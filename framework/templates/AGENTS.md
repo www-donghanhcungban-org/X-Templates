@@ -54,6 +54,8 @@ Skill `.claude/skills/`: factory autopilot complete optimize blueprint gate rese
 - Cấu trúc thư mục: [ĐIỀN]
 - Đặt tên / kiến trúc / thư viện chính và lý do: [ĐIỀN hoặc trỏ ADR]
 - Môi trường & secrets: [ĐIỀN cách nạp — không ghi giá trị]
+- Quy ước theo thư mục (`XC-DOCAI-011`): thư mục con có luật riêng đặt `AGENTS.md` con kèm `CLAUDE.md` cầu nối (`@AGENTS.md`), mỗi file ≤ 200 dòng, không lặp luật gốc.
+- Việc lớn làm tương tác (`WF-SDD-018`): bắt đầu ở Plan Mode (`claude --permission-mode plan`, `/plan` hoặc `Shift+Tab`), duyệt kế hoạch rồi mới sửa (nhấn `Esc` trước nếu cần chỉnh kế hoạch); autopilot vẫn dùng `PLAN.md`.
 - UI (bỏ nếu không có giao diện): theo `DESIGN.md` và token; xong việc UI khi `<XT> contrast <theme.css> --pairs <file>` xanh (`UX-DS-003`, `UX-DS-020`).
 - Tên phiên **bắt buộc, đặt ngay đầu phiên**: `<Tên repo> — <tên nhánh>` (`LOOP-HARNESS-028`).
 - Giao tiếp: tiếng Việt có dấu, ngắn, dẫn đầu bằng kết quả; báo cáo cuối: đã làm · bằng chứng · D-NNN · còn treo · đề xuất.

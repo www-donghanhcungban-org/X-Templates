@@ -39,7 +39,7 @@ updated: 2026-11-21
 
 ## Ghi nợ và điều không làm (chờ chủ duyệt)
 
-0. **Mẫu `AGENTS.md` của dự án đích** (`framework/templates/AGENTS.md`) đang 8 097/8 192 B (`tests/test_docs_budget.py`), `AGENTS.md` gốc 7 167/7 168 B. Hai dòng đề xuất cho §9 — "quy ước theo thư mục: `AGENTS.md` con kèm `CLAUDE.md` cầu nối, ≤ 200 dòng" và "việc lớn làm tương tác: Plan Mode, duyệt kế hoạch rồi mới sửa (`WF-SDD-018`)" — cần thêm ≈ 490 B, phải cắt chữ thừa ở chỗ khác (luật: không nới trần). Chưa làm vì chưa chọn được phần nào của hai tệp cô đọng này nên bỏ; chủ chọn thì thêm sau. Hai quy tắc đã nằm ở nhà của chúng (`WF-SDD-018`, `XC-DOCAI-011`).
+0. **Mẫu `AGENTS.md` của dự án đích** (`framework/templates/AGENTS.md`) và `AGENTS.md` gốc: sau khi `ADR-0089` (#717) nâng 5× trần kích thước tệp, hai dòng đề xuất cho §9 — quy ước theo thư mục (`AGENTS.md` con kèm `CLAUDE.md` cầu nối, ≤ 200 dòng, `XC-DOCAI-011`) và việc lớn làm tương tác bắt đầu ở Plan Mode, duyệt kế hoạch rồi mới sửa (`WF-SDD-018`) — đã được bổ sung vào cả hai tệp.
 1. **`isolation: worktree` cho subagent `executor`/`executor-deep`.** Docs: chạy subagent "in a temporary git worktree, giving it an isolated copy of the repository" (nhánh mặc định là default branch, tự dọn nếu không đổi). Có thể giảm xung đột khi nhiều executor chạy song song (cùng động cơ với D-142), nhưng đổi giao thức điều phối: kết quả nằm ở nhánh riêng và phiên chính phải gộp. Cần ADR và thử trên một PLAN thật trước khi bật.
 2. **`.worktreeinclude`** (chép tệp gitignored như `.env` vào worktree mới): chưa đánh giá cho `.venv` của repo khung.
 3. **Phiên bản:** changelog chính thức ghi Claude Code mới nhất 2.1.330 (2026-11-20); mẫu khung đặt `claude_min_version` 2.1.295; đọc `AGENTS.md` trực tiếp cần ≥ 2.1.277 → không cần nâng.
