@@ -46,5 +46,5 @@ Skill `.claude/skills/`: factory autopilot complete optimize blueprint gate rese
 
 ## 9. Giao tiếp
 Tên phiên bắt buộc: `<Tên repo> — <tên nhánh>` (`LOOP-HARNESS-028`). Tiếng Việt có dấu, ngắn, dẫn đầu bằng kết quả. Báo cáo cuối: đã làm · bằng chứng (lệnh + exit code) · D-NNN · còn treo · đề xuất. Không khai "xong" khi chưa có bằng chứng; sai thì đính chính, không xoá dấu vết.
-- **Quy ước theo thư mục** (`XC-DOCAI-011`): thư mục con có luật riêng (`scripts/AGENTS.md`, `tests/AGENTS.md`) đi kèm `CLAUDE.md` cầu nối (`@AGENTS.md`), mỗi file ≤ 200 dòng, chỉ ghi phần khác gốc.
-- **Việc lớn làm tương tác** (`WF-SDD-018`): bắt đầu ở Plan Mode (`claude --permission-mode plan`, `/plan` hoặc `Shift+Tab`), duyệt kế hoạch rồi mới sửa (nhấn `Esc` trước nếu cần chỉnh kế hoạch); chạy tự hành vẫn dùng `PLAN`.
+- **Quy ước theo thư mục** (`XC-DOCAI-011`): thư mục con có luật riêng (`scripts/AGENTS.md`, `tests/AGENTS.md`) đi kèm `CLAUDE.md` cầu nối (`@AGENTS.md`), chỉ ghi phần khác gốc; độ dài theo `XC-DOCAI-006`/`XC-DOCAI-011`.
+- **Việc lớn làm tương tác** (`WF-SDD-018`): bắt đầu ở Plan Mode (`claude --permission-mode plan`, `/plan` hoặc `Shift+Tab`), duyệt kế hoạch rồi mới sửa (chi tiết phím ở `WF-SDD-018`); chạy tự hành vẫn dùng `PLAN`.

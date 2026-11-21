@@ -658,3 +658,10 @@
 - Lý do (tiêu chí chất lượng cuối): cửa sổ 15 phút ngắn hơn CI + review nên chữ ký ở PR sau không bao giờ được duyệt; GO-NO-GO vẫn chặn phát hành (`go_no_go`, `release-sign`).
 - Đánh đổi chấp nhận: thiếu tag không còn bị BASE-REPO-006 báo khi đã có tệp GO-NO-GO (kể cả đã ký mà `release-tag.yml` hỏng); `go_no_go` và `release-check` vẫn đỏ/chờ. Có từ trước (AUD-HAR-460, chấp nhận tới 2027-01-21): BLUEPRINT.md tính là tài liệu nên đổi lệnh kiểm không sinh nợ review.
 - Đường lùi: Bỏ điều kiện `git ls-files` khỏi lệnh kiểm BASE-REPO-006
+
+### D-536 · 2026-11-21T18:01:47+00:00 · Sửa AUD-HAR-461: hook SessionStart nạp PROGRESS 40 KB làm additionalContext vượt 10 000 ký tự
+
+- Phương án: (1) Hook và PROGRESS_MAX_BYTES về 8192, thêm test ghim độ dài · (2) Giữ 40960 và đổi hook cắt theo ký tự, đưa khối Git/luật lên trước
+- Chọn: Hook và PROGRESS_MAX_BYTES về 8192, thêm test ghim độ dài
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn, (2) đường lùi: khôi phục hành vi đã chạy ổn trước ADR-0089; PROGRESS thật ~8 KB nên không mất gì; phương án 2 đổi cách nạp, cần ADR riêng
+- Đường lùi: Đổi hằng số và utf8_head lại 40960 kèm cắt theo ký tự (ADR mới)

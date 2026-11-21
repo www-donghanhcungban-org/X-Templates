@@ -1,7 +1,7 @@
 # ADR-0089: Nâng trần kích thước file và nhóm thư mục lên 5×
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-21 (yêu cầu của chủ repo: "x5 giới hạn file hiện tại").
-- **Trạng thái triển khai:** Đã triển khai — `tests/test_docs_budget.py` (`CAPS`, `DIR_CAPS`, `SIZE_MARKS`, `MARK_FACTOR = 5`), `scripts/xt.py` (`PROGRESS_MAX_BYTES = 40960`), `.claude/hooks/session-start.sh`.
+- **Trạng thái triển khai:** Đã triển khai — `tests/test_docs_budget.py` (`CAPS`, `DIR_CAPS`, `SIZE_MARKS`, `MARK_FACTOR = 5`), `scripts/xt.py`, `.claude/hooks/session-start.sh`. **Thay một phần bởi [ADR-0091](0091-progress-hook-cap-and-split-constraints.md):** trần `PROGRESS.md` và hook về lại 8 192 byte (AUD-HAR-461).
 - **Làm rõ:** [ADR-0043](0043-size-budget.md), [ADR-0050](0050-raise-dir-size-caps.md), [ADR-0072](0072-review-dir-caps-after-2x.md), [ADR-0083](0083-factory-lifecycle-flow.md), [ADR-0088](0088-docs-ledger-size-caps.md).
 
 ## Bối cảnh

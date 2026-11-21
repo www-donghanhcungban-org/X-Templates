@@ -6,10 +6,6 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
-### Added
-
-- Nâng 5× giới hạn kích thước cho các file hướng dẫn nạp đầu phiên (`CAPS`), các nhóm thư mục (`DIR_CAPS`), hệ số mốc xét lại (`MARK_FACTOR = 5` trong `tests/test_docs_budget.py`) và trần `PROGRESS.md` (`PROGRESS_MAX_BYTES = 40960`, đồng bộ `utf8_head 40960` ở `.claude/hooks/session-start.sh`). [ADR-0089](docs/adr/0089-raise-file-and-dir-caps-5x.md).
-
 ## [3.35.0] - 2026-11-21
 
 Bản harden sau audit delta 5 lô (0 🔴; mọi lô rút gọn, phần chưa rà ở báo cáo): kênh thông tin dự án phái sinh (ADR-0087)
@@ -83,7 +79,11 @@ một lần). Báo cáo: [`research/2026-11-21-audit-delta-3.35.0.md`](research/
 
 ### Changed
 
-- Trần byte của repo khung `docs/ops` và `docs/autopilot` cộng +1 MiB (ADR-0088, như ADR-0050); trần theo từng file nạp vào ngữ cảnh (`AGENTS.md`, `PROGRESS.md`, skill) giữ nguyên. Lệnh kiểm `BASE-REPO-006` của `BLUEPRINT.md` chấp nhận thêm ứng viên có `GO-NO-GO*<VERSION>*.md` chờ chữ ký (D-535, AUD-HAR-459) để chữ ký đến trong PR sau không bị cửa sổ 15 phút chặn.
+- Trần byte của repo khung `docs/ops` và `docs/autopilot` cộng +1 MiB (ADR-0088, như ADR-0050). Lệnh kiểm `BASE-REPO-006` của `BLUEPRINT.md` chấp nhận thêm ứng viên có `docs/ops/GO-NO-GO-*-<VERSION>.md` chờ chữ ký (D-535, AUD-HAR-459) để chữ ký đến trong PR sau không bị cửa sổ 15 phút chặn.
+- Nâng 5× trần byte theo từng file nạp đầu phiên (`CAPS`), nhóm thư mục (`DIR_CAPS`) và hệ số mốc xét lại (`MARK_FACTOR = 5`) trong `tests/test_docs_budget.py`, chỉ ở repo khung ([ADR-0089](docs/adr/0089-raise-file-and-dir-caps-5x.md)). Trần `PROGRESS.md` (`LOOP-HARNESS-004`, `LOOP-CTX-001`) và hook SessionStart vẫn 8 KB: Claude Code cắt `additionalContext` ở 10 000 ký tự (AUD-HAR-461). **Dự án đích:** không đổi.
+- `xt.py doctor github-text` bỏ qua symlink, đọc tối đa 1 MiB, chuẩn hoá NFC và SemVer; `repo-about` chưa đọc được API giữ `OPTIONAL` (AUD-DOC-307). **Dự án đích:** không phải làm gì.
+- `admin-plan` thêm hàng `field-workflow` (chỉ khi dự án cài `xt-field.yml`): kiểm environment `xt-field-read`; không đòi quyền tạo PR của Actions vì PR số field mở bằng `XT_STEWARD_TOKEN` (AUD-CI-037, AUD-CI-040). **Dự án đích:** dự án cài `xt-field.yml` tạo environment `xt-field-read`, nếu không `admin-plan` thoát 1.
+- Mẫu `AGENTS.md` của dự án đích thêm hai dòng (AGENTS.md theo thư mục, Plan Mode cho việc lớn). **Dự án đích:** dự án đã sửa `AGENTS.md` nhận tệp `.xtemplates-new` để gộp tay.
 - Dự án đích không còn mang lời mô tả khung trên GitHub (`WF-DOC-021`): `.xtemplates/README.md` chỉ còn ghi chú nguồn
   và một câu "do `install.py`/`xt.py upgrade` quản lý"; tên workflow `xt-upgrade.yml` thành "Nâng cấp công cụ quy
   trình"; tên bước và bình luận của `ci.yml`, mẫu PR, `pr-steward.yml`, gói `web-api-ts` và dòng chú thích `.gitignore`

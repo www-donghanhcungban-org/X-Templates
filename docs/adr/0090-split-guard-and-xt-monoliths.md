@@ -2,6 +2,7 @@
 
 - **Trạng thái:** Đề xuất được chấp nhận ngày 2026-11-21 (mục tiêu trước hạn xét lại 2027-01-21).
 - **Trạng thái triển khai:** Đã thống nhất ranh giới và cổng; tách từng lát nhỏ theo PR riêng.
+- **Bổ sung:** [ADR-0091](0091-progress-hook-cap-and-split-constraints.md) (bất biến nạp guard, `perf trial`, trình tự đo T-3709).
 - **Liên quan:** [ADR-0001](0001-framework-as-id-library-with-machine-composition.md), [ADR-0018](0018-deny-dangerous-allow-rest.md), [ADR-0089](0089-raise-file-and-dir-caps-5x.md), [scripts/AGENTS.md](../../scripts/AGENTS.md), [tests/AGENTS.md](../../tests/AGENTS.md).
 
 ## Bối cảnh

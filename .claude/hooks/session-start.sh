@@ -14,8 +14,8 @@ if [ -f "$XT_ROOT/PROGRESS.md" ]; then
     < "$XT_ROOT/PROGRESS.md" 2>/dev/null | awk '
     /^## /{keep = ($0 ~ /Đang làm|Tiếp theo|Quyết định|Bàn giao/)}
     NR==1 || keep {print}
-  ' | utf8_head 40960)"
-  [ -n "$prog" ] || prog="$(utf8_head 40960 < "$XT_ROOT/PROGRESS.md")"
+  ' | utf8_head 8192)"
+  [ -n "$prog" ] || prog="$(utf8_head 8192 < "$XT_ROOT/PROGRESS.md")"
   ctx+="===== PROGRESS.md (trạng thái phiên trước) =====
 $prog
 

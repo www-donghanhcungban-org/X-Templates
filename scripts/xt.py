@@ -3703,7 +3703,7 @@ def _stop_write(base: Path, fn: StateFn) -> Optional[Dict[str, Any]]:
 
 # --------------------------------------------------------------------------- progress-check
 
-PROGRESS_MAX_BYTES = 8192 * 5  # ADR-0089: nâng 5× giới hạn file (40 960 byte)
+PROGRESS_MAX_BYTES = 8192  # khớp hook SessionStart: additionalContext ≤ 10 000 ký tự (AUD-HAR-461)
 PROGRESS_SECTIONS = ("Đang làm", "Tiếp theo", "Quyết định", "Bàn giao phiên")
 SHA_TOKEN_RE = re.compile(r"`([0-9a-fA-F]{7,40})`")
 FENCE_RE = re.compile(r"^\s*(```|~~~)")

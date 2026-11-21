@@ -212,12 +212,13 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
         origin.pages.return_value = [{"name": "xt-field-read"}]
         self.assertEqual(setup.field_workflow_status(origin), setup.OK)
 
+        # AUD-CI-040: quyền tạo PR của GITHUB_TOKEN không liên quan (PR mở bằng XT_STEWARD_TOKEN); tên không phân biệt hoa thường.
         origin.get.return_value = {"can_approve_pull_request_reviews": False}
-        self.assertEqual(setup.field_workflow_status(origin), setup.MISSING)
+        origin.pages.return_value = [{"name": "XT-Field-Read"}]
+        self.assertEqual(setup.field_workflow_status(origin), setup.OK)
 
-        origin.get.return_value = {"can_approve_pull_request_reviews": True}
         origin.pages.return_value = [{"name": "other"}]
         self.assertEqual(setup.field_workflow_status(origin), setup.MISSING)
 
-        origin.get.return_value = None
+        origin.pages.return_value = None
         self.assertEqual(setup.field_workflow_status(origin), setup.UNKNOWN)

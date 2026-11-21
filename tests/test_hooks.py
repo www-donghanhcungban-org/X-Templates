@@ -788,12 +788,12 @@ class CommitGateWorktreeConfigTest(CommitGateWorktreeBase):
 @unittest.skipIf(shutil.which("bash") is None, "cần bash")
 class SessionStartUtf8Test(unittest.TestCase):
     def test_session_start_utf8_cut_is_valid(self):
-        # AUD-HAR-011: head -c từng cắt giữa ký tự UTF-8 tiếng Việt (ADR-0089: trần 40960 byte).
+        # AUD-HAR-011: head -c từng cắt giữa ký tự UTF-8 tiếng Việt (trần 8192 byte, AUD-HAR-461).
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         body = "\n".join(f"- dòng {i}: Đang làm việc dở với tiếng Việt có dấu ạ ễ ữ" for i in range(1200))
         pad = ""
-        while (("# PROGRESS" + pad + "\n## Đang làm\n" + body).encode()[40960] & 0xC0) != 0x80:
-            pad += "x"  # đặt mốc 40960 byte rơi GIỮA một ký tự nhiều byte
+        while (("# PROGRESS" + pad + "\n## Đang làm\n" + body).encode()[8192] & 0xC0) != 0x80:
+            pad += "x"  # đặt mốc 8192 byte rơi GIỮA một ký tự nhiều byte
         (tmp / "PROGRESS.md").write_text("# PROGRESS" + pad + "\n## Đang làm\n" + body + "\n", encoding="utf-8")
         env = dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp))
         r = subprocess.run(
@@ -801,6 +801,9 @@ class SessionStartUtf8Test(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         ctx = json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]  # strict decode
+        # AUD-HAR-461: Claude Code cắt additionalContext ở 10 000 ký tự; PROGRESS to không được đẩy khối Git/luật ra ngoài.
+        self.assertLessEqual(len(ctx), 10000)
+        self.assertIn("Luật vận hành", ctx)
         self.assertIn("Đang làm", ctx)
         self.assertFalse(any("\ud800" <= ch <= "\udfff" or ch == "\ufffd" for ch in ctx), "ký tự UTF-8 bị cắt dở")
 
