@@ -672,3 +672,10 @@
 - Chọn: Nâng x10 CAPS/DIR_CAPS/MARK_FACTOR, giữ 8 KB cho PROGRESS và hook (giới hạn cứng của kênh)
 - Lý do (tiêu chí chất lượng cuối): Người dùng có quyền cuối (AGENTS.md §1) nên nâng trần của khung; (1) đúng và an toàn: PROGRESS/hook bị Claude Code cắt ở 10 000 ký tự (AUD-HAR-461) nên phương án 2 gây lỗi thật, phương án 1 giữ đường lùi; kiểm kênh 32 KiB của AGENTS.md gốc vẫn do BLUEPRINT.md
 - Đường lùi: Đặt lại hằng số trong tests/test_docs_budget.py về x5 (ADR-0089) hoặc x1; trần chỉ ở repo khung
+
+### D-538 · 2026-11-21T21:29:04+00:00 · Duyệt PLAN-harden-2026-11-21 (khai lại các lát #727–#731 để vòng harden có bằng chứng chạy lại và release-sign kiểm được loop defer)
+
+- Phương án: (1) Lập PLAN khai các lát đã làm, loop init rồi loop verify chạy lại từng Gate · (2) Để chữ ký GO-NO-GO cho người, không dựng vòng
+- Chọn: Lập PLAN khai các lát đã làm, loop init rồi loop verify chạy lại từng Gate
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: loop verify chạy lại Gate hôm nay nên bằng chứng là thật, PLAN ghi rõ lập sau khi làm; chủ repo đã bật release_signoff agent và yêu cầu tự quyết; phương án 2 vẫn đúng nhưng chặn phát hành chờ người dù điều kiện máy đã đủ
+- Đường lùi: Bỏ .autopilot cục bộ và để người ký §5 GO-NO-GO; PLAN giữ làm hồ sơ
