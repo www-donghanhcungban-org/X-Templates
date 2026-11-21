@@ -229,6 +229,25 @@ def about_status(origin: Origin) -> tuple[str, list[str]]:
     return OPTIONAL, ['gh repo edit --description "<mô tả dự án>" — About/homepage/topics đang trống hoặc mô tả khung']
 
 
+def field_workflow_status(origin: Origin) -> str:
+    """AUD-CI-037: khi repo có `.github/workflows/xt-field.yml`, kiểm quyền tạo PR cho Actions và environment
+    `xt-field-read`. Repo không cài `xt-field.yml`: `SKIP`."""
+    wf = ".github/workflows/xt-field.yml"
+    if not origin.has_origin:
+        return MISSING if (origin.base / wf).is_file() else SKIP
+    if origin.sha is None:
+        return UNKNOWN if (origin.base / wf).is_file() else SKIP
+    if origin.file(wf, repo_root=True) is None:
+        return SKIP
+    perm = origin.get("actions/permissions/workflow")
+    envs = origin.pages("environments", "environments")
+    if not isinstance(perm, dict) or envs is None:
+        return UNKNOWN
+    can_pr = perm.get("can_approve_pull_request_reviews") is True
+    has_env = any(e.get("name") == "xt-field-read" for e in envs)
+    return state(can_pr and has_env)
+
+
 def budget_valid(cfg: dict[str, str]) -> bool:
     try:
         amount = float(cfg.get("worker_budget_usd", ""))
@@ -373,6 +392,14 @@ def remote_items(origin: Origin) -> list[Doc]:
             "Đặt About, homepage và topics mô tả dự án.",
             "GET repos/<owner>/<repo> (description, homepage, topics)",
             changes=about_changes,
+        ),
+        row(
+            "field-workflow",
+            field_workflow_status(origin),
+            "xt-field.yml cần quyền tạo PR cho Actions và môi trường xt-field-read.",
+            "Bật 'Allow GitHub Actions to create and approve pull requests' trong Settings → Actions và tạo "
+            "environment xt-field-read.",
+            "GET actions/permissions/workflow và GET environments",
         ),
     ]
 

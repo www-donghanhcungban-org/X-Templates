@@ -100,7 +100,8 @@ class SetupTest(GithubFixture, TmpRepoCase):
         for key in ("repo", "bot-token", "worker-budget", "deploy-target"):
             self.assertEqual(items[key]["status"], ops_setup.MISSING)
         self.assertEqual(items["gated-keys"]["status"], ops_setup.OPTIONAL)
-        self.assertEqual(len(items), 13)
+        self.assertEqual(items["field-workflow"]["status"], ops_setup.SKIP)
+        self.assertEqual(len(items), 14)
         self.assertEqual(self.git("status", "--porcelain"), before)
         self.assertNotIn("private-value", out)
         self.assertEqual(run_main("admin-plan", "--out", "../outside.md")[0], 2)

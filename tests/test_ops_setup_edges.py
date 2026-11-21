@@ -188,3 +188,36 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
             self.assertTrue(used <= declared, f"{mod.__name__}: thiếu trong Core Protocol: {sorted(used - declared)}")
             missing = [name for name in declared if not hasattr(xt, name)]
             self.assertEqual(missing, [], f"{mod.__name__}: tên không có trên xt: {missing}")
+
+    def test_field_workflow_status_checks_actions_pr_and_environment(self):
+        """AUD-CI-037: không có xt-field.yml → SKIP; không origin có file → MISSING; đủ quyền + env → OK; thiếu →
+        MISSING."""
+        origin = mock.Mock(spec=setup.Origin)
+        origin.has_origin, origin.base, origin.sha = False, self.repo, None
+        self.assertEqual(setup.field_workflow_status(origin), setup.SKIP)
+        wf = self.repo / ".github" / "workflows" / "xt-field.yml"
+        wf.parent.mkdir(parents=True, exist_ok=True)
+        wf.write_text("name: xt-field\n", encoding="utf-8")
+        self.assertEqual(setup.field_workflow_status(origin), setup.MISSING)
+
+        origin.has_origin = True
+        self.assertEqual(setup.field_workflow_status(origin), setup.UNKNOWN)
+
+        origin.sha = "a" * 40
+        origin.file.return_value = None
+        self.assertEqual(setup.field_workflow_status(origin), setup.SKIP)
+
+        origin.file.return_value = "name: xt-field\n"
+        origin.get.return_value = {"can_approve_pull_request_reviews": True}
+        origin.pages.return_value = [{"name": "xt-field-read"}]
+        self.assertEqual(setup.field_workflow_status(origin), setup.OK)
+
+        origin.get.return_value = {"can_approve_pull_request_reviews": False}
+        self.assertEqual(setup.field_workflow_status(origin), setup.MISSING)
+
+        origin.get.return_value = {"can_approve_pull_request_reviews": True}
+        origin.pages.return_value = [{"name": "other"}]
+        self.assertEqual(setup.field_workflow_status(origin), setup.MISSING)
+
+        origin.get.return_value = None
+        self.assertEqual(setup.field_workflow_status(origin), setup.UNKNOWN)
