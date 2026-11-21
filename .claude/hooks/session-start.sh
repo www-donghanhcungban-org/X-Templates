@@ -3,7 +3,8 @@
 # Nạp NGẮN GỌN trạng thái để phiên tiếp tục đúng chỗ: 4 mục của PROGRESS.md (tối đa 8 KB),
 # verdict autopilot (từ bằng chứng trên đĩa), git branch/dirty/3 commit, và nhắc đọc AGENTS.md.
 # Tổng additionalContext ≤ 9 800 ký tự: vượt 10 000 thì Claude Code thay cả chuỗi bằng đường dẫn tệp + 2 000 ký tự đầu
-# (AUD-HAR-461), nên khối Autopilot/Git/luật dựng trước, PROGRESS lấy phần ngân sách còn lại.
+# (AUD-HAR-461), nên khối Autopilot (≤ 2 400)/Git (tên nhánh, repo ≤ 200; log ≤ 1 200)/luật dựng trước, PROGRESS lấy
+# phần ngân sách còn lại. Cần python3 (như `utf8_head`, `context_output`); thiếu thì hook không in gì.
 # Chỉ đọc, không đổi gì. Fail-open.
 set -uo pipefail
 . "$(dirname "$0")/_lib.sh"
@@ -26,7 +27,17 @@ rest=""
 XT="$(xt_py)" || true
 if [ -n "${XT:-}" ] && [ -f "$XT_ROOT/.autopilot/state.json" ]; then
   status="$(py_run "$XT" loop status 2>/dev/null)" || status='không đọc được trạng thái'
-  status="$(printf '%s' "$status" | utf8_head 2400)"
+  # Quá 2 400 ký tự: bỏ đoạn giữa, giữ dòng verdict ở đầu và dòng checkpoint ở cuối.
+  status="$(printf '%s' "$status" | python3 -I -c '
+import sys
+t = sys.stdin.buffer.read().decode("utf-8", "replace")
+n = int(sys.argv[1])
+if len(t) > n:
+    mark = "\n[… đã cắt giữa …]\n"
+    h = (n - len(mark)) // 2
+    t = t[:h] + mark + t[-h:]
+sys.stdout.buffer.write(t.encode("utf-8", "replace"))
+' 2400 2>/dev/null)" || status='không đọc được trạng thái'
   rest+="===== Autopilot =====
 $status
 
@@ -38,6 +49,8 @@ if git -C "$XT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
   # Tên repo: đuôi URL remote origin (bỏ .git), không có remote thì tên thư mục gốc (LOOP-HARNESS-028).
   repo="$(git -C "$XT_ROOT" remote get-url origin 2>/dev/null | sed -e 's#/*$##' -e 's#\.git$##' -e 's#.*[/:]##')"
   [ -n "$repo" ] || repo="$(basename "$XT_ROOT")"
+  branch="$(printf '%s' "$branch" | utf8_head 200)"  # tên nhánh/repo dài bất thường không được ăn ngân sách PROGRESS
+  repo="$(printf '%s' "$repo" | utf8_head 200)"
   if [ -n "$branch" ] && [ "$branch" != "main" ] && [ "$branch" != "master" ]; then
     name_hint="Tên phiên: \"$repo — $branch\" — đặt ngay nếu phiên chưa mang tên này (Claude Code: /rename; phiên cloud: tool set_session_title)."
   else
@@ -58,15 +71,18 @@ rest+="Luật vận hành: AGENTS.md ở gốc dự án (Claude Code đã nạp 
 ctx="$rest"
 prog="$(progress_block)"
 if [ -n "$prog" ]; then
-  # Ngân sách PROGRESS tính bằng ký tự (chừa 60 cho tiêu đề và xuống dòng); thiếu python3 thì cắt theo byte (chặt hơn).
-  budget=$(( 9800 - ${#rest} - 60 ))
-  [ "$budget" -gt 0 ] || budget=0
-  cut="$(printf '%s' "$prog" | python3 -I -c 'import sys; sys.stdout.write(sys.stdin.read()[: int(sys.argv[1])])' "$budget" 2>/dev/null)" \
-    || cut="$(printf '%s' "$prog" | utf8_head "$budget")"
-  ctx="===== PROGRESS.md (trạng thái phiên trước) =====
-$cut
-
-$rest"
+  # Ngân sách PROGRESS = 9 800 trừ phần còn lại, đo bằng ký tự trong Python (đọc UTF-8 tường minh, không phụ thuộc
+  # LANG: `${#rest}` đếm byte khi locale trống). Cắt thì nối dấu để phiên sau biết còn phần chưa đọc.
+  ctx="$(python3 -I -c '
+import sys
+prog, rest = sys.argv[1], sys.argv[2]
+head = "===== PROGRESS.md (trạng thái phiên trước) =====\n"
+budget = 9800 - len(rest) - len(head) - 2
+if len(prog) > budget:
+    note = "\n[đã cắt phần cuối PROGRESS.md — đọc cả tệp]"
+    prog = prog[: max(budget - len(note), 0)] + note
+sys.stdout.buffer.write((head + prog + "\n\n" + rest).encode("utf-8", "replace"))
+' "$prog" "$rest" 2>/dev/null)" || ctx="$rest"
 fi
 
 context_output SessionStart "$ctx"

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CAPS = {  # byte; nhà của từng trần: PLAN-3.12-lean T-1701…T-1704; nâng 5× theo ADR-0089, ×10 nữa theo ADR-0092
+CAPS = {  # byte; nhà của từng trần: PLAN-3.12-lean T-1701…T-1704; ADR-0089 nâng 5×, ADR-0092 đặt lại theo giới hạn kênh
     # AGENTS.md + CLAUDE.md ≤ 32 768 (XC-DOCAI-006, giới hạn Codex): 28 672 + 4 096; skill ≤ 12 288 (~5 000 token sau compaction).
     "AGENTS.md": 28672,
     "framework/templates/AGENTS.md": 28672,

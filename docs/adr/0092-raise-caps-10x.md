@@ -1,7 +1,7 @@
 # ADR-0092: Nâng thêm 10× trần kích thước file và nhóm thư mục
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-21 (yêu cầu của chủ repo: "nâng trần các giới hạn hiện tại lên x10"; D-537). Nối tiếp [ADR-0089](0089-raise-file-and-dir-caps-5x.md).
-- **Trạng thái triển khai:** Đã triển khai — `tests/test_docs_budget.py` (`CAPS`, `DIR_CAPS` ×10 so với giá trị sau ADR-0089; `MARK_FACTOR = 50`).
+- **Trạng thái triển khai:** Đã triển khai — `tests/test_docs_budget.py` (`DIR_CAPS` ×10 so với giá trị sau ADR-0089; `CAPS` theo mục 1–3 và 6 dưới đây, phần lớn thấp hơn ADR-0089; `MARK_FACTOR = 50`).
 - **Liên quan:** [ADR-0043](0043-size-budget.md), [ADR-0091](0091-progress-hook-cap-and-split-constraints.md), AUD-HAR-462.
 
 ## Quyết định
@@ -9,7 +9,7 @@
 Nguyên tắc (chủ repo: "chọn mức tối đa hợp lý nhất"): mỗi trần nâng tới mức cao nhất còn nằm trong giới hạn của kênh nạp nó, tối đa 10×.
 
 1. `DIR_CAPS` (nhóm thư mục) và `CAPS` của `framework/11-autonomous-loop/README.md` (không bị kênh nào giới hạn) nhân 10 so với giá trị sau ADR-0089; `MARK_FACTOR` từ 5 lên 50 để trần hiệu lực (min của trần và hệ số × mốc) cũng tăng 10×. Chỉ áp ở repo khung; dự án đích không đổi.
-2. `AGENTS.md` và mẫu: 28 672 byte; `CLAUDE.md` và mẫu: 4 096 byte. Tổng 32 768 khớp giới hạn Codex (`XC-DOCAI-006`). Mức ×10 (71 680) sẽ vượt kênh nên không dùng.
+2. `AGENTS.md` và mẫu: 28 672 byte; `CLAUDE.md` và mẫu: 4 096 byte. Tổng 32 768 khớp giới hạn Codex (`XC-DOCAI-006`). Mức 10× giá trị gốc 7 168 (71 680) sẽ vượt kênh nên không dùng.
 3. Ba `SKILL.md`: 12 288 byte, xấp xỉ 5 000 token Claude Code gắn lại sau compaction (ước lượng, chưa đo bằng tokenizer). Mức ×10 sẽ làm đuôi checklist rơi sau compaction.
 4. **Không đổi** trần `PROGRESS.md` và hook SessionStart (8 192 byte): `additionalContext` vượt 10 000 ký tự thì Claude Code thay cả chuỗi bằng đường dẫn tệp và 2 000 ký tự đầu, và khối Git, autopilot, luật đã chiếm phần còn lại (AUD-HAR-461, ADR-0091). Muốn hơn phải đổi cách nạp (ADR riêng).
 5. Nhờ vậy không còn `CAPS` nào lớn hơn giới hạn kênh; AUD-HAR-462 đóng.

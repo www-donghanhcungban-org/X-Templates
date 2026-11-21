@@ -823,16 +823,31 @@ class SessionStartUtf8Test(unittest.TestCase):
         (tmp / "PROGRESS.md").write_text(
             head + "a" * (xt.PROGRESS_MAX_BYTES - len(head.encode())) + "\n", encoding="utf-8"
         )
-        env = dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp))
-        r = subprocess.run(
-            ["bash", str(HOOKS / "session-start.sh")], input=b"{}", capture_output=True, env=env, timeout=60
+        # Autopilot đang chạy: `loop status` giả in > 2 400 ký tự, verdict ở đầu và checkpoint ở cuối (F1/F2 của review #728).
+        (tmp / ".autopilot").mkdir()
+        (tmp / ".autopilot" / "state.json").write_text("{}", encoding="utf-8")
+        (tmp / "scripts").mkdir()
+        lines = ["verdict: continue"] + [f"chờ người: việc {i} " + "đ" * 120 for i in range(30)] + ["checkpoint: CUỐI"]
+        (tmp / "scripts" / "xt.py").write_text(
+            "def main():\n    print(" + repr("\n".join(lines)) + ")\n    return 0\n", encoding="utf-8"
         )
-        self.assertEqual(r.returncode, 0)
-        ctx = json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]
+        ctxs = []
+        for lang in ("C", "C.UTF-8"):  # F3: ngân sách không được phụ thuộc locale
+            env = dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp), LC_ALL=lang)
+            r = subprocess.run(
+                ["bash", str(HOOKS / "session-start.sh")], input=b"{}", capture_output=True, env=env, timeout=60
+            )
+            self.assertEqual(r.returncode, 0)
+            ctxs.append(json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(ctxs[0], ctxs[1])
+        ctx = ctxs[0]
         self.assertLessEqual(len(ctx), 10000)
         self.assertIn("===== Git =====", ctx)
         self.assertIn("Luật vận hành", ctx)
         self.assertIn("## Đang làm", ctx)
+        self.assertIn("verdict: continue", ctx)
+        self.assertIn("checkpoint: CUỐI", ctx)  # F2: đuôi `loop status` còn sau khi cắt giữa
+        self.assertIn("đã cắt phần cuối PROGRESS.md", ctx)  # F4: cắt PROGRESS phải có dấu
 
     def test_session_start_progress_cut_matches_progress_check_cap(self):
         # Số byte hook cắt phải bằng trần của `progress-check` (một số, hai nơi).

@@ -25,10 +25,10 @@ Tách module không được phá các bất biến đã có:
 ## Hệ quả
 
 - Chưa nâng trần `PROGRESS.md`; muốn nhiều hơn thì giảm khối Autopilot/Git hoặc đổi cách nạp bằng ADR mới. Đưa khối Git/luật lên trước không cứu được: vượt 10 000 thì chỉ 2 000 ký tự đầu còn lại.
+- ADR-0090 vẫn là lộ trình; mỗi lát tách phải dẫn mục "Ràng buộc" ở đây trong PR.
 
 ## Phương án đã xét
 
-- **Giữ 40 960 và cắt theo ký tự trong hook (chọn một phần):** hook nay đã cắt theo ký tự vào ngân sách còn lại, nhưng không nâng trần PROGRESS vì không có áp lực dung lượng (PROGRESS thật ≈ 8 KB) và tăng chi phí ngữ cảnh mỗi phiên.
+- **Giữ 40 960 và cắt theo ký tự trong hook (chọn một phần):** hook nay đã cắt theo ký tự vào ngân sách còn lại, nhưng không nâng trần PROGRESS vì PROGRESS thật đã sát trần (8 137/8 192 B, bị cắt có dấu khi Autopilot đầy) nên mức hiện tại là giới hạn kênh chứ không phải áp lực dung lượng, và nâng thêm tăng chi phí ngữ cảnh mỗi phiên.
 - **Giữ nguyên ADR-0089:** bị loại, đo được additionalContext 41 149 byte với PROGRESS 39 965 byte.
 - **Nâng cả PROGRESS lẫn hook ×10:** bị loại, vượt giới hạn kênh.
-- ADR-0090 vẫn là lộ trình; mỗi lát tách phải dẫn mục "Ràng buộc" ở đây trong PR.
