@@ -752,6 +752,26 @@
    "ids": [
     "AUD-HAR-459"
    ]
+  },
+  {
+   "reason": "Độ dài additionalContext của hook SessionStart và hàng field-workflow của admin-plan là đầu ra của hook/công cụ, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_hooks.SessionStartUtf8Test ghim len(additionalContext) ≤ 10000; tests.test_ops_setup_edges và tests.test_admin_plan ghim field_workflow_status.",
+   "ids": [
+    "AUD-CI-040",
+    "AUD-HAR-461"
+   ]
+  },
+  {
+   "reason": "Nội dung ADR, CHANGELOG, AGENTS.md, WF-SDD-018 và hướng dẫn tests/AGENTS.md. Không phải quyết định cho hoặc chặn; đỡ bằng validate, changelog-check, check-links và đọc ADR-0091.",
+   "ids": [
+    "AUD-ARCH-016",
+    "AUD-ARCH-017",
+    "AUD-DOC-311",
+    "AUD-DOC-312",
+    "AUD-DOC-313",
+    "AUD-DOC-314",
+    "AUD-DOC-315",
+    "AUD-TEST-136"
+   ]
   }
  ]
 }
