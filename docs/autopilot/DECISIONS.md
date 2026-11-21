@@ -665,3 +665,10 @@
 - Chọn: Hook và PROGRESS_MAX_BYTES về 8192, thêm test ghim độ dài
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn, (2) đường lùi: khôi phục hành vi đã chạy ổn trước ADR-0089; PROGRESS thật ~8 KB nên không mất gì; phương án 2 đổi cách nạp, cần ADR riêng
 - Đường lùi: Đổi hằng số và utf8_head lại 40960 kèm cắt theo ký tự (ADR mới)
+
+### D-537 · 2026-11-21T18:47:08+00:00 · Nâng trần CAPS, DIR_CAPS và MARK_FACTOR thêm x10 theo yêu cầu của chủ repo
+
+- Phương án: (1) Nâng x10 CAPS/DIR_CAPS/MARK_FACTOR, giữ 8 KB cho PROGRESS và hook (giới hạn cứng của kênh) · (2) Nâng x10 mọi thứ kể cả PROGRESS và hook
+- Chọn: Nâng x10 CAPS/DIR_CAPS/MARK_FACTOR, giữ 8 KB cho PROGRESS và hook (giới hạn cứng của kênh)
+- Lý do (tiêu chí chất lượng cuối): Người dùng có quyền cuối (AGENTS.md §1) nên nâng trần của khung; (1) đúng và an toàn: PROGRESS/hook bị Claude Code cắt ở 10 000 ký tự (AUD-HAR-461) nên phương án 2 gây lỗi thật, phương án 1 giữ đường lùi; kiểm kênh 32 KiB của AGENTS.md gốc vẫn do BLUEPRINT.md
+- Đường lùi: Đặt lại hằng số trong tests/test_docs_budget.py về x5 (ADR-0089) hoặc x1; trần chỉ ở repo khung
