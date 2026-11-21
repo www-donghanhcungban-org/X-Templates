@@ -6,11 +6,11 @@
 
 ## Bối cảnh
 
-ADR-0089 nâng 5× trần theo từng file, nhóm thư mục và trần `PROGRESS.md` cùng hook (8 192 → 40 960 byte). Audit delta 3.35.0 (lô B) đo: với `PROGRESS.md` 39 965 byte, hook SessionStart trả `additionalContext` 31 535 ký tự. Tài liệu hook của Claude Code ghi chuỗi này bị cắt ở 10 000 ký tự (ghi lại ở `research/2026-10-21-next-level-speed-automation-quality.md`). Khi vượt, mục "Tiếp theo", "Bàn giao", verdict autopilot và nhắc luật rơi khỏi ngữ cảnh đầu phiên và sau compaction. Hook vẫn thoát 0 và test xanh, nên lỗi không tự lộ. Trần nhóm thư mục thực dùng 19–20 %, không có áp lực nâng `PROGRESS.md`.
+ADR-0089 nâng 5× trần theo từng file, nhóm thư mục và trần `PROGRESS.md` cùng hook (8 192 → 40 960 byte). Audit delta 3.35.0 (lô B) đo: với `PROGRESS.md` 39 965 byte, hook SessionStart trả `additionalContext` 31 535 ký tự. Tài liệu hook của Claude Code (<https://code.claude.com/docs/en/hooks.md>, đọc 2026-11-21): chuỗi `additionalContext` giới hạn 10 000 ký tự; vượt thì Claude Code lưu cả chuỗi ra tệp trong thư mục phiên và thay bằng đường dẫn kèm xem trước tối đa 2 000 ký tự đầu, không nhắc model đọc tệp. Vượt dù chỉ 1 ký tự là mất mọi thứ sau ký tự 2 000: mục "Tiếp theo", "Bàn giao", verdict autopilot và nhắc luật rơi khỏi ngữ cảnh đầu phiên và sau compaction. Hook vẫn thoát 0 và test xanh, nên lỗi không tự lộ. Trần nhóm thư mục thực dùng 19–20 %, không có áp lực nâng `PROGRESS.md`.
 
 ## Quyết định
 
-1. `PROGRESS_MAX_BYTES` và `utf8_head` của hook về 8 192 byte (khớp `LOOP-HARNESS-004`, `LOOP-CTX-001`). Test ghim `len(additionalContext) ≤ 10 000`. Phần còn lại của ADR-0089 (`CAPS`, `DIR_CAPS`, `MARK_FACTOR`) giữ nguyên hiệu lực, chỉ ở repo khung.
+1. `PROGRESS_MAX_BYTES` và `utf8_head` của hook về 8 192 byte (khớp `LOOP-HARNESS-004`, `LOOP-CTX-001`). Hook dựng khối Autopilot (≤ 2 400 ký tự), Git và luật trước, rồi cắt PROGRESS theo ký tự vào ngân sách còn lại để tổng ≤ 9 800 (review của chính bản sửa này chỉ ra PROGRESS 8 192 B cộng Autopilot đang chạy đã đạt 10 315 ký tự). Test ghim tổng ≤ 10 000 với PROGRESS đúng trần cộng Git dài, và ghim số byte của hook bằng `PROGRESS_MAX_BYTES`. Phần còn lại của ADR-0089 (`CAPS`, `DIR_CAPS`, `MARK_FACTOR`) giữ nguyên hiệu lực, chỉ ở repo khung.
 2. Giới hạn của kênh nạp là trần cứng, không phải chỉ số nới theo ý muốn: `AGENTS.md` ≤ 32 768 byte (`XC-DOCAI-006`, Codex), `SKILL.md` đủ ngắn để 5 000 token đầu giữ checklist sau compaction. Trần `CAPS` của các file đó phải ≤ giới hạn kênh; việc hạ trần là nợ AUD-HAR-462.
 3. ADR-0089 thay các quyết định "không nới trần" của ADR-0043, 0050, 0072, 0083 và 0088 ở phần `CAPS`/`DIR_CAPS`/hệ số mốc. Lý do: nhóm đo được còn dư chỗ và chủ repo yêu cầu. Đánh đổi: tốn ngữ cảnh mỗi phiên nếu file nạp đầu phiên phình tới trần mới, nên ràng buộc ở mục 2 là cái giữ lại.
 
@@ -24,5 +24,11 @@ Tách module không được phá các bất biến đã có:
 
 ## Hệ quả
 
-- Chưa nâng trần `PROGRESS.md`; muốn nhiều hơn thì đổi cách nạp (hook cắt theo ký tự, đưa khối Git/luật lên trước) bằng ADR mới.
+- Chưa nâng trần `PROGRESS.md`; muốn nhiều hơn thì giảm khối Autopilot/Git hoặc đổi cách nạp bằng ADR mới. Đưa khối Git/luật lên trước không cứu được: vượt 10 000 thì chỉ 2 000 ký tự đầu còn lại.
+
+## Phương án đã xét
+
+- **Giữ 40 960 và cắt theo ký tự trong hook (chọn một phần):** hook nay đã cắt theo ký tự vào ngân sách còn lại, nhưng không nâng trần PROGRESS vì không có áp lực dung lượng (PROGRESS thật ≈ 8 KB) và tăng chi phí ngữ cảnh mỗi phiên.
+- **Giữ nguyên ADR-0089:** bị loại, đo được additionalContext 41 149 byte với PROGRESS 39 965 byte.
+- **Nâng cả PROGRESS lẫn hook ×10:** bị loại, vượt giới hạn kênh.
 - ADR-0090 vẫn là lộ trình; mỗi lát tách phải dẫn mục "Ràng buộc" ở đây trong PR.

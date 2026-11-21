@@ -801,11 +801,46 @@ class SessionStartUtf8Test(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         ctx = json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]  # strict decode
-        # AUD-HAR-461: Claude Code cắt additionalContext ở 10 000 ký tự; PROGRESS to không được đẩy khối Git/luật ra ngoài.
+        # AUD-HAR-461: additionalContext > 10 000 ký tự bị Claude Code thay bằng đường dẫn tệp + 2 000 ký tự đầu.
         self.assertLessEqual(len(ctx), 10000)
         self.assertIn("Luật vận hành", ctx)
         self.assertIn("Đang làm", ctx)
         self.assertFalse(any("\ud800" <= ch <= "\udfff" or ch == "\ufffd" for ch in ctx), "ký tự UTF-8 bị cắt dở")
+
+    def test_session_start_total_stays_within_hook_cap(self):
+        # AUD-HAR-461: PROGRESS đúng trần (thân ASCII, 1 byte/ký tự) cộng khối Git dài vẫn ≤ 10 000 ký tự:
+        # vượt thì Claude Code thay cả chuỗi bằng đường dẫn tệp + 2 000 ký tự đầu.
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import xt
+
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        init_git_fixture(tmp)
+        for i in range(3):
+            (tmp / f"f{i}").write_text("x", encoding="utf-8")
+            fixture_git(tmp, "add", f"f{i}")
+            fixture_git(tmp, "commit", "-q", "-m", f"c{i} " + "dài " * 100)
+        head = "# PROGRESS\n## Đang làm\n"
+        (tmp / "PROGRESS.md").write_text(
+            head + "a" * (xt.PROGRESS_MAX_BYTES - len(head.encode())) + "\n", encoding="utf-8"
+        )
+        env = dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp))
+        r = subprocess.run(
+            ["bash", str(HOOKS / "session-start.sh")], input=b"{}", capture_output=True, env=env, timeout=60
+        )
+        self.assertEqual(r.returncode, 0)
+        ctx = json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]
+        self.assertLessEqual(len(ctx), 10000)
+        self.assertIn("===== Git =====", ctx)
+        self.assertIn("Luật vận hành", ctx)
+        self.assertIn("## Đang làm", ctx)
+
+    def test_session_start_progress_cut_matches_progress_check_cap(self):
+        # Số byte hook cắt phải bằng trần của `progress-check` (một số, hai nơi).
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import xt
+
+        cuts = set(re.findall(r"utf8_head (\d+)\)?", (HOOKS / "session-start.sh").read_text(encoding="utf-8")))
+        self.assertIn(str(xt.PROGRESS_MAX_BYTES), cuts)
 
     def test_session_start_reads_nfd_progress_sections(self):
         # PROGRESS.md dạng NFD (macOS): awk so byte nên từng chỉ còn dòng tiêu đề, mất cả 4 mục.
