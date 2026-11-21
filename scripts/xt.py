@@ -5744,7 +5744,9 @@ def _doctor_distribution(base: Path) -> List[Finding]:
 
 def _github_texts(base: Path) -> Iterator[Path]:
     """README gốc và mọi tệp thường dưới `.github/` (không theo symlink) — chữ GitHub hiển thị của dự án."""
-    yield base / "README.md"
+    readme = base / "README.md"
+    if readme.is_file() and not readme.is_symlink():
+        yield readme
     github = base / ".github"
     if github.is_dir() and not github.is_symlink():
         yield from sorted(p for p in github.rglob("*") if p.is_file() and not p.is_symlink())
@@ -5762,7 +5764,8 @@ def _doctor_github_text(base: Path) -> List[Finding]:
     hits: List[str] = []
     for path in _github_texts(base):
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            with path.open("rb") as fh:
+                text = fh.read(1 << 20).decode("utf-8", errors="replace")
         except OSError:
             continue
         rel = path.relative_to(base).as_posix()

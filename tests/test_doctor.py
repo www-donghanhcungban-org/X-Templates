@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 import unittest.mock
 from contextlib import redirect_stderr, redirect_stdout
@@ -690,10 +691,22 @@ class DoctorStateAndEnvTest(DoctorCase):
         def group() -> list[xt.Finding]:
             return xt._doctor_github_text(self.base)
 
+        import xt_distribution
+
+        self.assertEqual(
+            xt_distribution.adopted_note("3.40.1 (abc1234)", "o/fork"),
+            "Áp dụng từ phiên bản v3.40.1 của dự án X-Templates (https://github.com/o/fork).",
+        )
+        self.assertEqual(
+            xt_distribution.adopted_note("  V1.0  "),
+            f"Áp dụng từ phiên bản v1.0 của dự án X-Templates (https://github.com/{xt_distribution.CANONICAL}).",
+        )
         self.assertEqual(group(), [])  # không README, không .github
         note = "Áp dụng từ phiên bản v3.34.0 của dự án X-Templates (https://github.com/o/X-Templates)."
         readme = self.write("README.md", f"# app\n\nQuản lý khách sạn.\n\n---\n\n{note}\n")
         self.assertEqual(group(), [])
+        readme.write_text(unicodedata.normalize("NFD", f"# app\n\n{note}\n"), encoding="utf-8")
+        self.assertEqual(group(), [])  # chuẩn hoá NFC trước khi khớp ADOPTED
         readme.write_text("# app\n\náp dụng TỪ phiên bản 3.1.0 của dự án x-templates\n", encoding="utf-8")
         self.assertEqual(group(), [])  # không phân biệt hoa/thường, `v` tuỳ chọn
         readme.write_text("# app\n\nBản sao khung x-templates.\n", encoding="utf-8")
@@ -705,9 +718,14 @@ class DoctorStateAndEnvTest(DoctorCase):
         self.assertIn("README.md:3, .github/workflows/up.yml:1", finding.msg)
         self.assertNotIn("link.yml", finding.msg)
         self.assertIn(("github-text", "warn"), [(f.code, f.level) for f in self.findings()])
+        with unittest.mock.patch.object(Path, "open", side_effect=OSError("locked")):
+            self.assertEqual(group(), [])
         readme.write_text("X-Templates\n" * 7, encoding="utf-8")
         self.assertIn("README.md:5 (+3)", group()[0].msg)
         readme.unlink()
+        (self.base / "README.md").symlink_to(self.base / ".github/workflows/up.yml")
+        self.assertEqual([f.msg for f in group()], [finding.msg.replace("README.md:3, ", "")])
+        (self.base / "README.md").unlink()
         readme.mkdir()  # không đọc được (thư mục) → bỏ qua, không sập
         shutil.rmtree(self.base / ".github")
         (self.base / ".github").symlink_to(self.tmp, target_is_directory=True)

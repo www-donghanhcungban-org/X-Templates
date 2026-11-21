@@ -215,18 +215,17 @@ def deploy_secret_status(origin: Origin, cfg: dict[str, str]) -> str:
 
 
 def about_status(origin: Origin) -> tuple[str, list[str]]:
-    """WF-DOC-021: mô tả repo (About, homepage, topics) mô tả dự án — trống hoặc nhắc khung ngoài ghi chú nguồn là việc
-    tuỳ chọn của chủ repo (installer ngoại tuyến không đặt được metadata GitHub). Repo khung và repo chưa có origin: không áp."""
+    """WF-DOC-021: mô tả repo (About, homepage, topics) mô tả dự án — trống, chưa đọc được hoặc nhắc khung ngoài ghi chú
+    nguồn là việc tuỳ chọn của chủ repo (installer ngoại tuyến không đặt được metadata GitHub). Repo khung: không áp."""
     if not origin.has_origin or (origin.base / "framework" / "00-method" / "README.md").is_file():
         return SKIP, []
     doc = origin.get("")
-    if not isinstance(doc, dict):
-        return UNKNOWN, []
-    topics, description = doc.get("topics"), doc.get("description")
-    words = [description, doc.get("homepage"), *(topics if isinstance(topics, list) else [])]
-    text = "\n".join(w for w in words if isinstance(w, str))
-    if isinstance(description, str) and description.strip() and not xt_distribution.stray_mentions(text):
-        return OK, []
+    if isinstance(doc, dict):
+        topics, description = doc.get("topics"), doc.get("description")
+        words = [description, doc.get("homepage"), *(topics if isinstance(topics, list) else [])]
+        text = "\n".join(w for w in words if isinstance(w, str))
+        if isinstance(description, str) and description.strip() and not xt_distribution.stray_mentions(text):
+            return OK, []
     return OPTIONAL, ['gh repo edit --description "<mô tả dự án>" — About/homepage/topics đang trống hoặc mô tả khung']
 
 

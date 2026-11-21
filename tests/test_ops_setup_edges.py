@@ -119,16 +119,15 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
         self.assertNotIn("--method POST", script)
 
     def test_repo_about_describes_project_and_stays_optional(self):
-        """WF-DOC-021: About/homepage/topics trống hoặc nhắc khung ngoài ghi chú nguồn → tuỳ chọn kèm `gh repo edit`
-        (không làm admin-plan đỏ); mô tả dự án → đạt; không origin/repo khung → không áp; API không đọc được → chưa biết."""
+        """WF-DOC-021: About/homepage/topics trống, chưa đọc được hoặc nhắc khung ngoài ghi chú nguồn → tuỳ chọn kèm
+        `gh repo edit` (không làm admin-plan đỏ); mô tả dự án → đạt; không origin/repo khung → không áp."""
         origin = mock.Mock(spec=setup.Origin)
         origin.has_origin, origin.base = False, self.repo
         self.assertEqual(setup.about_status(origin), (setup.SKIP, []))
         origin.has_origin = True
-        origin.get.return_value = None
-        self.assertEqual(setup.about_status(origin), (setup.UNKNOWN, []))
         note = "Áp dụng từ phiên bản v3.34.0 của dự án X-Templates"
         cases = [
+            (None, setup.OPTIONAL),
             ({"description": "Quản lý khách sạn", "topics": ["hotel"], "homepage": None}, setup.OK),
             ({"description": f"Quản lý khách sạn. {note}", "topics": "bad"}, setup.OK),
             ({"description": "  ", "topics": []}, setup.OPTIONAL),
