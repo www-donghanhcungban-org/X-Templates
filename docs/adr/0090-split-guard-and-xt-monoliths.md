@@ -2,7 +2,7 @@
 
 - **Trạng thái:** Đề xuất được chấp nhận ngày 2026-11-21 (mục tiêu trước hạn xét lại 2027-01-21).
 - **Trạng thái triển khai:** Đã thống nhất ranh giới và cổng; tách từng lát nhỏ theo PR riêng.
-- **Liên quan:** [ADR-0001](0001-runtime-stdlib-only.md), [ADR-0018](0018-guard-hook-choke-point.md), [ADR-0089](0089-raise-file-and-dir-caps-5x.md), [scripts/AGENTS.md](../../scripts/AGENTS.md), [tests/AGENTS.md](../../tests/AGENTS.md).
+- **Liên quan:** [ADR-0001](0001-framework-as-id-library-with-machine-composition.md), [ADR-0018](0018-deny-dangerous-allow-rest.md), [ADR-0089](0089-raise-file-and-dir-caps-5x.md), [scripts/AGENTS.md](../../scripts/AGENTS.md), [tests/AGENTS.md](../../tests/AGENTS.md).
 
 ## Bối cảnh
 
