@@ -35,5 +35,5 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- Mốc `main` `55864687` (#726); nhánh `seeker/awesome-euler-socvpt` thêm sửa 🔴 AUD-HAR-461/CI-040 (D-536, ADR-0091), chưa có PR. Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). Phiên "tiếp tục" đọc sổ [audit](docs/ops/AUDIT-STATUS.md), PLAN-harden-2026-11-17 và CHANGELOG.
+- Mốc `main` `98770bc7` (#729): 🔴 AUD-HAR-461/CI-040 sửa (D-536/537, ADR-0091/0092); còn `release-sign` 3.35.0. Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). Phiên "tiếp tục" đọc sổ [audit](docs/ops/AUDIT-STATUS.md), PLAN-harden-2026-11-17 và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Subagent dùng scratch riêng dưới `/home/liend` (không `/tmp`: tmpfs, mất khi khởi động lại). Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv 3.15 đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
