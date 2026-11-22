@@ -932,13 +932,14 @@ class SessionStartUtf8Test(unittest.TestCase):
         self.assertLessEqual(len(ctx), 9800)
 
     def test_session_start_many_deferred_lines_keep_checkpoint(self):
-        # AUD-HAR-473: 16 việc chờ người (lý do ~146 ký tự) gộp thành dòng đầu ≥ 2 382 ký tự (trần mới của dòng đầu).
+        # AUD-HAR-473, AUD-DOC-330: 16 việc chờ người (lý do 140 ký tự) gộp thành một dòng verdict hơn 2 400 ký tự — vượt
+        # trần 1 200 của dòng đầu. Dòng dựng đúng định dạng `loop status` thật (`xt.py` `_with_pending_human`, `verdict: …`).
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n- việc dở\n", encoding="utf-8")
-        reasons = "; ".join(f"T-{i:02d}: " + "đ" * 140 for i in range(16))
-        ctx = self._autopilot_ctx(
-            tmp, ["inactive — done-pending-human: " + reasons, "  · checkpoint trước nén: đang ở T-9"]
-        )
+        items = "; ".join(f"T-{i:02d} (" + "đ" * 140 + ")" for i in range(16))
+        first = f"verdict: done-pending-human — mọi việc tự làm được đã xong; chờ người 16 việc: {items}"
+        self.assertGreater(len(first), 2400)
+        ctx = self._autopilot_ctx(tmp, [first, "  · checkpoint trước nén: đang ở T-9"])
         self.assertIn("đang ở T-9", ctx)
         self.assertIn("## Đang làm", ctx)
         self.assertLessEqual(len(ctx), 9800)
@@ -963,6 +964,15 @@ class SessionStartUtf8Test(unittest.TestCase):
         ctx = self._autopilot_ctx(tmp, ["v", "m" * 100, last])
         block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
         self.assertEqual(block, "v" + mark + last)
+
+    def test_session_start_extra_tail_lines_count_their_newline(self):
+        # AUD-TEST-148: các dòng nối thêm phía trước dòng cuối phải tính ký tự xuống dòng giữa chúng. Với dòng đầu `v`,
+        # dòng giữa 100 ký tự, dòng 2 379 ký tự rồi dòng `c`: đuôi chỉ còn vừa `c` (hai dòng đuôi sẽ dài 2 401).
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        mark = "\n[… đã cắt giữa …]\n"
+        ctx = self._autopilot_ctx(tmp, ["v", "m" * 100, "b" * 2379, "c"])
+        block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(block, "v" + mark + "c")
 
     def test_session_start_marks_cut_of_progress_just_above_cap(self):
         # AUD-TEST-146: PROGRESS 8 500 B không autopilot — tổng còn dưới ngân sách, nên dấu chỉ có nếu chính lần cắt 8 KB
