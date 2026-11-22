@@ -47,10 +47,11 @@ if len(t) > n:
         keep = n - len(first) - len(mark)
         tail, size = [], 0
         for line in reversed(lines[1:]):
-            if size + len(line) + 1 > keep:
+            need = len(line) + (1 if tail else 0)  # chỉ các dòng nối sau dòng cuối mới tốn thêm một ký tự xuống dòng
+            if size + need > keep:
                 break
             tail.insert(0, line)
-            size += len(line) + 1
+            size += need
         if not tail:
             tail = [lines[-1][: keep - 1] + "…"]
         t = first + mark + "\n".join(tail)

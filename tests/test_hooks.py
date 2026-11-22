@@ -859,11 +859,12 @@ class SessionStartUtf8Test(unittest.TestCase):
         self.assertEqual(limits, [str(xt.PROGRESS_MAX_BYTES)])
 
     def _session_ctx(self, tmp: Path) -> str:
+        # AUD-TEST-147: GIT_CEILING_DIRECTORIES chặn git tìm repo ở thư mục cha của TMPDIR (khối Git dài làm ctx chạm trần).
         r = subprocess.run(
             ["bash", str(HOOKS / "session-start.sh")],
             input=b"{}",
             capture_output=True,
-            env=dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp)),
+            env=dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp), GIT_CEILING_DIRECTORIES=str(tmp.parent)),
             timeout=60,
         )
         self.assertEqual(r.returncode, 0)
@@ -911,7 +912,8 @@ class SessionStartUtf8Test(unittest.TestCase):
         block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
         self.assertLessEqual(len(block), 2400)
         self.assertIn("verdict: blocked", block)
-        self.assertIn("…", block)  # dòng đầu bị chặn phải có dấu
+        # AUD-TEST-147: dấu cắt giữa cũng chứa "…" nên phải kiểm riêng dòng đầu của khối.
+        self.assertTrue(block.split("\n", 1)[0].endswith("…"))
         self.assertIn("đang ở T-1", ctx)
         self.assertIn("## Đang làm", ctx)
         self.assertLessEqual(len(ctx), 9800)
@@ -942,7 +944,7 @@ class SessionStartUtf8Test(unittest.TestCase):
         self.assertLessEqual(len(ctx), 9800)
 
     def test_session_start_checkpoint_head_survives_medium_pending_lines(self):
-        # AUD-TEST-146: kịch bản AUD-HAR-471 đúng nghĩa — 12 dòng chờ người ~110 ký tự đẩy đầu dòng checkpoint ra ngoài
+        # AUD-TEST-146: kịch bản AUD-HAR-471 đúng nghĩa — 12 dòng chờ người ~118 ký tự đẩy đầu dòng checkpoint ra ngoài
         # nửa sau; cắt giữa (hook cũ) làm mất `đang ở T-4120`.
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         lines = ["verdict: continue"] + [f"chờ người: việc {i} " + "đ" * 100 for i in range(12)]
@@ -952,6 +954,15 @@ class SessionStartUtf8Test(unittest.TestCase):
         self.assertIn("đang ở T-4120", block)
         self.assertTrue(block.endswith("…"))  # đuôi dòng checkpoint bị cắt phải có dấu
         self.assertLessEqual(len(block), 2400)
+
+    def test_session_start_last_line_that_fits_exactly_is_not_cut(self):
+        # AUD-HAR-475: dòng cuối dài đúng phần còn lại (2 400 − dòng đầu − dấu cắt) vừa khít, không bị cắt oan một ký tự.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        mark = "\n[… đã cắt giữa …]\n"
+        last = "b" * (2400 - len("v") - len(mark))
+        ctx = self._autopilot_ctx(tmp, ["v", "m" * 100, last])
+        block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(block, "v" + mark + last)
 
     def test_session_start_marks_cut_of_progress_just_above_cap(self):
         # AUD-TEST-146: PROGRESS 8 500 B không autopilot — tổng còn dưới ngân sách, nên dấu chỉ có nếu chính lần cắt 8 KB

@@ -37,7 +37,7 @@ Luật bất biến AGENTS §3 không bị làm yếu; khối D-520/D-521 của 
 
 ## Kết quả sau sửa (#738)
 
-Ba 🟠 sửa ở #738 (merge `4eeee393`). Review độc lập ở head `095302b` kết luận mã hook đúng, nhưng tìm thêm 🔴 **AUD-HAR-476**: dòng 7 của chính báo cáo này từng ghi tên model reviewer, trái AGENTS §3. #738 merge trước khi báo cáo review tới nên chuỗi đã vào lịch sử `main`; PR sổ kế gỡ khỏi cây (lịch sử không viết lại). Còn: AUD-TEST-147 (assert "…" của dòng đầu không kiểm được gì; nghi ngờ test phụ thuộc TMPDIR), số đếm 🟢 ở đầu sổ sửa thành 8. Bài học: chờ review ở head xong rồi mới merge.
+Ba 🟠 sửa ở #738 (merge `4eeee393`). Review độc lập ở head `095302b` kết luận mã hook đúng, nhưng tìm thêm 🔴 **AUD-HAR-476**: dòng 7 của chính báo cáo này từng ghi tên model reviewer, trái AGENTS §3. #738 merge trước khi báo cáo review tới nên chuỗi đã vào lịch sử `main`; #739 gỡ khỏi cây (lịch sử không viết lại). #740 trả hai nợ 🟢: AUD-TEST-147 (assert "…" của dòng đầu không kiểm được gì; test phụ thuộc TMPDIR) và AUD-HAR-475 (dòng đuôi vừa khít bị cắt oan một ký tự). Bài học: chờ review ở head xong rồi mới merge.
 
 ## Kế hoạch sửa (đã thực hiện ở #738)
 

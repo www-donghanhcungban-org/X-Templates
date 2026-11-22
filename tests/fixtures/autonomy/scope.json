@@ -766,7 +766,7 @@
    ]
   },
   {
-   "reason": "Nội dung ADR, CHANGELOG, AGENTS.md, WF-SDD-018 và hướng dẫn tests/AGENTS.md. Không phải quyết định cho hoặc chặn; đỡ bằng validate, changelog-check, check-links và đọc ADR-0091.",
+   "reason": "Nội dung ADR, CHANGELOG, AGENTS.md, WF-SDD-018, LOOP-CTX-001 và hướng dẫn tests/AGENTS.md. Không phải quyết định cho hoặc chặn; đỡ bằng validate, changelog-check, check-links và đọc ADR-0091.",
    "ids": [
     "AUD-ARCH-016",
     "AUD-ARCH-017",
