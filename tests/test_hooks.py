@@ -911,12 +911,26 @@ class SessionStartUtf8Test(unittest.TestCase):
         block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
         self.assertLessEqual(len(block), 2400)
         self.assertIn("verdict: blocked", block)
+        self.assertIn("…", block)  # dòng đầu bị chặn phải có dấu
         self.assertIn("đang ở T-1", ctx)
         self.assertIn("## Đang làm", ctx)
         self.assertLessEqual(len(ctx), 9800)
 
+    def test_session_start_single_long_line_is_cut_with_marker(self):
+        # AUD-HAR-473: vòng bị chặn với lý do dài và không có dòng phụ — `loop status` chỉ một dòng; cắt đúng trần,
+        # có "…", không in dấu "đã cắt giữa" (không có đoạn giữa) và không lặp lại dòng.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n- việc dở\n", encoding="utf-8")
+        ctx = self._autopilot_ctx(tmp, ["verdict: blocked — " + "x" * 12000])
+        block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
+        self.assertEqual(len(block), 2400)
+        self.assertTrue(block.endswith("…"))
+        self.assertNotIn("đã cắt giữa", block)
+        self.assertIn("## Đang làm", ctx)
+        self.assertLessEqual(len(ctx), 9800)
+
     def test_session_start_many_deferred_lines_keep_checkpoint(self):
-        # AUD-HAR-473: 16 việc chờ người (lý do ~146 ký tự) gộp thành dòng đầu > 2 400 ký tự.
+        # AUD-HAR-473: 16 việc chờ người (lý do ~146 ký tự) gộp thành dòng đầu ≥ 2 382 ký tự (trần mới của dòng đầu).
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n- việc dở\n", encoding="utf-8")
         reasons = "; ".join(f"T-{i:02d}: " + "đ" * 140 for i in range(16))
@@ -936,6 +950,7 @@ class SessionStartUtf8Test(unittest.TestCase):
         ctx = self._autopilot_ctx(tmp, lines)
         block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
         self.assertIn("đang ở T-4120", block)
+        self.assertTrue(block.endswith("…"))  # đuôi dòng checkpoint bị cắt phải có dấu
         self.assertLessEqual(len(block), 2400)
 
     def test_session_start_marks_cut_of_progress_just_above_cap(self):

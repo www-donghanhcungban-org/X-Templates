@@ -29,8 +29,8 @@ rest=""
 XT="$(xt_py)" || true
 if [ -n "${XT:-}" ] && [ -f "$XT_ROOT/.autopilot/state.json" ]; then
   status="$(py_run "$XT" loop status 2>/dev/null)" || status='không đọc được trạng thái'
-  # Quá 2 400 ký tự: giữ dòng verdict đầu, bỏ các dòng giữa, giữ nguyên các dòng cuối còn vừa (dòng checkpoint);
-  # dòng cuối dài hơn phần còn lại thì giữ phần đầu của nó.
+  # Quá 2 400 ký tự: giữ dòng verdict đầu (chặn ở 1 200 ký tự kèm "…"), bỏ các dòng giữa, giữ nguyên các dòng cuối còn
+  # vừa (dòng checkpoint); dòng cuối dài hơn phần còn lại thì giữ phần đầu của nó kèm "…"; chỉ một dòng thì cắt cụt kèm "…".
   status="$(printf '%s' "$status" | python3 -I -c '
 import sys
 t = sys.stdin.buffer.read().decode("utf-8", "replace")
