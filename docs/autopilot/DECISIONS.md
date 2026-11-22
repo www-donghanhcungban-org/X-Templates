@@ -686,3 +686,10 @@
 - Chọn: Hai lát (tài liệu, rồi hook và test), PLAN lập trước, loop init, bỏ phần ngoài repo hoặc quá lớn và ghi rõ
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: nâng dự án đích cần token và quyền ở repo khác, tách guard.py 22 000 dòng là nhiều PR nhỏ theo ADR-0090; gom hết một đợt phá nguyên tắc nhỏ đảo ngược được (P8); (2) đường lùi: mỗi lát một PR
 - Đường lùi: Bỏ PLAN-harden-2026-11-22, nợ vẫn nằm trong sổ audit
+
+### D-540 · 2026-11-22T15:38:04+00:00 · Lát đầu của việc tách guard.py (ADR-0090/0091) là gì? Dữ kiện: guard.py 24 423 dòng, 1 379 538 B; hook Bash đo 0,51–0,59 s mỗi lệnh trên CPython 3.15.0b4 (AUD-PERF-013 từng đo 0,21–0,28 s ở 510 KB); bộ nạp compile từ nguồn mỗi lần, không pyc (AUD-SEC-074)
+
+- Phương án: (1) Đo trước (T-3709): công cụ có test tách chi phí compile và quyết định, lập đồ thị gọi theo họ hàm, rồi mới chọn cụm tách và module nạp lười · (2) Tách ngay guard_bash.py theo ADR-0090 mà chưa đo · (3) Không tách; chỉ đặt cảnh báo kích thước
+- Chọn: Đo trước (T-3709): công cụ có test tách chi phí compile và quyết định, lập đồ thị gọi theo họ hàm, rồi mới chọn cụm tách và module nạp lười
+- Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: guard là hàng rào duy nhất, hồi quy ở đây là lỗ hổng; ADR-0091 đòi số đo trước khi quyết tách. (2) Đường lùi: lát đo không đổi hành vi. (3) Bền: không có pyc nên tách mà không nạp lười không giảm compile mỗi lệnh, chỉ số đo mới cho biết module nào nạp lười; ADR-0090 vẫn giữ nguyên.
+- Đường lùi: Đóng PLAN-guard-split-2026-11-22 và task T-3984…; ADR-0090/0091 không đổi
