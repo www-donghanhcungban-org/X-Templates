@@ -3,7 +3,7 @@ title: Spec-driven: spec là hợp đồng, tiêu chí chấp nhận, truy vết
 kind: module
 prefix: WF-SDD
 applies_to: [all]
-updated: 2026-11-21
+updated: 2026-11-22
 ---
 
 # Spec-driven: spec là hợp đồng, tiêu chí chấp nhận, truy vết
@@ -56,7 +56,7 @@ updated: 2026-11-21
 - [ ] `WF-SDD-015` **SHOULD** Dùng công cụ SDD có ghim phiên bản (Spec Kit `specify-cli` / OpenSpec) hoặc skill `/research` + template của khung; không trộn hai quy trình trong một repo. → Kiểm: ADR chọn công cụ; lockfile/phiên bản ghi.
 - [ ] `WF-SDD-016` **MAY** Sinh test khung (skeleton) từ AC bằng agent, người/evaluator duyệt trước khi implement. → Kiểm: test skeleton có `AC-` tag, trạng thái `todo/skip` có lý do cho tới khi implement.
 - [ ] `WF-SDD-017` **MAY** Spec song ngữ/thuật ngữ thống nhất (glossary) cho đội đa ngôn ngữ; thuật ngữ nghiệp vụ là một nguồn. → Kiểm: `docs/GLOSSARY.md` tồn tại và được link từ spec.
-- [ ] `WF-SDD-018` **SHOULD** Việc lớn làm **tương tác** (viết lại, refactor nhiều tệp, nâng major, đổi schema) bắt đầu ở **Plan Mode** của Claude Code (`Shift+Tab`, `/plan <prompt>` hoặc `claude --permission-mode plan`): agent đọc mã và đề xuất hướng làm, không sửa tệp (lệnh shell vẫn chạy được; chế độ bypass thì không chặn sửa), người duyệt kế hoạch rồi mới cho sửa — sai ở kế hoạch chỉ tốn vài phút, sai sau khi đã đổi hàng chục tệp tốn cả buổi. Muốn thoát Plan Mode khi đang ở màn hình duyệt kế hoạch thì bấm `Esc` trước, vì `Shift+Tab` ở đó là *duyệt*; muốn chỉnh kế hoạch thì chọn "No, keep planning" hoặc `Ctrl+G`. Vòng tự động (`/autopilot`) không dùng Plan Mode: kế hoạch là PLAN máy kiểm cùng `loop decide` (`WF-SDD-008`). → Kiểm: `AGENTS.md` của dự án nêu bước này cho việc lớn; PR viết lại link kế hoạch hoặc ghi "đã duyệt ở Plan Mode". · Nguồn: Claude Code docs *Permission modes* (mục "Analyze before you edit with plan mode"); Anthropic, *The Claude Code guide for startups* (2026-08-20), chương "Build for rebuilding".
+- [ ] `WF-SDD-018` **SHOULD** Việc lớn làm **tương tác** (viết lại, refactor nhiều tệp, nâng major, đổi schema) bắt đầu ở **Plan Mode** của Claude Code (`Shift+Tab`, `/plan <prompt>` hoặc `claude --permission-mode plan`): agent đọc mã và đề xuất hướng làm, không sửa tệp (lệnh shell vẫn chạy được; chế độ bypass thì không chặn sửa), người duyệt kế hoạch rồi mới cho sửa — sai ở kế hoạch chỉ tốn vài phút, sai sau khi đã đổi hàng chục tệp tốn cả buổi. Muốn thoát Plan Mode khi đang ở màn hình duyệt kế hoạch thì bấm `Esc` trước, vì `Shift+Tab` ở đó là *duyệt*; muốn chỉnh kế hoạch thì chọn "No, keep planning" hoặc `Ctrl+G`. Vòng tự động (`/autopilot`) không dùng Plan Mode: kế hoạch là PLAN máy kiểm cùng `loop decide` (`WF-SDD-008`). → Kiểm: `CLAUDE.md` (Claude Code) hoặc `AGENTS.md` của dự án nêu bước này cho việc lớn; PR viết lại link kế hoạch hoặc ghi "đã duyệt ở Plan Mode". · Nguồn: Claude Code docs *Permission modes* (mục "Analyze before you edit with plan mode"); Anthropic, *The Claude Code guide for startups* (2026-08-20), chương "Build for rebuilding".
 
 ## Bẫy thường gặp
 

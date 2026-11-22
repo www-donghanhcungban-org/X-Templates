@@ -11,6 +11,10 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 - Mẫu dự án đích: dòng Plan Mode (`WF-SDD-018`, riêng Claude Code) chuyển từ `framework/templates/AGENTS.md` sang `framework/templates/CLAUDE.md` (AUD-HAR-463); `AGENTS.md` giữ dòng quy ước theo thư mục. Spec `SPEC-factory-setup` §2.2 thêm hai mục `repo-about` và `field-workflow` của `admin-plan` (AUD-DOC-317). **Dự án đích:** dự án đã sửa `AGENTS.md` hoặc `CLAUDE.md` nhận `.xtemplates-new` để gộp tay; không bắt buộc.
 - Hook SessionStart: cắt PROGRESS ở trần 8 KB nay có dấu "đã cắt phần cuối" (một dấu duy nhất cho cả trần byte lẫn ngân sách tổng); khi `loop status` quá 2 400 ký tự thì giữ dòng đầu và các dòng cuối còn vừa, dòng cuối dài hơn thì giữ phần đầu của nó; tên nhánh hoặc repo dài hơn 200 byte được thêm "…" và không gợi ý tên phiên bằng tên đã cắt (AUD-HAR-471, AUD-TEST-145). `install.py` giữ quyền tệp `.claude/settings.json` khi gộp hook (không hạ 0644 về 0600, AUD-TEST-142). `admin-plan` báo "chưa đọc được" thay vì "đang trống" khi API không trả metadata repo (AUD-CODE-066); `doctor github-text` không báo dòng URL chỉ do công cụ ngắt dòng tách khỏi ghi chú nguồn (AUD-DOC-316). **Dự án đích:** hook mới đến qua `install.py`, không phải làm gì.
 
+### Fixed
+
+- Hook SessionStart: dòng đầu của `loop status` (verdict kèm lý do dán nguyên văn hoặc nhiều việc chờ người) bị chặn ở nửa trần 2 400 ký tự, nên khối Autopilot không còn vượt trần, mất dòng checkpoint hay đẩy tổng quá 10 000 ký tự (AUD-HAR-473); `LOOP-CTX-001` và `WF-SDD-018` → Kiểm khớp hook/mẫu hiện tại (AUD-DOC-325/326); thêm test ghim các hành vi đó (AUD-TEST-146).
+
 ## [3.35.0] - 2026-11-21
 
 Bản harden sau audit delta 5 lô (0 🔴; mọi lô rút gọn, phần chưa rà ở báo cáo): kênh thông tin dự án phái sinh (ADR-0087)

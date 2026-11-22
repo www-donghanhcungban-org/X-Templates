@@ -892,6 +892,61 @@ class SessionStartUtf8Test(unittest.TestCase):
         self.assertIn("checkpoint: ĐẦU", ctx)
         self.assertNotIn("x" * 2400, ctx)
 
+    def _autopilot_ctx(self, tmp: Path, lines: list[str]) -> str:
+        (tmp / ".autopilot").mkdir()
+        (tmp / ".autopilot" / "state.json").write_text("{}", encoding="utf-8")
+        (tmp / "scripts").mkdir()
+        (tmp / "scripts" / "xt.py").write_text(
+            "def main():\n    print(" + repr("\n".join(lines)) + ")\n    return 0\n", encoding="utf-8"
+        )
+        return self._session_ctx(tmp)
+
+    def test_session_start_long_first_line_keeps_checkpoint_and_progress(self):
+        # AUD-HAR-473: dòng đầu của `loop status` (verdict + lý do dán nguyên văn) không có trần độ dài; khối Autopilot
+        # phải vẫn ≤ 2 400, còn dòng checkpoint, PROGRESS và tổng ≤ 9 800.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n- việc dở\n", encoding="utf-8")
+        lines = ["verdict: blocked — " + "x" * 9000, "  · checkpoint trước nén: đang ở T-1"]
+        ctx = self._autopilot_ctx(tmp, lines)
+        block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
+        self.assertLessEqual(len(block), 2400)
+        self.assertIn("verdict: blocked", block)
+        self.assertIn("đang ở T-1", ctx)
+        self.assertIn("## Đang làm", ctx)
+        self.assertLessEqual(len(ctx), 9800)
+
+    def test_session_start_many_deferred_lines_keep_checkpoint(self):
+        # AUD-HAR-473: 16 việc chờ người (lý do ~146 ký tự) gộp thành dòng đầu > 2 400 ký tự.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n- việc dở\n", encoding="utf-8")
+        reasons = "; ".join(f"T-{i:02d}: " + "đ" * 140 for i in range(16))
+        ctx = self._autopilot_ctx(
+            tmp, ["inactive — done-pending-human: " + reasons, "  · checkpoint trước nén: đang ở T-9"]
+        )
+        self.assertIn("đang ở T-9", ctx)
+        self.assertIn("## Đang làm", ctx)
+        self.assertLessEqual(len(ctx), 9800)
+
+    def test_session_start_checkpoint_head_survives_medium_pending_lines(self):
+        # AUD-TEST-146: kịch bản AUD-HAR-471 đúng nghĩa — 12 dòng chờ người ~110 ký tự đẩy đầu dòng checkpoint ra ngoài
+        # nửa sau; cắt giữa (hook cũ) làm mất `đang ở T-4120`.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        lines = ["verdict: continue"] + [f"chờ người: việc {i} " + "đ" * 100 for i in range(12)]
+        lines.append("  · checkpoint trước nén: đang ở T-4120 " + "y" * 4000)
+        ctx = self._autopilot_ctx(tmp, lines)
+        block = ctx.split("===== Autopilot =====\n", 1)[1].split("\n\n", 1)[0]
+        self.assertIn("đang ở T-4120", block)
+        self.assertLessEqual(len(block), 2400)
+
+    def test_session_start_marks_cut_of_progress_just_above_cap(self):
+        # AUD-TEST-146: PROGRESS 8 500 B không autopilot — tổng còn dưới ngân sách, nên dấu chỉ có nếu chính lần cắt 8 KB
+        # đánh dấu (bỏ lần cắt hoặc bỏ dấu đều làm test đỏ).
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n" + "word " * 1700 + "\n", encoding="utf-8")
+        ctx = self._session_ctx(tmp)
+        self.assertIn("đã cắt phần cuối PROGRESS.md", ctx)
+        self.assertLess(len(ctx), 9800)
+
     def test_session_start_long_branch_is_marked_and_not_hinted(self):
         # AUD-HAR-471: nhánh dài hơn 200 byte bị cắt có "…" và không gợi ý tên phiên bằng tên đã cắt.
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))

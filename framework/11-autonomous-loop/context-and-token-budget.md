@@ -3,7 +3,7 @@ title: Ngân sách context/token, compaction, bàn giao phiên
 kind: module
 prefix: LOOP-CTX
 applies_to: [all]
-updated: 2026-11-21
+updated: 2026-11-22
 ---
 
 # Ngân sách context/token, compaction, bàn giao phiên
@@ -65,7 +65,7 @@ Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 9
 
 ## Checklist
 
-- [ ] `LOOP-CTX-001` **MUST** SessionStart chỉ nạp 4 mục của `PROGRESS.md` (Đang làm · Tiếp theo · Quyết định · Bàn giao phiên) để phiên sau tiếp tục; định dạng và độ tươi theo [`LOOP-HARNESS-004`](harness-files.md)/[`LOOP-HARNESS-005`](harness-files.md). → Kiểm: chạy `session-start.sh` với PROGRESS mẫu chỉ in 4 mục đó (cắt ở 8 KB) và tổng `additionalContext` ≤ 9 800 ký tự kể cả khi autopilot đang chạy (vượt 10 000 thì Claude Code thay cả chuỗi bằng đường dẫn tệp và 2 000 ký tự đầu); PROGRESS bị cắt vì ngân sách tổng (autopilot đầy) thì có dấu "đã cắt phần cuối"; lần cắt 8 KB đầu tiên chưa có dấu (AUD-HAR-471). · Nguồn: stored 03 §6; `.claude/hooks/session-start.sh`
+- [ ] `LOOP-CTX-001` **MUST** SessionStart chỉ nạp 4 mục của `PROGRESS.md` (Đang làm · Tiếp theo · Quyết định · Bàn giao phiên) để phiên sau tiếp tục; định dạng và độ tươi theo [`LOOP-HARNESS-004`](harness-files.md)/[`LOOP-HARNESS-005`](harness-files.md). → Kiểm: chạy `session-start.sh` với PROGRESS mẫu chỉ in 4 mục đó (cắt ở 8 KB) và tổng `additionalContext` ≤ 9 800 ký tự kể cả khi autopilot đang chạy (vượt 10 000 thì Claude Code thay cả chuỗi bằng đường dẫn tệp và 2 000 ký tự đầu); PROGRESS bị cắt (trần 8 KB hoặc ngân sách tổng) thì có dấu "đã cắt phần cuối" (AUD-HAR-471); khối Autopilot ≤ 2 400 ký tự kể cả khi dòng đầu của `loop status` rất dài và vẫn còn dòng checkpoint (AUD-HAR-473). · Nguồn: stored 03 §6; `.claude/hooks/session-start.sh`
 - [ ] `LOOP-CTX-002` **MUST** Mỗi lần chạy headless hoặc `loop init` khai trần: `--max-iterations`/`--hours` và (headless) `--max-turns` + `--max-budget-usd`. → Kiểm: `.autopilot/state.json` có `max_iterations`, `deadline`; JSON headless có `total_cost_usd`. · Nguồn: [`loop-design.md`](loop-design.md)
 - [ ] `LOOP-CTX-003` **MAY** Ngừng dùng 2026-10-15 — thay bằng `LOOP-CTX-017` (ADR-0009: context lớn không còn là lý do bàn giao; compaction có checkpoint thay thế).
 - [ ] `LOOP-CTX-004` **MUST@L** Không `cat` file > 1 MB hoặc đổ output lệnh > 40 dòng vào context; lọc bằng script rồi đọc phần cần. → Kiểm: `.claude/settings.json`/hook chặn `cat` file lớn hoặc quy ước trong `AGENTS.md`; `xt.py loop record` giữ `output_tail` 40 dòng. · Nguồn: stored 03 §8b
