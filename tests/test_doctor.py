@@ -694,6 +694,11 @@ class DoctorStateAndEnvTest(DoctorCase):
         self.assertEqual(xt_distribution.stray_mentions(f"# app\n\n{head}\n{tail}\n"), [])
         self.assertEqual(xt_distribution.stray_mentions(f"# app\n\n{tail}\n"), [3])
         self.assertEqual(xt_distribution.stray_mentions(f"{head}\nthêm chữ x-templates\n"), [2])
+        # AUD-XFEAT-053: chỉ miễn khi dòng ghi chú chưa có URL (bị ngắt dòng); ghi chú đủ URL rồi thì dòng URL sau nó là chữ lạ.
+        full = f"{head} {tail}"
+        self.assertEqual(xt_distribution.stray_mentions(f"{full}\n"), [])
+        self.assertEqual(xt_distribution.stray_mentions(f"{full}\n{tail}\n"), [2])
+        self.assertEqual(xt_distribution.stray_mentions(f"{full}\nhttps://github.com/evil/X-Templates-fork\n"), [2])
         readme = self.write("README.md", "# app\n" + "a" * (1 << 20) + "\nBản sao khung x-templates.\n")
         self.assertEqual(xt._doctor_github_text(self.base), [])  # chữ nhắc khung nằm sau mốc 1 MiB
         readme.write_text("# app\nBản sao khung x-templates.\n" + "a" * (1 << 20) + "\n", encoding="utf-8")

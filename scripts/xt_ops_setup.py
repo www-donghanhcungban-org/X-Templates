@@ -222,12 +222,19 @@ def about_status(origin: Origin) -> tuple[str, list[str]]:
     doc = origin.get("")
     if not isinstance(doc, dict):  # AUD-CODE-066: chưa đọc được thì nói đúng là chưa đọc, không nói "đang trống"
         return OPTIONAL, [
-            'gh repo edit --description "<mô tả dự án>" — chưa đọc được About/homepage/topics (API không trả về)'
+            "chưa đọc được About/homepage/topics (API không trả về): chạy "
+            "`gh repo view --json description,homepageUrl,repositoryTopics` rồi mới đặt bằng `gh repo edit` nếu cần, "
+            "đừng ghi đè mô tả đang có"
         ]
     topics, description = doc.get("topics"), doc.get("description")
     words = [description, doc.get("homepage"), *(topics if isinstance(topics, list) else [])]
-    text = "\n".join(w for w in words if isinstance(w, str))
-    if isinstance(description, str) and description.strip() and not xt_distribution.stray_mentions(text):
+    # AUD-XFEAT-053: xét từng trường riêng — nối bằng xuống dòng làm homepage bị coi như dòng ghi chú bị ngắt.
+    texts = [w for w in words if isinstance(w, str)]
+    if (
+        isinstance(description, str)
+        and description.strip()
+        and not any(xt_distribution.stray_mentions(t) for t in texts)
+    ):
         return OK, []
     return OPTIONAL, ['gh repo edit --description "<mô tả dự án>" — About/homepage/topics đang trống hoặc mô tả khung']
 

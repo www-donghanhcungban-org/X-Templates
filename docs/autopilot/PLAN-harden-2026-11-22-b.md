@@ -15,5 +15,5 @@
 - [x] `T-3991` AUD-DOC-328: thay "(`3a7f952b`, PR sau)" bằng "(#737)" và "(`bd762557`, PR sau)" bằng "(#736)" ở các hàng sổ — Gate: `python3 scripts/xt.py audit check docs/ops/AUDIT-STATUS.md --strict`
 ### Lát B — mã và test
 - [x] `T-3992` AUD-TEST-148, AUD-DOC-330: test dòng nối thêm của khối Autopilot, sửa chú thích dòng đầu — Gate: `python3 -m unittest tests.test_hooks.SessionStartUtf8Test` (sau: T-3991)
-- [ ] `T-3993` AUD-XFEAT-053, AUD-CODE-067: `URL_TAIL` chỉ miễn khi dòng ghi chú chưa có URL, `about_status` xét từng trường, bỏ cách che chữ `https:/{2}`, gợi ý "chưa đọc được" không ghi đè mô tả — Gate: `python3 -m unittest tests.test_doctor tests.test_ops_setup_edges` (sau: T-3992)
-- [ ] `T-3994` CHANGELOG và sổ khớp (bốn hàng `đã sửa`, ghi PR) — Gate: `python3 scripts/xt.py changelog-check` (sau: T-3993)
+- [x] `T-3993` AUD-XFEAT-053, AUD-CODE-067: `URL_TAIL` chỉ miễn khi dòng ghi chú chưa có URL, `about_status` xét từng trường, bỏ cách che chữ `https:/{2}`, gợi ý "chưa đọc được" không ghi đè mô tả — Gate: `python3 -m unittest tests.test_doctor tests.test_ops_setup_edges` (sau: T-3992)
+- [x] `T-3994` CHANGELOG và sổ khớp (bốn hàng `đã sửa`, ghi PR) — Gate: `python3 scripts/xt.py changelog-check` (sau: T-3993)

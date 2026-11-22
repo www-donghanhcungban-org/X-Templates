@@ -134,6 +134,8 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
             ({"description": None}, setup.OPTIONAL),
             ({"description": "Bản sao X-Templates"}, setup.OPTIONAL),
             ({"description": "Khách sạn", "homepage": "https://github.com/o/X-Templates"}, setup.OPTIONAL),
+            # AUD-XFEAT-053: homepage là URL khung ngay sau description chứa đầu ghi chú nguồn không phải dòng bị ngắt.
+            ({"description": note, "homepage": "https://github.com/o/X-Templates"}, setup.OPTIONAL),
             ({"description": "Khách sạn", "topics": ["x-templates"]}, setup.OPTIONAL),
         ]
         for doc, expected in cases:
@@ -142,13 +144,16 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
                 status, changes = setup.about_status(origin)
                 self.assertEqual(status, expected)
                 self.assertEqual(bool(changes), expected == setup.OPTIONAL)
-                if changes:
+                if changes and doc is not None:
                     self.assertIn('gh repo edit --description "<mô tả dự án>"', changes[0])
         # AUD-CODE-066: API không đọc được thì nói "chưa đọc được", không nói "đang trống".
         origin.get.return_value = None
         unreadable = setup.about_status(origin)[1][0]
         self.assertIn("chưa đọc được", unreadable)
         self.assertNotIn("đang trống", unreadable)
+        # AUD-CODE-067: lỗi API tạm thời không được gợi ý ghi đè mô tả đang có.
+        self.assertNotIn("gh repo edit --description", unreadable)
+        self.assertIn("gh repo view", unreadable)
         origin.get.return_value = {"description": "  "}
         self.assertIn("đang trống", setup.about_status(origin)[1][0])
         (self.repo / "framework" / "00-method").mkdir(parents=True)

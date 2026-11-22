@@ -54,20 +54,21 @@ def adopted_note(version: str, repo: object = None) -> str:
     return f"Áp dụng từ phiên bản v{ver} của dự án X-Templates (https://github.com/{slug})."
 
 
-URL_TAIL = re.compile(
-    r"\(?https:/{2}github\.com/[\w.-]+/[\w.-]+\)?\.?"
-)  # `:/{2}`: BASE-CFG-001 cấm URL literal trong mã
+GITHUB = "https://github.com/"
+URL_TAIL = re.compile(r"\(?" + re.escape(GITHUB) + r"[\w.-]+/[\w.-]+\)?\.?")
 
 
 def stray_mentions(text: str) -> list[int]:
     """Số dòng (từ 1) nhắc X-Templates ngoài dòng ghi chú nguồn hợp lệ (chuẩn hoá NFC). Ghi chú chuẩn dài 108 ký tự nên
-    công cụ ngắt dòng có thể tách riêng đoạn URL xuống dòng sau: dòng chỉ gồm URL ngay sau dòng ghi chú không bị báo."""
+    công cụ ngắt dòng có thể tách riêng đoạn URL xuống dòng sau: dòng chỉ gồm URL ngay sau dòng ghi chú CHƯA có URL không
+    bị báo (AUD-XFEAT-053: ghi chú đã đủ URL thì dòng URL kế tiếp là chữ lạ)."""
     lines = unicodedata.normalize("NFC", text).splitlines()
     hits: list[int] = []
     for n, line in enumerate(lines, 1):
         if not MENTION.search(line) or ADOPTED.search(line):
             continue
-        if n > 1 and ADOPTED.search(lines[n - 2]) and URL_TAIL.fullmatch(line.strip()):
+        before = lines[n - 2] if n > 1 else ""
+        if ADOPTED.search(before) and GITHUB not in before and URL_TAIL.fullmatch(line.strip()):
             continue
         hits.append(n)
     return hits
