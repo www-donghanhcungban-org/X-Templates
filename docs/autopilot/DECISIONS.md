@@ -693,3 +693,10 @@
 - Chọn: Đo trước (T-3709): công cụ có test tách chi phí compile và quyết định, lập đồ thị gọi theo họ hàm, rồi mới chọn cụm tách và module nạp lười
 - Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: guard là hàng rào duy nhất, hồi quy ở đây là lỗ hổng; ADR-0091 đòi số đo trước khi quyết tách. (2) Đường lùi: lát đo không đổi hành vi. (3) Bền: không có pyc nên tách mà không nạp lười không giảm compile mỗi lệnh, chỉ số đo mới cho biết module nào nạp lười; ADR-0090 vẫn giữ nguyên.
 - Đường lùi: Đóng PLAN-guard-split-2026-11-22 và task T-3984…; ADR-0090/0091 không đổi
+
+### D-541 · 2026-11-22T16:11:24+00:00 · PLAN-harden sau 3.35.0: trả nợ 🟢 nào của audit delta 22/11 trong repo này và có cắt bản mới không? Dữ kiện: release-check mọi hàng chặn PASS ở main b11cbee2, GO-NO-GO 3.35.0 đã ký; nợ 🟢 trả được: AUD-DOC-328, AUD-TEST-148, AUD-DOC-330, AUD-XFEAT-053, AUD-CODE-067; không trả được hoặc giá trị thấp: AUD-DOC-327, AUD-DOC-329, AUD-HAR-474
+
+- Phương án: (1) Trả năm nợ có đường tái hiện (hai PR: sổ rồi mã), loại ba mục còn lại có lý do, không cắt bản · (2) Trả cả tám nợ rồi cắt 3.35.1 · (3) Chỉ nâng SHA sổ, không sửa gì
+- Chọn: Trả năm nợ có đường tái hiện (hai PR: sổ rồi mã), loại ba mục còn lại có lý do, không cắt bản
+- Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: chỉ sửa nợ có bằng chứng đo được; AUD-HAR-474 chưa biết Claude Code đếm đơn vị nào nên sửa theo đoán là rủi ro, AUD-DOC-329 nằm ở bản đã ký. (2) Giữ đường lùi: hai PR nhỏ. (3) Không cắt bản: thay đổi chỉ là sửa hook và tài liệu, không buộc dự án đích làm gì; GO-NO-GO 3.35.0 đã ký, bản kế là 3.36.0 cùng việc tách guard.
+- Đường lùi: Đóng PLAN-harden-2026-11-22-b; ledger giữ nguyên các hàng mở
