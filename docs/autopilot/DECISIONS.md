@@ -557,15 +557,15 @@
 
 - Phương án: (1) Sửa tài liệu và tên test (b): tệp Codex là sản phẩm SINH từ .claude/; tệp trùng đầu ra sinh được ghi nhận (như mọi tệp harness trùng bản khung) và đi theo .claude/ ở các lần cài sau, kể cả khi --force-harness thay nguồn; chỉ tệp khác bản đã ghi nhận mới được giữ kèm .xtemplates-new · (2) Sửa mã (a): khi --force-harness, bỏ qua hash codex_files cho tệp có nguồn không phải bản khung → .xtemplates-new
 - Chọn: Phương án (1): sửa tài liệu và tên test (b)
-- Lý do (tiêu chí chất lượng cuối): Đúng: gương là bản sao byte của nguồn; khi người dùng chủ động --force-harness thay .claude/skills/<tên> thì gương giữ bản cũ sẽ LỆCH nguồn (test gương của dhcb đỏ) — đi theo nguồn mới là hành vi nhất quán với mọi tệp harness. Phương án (a) thêm ngoại lệ vào luật sở hữu và để gương lệch nguồn. Lần cài ĐẦU với --force-harness vẫn giữ gương và để .xtemplates-new.
+- Lý do (tiêu chí chất lượng cuối): Đúng: gương là bản sao byte của nguồn; khi người dùng chủ động --force-harness thay .claude/skills/<tên> thì gương giữ bản cũ sẽ LỆCH nguồn (test gương trùng byte của dự án như dhcb đỏ) — đi theo nguồn mới là hành vi nhất quán với mô hình 'tệp trùng bản khung ghi là của khung' mà install.py dùng cho mọi tệp harness. Phương án (a) thêm ngoại lệ vào luật sở hữu và để gương lệch nguồn. Lần cài ĐẦU với --force-harness vẫn giữ gương và để .xtemplates-new (chưa có ghi nhận) — đã sửa ở lượt 2.
 - Đường lùi: Áp phương án (a) trong install.py
 
 ### D-521 · 2026-11-19T23:39:27+00:00 · Điều phối một dự án từ ý tưởng qua ba giai đoạn tới vận hành bằng gì?
 
 - Phương án: (1) Dùng sổ giai đoạn, trạng thái vòng lặp và chứng cứ bản chạy hiện có; chốt phạm vi nghiệm thu ở Git; diễn tập trước chuyển giao cho CD của sản phẩm · (2) Tạo bộ điều phối riêng với sổ trạng thái, quyền duyệt và hạ tầng production mặc định
-- Chọn: Phương án (1)
-- Lý do (tiêu chí chất lượng cuối): Giữ một nguồn trạng thái cho mỗi quyết định, duyệt đúng bản, đo thời gian, kiểm lại được trên repo mới và repo có sẵn
-- Đường lùi: Dự án tiếp tục dùng các lệnh stage, loop, release-check, deploy, perf riêng; kiểm lại hợp đồng khi đổi adapter.
+- Chọn: Dùng sổ giai đoạn, trạng thái vòng lặp và chứng cứ bản chạy hiện có; chốt phạm vi nghiệm thu ở Git; diễn tập trước chuyển giao cho CD của sản phẩm
+- Lý do (tiêu chí chất lượng cuối): Giữ một nguồn trạng thái cho mỗi quyết định, tôn trọng duyệt đúng bản, đo thời gian và kiểm lại được trên repo sinh mới và repo có sẵn
+- Đường lùi: Các dự án có thể tiếp tục dùng những lệnh stage, loop, release-check, deploy và perf riêng; kiểm lại hợp đồng khi thay adapter đích.
 
 ### D-522 · 2026-11-20T01:05:30+00:00 · Trình MVP lúc nào?
 
@@ -679,3 +679,10 @@
 - Chọn: Lập PLAN khai các lát đã làm, loop init rồi loop verify chạy lại từng Gate
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: loop verify chạy lại Gate hôm nay nên bằng chứng là thật, PLAN ghi rõ lập sau khi làm; chủ repo đã bật release_signoff agent và yêu cầu tự quyết; phương án 2 vẫn đúng nhưng chặn phát hành chờ người dù điều kiện máy đã đủ
 - Đường lùi: Bỏ .autopilot cục bộ và để người ký §5 GO-NO-GO; PLAN giữ làm hồ sơ
+
+### D-539 · 2026-11-22T00:23:05+00:00 · Làm 'tất cả' nợ sau phát hành 3.35.0: phạm vi và cách làm
+
+- Phương án: (1) Hai lát (tài liệu, rồi hook và test), PLAN lập trước, loop init, bỏ phần ngoài repo hoặc quá lớn và ghi rõ · (2) Gom mọi thứ kể cả tách guard.py và nâng dự án đích trong một đợt
+- Chọn: Hai lát (tài liệu, rồi hook và test), PLAN lập trước, loop init, bỏ phần ngoài repo hoặc quá lớn và ghi rõ
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: nâng dự án đích cần token và quyền ở repo khác, tách guard.py 22 000 dòng là nhiều PR nhỏ theo ADR-0090; gom hết một đợt phá nguyên tắc nhỏ đảo ngược được (P8); (2) đường lùi: mỗi lát một PR
+- Đường lùi: Bỏ PLAN-harden-2026-11-22, nợ vẫn nằm trong sổ audit

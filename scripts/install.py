@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""install.py — cài khung X-Templates vào một dự án đích (mọi hệ điều hành, cần CPython 3.15.x).
+"""install.py — cài khung X-Templates vào một dự án đích (POSIX: Linux đã kiểm bằng CI, macOS chưa; cần CPython 3.15.x).
 
 Kết quả trong dự án đích:
   .xtemplates/framework/        bản sao thư viện yêu cầu (chỉ đọc; cập nhật bằng cách chạy lại install)

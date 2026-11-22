@@ -44,6 +44,8 @@ trạng thái (`đạt` / `thiếu` / `không đọc được` / `không áp d�
 | `worker-budget` | Merge PR đặt trần chi phí và số lượt cho worker ngoài phiên (khoá chỉ người đổi — SPEC-factory-parallel §2.3) | `worker_budget_usd`, `worker_max_turns` ở bản đã commit của **nhánh chính**; giá trị ở cây làm việc không tính |
 | `worker-launcher` | Bật một nơi khởi động worker (workflow, scheduled task hoặc máy riêng) | workflow mẫu có trong `.github/workflows/`; scheduled task: `không đọc được` — kiểm tay |
 | `security-updates` | Bật Dependabot security updates | `GET /repos/{o}/{r}/automated-security-fixes` |
+| `repo-about` | Đặt About, homepage và topics mô tả chính dự án (`WF-DOC-021`) | `GET repos/{o}/{r}` (description, homepage, topics); chưa đọc được API thì giữ `tuỳ chọn` |
+| `field-workflow` | Khi dự án cài `xt-field.yml`: tạo environment `xt-field-read` (PR số field mở bằng `XT_STEWARD_TOKEN`, không cần quyền tạo PR của Actions — AUD-CI-040) | `GET environments`, so tên không phân biệt hoa thường; repo không cài workflow: `không áp dụng` |
 | `human-musts` | Các mục MUST lớp B đang áp dụng mà chưa tick (SPEC-factory-scale §2.4) | `blueprint-status` + bảng lớp |
 | `deferred` | Việc đã `loop defer` | state của vòng và dòng PLAN |
 | `prod-switch` | Quyết "khi chạy thật" nếu phương án khác tự host | hàng `prod_switch` của `release-check` |

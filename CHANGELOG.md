@@ -6,6 +6,10 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+### Changed
+
+- Mẫu dự án đích: dòng Plan Mode (`WF-SDD-018`, riêng Claude Code) chuyển từ `framework/templates/AGENTS.md` sang `framework/templates/CLAUDE.md` (AUD-HAR-463); `AGENTS.md` giữ dòng quy ước theo thư mục. Spec `SPEC-factory-setup` §2.2 thêm hai mục `repo-about` và `field-workflow` của `admin-plan` (AUD-DOC-317). **Dự án đích:** dự án đã sửa `AGENTS.md` hoặc `CLAUDE.md` nhận `.xtemplates-new` để gộp tay; không bắt buộc.
+
 ## [3.35.0] - 2026-11-21
 
 Bản harden sau audit delta 5 lô (0 🔴; mọi lô rút gọn, phần chưa rà ở báo cáo): kênh thông tin dự án phái sinh (ADR-0087)

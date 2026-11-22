@@ -4,9 +4,8 @@
 
 ## Đang làm
 
-- 2026-11-21 **3.35.0 cắt bản** (tag `v3.35.0` do `release-tag.yml` tạo sau khi agent ký GO-NO-GO §5): [audit delta](research/2026-11-21-audit-delta-3.35.0.md) 5 lô, 0 🔴; 🟠 chấp nhận AUD-HAR-452/453 (D-532), AUD-HAR-454, AUD-CI-036 (D-534), hạn 2027-01-21. 3.34.0 (`ef146b0`): harden ADR-0080 14 đợt; giới hạn đã biết ở `harness-files.md` (hạn 2027-01-21); 🟠 AUD-DEP-037 (D-514).
+- 2026-11-21 **3.35.0 đã phát hành** (tag `v3.35.0` ở `7fc43e74`, agent ký GO-NO-GO §5, ADR-0074; audit delta thứ hai: 2 🔴 + 12 🟠 sửa ở #727–#729, D-536/537, ADR-0091/0092; nợ 🟢 trong sổ audit): [audit delta](research/2026-11-21-audit-delta-3.35.0.md) 5 lô, 0 🔴; 🟠 chấp nhận AUD-HAR-452/453 (D-532), AUD-HAR-454, AUD-CI-036 (D-534), hạn 2027-01-21. 3.34.0 (`ef146b0`): harden ADR-0080 14 đợt; giới hạn đã biết ở `harness-files.md` (hạn 2027-01-21); 🟠 AUD-DEP-037 (D-514).
 - ADR-0081 (D-511, #673): `compose` giữ quy mô cũ (lỗi đọc → dừng), mặc định mới S; `doctor` ở build không cảnh báo chậm MINOR/PATCH ([đo](research/2026-11-19-target-project-speed.md)). Nâng khung kèm `actions/setup-python` 3.15.2 ở CI dự án (ADR-0078).
-- D-524 (#694): [`plan waves --handoff`](docs/adr/0086-plan-wave-handoff.md) gộp ngữ cảnh đợt đầu và giảm tổng số đợt từ 463 xuống 444 khi phát lại 42 PLAN.
 - **Factory**: [MVP ghi chú](docs/ops/FACTORY-PILOT-1.md) có bốn ca xanh (#699); quyền triển khai, trần duyệt và G7 đã nối (#701); `feedback routine-check` (#700). Điều kiện vận hành và số đo còn thiếu ở [PLAN](docs/autopilot/PLAN-factory-e2e.md).
 - **Guard** (#704, D-530): chặn đường lách tag phiên bản (`--follow-tags`, `fetch` vào `refs/tags/`, cụm cờ `gh release`, glob) — AUD-SEC-996/997 (#704), 999 (#707) đã sửa. Nợ 🟢: AUD-HAR-449/450/451/455/456, AUD-SEC-998, AUD-TEST-133/135, AUD-XFEAT-050.
 - Dự án đích ([registry](docs/ops/registry.json)): X-Company, xboss, dhcb, x-shop và hotel-manager ở 3.34.0. [Pilot lọc tầng](research/2026-11-20-hotel-floor-pilot.md) từ checkout đến merge mất 18 phút 11 giây. Còn mở bài kiểm host Codex/Gemini.
@@ -20,7 +19,7 @@
 4. Ruleset `main` đủ 5 check (2026-11-20). Việc của người: xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
 5. Còn: máy hoá `LOOP-HARNESS-031`, `LOOP-STOP-030`; task `[perf]` trong `loop` (D-041); URL phiên do máy chủ MCP gắn vào thân PR; ép báo "đã đo/chưa đo" cho UI (`LOOP-DESIGN-021`); `xt.pyz` (ADR-0010).
 6. Cách làm nhanh: CI là cổng đầy đủ; PR sổ gộp vào PR sửa (mở draft để steward không merge sớm); một executor cho một tệp nóng.
-7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), tên định danh tránh secret/token/password/credential (CodeQL) — không `noqa`/pragma, không nới trần.
+7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), quy ước tên định danh ở `scripts/AGENTS.md` — không `noqa`/pragma; nới trần chỉ bằng ADR (ADR-0092).
 
 ## Quyết định
 > Chi tiết ở `docs/adr/` và `docs/autopilot/DECISIONS.md` (D-NNN); ở đây chỉ giữ điều chưa có nhà khác.
@@ -35,5 +34,5 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- Mốc `main` `98770bc7` (#729): 🔴 AUD-HAR-461/CI-040 sửa (D-536/537, ADR-0091/0092); còn `release-sign` 3.35.0. Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). Phiên "tiếp tục" đọc sổ [audit](docs/ops/AUDIT-STATUS.md), PLAN-harden-2026-11-17 và CHANGELOG.
+- Mốc `main` `7fc43e74` (#735, tag `v3.35.0`). Phiên sau chạy `/complete` đủ Bước 3–4: PLAN-harden lập trước, `loop init` (đợt 3.35.0 khai sau khi làm, D-538); trả nợ 🟢 theo PLAN-harden-2026-11-22 (D-539). Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). Phiên "tiếp tục" đọc sổ [audit](docs/ops/AUDIT-STATUS.md), PLAN-harden-2026-11-17 và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Subagent dùng scratch riêng dưới `/home/liend` (không `/tmp`: tmpfs, mất khi khởi động lại). Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv 3.15 đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
