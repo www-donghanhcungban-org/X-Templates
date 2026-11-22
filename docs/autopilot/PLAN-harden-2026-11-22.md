@@ -18,4 +18,4 @@
 ### Lát B — hook và test
 - [x] `T-3981` AUD-HAR-471, AUD-TEST-145: dấu khi cắt 8 KB, cắt `loop status` theo dòng, nhánh dài có dấu, test ghim 9 800 — Gate: `python3 -m unittest tests.test_hooks.SessionStartUtf8Test` (sau: T-3980)
 - [x] `T-3982` AUD-TEST-144, AUD-CODE-066, AUD-TEST-143, AUD-TEST-142, AUD-DOC-316: tên test, thông điệp about, trần 1 MiB, keep_mode, ghi chú chuẩn một dòng — Gate: `python3 -m unittest tests.test_ops_setup_edges tests.test_doctor tests.test_install` (sau: T-3981)
-- [ ] `T-3983` Sổ audit khớp — Gate: `python3 scripts/xt.py audit check docs/ops/AUDIT-STATUS.md --strict` (sau: T-3982)
+- [x] `T-3983` Sổ audit khớp — Gate: `python3 scripts/xt.py audit check docs/ops/AUDIT-STATUS.md --strict` (sau: T-3982)
