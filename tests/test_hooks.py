@@ -801,8 +801,9 @@ class SessionStartUtf8Test(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         ctx = json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]  # strict decode
-        # AUD-HAR-461: additionalContext > 10 000 ký tự bị Claude Code thay bằng đường dẫn tệp + 2 000 ký tự đầu.
-        self.assertLessEqual(len(ctx), 10000)
+        # AUD-HAR-461: additionalContext > 10 000 ký tự bị Claude Code thay bằng đường dẫn tệp + 2 000 ký tự đầu;
+        # hook hứa ≤ 9 800 (AUD-TEST-145).
+        self.assertLessEqual(len(ctx), 9800)
         self.assertIn("Luật vận hành", ctx)
         self.assertIn("Đang làm", ctx)
         self.assertFalse(any("\ud800" <= ch <= "\udfff" or ch == "\ufffd" for ch in ctx), "ký tự UTF-8 bị cắt dở")
@@ -841,7 +842,7 @@ class SessionStartUtf8Test(unittest.TestCase):
             ctxs.append(json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(ctxs[0], ctxs[1])
         ctx = ctxs[0]
-        self.assertLessEqual(len(ctx), 10000)
+        self.assertLessEqual(len(ctx), 9800)
         self.assertIn("===== Git =====", ctx)
         self.assertIn("Luật vận hành", ctx)
         self.assertIn("## Đang làm", ctx)
@@ -854,8 +855,52 @@ class SessionStartUtf8Test(unittest.TestCase):
         sys.path.insert(0, str(ROOT / "scripts"))
         import xt
 
-        cuts = set(re.findall(r"utf8_head (\d+)\)?", (HOOKS / "session-start.sh").read_text(encoding="utf-8")))
-        self.assertIn(str(xt.PROGRESS_MAX_BYTES), cuts)
+        limits = re.findall(r"^PROGRESS_LIMIT=(\d+)", (HOOKS / "session-start.sh").read_text(encoding="utf-8"), re.M)
+        self.assertEqual(limits, [str(xt.PROGRESS_MAX_BYTES)])
+
+    def _session_ctx(self, tmp: Path) -> str:
+        r = subprocess.run(
+            ["bash", str(HOOKS / "session-start.sh")],
+            input=b"{}",
+            capture_output=True,
+            env=dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp)),
+            timeout=60,
+        )
+        self.assertEqual(r.returncode, 0)
+        return json.loads(r.stdout.decode("utf-8"))["hookSpecificOutput"]["additionalContext"]
+
+    def test_session_start_marks_8kb_cut_without_autopilot(self):
+        # AUD-HAR-471: PROGRESS vượt trần 8 KB bị cắt phải có dấu, không dừng giữa từ lặng lẽ.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / "PROGRESS.md").write_text("# PROGRESS\n## Đang làm\n" + "word " * 2400 + "\n", encoding="utf-8")
+        ctx = self._session_ctx(tmp)
+        self.assertIn("đã cắt phần cuối PROGRESS.md", ctx)
+        self.assertLessEqual(len(ctx), 9800)
+
+    def test_session_start_keeps_head_of_long_checkpoint_line(self):
+        # AUD-HAR-471: dòng cuối của `loop status` dài hơn phần còn lại thì giữ phần đầu của nó, không mất cả dòng.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (tmp / ".autopilot").mkdir()
+        (tmp / ".autopilot" / "state.json").write_text("{}", encoding="utf-8")
+        (tmp / "scripts").mkdir()
+        lines = ["verdict: continue"] + [f"chờ người: việc {i}" for i in range(12)] + ["checkpoint: ĐẦU " + "x" * 3000]
+        (tmp / "scripts" / "xt.py").write_text(
+            "def main():\n    print(" + repr("\n".join(lines)) + ")\n    return 0\n", encoding="utf-8"
+        )
+        ctx = self._session_ctx(tmp)
+        self.assertIn("verdict: continue", ctx)
+        self.assertIn("checkpoint: ĐẦU", ctx)
+        self.assertNotIn("x" * 2400, ctx)
+
+    def test_session_start_long_branch_is_marked_and_not_hinted(self):
+        # AUD-HAR-471: nhánh dài hơn 200 byte bị cắt có "…" và không gợi ý tên phiên bằng tên đã cắt.
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        init_git_fixture(tmp)
+        fixture_git(tmp, "checkout", "-q", "-b", "x" * 240)
+        ctx = self._session_ctx(tmp)
+        self.assertIn("x" * 200 + "…", ctx)
+        self.assertNotIn("x" * 201, ctx)
+        self.assertNotIn("đặt ngay nếu phiên chưa mang tên này", ctx)
 
     def test_session_start_reads_nfd_progress_sections(self):
         # PROGRESS.md dạng NFD (macOS): awk so byte nên từng chỉ còn dòng tiêu đề, mất cả 4 mục.

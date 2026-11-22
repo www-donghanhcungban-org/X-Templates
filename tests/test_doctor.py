@@ -684,6 +684,21 @@ class DoctorStateAndEnvTest(DoctorCase):
         self.assertEqual(codes.count(("legacy", "warn")), 2)
         self.assertIn(("git", "warn"), codes)
 
+    def test_github_text_wrapped_note_and_size_cap(self):
+        """AUD-DOC-316: ghi chú nguồn bị ngắt dòng tách URL không bị báo, URL lẻ hay chữ khác sau ghi chú vẫn bị báo;
+        AUD-TEST-143: chỉ đọc 1 MiB đầu của README (chữ nhắc khung nằm sau mốc đó không được thấy)."""
+        import xt_distribution
+
+        head = "Áp dụng từ phiên bản v3.34.0 của dự án X-Templates"
+        tail = "(https://github.com/o/X-Templates)."
+        self.assertEqual(xt_distribution.stray_mentions(f"# app\n\n{head}\n{tail}\n"), [])
+        self.assertEqual(xt_distribution.stray_mentions(f"# app\n\n{tail}\n"), [3])
+        self.assertEqual(xt_distribution.stray_mentions(f"{head}\nthêm chữ x-templates\n"), [2])
+        readme = self.write("README.md", "# app\n" + "a" * (1 << 20) + "\nBản sao khung x-templates.\n")
+        self.assertEqual(xt._doctor_github_text(self.base), [])  # chữ nhắc khung nằm sau mốc 1 MiB
+        readme.write_text("# app\nBản sao khung x-templates.\n" + "a" * (1 << 20) + "\n", encoding="utf-8")
+        self.assertTrue(xt._doctor_github_text(self.base))  # nằm trong 1 MiB đầu thì báo
+
     def test_github_text_mentions_outside_adopted_note(self):
         """WF-DOC-021: README gốc/`.github/**` của dự án đích nhắc X-Templates ngoài ghi chú nguồn → MỘT cảnh báo
         `github-text` kèm tệp:dòng (không đỏ); không README, README sạch, ghi chú hợp lệ, symlink, repo khung → im."""

@@ -144,6 +144,13 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
                 self.assertEqual(bool(changes), expected == setup.OPTIONAL)
                 if changes:
                     self.assertIn('gh repo edit --description "<mô tả dự án>"', changes[0])
+        # AUD-CODE-066: API không đọc được thì nói "chưa đọc được", không nói "đang trống".
+        origin.get.return_value = None
+        unreadable = setup.about_status(origin)[1][0]
+        self.assertIn("chưa đọc được", unreadable)
+        self.assertNotIn("đang trống", unreadable)
+        origin.get.return_value = {"description": "  "}
+        self.assertIn("đang trống", setup.about_status(origin)[1][0])
         (self.repo / "framework" / "00-method").mkdir(parents=True)
         (self.repo / "framework" / "00-method" / "README.md").write_text("# khung\n")
         self.assertEqual(setup.about_status(origin), (setup.SKIP, []))
@@ -189,9 +196,9 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
             missing = [name for name in declared if not hasattr(xt, name)]
             self.assertEqual(missing, [], f"{mod.__name__}: tên không có trên xt: {missing}")
 
-    def test_field_workflow_status_checks_actions_pr_and_environment(self):
-        """AUD-CI-037: không có xt-field.yml → SKIP; không origin có file → MISSING; đủ quyền + env → OK; thiếu →
-        MISSING."""
+    def test_field_workflow_status_checks_environment_only(self):
+        """AUD-CI-037, AUD-CI-040: không có xt-field.yml → SKIP; không origin có file → MISSING; có environment
+        `xt-field-read` (không phân biệt hoa thường, không xét quyền tạo PR của Actions) → OK; thiếu → MISSING."""
         origin = mock.Mock(spec=setup.Origin)
         origin.has_origin, origin.base, origin.sha = False, self.repo, None
         self.assertEqual(setup.field_workflow_status(origin), setup.SKIP)
@@ -208,12 +215,10 @@ class SetupEvidenceEdges(GithubFixture, TmpRepoCase):
         self.assertEqual(setup.field_workflow_status(origin), setup.SKIP)
 
         origin.file.return_value = "name: xt-field\n"
-        origin.get.return_value = {"can_approve_pull_request_reviews": True}
         origin.pages.return_value = [{"name": "xt-field-read"}]
         self.assertEqual(setup.field_workflow_status(origin), setup.OK)
 
-        # AUD-CI-040: quyền tạo PR của GITHUB_TOKEN không liên quan (PR mở bằng XT_STEWARD_TOKEN); tên không phân biệt hoa thường.
-        origin.get.return_value = {"can_approve_pull_request_reviews": False}
+        # AUD-CI-040: PR mở bằng XT_STEWARD_TOKEN nên không xét quyền của GITHUB_TOKEN; tên không phân biệt hoa thường.
         origin.pages.return_value = [{"name": "XT-Field-Read"}]
         self.assertEqual(setup.field_workflow_status(origin), setup.OK)
 

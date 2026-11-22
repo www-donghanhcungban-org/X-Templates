@@ -1068,10 +1068,12 @@ class InstallEdgeTest(unittest.TestCase):
         dst = self.tmp / "settings.json"
         old = {"hooks": {"PreToolUse": [{"matcher": "mcp__.*merge.*", "hooks": [{"command": cmd}]}]}}
         dst.write_text(json.dumps(old), encoding="utf-8")
+        dst.chmod(0o644)
         self.assertEqual(install.merge_hooks(src, dst), "merged-hooks")
         self.assertEqual(
             json.loads(dst.read_text(encoding="utf-8"))["hooks"]["PreToolUse"][0]["matcher"], new["matcher"]
         )
+        self.assertEqual(dst.stat().st_mode & 0o777, 0o644)  # AUD-TEST-142: merge không hạ settings.json về 0600
         self.assertEqual(install.merge_hooks(src, dst), "kept")
         mixed = {"matcher": "mcp__.*merge.*", "hooks": [{"command": cmd}, {"command": own}]}
         dst.write_text(json.dumps({"hooks": {"PreToolUse": [mixed]}}), encoding="utf-8")
@@ -3262,8 +3264,13 @@ class GitHooksTest(unittest.TestCase):
         nested = self.target / "sub" / "file.txt"
         install.write_atomic(nested, "dòng 1\r\ndòng 2\n")
         self.assertEqual(nested.read_bytes(), "dòng 1\r\ndòng 2\n".encode("utf-8"))
+        # AUD-TEST-142: mkstemp tạo 0600 nên phải đặt 0644 trước, rồi mới thấy keep_mode có giữ quyền hay không.
+        nested.chmod(0o644)
         install.write_atomic(nested, "dòng 3\n", keep_mode=True)
         self.assertEqual(nested.read_bytes(), "dòng 3\n".encode("utf-8"))
+        self.assertEqual(nested.stat().st_mode & 0o777, 0o644)
+        install.write_atomic(nested, "dòng 4\n")
+        self.assertEqual(nested.stat().st_mode & 0o777, 0o600)  # mặc định không giữ quyền (như xt.write_atomic)
         for tmpl in sorted((install.SRC / "framework" / "templates").glob("*.md")):
             raw = tmpl.read_text(encoding="utf-8")
             self.assertEqual(install.template_body(raw), xt.template_body(raw), tmpl.name)

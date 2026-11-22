@@ -54,10 +54,21 @@ def adopted_note(version: str, repo: object = None) -> str:
     return f"Áp dụng từ phiên bản v{ver} của dự án X-Templates (https://github.com/{slug})."
 
 
+URL_TAIL = re.compile(r"\(?https://github\.com/[\w.-]+/[\w.-]+\)?\.?")
+
+
 def stray_mentions(text: str) -> list[int]:
-    """Số dòng (từ 1) nhắc X-Templates ngoài dòng ghi chú nguồn hợp lệ (chuẩn hoá NFC)."""
-    norm = unicodedata.normalize("NFC", text)
-    return [n for n, line in enumerate(norm.splitlines(), 1) if MENTION.search(line) and not ADOPTED.search(line)]
+    """Số dòng (từ 1) nhắc X-Templates ngoài dòng ghi chú nguồn hợp lệ (chuẩn hoá NFC). Ghi chú chuẩn dài 108 ký tự nên
+    công cụ ngắt dòng có thể tách riêng đoạn URL xuống dòng sau: dòng chỉ gồm URL ngay sau dòng ghi chú không bị báo."""
+    lines = unicodedata.normalize("NFC", text).splitlines()
+    hits: list[int] = []
+    for n, line in enumerate(lines, 1):
+        if not MENTION.search(line) or ADOPTED.search(line):
+            continue
+        if n > 1 and ADOPTED.search(lines[n - 2]) and URL_TAIL.fullmatch(line.strip()):
+            continue
+        hits.append(n)
+    return hits
 
 
 class DistributionError(ValueError):

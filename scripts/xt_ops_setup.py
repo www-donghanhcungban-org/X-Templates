@@ -220,12 +220,15 @@ def about_status(origin: Origin) -> tuple[str, list[str]]:
     if not origin.has_origin or (origin.base / "framework" / "00-method" / "README.md").is_file():
         return SKIP, []
     doc = origin.get("")
-    if isinstance(doc, dict):
-        topics, description = doc.get("topics"), doc.get("description")
-        words = [description, doc.get("homepage"), *(topics if isinstance(topics, list) else [])]
-        text = "\n".join(w for w in words if isinstance(w, str))
-        if isinstance(description, str) and description.strip() and not xt_distribution.stray_mentions(text):
-            return OK, []
+    if not isinstance(doc, dict):  # AUD-CODE-066: chưa đọc được thì nói đúng là chưa đọc, không nói "đang trống"
+        return OPTIONAL, [
+            'gh repo edit --description "<mô tả dự án>" — chưa đọc được About/homepage/topics (API không trả về)'
+        ]
+    topics, description = doc.get("topics"), doc.get("description")
+    words = [description, doc.get("homepage"), *(topics if isinstance(topics, list) else [])]
+    text = "\n".join(w for w in words if isinstance(w, str))
+    if isinstance(description, str) and description.strip() and not xt_distribution.stray_mentions(text):
+        return OK, []
     return OPTIONAL, ['gh repo edit --description "<mô tả dự án>" — About/homepage/topics đang trống hoặc mô tả khung']
 
 
@@ -243,7 +246,7 @@ def field_workflow_status(origin: Origin) -> str:
     if envs is None:
         return UNKNOWN
     # PR số field mở bằng XT_STEWARD_TOKEN (hàng bot-token), không bằng GITHUB_TOKEN: không đòi quyền tạo PR của Actions.
-    return state(any(str(e.get("name", "")).casefold() == "xt-field-read" for e in envs))
+    return state(any(str(e.get("name", "")).lower() == "xt-field-read" for e in envs))
 
 
 def budget_valid(cfg: dict[str, str]) -> bool:

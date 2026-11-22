@@ -664,7 +664,8 @@ def merge_hooks(
         report.update(rep)
     if not rep["changes"]:
         return "kept"
-    write_atomic(dst, settings_text(dst.read_bytes().decode("utf-8"), theirs))  # bytes: giữ CRLF (AUD-HAR-311)
+    # bytes: giữ CRLF (AUD-HAR-311); keep_mode: tệp tạm của mkstemp là 0600, không để settings.json 0644 của dự án đổi quyền
+    write_atomic(dst, settings_text(dst.read_bytes().decode("utf-8"), theirs), keep_mode=True)
     return "merged-hooks"
 
 
