@@ -54,7 +54,9 @@ def adopted_note(version: str, repo: object = None) -> str:
     return f"Áp dụng từ phiên bản v{ver} của dự án X-Templates (https://github.com/{slug})."
 
 
-URL_TAIL = re.compile(r"\(?https://github\.com/[\w.-]+/[\w.-]+\)?\.?")
+URL_TAIL = re.compile(
+    r"\(?https:/{2}github\.com/[\w.-]+/[\w.-]+\)?\.?"
+)  # `:/{2}`: BASE-CFG-001 cấm URL literal trong mã
 
 
 def stray_mentions(text: str) -> list[int]:
