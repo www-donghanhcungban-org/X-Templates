@@ -761,7 +761,8 @@
     "AUD-HAR-465",
     "AUD-HAR-466",
     "AUD-HAR-467",
-    "AUD-HAR-468"
+    "AUD-HAR-468",
+    "AUD-HAR-473"
    ]
   },
   {
@@ -774,7 +775,15 @@
     "AUD-DOC-313",
     "AUD-DOC-314",
     "AUD-DOC-315",
+    "AUD-DOC-325",
+    "AUD-DOC-326",
     "AUD-TEST-136"
+   ]
+  },
+  {
+   "reason": "Tên model trong NỘI DUNG tệp đẩy lên repo (AUD-HAR-476): guard chỉ quét thông điệp commit và PR (ai_attribution, LOOP-HARNESS-027), nên corpus mô phỏng quyết định của guard không có ca nào cho nội dung tệp; AGENTS §3 giao phần này cho review. Chưa có máy quét tệp; đỡ bằng grep ở dòng Gate của hàng sổ và review ở head.",
+   "ids": [
+    "AUD-HAR-476"
    ]
   }
  ]

@@ -4,7 +4,7 @@ Dải `98770bc7..ce08f914` (#730–#737, 25 tệp). Mốc rà là `main` tại `
 
 ## Phạm vi
 
-`xt.py audit plan` (Python 3.15.0b4) báo bảy nhóm cần quét lại: ARCH, SEC, CODE, TEST, DOC, XFEAT, HAR. Nhóm còn lại không có tệp đổi nên giữ SHA cũ. Người viết dải này là phiên chính; mọi reviewer là `reviewer-alt` chạy `claude-opus-5-5`, effort `max`, cao hơn người viết (`LOOP-ORCH-005`).
+`xt.py audit plan` (Python 3.15.0b4) báo bảy nhóm cần quét lại: ARCH, SEC, CODE, TEST, DOC, XFEAT, HAR. Nhóm còn lại không có tệp đổi nên giữ SHA cũ. Người viết dải này là phiên chính; mọi reviewer là `reviewer-alt` chạy model bậc cao hơn người viết, effort tối đa (`LOOP-ORCH-005`; tên model không ghi vào kho theo `ai_attribution`).
 
 | Cụm | Phạm vi | Kết quả |
 |---|---|---|
@@ -35,6 +35,10 @@ Luật bất biến AGENTS §3 không bị làm yếu; khối D-520/D-521 của 
 - `progress-check` và `audit check --strict` cục bộ báo SHA chưa trên `origin/main` vì `origin/main` cục bộ cũ; với `XT_PROGRESS_BASE=ce08f914…` thì `audit check` exit 0.
 - Guard chặn `git archive … | tar -x` vào scratch và `git update-ref`; các reviewer không đi đường khác (`LOOP-STOP-025`).
 
-## Kế hoạch sửa
+## Kết quả sau sửa (#738)
+
+Ba 🟠 sửa ở #738 (merge `4eeee393`). Review độc lập ở head `095302b` kết luận mã hook đúng, nhưng tìm thêm 🔴 **AUD-HAR-476**: dòng 7 của chính báo cáo này từng ghi tên model reviewer, trái AGENTS §3. #738 merge trước khi báo cáo review tới nên chuỗi đã vào lịch sử `main`; PR sổ kế gỡ khỏi cây (lịch sử không viết lại). Còn: AUD-TEST-147 (assert "…" của dòng đầu không kiểm được gì; nghi ngờ test phụ thuộc TMPDIR), số đếm 🟢 ở đầu sổ sửa thành 8. Bài học: chờ review ở head xong rồi mới merge.
+
+## Kế hoạch sửa (đã thực hiện ở #738)
 
 Một PR, tách commit: (1) test đỏ cho AUD-HAR-473 và AUD-TEST-146, rồi sửa hook (cắt dòng đầu ở n//2 kèm "…"); (2) AUD-DOC-325/326 kèm nâng `updated` và CHANGELOG; (3) các 🟢 rẻ (`updated`, newline cuối `AGENTS.md`, số PR ở sổ). PR cần review sạch trước merge; sau đó nâng SHA nhóm HAR/DOC/CODE/TEST.
