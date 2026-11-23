@@ -107,7 +107,7 @@ Giữ nguyên bốn quyết định nền của đề xuất: `merge_autonomy: L
 **Cửa đợt 1:** quyết định chặn giữ được tới điểm merge theo bảng của `T-3999`; lời gọi reviewer nào cũng có lý do ghi được; mẫu ruleset tag đúng và việc áp live đã giao chủ repo; sổ số đo bắt đầu ghi và có baseline.
 
 ### Lát 2A — chọn test không sót (mục 03)
-- [ ] `T-4012` `test-select` bắc cầu kế thừa qua tệp test khác (`AUD-TEST-131`: lớp nền `TmpRepoCase`, `SignoffRepo`, `ReleaseCase`); regression cho từng ranh giới đã tìm thấy, không thêm test để tăng số (sau: T-4004; files: scripts/xt.py, tests/test_select_inherit.py) — Gate: `python3 -m unittest tests.test_select_inherit`
+- [x] `T-4012` `test-select` bắc cầu kế thừa qua tệp test khác (`AUD-TEST-131`: lớp nền `TmpRepoCase`, `SignoffRepo`, `ReleaseCase`); regression cho từng ranh giới đã tìm thấy, không thêm test để tăng số (sau: T-4004; files: scripts/xt.py, tests/test_select_inherit.py) — Gate: `python3 -m unittest tests.test_select_inherit`
 - [ ] `T-4013` Tệp chưa track ở cổng commit (`AUD-HAR-443`; cách làm theo D-518: chỉ loại khi guard xác nhận lệnh là `git commit` đứng một mình; đổi hàng rào nên rà sớm) (sau: T-4012; topo: review; files: .claude/hooks/, tests/test_commit_gate_untracked.py) — Gate: `python3 -m unittest tests.test_commit_gate_untracked`
 
 ### Lát 2B — bằng chứng review gắn nội dung (mục 02)

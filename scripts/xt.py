@@ -2634,6 +2634,81 @@ def _tests_for_file(
     return chosen or None
 
 
+_FileImports = Tuple[Dict[str, Dict[str, str]], Set[str], Set[str]]
+# Câu import đọc bằng regex (không `ast.walk` cả tệp — đo: chậm gấp 2,5 lần bước chọn), kể cả lồng trong hàm và
+# `from x import (a,\n b as c)` nhiều dòng. Chọn dư còn hơn sót: dạng lạ không đọc được → module coi như nhập cả module.
+_FROM_IMPORT_RE = re.compile(r"^[ \t]*from[ \t]+([\w.]+)[ \t]+import[ \t]+(\([^)]*\)|[^\n#;]*)", re.M)
+_PLAIN_IMPORT_RE = re.compile(r"^[ \t]*import[ \t]+([^\n#;]+)", re.M)
+_IMPORT_NAME_RE = re.compile(r"(\w+)(?:\s+as\s+(\w+))?")
+
+
+@functools.lru_cache(maxsize=1 << 10)  # hàm thuần; đọc mỗi tệp test một lần cho mọi module được hỏi
+def _file_imports(text: str) -> _FileImports:
+    """({module: {tên dùng: tên gốc}} của `from … import`, {module nhập cả module hoặc `*`}, {dòng thuộc câu import})."""
+    names: Dict[str, Dict[str, str]] = {}
+    opaque: Set[str] = set()
+    spans: List[Tuple[int, int]] = []
+    for m in _PLAIN_IMPORT_RE.finditer(text):
+        opaque.update(part.split()[0] for part in m[1].split(",") if part.split())
+        spans.append(m.span())
+    for m in _FROM_IMPORT_RE.finditer(text):
+        items = [i.strip() for i in m[2].strip("()").split(",") if i.strip()]
+        parsed = [_IMPORT_NAME_RE.fullmatch(i) for i in items]
+        if any(p is None for p in parsed):  # `*` hay dạng lạ
+            opaque.add(m[1])
+        names.setdefault(m[1], {}).update((p[2] or p[1], p[1]) for p in parsed if p)
+        spans.append(m.span())
+    return names, opaque, {ln for a, b in spans for ln in text[a:b].split("\n")}
+
+
+def _from_imports(text: str, module: str) -> Optional[Tuple[Dict[str, str], Set[str]]]:
+    """({tên dùng trong tệp: tên gốc} của `from <module> import …`, {dòng thuộc mọi câu import}). `import <module>` (dùng
+    qua thuộc tính) hay `import *` → None: không lần được tên, chọn cả tệp."""
+    names, opaque, import_lines = _file_imports(text)
+    return None if module in opaque else (names.get(module, {}), import_lines)
+
+
+def _inherited_hits(
+    b: str, a_cls: Set[str], a_whole: bool, stem: str, texts: Dict[str, str], memo: Dict[str, _TestParts]
+) -> Optional[Set[str]]:
+    """Lớp của tệp `b` dùng (kế thừa, gọi) tên nhập từ tệp test `stem` mà tệp đó đã chọn (`a_whole`: mọi tên nhập);
+    None = `b` không dùng tên nào đã chọn. Dòng import bị bỏ khỏi phần ngoài lớp khi so (tự nó nhắc tên)."""
+    found = _from_imports(texts[b], stem)
+    rest, classes = _test_parts_of(b, texts, memo)
+    if found is None:
+        return set(classes)
+    names, import_lines = found
+    parts = ("\n".join(ln for ln in rest.split("\n") if ln not in import_lines), classes)
+    used = [alias for alias, orig in names.items() if a_whole or orig in a_cls]
+    if used and not classes:  # không có lớp top-level (sinh động, hay tệp không parse được): chạy cả tệp
+        return set()
+    hit: Set[str] = set()
+    for alias in used:
+        hit |= _test_classes_hit(alias, parts, False) or set()
+    return hit or None
+
+
+def _propagate_inherit(chosen: Dict[str, Set[str]], texts: Dict[str, str], memo: Dict[str, _TestParts]) -> None:
+    """Bắc cầu qua tệp (AUD-TEST-131): tệp B nhập lớp/tên từ tệp test A đã chọn → chọn lớp của B dùng tên đó; lặp tới
+    điểm dừng để đi hết chuỗi A → B → C (hàng đợi: chỉ xét lại tệp vừa thêm lớp). Chỉ thêm, không bớt."""
+    importers: Dict[str, List[str]] = {}
+    for b, text in texts.items():
+        if "import" in text:
+            names, opaque, _ = _file_imports(text)
+            for module in {*names, *opaque}:
+                importers.setdefault(module, []).append(b)
+    queue = list(chosen)
+    while queue:
+        a = queue.pop()
+        a_cls, stem = chosen[a], posixpath.splitext(posixpath.basename(a))[0]
+        a_whole = a_cls == set(_test_parts_of(a, texts, memo)[1])
+        for b in importers.get(stem, []):
+            hit = None if b == a else _inherited_hits(b, a_cls, a_whole, stem, texts, memo)
+            if hit is not None and (b not in chosen or not hit <= chosen[b]):
+                chosen.setdefault(b, set()).update(hit)  # rỗng = tệp không có lớp top-level: chạy cả tệp
+                queue.append(b)
+
+
 def test_select_plan(root: Path, tests_dir: str, files: Sequence[str]) -> Optional[Dict[str, Set[str]]]:
     """{file test (POSIX, theo gốc) liên quan tới `files`: lớp top-level BỎ QUA (rỗng = cả file)}; None = cả suite."""
     tests_rel = posixpath.normpath(tests_dir)
@@ -2649,6 +2724,7 @@ def test_select_plan(root: Path, tests_dir: str, files: Sequence[str]) -> Option
             return None
         for t, cls in hit.items():
             chosen.setdefault(t, set()).update(cls)
+    _propagate_inherit(chosen, texts, parts)
     return {t: set(parts[t][1]) - cls for t, cls in chosen.items()}
 
 
