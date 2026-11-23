@@ -784,3 +784,10 @@
 - Chọn: Sửa Gate T-4004 theo D-551 (chấp nhận hoặc đã sửa) và đặt bản nháp GO-NO-GO NO-GO tạm
 - Lý do (tiêu chí chất lượng cuối): Gate phải phản ánh quyết định đã duyệt (AUD-HAR-460 chấp nhận một phần); BASE-REPO-006 chấp nhận ứng viên chờ ký; --force là vượt cổng
 - Đường lùi: Hoàn tác commit; xoá bản nháp GO-NO-GO
+
+### D-554 · 2026-11-23T21:39:32+00:00 · Xử lý 🟠 của audit delta #746–#756 (lô A/B): sửa ngay hay chấp nhận có hạn
+
+- Phương án: (1) Chấp nhận có hạn, sửa ở lát kế của đợt 2 PLAN-improve · (2) Sửa ngay trong PR sổ
+- Chọn: Chấp nhận có hạn, sửa ở lát kế của đợt 2 PLAN-improve
+- Lý do (tiêu chí chất lượng cuối): Không có 🔴; ADR-0062: 🟠 là nợ; sửa trong PR sổ đổi mã/hook và buộc review ở head thêm một vòng; hạn 2026-12-15 cho hai mục chặn blueprint/ruff, 2027-01-21 cho còn lại
+- Đường lùi: Đổi trạng thái hàng về mở rồi sửa từng mục
