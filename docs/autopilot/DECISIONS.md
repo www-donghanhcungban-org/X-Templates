@@ -777,3 +777,10 @@
 - Chọn: Làm audit delta và sổ ở đây, không ký
 - Lý do (tiêu chí chất lượng cuối): Nợ review không phụ thuộc phiên bản Python; người chọn mở cờ; không ký khi BASE-DEP-003 đỏ
 - Đường lùi: loop block lại; PLAN chỉ thêm tài liệu và sổ
+
+### D-553 · 2026-11-23T21:19:51+00:00 · Gate T-4004 và bản nháp GO-NO-GO 3.36.0 để mở vòng harden
+
+- Phương án: (1) Sửa Gate T-4004 theo D-551 (chấp nhận hoặc đã sửa) và đặt bản nháp GO-NO-GO NO-GO tạm · (2) loop init --force qua mặt kiểm lại cuối
+- Chọn: Sửa Gate T-4004 theo D-551 (chấp nhận hoặc đã sửa) và đặt bản nháp GO-NO-GO NO-GO tạm
+- Lý do (tiêu chí chất lượng cuối): Gate phải phản ánh quyết định đã duyệt (AUD-HAR-460 chấp nhận một phần); BASE-REPO-006 chấp nhận ứng viên chờ ký; --force là vượt cổng
+- Đường lùi: Hoàn tác commit; xoá bản nháp GO-NO-GO
