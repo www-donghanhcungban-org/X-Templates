@@ -22176,6 +22176,7 @@ def _add_release_ops(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
     group = admin.add_mutually_exclusive_group()
     group.add_argument("--json", action="store_true")
     group.add_argument("--script", action="store_true", help="in gợi ý lệnh dành cho chủ repo")
+    admin.add_argument("--only", metavar="ITEM", help="chỉ kiểm, xuất và trả mã thoát theo một hàng, ví dụ ruleset")
     admin.add_argument("--out", metavar="MARKDOWN")
     admin.set_defaults(fn=cmd_release_ops)
 

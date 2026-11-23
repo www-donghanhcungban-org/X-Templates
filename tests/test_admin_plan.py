@@ -29,8 +29,15 @@ class GithubFixture:
                 "conditions": {"ref_name": {"include": [pattern], "exclude": []}},
                 "rules": [{"type": "deletion"}],
             }
-            for name, target, pattern in (("main", "branch", "~DEFAULT_BRANCH"), ("tags", "tag", "refs/tags/v*"))
+            for name, target, pattern in (
+                ("main", "branch", "~DEFAULT_BRANCH"),
+                ("tags", "tag", "refs/tags/v*"),
+                ("tags-create", "tag", "refs/tags/v*"),
+            )
         ]
+        rules[1]["rules"] = [{"type": "update"}, {"type": "deletion"}]
+        rules[2]["rules"] = [{"type": "creation"}]
+        rules[2]["bypass_actors"] = [{"actor_id": 1, "actor_type": "Integration", "bypass_mode": "always"}]
         sha = self.git("rev-parse", "HEAD")
         files = {
             "xt.yaml": cfg,
@@ -137,9 +144,9 @@ class SetupTest(GithubFixture, TmpRepoCase):
         commands = [
             line.strip().removesuffix(" ;;")
             for line in script.splitlines()
-            if line.strip().startswith(("gh secret set ", "gh api --method POST "))
+            if line.strip().startswith(("gh secret set ", "gh api --method POST ", "gh api --method PUT "))
         ]
-        self.assertEqual(len(commands), 2)
+        self.assertEqual(len(commands), 3)
         with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(repo)}):
             for cmd in commands:
                 self.assertEqual(run_main("guard-check", "--", cmd)[0], 126)

@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 from typing import Any, Callable, Protocol
 from urllib.parse import quote
 
@@ -49,6 +50,23 @@ class Core(Protocol):
 
 OK, MISSING, UNKNOWN, SKIP, OPTIONAL = "đạt", "thiếu", "không đọc được", "không áp dụng", "tuỳ chọn"
 BLOCKS = (MISSING, UNKNOWN)
+LOCAL_ITEMS = ("human-musts", "deferred", "prod-switch")
+REMOTE_ITEMS = (
+    "repo",
+    "bot-token",
+    "ruleset",
+    "gated-keys",
+    "deploy-target",
+    "deploy-secrets",
+    "worker-budget",
+    "worker-launcher",
+    "security-updates",
+    "repo-about",
+    "field-workflow",
+)
+RULESET_FILES = {"main.json": "branch", "tags.json": "tag", "tags-create.json": "tag"}
+TAG_CONDITIONS = {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}}
+TAG_RULES = {"tags.json": [{"type": "deletion"}, {"type": "update"}], "tags-create.json": [{"type": "creation"}]}
 NAME = re.compile(r"[A-Z][A-Z0-9_]{0,99}")
 KEYS = {
     "release_signoff": ("agent", "Cho agent ký khi bằng chứng đạt điều kiện của phiên bản khung."),
@@ -72,7 +90,7 @@ def field(obj: Any, key: str, default: Any = None) -> Any:
 class Origin:
     """Use only the checkout's GitHub origin. Pin config, plan and ancestry to one remote commit."""
 
-    def __init__(self, core: Core, base: Path) -> None:
+    def __init__(self, core: Core, base: Path, *, load_config: bool = True) -> None:
         self.core, self.base = core, base
         self.cache: Doc = {}
         git_env = core._go_git_env()
@@ -88,8 +106,8 @@ class Origin:
         self.tree_sha = field(field(field(commit, "commit"), "tree"), "sha")
         self.sha = sha if isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha) else None
         self.branch = default
-        raw = self.file("xt.yaml")
-        if not self.has_origin:
+        raw = self.file("xt.yaml") if load_config else None
+        if load_config and not self.has_origin:
             raw = core._committed_xt_text(base, "refs/heads/main") or core._committed_xt_text(base, "refs/heads/master")
         self.cfg = core._yaml_keys(raw) if raw is not None else None
 
@@ -159,24 +177,91 @@ def row(name: str, status: str, why: str, action: str, verify: str, **extra: Any
     return {"id": name, "status": status, "reason": why, "action": action, "verify": verify, **extra}
 
 
+def release_actor(actors: Any) -> bool:
+    """Một App riêng được tạo tag; không đoán App ID hoặc mở rộng tới role của repo."""
+    if not isinstance(actors, list) or len(actors) != 1 or not isinstance(actors[0], dict):
+        return False
+    actor = actors[0]
+    return (
+        type(actor.get("actor_id")) is int
+        and actor["actor_id"] > 0
+        and actor.get("actor_type") == "Integration"
+        and actor.get("bypass_mode") == "always"
+    )
+
+
+def tag_rules_configured(filename: str, expected: Doc) -> bool:
+    """Bypass áp cả ruleset: quyền tạo không được nằm cùng quyền sửa/xoá."""
+    rules = expected.get("rules")
+    if not isinstance(rules, list) or sorted(rules, key=json.dumps) != TAG_RULES[filename]:
+        return False
+    actors = expected.get("bypass_actors")
+    return (
+        expected.get("target") == "tag"
+        and expected.get("enforcement") == "active"
+        and expected.get("conditions") == TAG_CONDITIONS
+        and (release_actor(actors) if filename == "tags-create.json" else actors == [])
+    )
+
+
+def rules_configured(filename: str, expected: Doc) -> bool:
+    """Một bộ kiểm dùng cho cấu hình đã commit và file chủ repo chuẩn bị ghi lên GitHub."""
+    name = expected.get("name")
+    return (
+        filename in RULESET_FILES
+        and isinstance(name, str)
+        and bool(name.strip())
+        and expected.get("target") == RULESET_FILES[filename]
+        and expected.get("enforcement") == "active"
+        and isinstance(expected.get("conditions"), dict)
+        and isinstance(expected.get("rules"), list)
+        and isinstance(expected.get("bypass_actors"), list)
+        and (filename not in TAG_RULES or tag_rules_configured(filename, expected))
+    )
+
+
+def check_ruleset_file(path: str) -> int:
+    """Chỉ đọc ba tệp mẫu được phép; lỗi đọc, JSON hay policy đều dừng trước POST/PUT."""
+    if path not in {f".github/rulesets/{filename}" for filename in RULESET_FILES}:
+        print("Ruleset phải là main.json, tags.json hoặc tags-create.json trong .github/rulesets/.", file=sys.stderr)
+        return 2
+    try:
+        expected = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        print(f"Ruleset không đọc được hoặc JSON sai: {path}", file=sys.stderr)
+        return 2
+    if not isinstance(expected, dict) or not rules_configured(Path(path).name, expected):
+        print(f"Ruleset chưa đủ cấu hình hợp lệ: {path}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def rules_file_status(origin: Origin, listing: list[Doc], filename: str, target_type: str) -> str:
+    raw = origin.file(f".github/rulesets/{filename}", repo_root=True)
+    if raw is None:
+        return MISSING if origin.sha else UNKNOWN
+    try:
+        expected = json.loads(raw)
+    except ValueError:
+        return UNKNOWN
+    if not isinstance(expected, dict):
+        return UNKNOWN
+    if not rules_configured(filename, expected):
+        return MISSING
+    found = [i for i in listing if i.get("target") == target_type and i.get("name") == expected.get("name")]
+    if len(found) != 1:
+        return MISSING
+    return match_rules(origin, found[0].get("id"), expected)
+
+
 def rules_status(origin: Origin) -> str:
     if not origin.has_origin:
         return MISSING
     listing = origin.pages("rulesets")
     if listing is None:
         return UNKNOWN
-    for filename, target_type in (("main.json", "branch"), ("tags.json", "tag")):
-        raw = origin.file(f".github/rulesets/{filename}", repo_root=True)
-        if raw is None:
-            return MISSING if origin.sha else UNKNOWN
-        try:
-            expected = json.loads(raw)
-        except ValueError:
-            return UNKNOWN
-        found = [i for i in listing if i.get("target") == target_type and i.get("name") == field(expected, "name")]
-        if not found:
-            return MISSING
-        status = match_rules(origin, found[0].get("id"), expected)
+    for filename, target_type in RULESET_FILES.items():
+        status = rules_file_status(origin, listing, filename, target_type)
         if status != OK:
             return status
     active = origin.get(f"rules/branches/{quote(origin.branch, safe='')}")
@@ -192,6 +277,11 @@ def match_rules(origin: Origin, identifier: Any, expected: Any) -> str:
         return UNKNOWN
     if expected["enforcement"] != "active":
         return MISSING
+    if expected["target"] == "tag" and not any(tag_rules_configured(name, actual) for name in TAG_RULES):
+        return MISSING
+    if expected["target"] == "tag" and isinstance(expected["rules"], list):
+        expected = {**expected, "rules": sorted(expected["rules"], key=json.dumps)}
+        actual = {**actual, "rules": sorted(actual["rules"], key=json.dumps)}
     return state(all(actual[k] == expected[k] for k in keys))
 
 
@@ -265,9 +355,8 @@ def budget_valid(cfg: dict[str, str]) -> bool:
         return False
 
 
-def local_items(core: Core, base: Path) -> list[Doc]:
-    human, deferred = UNKNOWN, SKIP
-    ids, waits = [], []
+def human_item(core: Core, base: Path) -> Doc:
+    human, ids = UNKNOWN, []
     bp = base / "BLUEPRINT.md"
     if bp.is_file():
         result = core.blueprint_status(bp)
@@ -278,161 +367,193 @@ def local_items(core: Core, base: Path) -> list[Doc]:
         else:
             if not result["bad_lines"] and not result["bad_waivers"]:
                 human = MISSING if ids else OK
+    return row(
+        "human-musts",
+        human,
+        "Cần bằng chứng của người chịu trách nhiệm.",
+        "Hoàn tất các MUST lớp B đang áp dụng trong BLUEPRINT.md.",
+        "blueprint-status",
+        ids=ids,
+    )
+
+
+def deferred_item(core: Core, base: Path) -> Doc:
+    deferred, waits = SKIP, []
     doc = core.read_state(base)
     if doc is not None:
         waits = sorted(key for key in core._deferred(doc) if core.DEFER_ID_RE.fullmatch(key))
         deferred = MISSING if waits else OK
     elif (core.state_dir(base) / "state.json").exists():
         deferred = UNKNOWN
+    return row(
+        "deferred",
+        deferred,
+        "Các quyết định được vòng chuyển cho chủ dự án.",
+        "Xử lý mục tương ứng trong PLAN.",
+        "loop status --json",
+        ids=waits,
+    )
+
+
+def switch_item(core: Core, base: Path) -> Doc:
     switch = core._release_prod_switch(base)
     decision = {"PASS": OK, "FAIL": UNKNOWN, "N/A": MISSING if switch["level"] == "BLOCKER" else SKIP}
-    return [
-        row(
-            "human-musts",
-            human,
-            "Cần bằng chứng của người chịu trách nhiệm.",
-            "Hoàn tất các MUST lớp B đang áp dụng trong BLUEPRINT.md.",
-            "blueprint-status",
-            ids=ids,
-        ),
-        row(
-            "deferred",
-            deferred,
-            "Các quyết định được vòng chuyển cho chủ dự án.",
-            "Xử lý mục tương ứng trong PLAN.",
-            "loop status --json",
-            ids=waits,
-        ),
-        row(
-            "prod-switch",
-            decision[switch["result"]],
-            "Phương án vận hành thật cần người chọn.",
-            "Quyết từng đề xuất đang chờ trong DECISIONS.md.",
-            "release-check, hàng prod_switch",
-        ),
-    ]
+    return row(
+        "prod-switch",
+        decision[switch["result"]],
+        "Phương án vận hành thật cần người chọn.",
+        "Quyết từng đề xuất đang chờ trong DECISIONS.md.",
+        "release-check, hàng prod_switch",
+    )
 
 
-def remote_items(origin: Origin) -> list[Doc]:
+def local_items(core: Core, base: Path, only: str | None = None) -> list[Doc]:
+    makers = {"human-musts": human_item, "deferred": deferred_item, "prod-switch": switch_item}
+    return [make(core, base) for name, make in makers.items() if only is None or only == name]
+
+
+def deploy_target_item(origin: Origin) -> Doc:
     cfg = origin.cfg or {}
-    secrets = origin.pages("actions/secrets", "secrets")
-    protected = UNKNOWN if origin.has_origin and origin.cfg is None else None
-    secret_status = deploy_secret_status(origin, cfg)
     envs = [
         env for env in cfg.get("deploy_envs", "").split() if env != "dev" and origin.core.DEPLOY_ENV_NAME.fullmatch(env)
     ]
     targets = {env: target(origin, env) for env in envs}
     authorized = bool(targets) and all(all(checks.values()) for checks in targets.values())
+    return row(
+        "deploy-target",
+        UNKNOWN if origin.has_origin and origin.cfg is None else state(authorized),
+        "Đích, rollback và phạm vi ủy quyền thuộc chủ dự án.",
+        "Khai bốn lệnh cho đích và cấp grant deploy đúng môi trường trong PLAN đã duyệt.",
+        "commands ở main và grant-check deploy env=<env>",
+        environments=targets,
+    )
+
+
+def gated_item(origin: Origin) -> Doc:
+    cfg = origin.cfg or {}
     missing_keys = [f"+ {k}: {v} — {why}" for k, (v, why) in KEYS.items() if cfg.get(k) != v]
+    return row(
+        "gated-keys",
+        UNKNOWN if origin.has_origin and origin.cfg is None else OPTIONAL if missing_keys else OK,
+        "Chủ dự án chọn giới hạn tự chủ.",
+        "Giữ quyền duyệt hiện tại hoặc merge riêng từng thay đổi cần thiết.",
+        "xt.yaml đã commit trên nhánh chính",
+        changes=missing_keys,
+    )
+
+
+def security_updates_item(origin: Origin) -> Doc:
     updates = field(origin.get("automated-security-fixes"), "enabled")
-    launcher = origin.file(".github/workflows/worker.yml", repo_root=True)
+    return row(
+        "security-updates",
+        state(updates) if type(updates) is bool else UNKNOWN,
+        "Cài đặt bảo mật cần quản trị repo.",
+        "Bật Dependabot security updates trong Settings.",
+        "GET automated-security-fixes",
+    )
+
+
+def about_item(origin: Origin) -> Doc:
     about, about_changes = about_status(origin)
-    return [
-        row(
+    return row(
+        "repo-about",
+        about,
+        "Mô tả repo trên GitHub do chủ repo đặt.",
+        "Đặt About, homepage và topics mô tả dự án.",
+        "GET repos/<owner>/<repo> (description, homepage, topics)",
+        changes=about_changes,
+    )
+
+
+def remote_items(origin: Origin, only: str | None = None) -> list[Doc]:
+    cfg = origin.cfg or {}
+    protected = UNKNOWN if origin.has_origin and origin.cfg is None else None
+    makers: dict[str, Callable[[], Doc]] = {
+        "repo": lambda: row(
             "repo",
             state(origin.has_origin),
             "Chủ dự án chọn tổ chức và quyền truy cập.",
             "Tạo repo rồi đặt Git remote origin.",
             "git remote get-url origin",
         ),
-        row(
+        "bot-token": lambda: row(
             "bot-token",
-            names_status(origin, {"XT_STEWARD_TOKEN"}, secrets),
+            names_status(origin, {"XT_STEWARD_TOKEN"}, origin.pages("actions/secrets", "secrets")),
             "Quyền CI do chủ repo cấp.",
             "Đặt secret XT_STEWARD_TOKEN theo RUNBOOK-PR-STEWARD.",
             "GET actions/secrets (chỉ tên)",
         ),
-        row(
+        "ruleset": lambda: row(
             "ruleset",
             rules_status(origin),
             "Bảo vệ nhánh và tag cần quản trị repo.",
-            "So cấu hình main.json và tags.json, nhập ruleset đang thiếu và kiểm danh sách bypass.",
+            "So main.json, tags.json và tags-create.json đã commit; chỉ ruleset tạo tag có một App phát hành được bypass.",
             "GET rulesets và rules/branches của nhánh mặc định",
         ),
-        row(
-            "gated-keys",
-            protected or (OPTIONAL if missing_keys else OK),
-            "Chủ dự án chọn giới hạn tự chủ.",
-            "Giữ quyền duyệt hiện tại hoặc merge riêng từng thay đổi cần thiết.",
-            "xt.yaml đã commit trên nhánh chính",
-            changes=missing_keys,
-        ),
-        row(
-            "deploy-target",
-            protected or state(authorized),
-            "Đích, rollback và phạm vi ủy quyền thuộc chủ dự án.",
-            "Khai bốn lệnh cho đích và cấp grant deploy đúng môi trường trong PLAN đã duyệt.",
-            "commands ở main và grant-check deploy env=<env>",
-            environments=targets,
-        ),
-        row(
+        "gated-keys": lambda: gated_item(origin),
+        "deploy-target": lambda: deploy_target_item(origin),
+        "deploy-secrets": lambda: row(
             "deploy-secrets",
-            protected or secret_status,
+            protected or deploy_secret_status(origin, cfg),
             "Chủ tài khoản cấp quyền đích.",
             "Tạo các tên khai trong deploy_secrets từ hệ quản lý bí mật của dự án.",
             "GET actions/secrets (chỉ tên)",
         ),
-        row(
+        "worker-budget": lambda: row(
             "worker-budget",
             protected or state(budget_valid(cfg)),
             "Ngân sách thuộc người trả phí.",
             "Đặt worker_budget_usd và worker_max_turns dương trên main.",
             "xt.yaml trên nhánh chính",
         ),
-        row(
+        "worker-launcher": lambda: row(
             "worker-launcher",
-            OK if launcher else UNKNOWN,
+            OK if origin.file(".github/workflows/worker.yml", repo_root=True) else UNKNOWN,
             "Nơi chạy worker do chủ dự án vận hành.",
             "Kiểm workflow worker.yml hoặc xác nhận lịch chạy ngoài repo.",
             "GET workflow trên nhánh chính; lịch ngoài repo cần kiểm tay",
         ),
-        row(
-            "security-updates",
-            state(updates) if type(updates) is bool else UNKNOWN,
-            "Cài đặt bảo mật cần quản trị repo.",
-            "Bật Dependabot security updates trong Settings.",
-            "GET automated-security-fixes",
-        ),
-        row(
-            "repo-about",
-            about,
-            "Mô tả repo trên GitHub do chủ repo đặt.",
-            "Đặt About, homepage và topics mô tả dự án.",
-            "GET repos/<owner>/<repo> (description, homepage, topics)",
-            changes=about_changes,
-        ),
-        row(
+        "security-updates": lambda: security_updates_item(origin),
+        "repo-about": lambda: about_item(origin),
+        "field-workflow": lambda: row(
             "field-workflow",
             field_workflow_status(origin),
             "xt-field.yml cần môi trường xt-field-read (giữ khoá đọc số field).",
             "Tạo environment xt-field-read trong Settings → Environments.",
             "GET environments",
         ),
-    ]
+    }
+    return [make() for name, make in makers.items() if only is None or only == name]
 
 
-def inventory(core: Core, base: Path) -> Doc:
-    origin = Origin(core, base)
+def dev_snapshot(core: Core, base: Path) -> Doc:
     try:
         dev = core.read_deploy_ledger(base)["envs"].get("dev", {})
         dev_digest = field(dev.get("current"), "served_digest") if dev.get("unknown") is False else None
         dev_state = "deployed" if dev_digest else "absent"
     except core.DeployError:
         dev_state, dev_digest = "unreadable", None
+    return {"state": dev_state, "digest": dev_digest}
+
+
+def inventory(core: Core, base: Path, only: str | None = None) -> Doc:
+    origin = Origin(core, base, load_config=only != "ruleset") if only not in LOCAL_ITEMS else None
     return {
         "schema": 1,
-        "dev": {"state": dev_state, "digest": dev_digest},
-        "items": remote_items(origin) + local_items(core, base),
+        "dev": dev_snapshot(core, base) if only is None else {"state": "not_checked", "digest": None},
+        "items": (remote_items(origin, only) if origin else []) + local_items(core, base, only),
+        "only": only,
         "head": core._git_head(base),
         "at": dt.datetime.now(dt.timezone.utc).date().isoformat(),
-        "main_sha": origin.sha,
+        "main_sha": origin.sha if origin else None,
     }
 
 
 def markdown(doc: Doc) -> str:
-    dev = doc["dev"]["digest"] or ("không đọc được" if doc["dev"]["state"] == "unreadable" else "chưa có")
+    states = {"unreadable": "không đọc được", "not_checked": "không kiểm ở --only"}
+    dev = doc["dev"]["digest"] or states.get(doc["dev"]["state"], "chưa có")
     lines = [f"# Thiết lập một lần — bản dev: {dev}", ""]
-    todo = [i for i in doc["items"] if i["status"] in BLOCKS]
+    todo = [i for i in doc["items"] if i["status"] in BLOCKS or i["id"] == doc.get("only")]
     if todo:
         lines.extend(["| Mục | Trạng thái | Vì sao | Việc cần làm | Máy kiểm |", "|---|---|---|---|---|"])
         lines.extend(f"| {i['id']} | {i['status']} | {i['reason']} | {i['action']} | {i['verify']} |" for i in todo)
@@ -458,32 +579,46 @@ def owner_script(doc: Doc) -> str:
         '[ "$confirmed" = "$GH_REPO" ] || exit 1',
     ]
     items = {item["id"]: item["status"] for item in doc["items"]}
-    if items["bot-token"] == MISSING:
+    if items.get("bot-token") == MISSING:
         lines.append('gh secret set XT_STEWARD_TOKEN --repo "$GH_REPO"')
-    if items["ruleset"] == MISSING:
+    if items.get("ruleset") == MISSING:
         lines.extend(
             [
-                "# Chỉ đặt XT_NEW_RULESET_FILE sau khi kiểm đúng ruleset này chưa tồn tại trên repo đã chọn.",
-                "# Với tag, điền trước actor_id của đúng GitHub App cấp XT_RELEASE_TOKEN vào bypass_actors.",
-                'if test "${XT_NEW_RULESET_FILE:-}" = ".github/rulesets/tags.json"; then',
-                """  jq -e '.bypass_actors | length == 1 and .[0].actor_type == "Integration" and (.[0].actor_id > 0) and .[0].bypass_mode == "always"' "$XT_NEW_RULESET_FILE" >/dev/null || exit 2""",
-                "fi",
-                'case "${XT_NEW_RULESET_FILE:-}" in',
-                "  .github/rulesets/main.json|.github/rulesets/tags.json)",
+                "# Chọn XT_NEW_RULESET_FILE sau khi xem ruleset live. Nếu đã tồn tại, đặt XT_EXISTING_RULESET_ID để PUT.",
+                "# Điền App ID phát hành thật vào tags-create.json rồi commit trước khi áp; tags.json không bypass.",
+                "# Di trú: tạo ruleset tags-create trước; rồi PUT tags.json vào ID ruleset tag cũ để bỏ creation.",
+                "# Không POST lại tên đã có: hai ruleset cũ/mới cùng tên không phải là cập nhật.",
+                'if test -n "${XT_NEW_RULESET_FILE:-}"; then',
+                "    XT_SETUP_SCRIPTS=.xtemplates/scripts",
+                "    if test -f framework/00-method/README.md; then XT_SETUP_SCRIPTS=scripts; fi",
+                '    test -f "$XT_SETUP_SCRIPTS/xt_ops_setup.py" || exit 2',
+                '    python3 -I - "$XT_SETUP_SCRIPTS" "$XT_NEW_RULESET_FILE" <<\'PY\'',
+                "import sys",
+                "sys.path.insert(0, sys.argv[1])",
+                "from xt_ops_setup import check_ruleset_file",
+                "raise SystemExit(check_ruleset_file(sys.argv[2]))",
+                "PY",
                 "    export GH_REPO",
-                '    gh api --method POST "repos/{owner}/{repo}/rulesets" --input "$XT_NEW_RULESET_FILE" ;;',
-                '  "") ;;',
-                "  *) exit 2 ;;",
-                "esac",
+                '    case "${XT_EXISTING_RULESET_ID:-}" in',
+                '      "")',
+                '        gh api --method POST "repos/{owner}/{repo}/rulesets" --input "$XT_NEW_RULESET_FILE" ;;',
+                "      0*|*[!0-9]*) exit 2 ;;",
+                "      *)",
+                '        gh api --method PUT "repos/{owner}/{repo}/rulesets/$XT_EXISTING_RULESET_ID" --input "$XT_NEW_RULESET_FILE" ;;',
+                "    esac",
+                "fi",
             ]
         )
-    if items["security-updates"] == MISSING:
+    if items.get("security-updates") == MISSING:
         lines.append('gh api --method PUT "repos/$GH_REPO/automated-security-fixes"')
     lines.append("# Các mục còn lại dùng hướng dẫn trong admin-plan. Chạy lại admin-plan để kiểm.")
     return "\n".join(lines)
 
 
 def command(core: Core, args: argparse.Namespace) -> int:
+    if args.only is not None and args.only not in REMOTE_ITEMS + LOCAL_ITEMS:
+        print(f"admin-plan: mục không hợp lệ: {args.only}", file=sys.stderr)
+        return 2
     base = core.loop_root(core.project_dir())
     out = None
     if args.out:
@@ -492,7 +627,7 @@ def command(core: Core, args: argparse.Namespace) -> int:
             return 2
         if out.exists() and not out.read_text(encoding="utf-8").startswith("# Thiết lập một lần — bản dev:"):
             return 2
-    doc = inventory(core, base)
+    doc = inventory(core, base, args.only)
     if out:
         core.write_atomic(out, markdown(doc), keep_mode=True)
     print(json.dumps(doc, ensure_ascii=False) if args.json else owner_script(doc) if args.script else markdown(doc))

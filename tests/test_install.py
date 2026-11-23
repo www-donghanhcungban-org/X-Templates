@@ -905,6 +905,7 @@ def make_fake_src(base: Path, ruleset: str | None = None) -> Path:
     if ruleset is not None:
         for path in (
             ".github/rulesets/tags.json",
+            ".github/rulesets/tags-create.json",
             ".github/workflows/release-tag.yml",
             "framework/templates/xt-upgrade.yml",
             "framework/templates/xt-field.yml",

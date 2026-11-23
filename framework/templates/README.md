@@ -1,7 +1,7 @@
 ---
 title: Mẫu tài liệu
 kind: index
-updated: 2026-11-21
+updated: 2026-11-23
 ---
 
 # Mẫu tài liệu
@@ -11,7 +11,7 @@ updated: 2026-11-21
 > Không có gì để điền thì ghi "không áp dụng — lý do", không xoá mục. Bốn file `AGENTS.md`, `CLAUDE.md`, `PROGRESS.md`, `xt.yaml` là
 > mẫu harness do `scripts/install.py` copy vào dự án đích (copy-if-absent), có chỗ `[ĐIỀN]` thay vì `<...>`; `PULL-REQUEST.md`,
 > `dependabot.yml`, `ci.yml`, `secret-scan.yml`, `pr-title.yml`, `ruleset-main.json`, `xt-upgrade.yml`, `xt-field.yml` là mẫu `.github/` do `install.py --with-github` copy.
-> `--with-github` cài 12 tệp, gồm 4 tệp không có hàng riêng ở bảng dưới ngoài mục này: `.github/rulesets/tags.json` (ruleset tag phát hành) và `.github/workflows/release-tag.yml` (lấy từ `.github/` của khung), `xt-field.yml`, `xt-upgrade.yml`.
+> `--with-github` cài 13 tệp, gồm 5 tệp không có hàng riêng ở bảng dưới ngoài mục này: `.github/rulesets/tags.json` (chặn sửa/xoá tag, không bypass), `.github/rulesets/tags-create.json` (tạo tag, cần App ID phát hành riêng) và `.github/workflows/release-tag.yml` (lấy từ `.github/` của khung), `xt-field.yml`, `xt-upgrade.yml`.
 > Điều kiện chạy: `xt-upgrade.yml` cần secret `XT_STEWARD_TOKEN` (thiếu thì job đỏ để CI chạy cho PR nâng bản); `xt-field.yml` cần environment `xt-field-read`, secret `XT_FIELD_READ_TOKEN` và — khi mở PR báo cáo — secret `XT_STEWARD_TOKEN` ([`optimization-loop.md`](../11-autonomous-loop/optimization-loop.md)). Khoá `upgrade_wave`, `upgrade_soak_days` của `xt.yaml` chọn đợt và số ngày chờ khi nâng khung (mặc định ghi chú trong [`xt.yaml`](xt.yaml)); token steward: `RUNBOOK-PR-STEWARD.md` (`docs/ops/` của repo khung).
 
 | File | Dùng cho | Giai đoạn · cổng |

@@ -96,6 +96,7 @@ LEGACY_RE = re.compile(r"\.xstored\b|\bxs\.(?:py|yaml)\b|\bXS_[A-Z]")
 # của riêng repo khung.
 GITHUB_FILES = {
     ".github/rulesets/tags.json": ".github/rulesets/tags.json",
+    ".github/rulesets/tags-create.json": ".github/rulesets/tags-create.json",
     ".github/workflows/release-tag.yml": ".github/workflows/release-tag.yml",
     ".github/workflows/xt-field.yml": "framework/templates/xt-field.yml",
     ".github/workflows/xt-upgrade.yml": "framework/templates/xt-upgrade.yml",
