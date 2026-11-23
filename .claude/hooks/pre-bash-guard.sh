@@ -186,6 +186,9 @@ if [ "$XG_COMMIT" = "true" ] && { [ "$XG_NO_VERIFY" != "true" ] || [ "${XT_GUARD
     elif [ "$task" = "gate-fast" ]; then
       echo "⚡ Commit nhanh (commit_gate: fast): format/lint/typecheck + test liên quan file đổi; cổng đầy đủ (scripts/dev-task.sh gate) chạy ở CI." >&2
     fi
+    # T-4013 (AUD-HAR-443, D-518): guard khẳng định cả lệnh là `git commit` đứng một mình → tệp chưa track không vào được
+    # commit, bỏ khỏi tập tệp đổi của gate-fast. Mọi ca khác (`git add -A && git commit`…) giữ cách thận trọng cũ.
+    if [ "$XG_COMMIT_ALONE" = "true" ]; then export XT_CHANGED_TRACKED_ONLY=1; else unset XT_CHANGED_TRACKED_ONLY; fi
     # stdout của cổng sang stderr: stdout của hook chỉ được chứa JSON quyết định.
     if ! CLAUDE_PROJECT_DIR="$groot" "$gate" "$task" >&2; then
       echo "❌ Cổng trước commit ĐỎ ($task: build/typecheck/lint/test) ở $groot. CẢ lệnh chưa chạy (kể cả phần trước \`git commit\`). Sửa rồi commit lại." >&2

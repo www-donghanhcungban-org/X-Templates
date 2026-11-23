@@ -108,7 +108,7 @@ Giữ nguyên bốn quyết định nền của đề xuất: `merge_autonomy: L
 
 ### Lát 2A — chọn test không sót (mục 03)
 - [x] `T-4012` `test-select` bắc cầu kế thừa qua tệp test khác (`AUD-TEST-131`: lớp nền `TmpRepoCase`, `SignoffRepo`, `ReleaseCase`); regression cho từng ranh giới đã tìm thấy, không thêm test để tăng số (sau: T-4004; files: scripts/xt.py, tests/test_select_inherit.py) — Gate: `python3 -m unittest tests.test_select_inherit`
-- [ ] `T-4013` Tệp chưa track ở cổng commit (`AUD-HAR-443`; cách làm theo D-518: chỉ loại khi guard xác nhận lệnh là `git commit` đứng một mình; đổi hàng rào nên rà sớm) (sau: T-4012; topo: review; files: .claude/hooks/, tests/test_commit_gate_untracked.py) — Gate: `python3 -m unittest tests.test_commit_gate_untracked`
+- [x] `T-4013` Tệp chưa track ở cổng commit (`AUD-HAR-443`; cách làm theo D-518: chỉ loại khi guard xác nhận lệnh là `git commit` đứng một mình; đổi hàng rào nên rà sớm) (sau: T-4012; topo: review; files: .claude/hooks/, tests/test_commit_gate_untracked.py) — Gate: `python3 -m unittest tests.test_commit_gate_untracked`
 
 ### Lát 2B — bằng chứng review gắn nội dung (mục 02)
 - [ ] `T-4014` Bản ghi và dấu review thêm base, phạm vi (tệp và digest diff) và chính sách hiệu lực ở nhánh đích; dấu `xt-review` bản mới đọc được bản cũ, và guard (`REVIEW_MARK_RE`) cùng bộ lọc của `pr-steward.yml` nhận cả hai để dấu mới không lọt luật chống đăng tay; chỉ tái dùng khi máy chứng minh diff trên phạm vi còn y nguyên, cập nhật base hay giải xung đột thì kiểm lại phần bị chạm; rủi ro chấp nhận có chủ, lý do, bằng chứng giảm thiểu, hạn (sau: T-4004; topo: review; files: scripts/xt.py, .claude/hooks/guard.py, .github/workflows/pr-steward.yml, tests/test_review_scope.py) — Gate: `python3 -m unittest tests.test_review_scope`

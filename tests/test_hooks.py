@@ -5845,7 +5845,8 @@ class HookRunnerTest(unittest.TestCase):
             env=self.env,
             timeout=60,
         )
-        self.assertEqual(r.stdout.split("\0"), ["ok", "", "", "true", "false", str(self.tmp), ""])
+        # trường cuối `commit_alone` (T-4013) nối sau các trường cũ: hook cũ đọc sáu trường đầu vẫn đúng
+        self.assertEqual(r.stdout.split("\0"), ["ok", "", "", "true", "false", str(self.tmp), "true", ""])
         r = subprocess.run(
             [sys.executable, str(self.hooks / "guard.py"), "edit", "nul"],
             input=json.dumps({"tool_input": {"file_path": ".env"}}),
@@ -5855,7 +5856,7 @@ class HookRunnerTest(unittest.TestCase):
             timeout=60,
         )
         fields = r.stdout.split("\0")
-        self.assertEqual((fields[0], fields[1], fields[3:]), ("ok", "deny", ["", "", "", ""]))
+        self.assertEqual((fields[0], fields[1], fields[3:]), ("ok", "deny", ["", "", "", "", ""]))
 
 
 class GuardCheckSourceLoadTest(unittest.TestCase):

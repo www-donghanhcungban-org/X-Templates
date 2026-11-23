@@ -369,8 +369,12 @@ changed_files() { # file đổi so với HEAD (theo gốc dự án) + file mới
   git -C "$ROOT" rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
   # core.quotePath=false: tên file Unicode (tiếng Việt) ra nguyên văn, không thành "\303\241…" có nháy.
   # --no-renames: đổi tên giữ cả tên cũ để chọn đúng test của file cũ (như pre-bash-guard.sh — review #321).
+  # XT_CHANGED_TRACKED_ONLY=1: hook commit đã được guard khẳng định lệnh là `git commit` đứng một mình (T-4013) — tệp
+  # chưa track không vào commit nên không tính.
   { git -C "$ROOT" -c core.quotePath=false diff --no-renames --relative --name-only HEAD -- &&
-    git -C "$ROOT" -c core.quotePath=false ls-files --others --exclude-standard; } | sort -u
+    if [ "${XT_CHANGED_TRACKED_ONLY:-}" != 1 ]; then
+      git -C "$ROOT" -c core.quotePath=false ls-files --others --exclude-standard
+    fi; } | sort -u
 }
 fast_test_task() { # in task test cho gate-fast: test_fast nếu có lệnh thật và biết file đổi, ngược lại test
   # XT_GATE_ALL_TESTS=1 (hook commit: diff đụng cấu hình cổng — T-1713): mọi lớp test qua test_list/test_unit, không

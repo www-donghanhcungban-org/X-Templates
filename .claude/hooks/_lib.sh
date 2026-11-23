@@ -34,13 +34,13 @@ sys.exit(m.main())
 ' "$@"
 }
 
-# Chạy guard.py một lần, đặt XG_DECISION XG_REASON XG_COMMIT XG_NO_VERIFY XG_COMMIT_DIR (định dạng `nul` của guard.py) — không
+# Chạy guard.py một lần, đặt XG_DECISION XG_REASON XG_COMMIT XG_NO_VERIFY XG_COMMIT_DIR XG_COMMIT_ALONE (định dạng `nul` của guard.py) — không
 # sinh thêm tiến trình python để tách trường. Trả 1 khi guard.py không trả kết quả (lỗi cú pháp, bị kill, thiếu file).
 # Gọi bằng `guard_fields <mode> <<<"$payload"` (không qua ống: ống chạy hàm trong subshell, mất biến).
 # shellcheck disable=SC2034 # XG_* là kết quả cho hook đã source file này
 guard_fields() { # $1=bash|edit|mcp
   local ok=""
-  XG_DECISION="" XG_REASON="" XG_COMMIT="" XG_NO_VERIFY="" XG_COMMIT_DIR=""
+  XG_DECISION="" XG_REASON="" XG_COMMIT="" XG_NO_VERIFY="" XG_COMMIT_DIR="" XG_COMMIT_ALONE=""
   {
     IFS= read -r -d '' ok
     IFS= read -r -d '' XG_DECISION
@@ -48,6 +48,7 @@ guard_fields() { # $1=bash|edit|mcp
     IFS= read -r -d '' XG_COMMIT
     IFS= read -r -d '' XG_NO_VERIFY
     IFS= read -r -d '' XG_COMMIT_DIR
+    IFS= read -r -d '' XG_COMMIT_ALONE || true # guard cũ không có trường này: rỗng = không khẳng định (T-4013)
   } < <(CLAUDE_PROJECT_DIR="$XT_ROOT" py_run "$(dirname "$0")/guard.py" "$1" nul 2>/dev/null)
   [ "$ok" = ok ]
 }
