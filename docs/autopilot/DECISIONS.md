@@ -798,3 +798,10 @@
 - Chọn: Đưa các nhóm đã rà lên bcd1c25a, delta chỉ tài liệu
 - Lý do (tiêu chí chất lượng cuối): DEP đã được lô B rà; 37399979..bcd1c25a chỉ đổi PLAN/sổ/báo cáo/GO-NO-GO, Gate của PLAN là lệnh kiểm đơn giản đã chạy xanh
 - Đường lùi: Đặt lại SHA nhóm về giá trị cũ
+
+### D-556 · 2026-11-23T22:12:20+00:00 · Mốc quét lên 78ad81dd sau khi #758 thêm PLAN đợt b
+
+- Phương án: (1) Chỉ sửa SHA ở sổ, không thêm PLAN mới (tránh nợ lặp vô hạn từ dòng Gate) · (2) Thêm PLAN mới cho lát này
+- Chọn: Chỉ sửa SHA ở sổ, không thêm PLAN mới (tránh nợ lặp vô hạn từ dòng Gate)
+- Lý do (tiêu chí chất lượng cuối): Mỗi PLAN mới có dòng Gate tính là mã chạy được, tạo nợ sau mốc; lát tiếp nối T-4104 (cùng mục tiêu mốc quét), không thêm dòng lệnh
+- Đường lùi: Đặt SHA nhóm về bcd1c25a
