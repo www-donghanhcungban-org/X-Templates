@@ -3,7 +3,7 @@ title: Bảo mật phía client: XSS, CSP, token, storage, dependency
 kind: module
 prefix: FE-SEC
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-04
+updated: 2026-11-23
 ---
 
 # Bảo mật phía client: XSS, CSP, token, storage, dependency
@@ -39,7 +39,7 @@ updated: 2026-11-04
 
 ## Checklist
 
-- [ ] `FE-SEC-001` **MUST** Không có DOM sink nhận dữ liệu chưa sanitize: mọi `dangerouslySetInnerHTML|v-html|{@html}|innerHTML=|bypassSecurityTrust|insertAdjacentHTML|document.write` đi kèm `DOMPurify.sanitize` (hoặc Trusted Types policy) và chú thích lý do. → Kiểm: lint `react/no-danger` (hoặc rule tương đương) ở mức error với `eslint-disable` có lý do; grep sink → mỗi kết quả nằm trong module `safe-html` duy nhất; test fixture XSS (`<img onerror>`, `<svg/onload>`, `javascript:`) không thực thi. · Nguồn: OWASP XSS Prevention Cheat Sheet
+- [ ] `FE-SEC-001` **MUST** Không có DOM sink nhận dữ liệu chưa sanitize: mọi `dangerouslySetInnerHTML|v-html|{@html}|innerHTML=|bypassSecurityTrust|insertAdjacentHTML|document.write` đi kèm `DOMPurify.sanitize` (hoặc Trusted Types policy) và chú thích lý do. → Kiểm: lint `react/no-danger` (hoặc rule tương đương) ở mức error với `eslint-disable` có lý do; grep sink → mỗi kết quả nằm trong module `safe-html` duy nhất; test fixture XSS (`<img onerror>`, `<svg/onload>`, `javascript:`) không thực thi. HTML, JS hoặc spec giao diện **do model sinh lúc chạy** là dữ liệu không tin cậy: không chạy toàn quyền trong WebView, mức khai báo cần danh mục component và hành động được phép cùng kiểm schema đầu ra, CSP không dùng `https:` cho mọi host, liên kết do model sinh qua danh sách cho phép (`javascript:` bị từ chối), mức mở chỉ trong sandbox có CSP chặt; công cụ kiểm tra spec không tự truy cập URL trong spec (ví dụ đọc mã, chưa chạy: pi-generative-ui chạy HTML/JS do model sinh không CSP; json-render đặt CSP MCP là `https:`; `validate_a2ui.py` của AGenUI gửi GET tới mọi URL trong spec). Kiểm thêm: fixture spec có `href` `javascript:` hoặc host ngoài danh sách bị từ chối; trình xác thực chạy với URL nội bộ không phát sinh lời gọi mạng. · Nguồn: OWASP XSS Prevention Cheat Sheet
 - [ ] `FE-SEC-002` **MUST** URL từ dữ liệu ngoài được allowlist scheme `http(s):`/`mailto:` sau khi canonicalize; không render `javascript:`/`data:` vào `href`/`src`. → Kiểm: hàm `safeUrl()` dùng chung + test; grep `href={` với biến không qua `safeUrl` = 0 (lint tuỳ chỉnh). · Nguồn: OWASP XSS Prevention; Vue Security guide
 - [ ] `FE-SEC-003` **MUST** CSP cho script là strict: nonce (per-response, không do middleware gắn tự động vào mọi `<script>`) hoặc hash + `'strict-dynamic'`; `object-src 'none'`; `base-uri 'none'`; không `'unsafe-inline'`/`'unsafe-eval'` cho `script-src`; `frame-ancestors` đặt. → Kiểm: `curl -I` có header; E2E Playwright không có lỗi console `Refused to execute`; test cấu hình parse header và assert các directive. · Nguồn: OWASP CSP Cheat Sheet
 - [ ] `FE-SEC-004` **MUST@L** CSP có `report-to` (và `report-uri` để tương thích) tới endpoint thu vi phạm; triển khai `Content-Security-Policy-Report-Only` ở staging ≥ 1 chu kỳ trước khi enforce. → Kiểm: endpoint nhận báo cáo có trong observability; changelog ghi ngày chuyển enforce. · Nguồn: OWASP CSP Cheat Sheet
