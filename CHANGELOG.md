@@ -9,6 +9,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 ### Added
 
 - `scripts/xt_guard_profile.py` (chỉ ở repo khung, không cài sang dự án đích): đo chỉ đọc chi phí compile, họ hàm theo tiền tố, cạnh gọi giữa họ và hằng dùng chung nhiều họ của `.claude/hooks/guard.py`; số đo cho việc tách guard theo ADR-0090/0091 (T-3984, D-540). Thêm vào lệnh `typecheck` của `xt.yaml`.
+- [ADR-0093](docs/adr/0093-guard-split-order-and-sibling-loader.md) và báo cáo đo [`research/2026-11-23-guard-compile-cost.md`](research/2026-11-23-guard-compile-cost.md): thứ tự tách `guard.py` (lõi dùng chung, họ từ xa, phần còn lại) và bộ nạp module anh em compile-từ-nguồn; compile trung vị 398,5 ms trong ≈ 0,55 s mỗi lệnh Bash; đường nhanh để ADR riêng (D-542).
 
 ### Changed
 
