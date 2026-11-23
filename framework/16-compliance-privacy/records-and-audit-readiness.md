@@ -3,7 +3,7 @@ title: Hồ sơ tuân thủ, audit trail, bằng chứng, chính sách, đào t�
 kind: module
 prefix: CMP-AUDIT
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-23
 ---
 
 # Hồ sơ tuân thủ, audit trail, bằng chứng, chính sách, đào tạo
@@ -44,7 +44,7 @@ bằng chứng → owner → tần suất) và `evidence/<YYYY-MM>/` do CI/job �
 ## Checklist
 
 - [ ] `CMP-AUDIT-001` **MUST@L** Có ma trận kiểm soát `docs/compliance/controls.yaml`: mỗi control có id, mô tả, khung ánh xạ (SOC 2/ISO/PCI/luật VN), owner, tần suất, loại bằng chứng, nguồn tự động. Dự án mã mở: ánh xạ OpenSSF OSPS Baseline/NIST SSDF theo [`XC-OSS-020`](../18-cross-cutting/open-source-and-community.md); ma trận chỉ dẫn link tới file đó. → Kiểm: file hợp lệ schema; script liệt kê control không có bằng chứng trong kỳ. · Nguồn: ISO/IEC 27001:2022 cl. 9.2; SOC 2 CC1–CC9
-- [ ] `CMP-AUDIT-002` **MUST** Audit trail cho hành động nhạy cảm (đăng nhập/đổi quyền, truy cập dữ liệu nhạy cảm, thay đổi cấu hình, triển khai, xuất dữ liệu, xử lý DSAR) ghi `who, what, target, when(UTC), where(ip/ua), result, reason`; lưu ở kho chỉ ghi thêm (append-only/WORM) với thời hạn theo luật (≥ 12 tháng NĐ 333; ≥ 6 năm HIPAA; ≥ 10 năm chứng từ kế toán). → Kiểm: schema sự kiện; test mỗi hành động trong danh sách sinh sự kiện; cấu hình immutability/retention; NTP. · Nguồn: NĐ 333/2026/NĐ-CP Đ.22–23; HIPAA §164.316(b)(2); PCI DSS v4.0.1 Req. 10
+- [ ] `CMP-AUDIT-002` **MUST** Audit trail cho hành động nhạy cảm (đăng nhập/đổi quyền, truy cập dữ liệu nhạy cảm, thay đổi cấu hình, triển khai, xuất dữ liệu, xử lý DSAR) ghi `who, what, target, when(UTC), where(ip/ua), result, reason`; lưu ở kho chỉ ghi thêm (append-only/WORM) với thời hạn theo luật (≥ 12 tháng NĐ 333; ≥ 6 năm HIPAA; ≥ 10 năm chứng từ kế toán). → Kiểm: schema sự kiện; test mỗi hành động trong danh sách sinh sự kiện; cấu hình immutability/retention; NTP; test vai trò ứng dụng thử UPDATE/DELETE bảng audit phải bị từ chối (REVOKE hoặc trigger) — tuyên bố "bất biến" không kèm test này ghi là chưa cưỡng chế (ví dụ đọc mã, chưa chạy: OpenMES tuyên bố PostgreSQL cưỡng chế nhưng migration không có trigger hay REVOKE). · Nguồn: NĐ 333/2026/NĐ-CP Đ.22–23; HIPAA §164.316(b)(2); PCI DSS v4.0.1 Req. 10
 - [ ] `CMP-AUDIT-003` **MUST** Sổ hoạt động xử lý (ROPA)/sổ dữ liệu, hồ sơ ĐGTĐ, hồ sơ chuyển dữ liệu, bản ghi đồng ý và biên nhận nộp cơ quan được lưu có phiên bản tại `docs/privacy/`; cập nhật theo mốc luật (6 tháng/10 ngày NĐ 356). → Kiểm: thư mục có CHANGELOG với ngày; CI nhắc khi quá hạn cập nhật. · Nguồn: Luật 91/2025/QH15 Đ.21–22; NĐ 356/2025/NĐ-CP (chưa xác minh số điều); GDPR Art. 30
 - [ ] `CMP-AUDIT-004` **MUST@L** Rà soát quyền truy cập định kỳ (≤ 90 ngày cho hệ thống production/dữ liệu nhạy cảm): danh sách người × quyền xuất tự động từ IdP/cloud, người duyệt ký, quyền thừa bị thu hồi có ticket. → Kiểm: `evidence/<kỳ>/access-review.csv` + phê duyệt; job xuất danh sách; số quyền thu hồi. · Nguồn: SOC 2 CC6.2–6.3; ISO/IEC 27001:2022 A.5.18; PCI DSS 7.2.4
 - [ ] `CMP-AUDIT-005` **MUST@L** Chính sách bắt buộc có owner, phiên bản, ngày rà ≤ 12 tháng và bằng chứng nhân sự xác nhận: an toàn thông tin, bảo vệ dữ liệu cá nhân, sử dụng chấp nhận được, ứng phó sự cố, quản lý nhà cung cấp, quản lý thay đổi, sao lưu/khôi phục, phát triển an toàn, AI (nếu có). → Kiểm: `docs/policies/` có frontmatter `owner, version, reviewed_at`; CI fail khi quá 12 tháng; bảng xác nhận từ LMS/IdP. · Nguồn: ISO/IEC 27001:2022 cl. 5.2, A.5.1; SOC 2 CC1.4, CC2.2
