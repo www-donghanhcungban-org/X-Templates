@@ -3,7 +3,7 @@ title: Điểm dừng bắt buộc, mức tin cậy T0–T4, leo thang
 kind: module
 prefix: LOOP-STOP
 applies_to: [all]
-updated: 2026-11-20
+updated: 2026-11-23
 ---
 
 # Điểm dừng bắt buộc, mức tin cậy T0–T4, leo thang
@@ -137,6 +137,24 @@ mà luật nguy hiểm đã chặn — `LOOP-STOP-025`).
 | `read -ra a …; git "${a[@]}"` — mảng từ dữ liệu làm đối số (AUD-SEC-399) | Đối số nguyên văn, hay `for x in "${a[@]}"; do git add -- "$x"; done` | Mảng chữ nguyên văn `a=(x 'y z')` vẫn chạy |
 | `printf … > s.sh; bash s.sh` — ghi rồi chạy trong cùng lệnh (AUD-SEC-400); `bash /dev/fd/3 3<<E` (AUD-SEC-402) | Ghi script bằng công cụ Write rồi chạy ở lệnh Bash riêng; heredoc vào stdin `bash <<'EOF'` | Guard không đọc tệp lúc chạy — lệnh riêng để người/review thấy nội dung |
 | `issue_write` sửa `title` không theo `<type>(scope): mô tả` (deny `LOOP-HARNESS-029`, AUD-SEC-386) | Tiêu đề dạng `fix: …`/`docs: …` (hợp lệ cả cho issue), hay chỉ sửa thân/nhãn | Số issue có thể là PR — guard không tra nên áp luật tiêu đề PR (chiều chặt) |
+
+### Rà độc lập sớm theo tác động tức thì (ADR-0095)
+
+Mặc định review gom về cổng ký (ADR-0079, ADR-0080). Ngoại lệ duy nhất: thay đổi mà **chính nó là lớp đỡ** hoặc có hiệu
+lực ngay khi merge cần một lượt rà có trọng tâm ở head **trước merge**, kể cả khi `merge_review: optional`. Chính sách đọc
+từ nhánh đích; nhãn hay cấu hình trong chính PR không tự miễn. Máy cưỡng chế từ `T-4003` của PLAN-improve-2026-11-23 (tới lúc
+đó là kỷ luật).
+
+| Thay đổi | Xử lý thường lệ | Rà độc lập |
+|---|---|---|
+| Văn xuôi thuần | Tự rà diff, kiểm link/cấu trúc | Thường không cần |
+| Mã thông thường chưa phát hành (kể cả `scripts/*`) | Test liên quan, CI, auto merge | Diff tích luỹ trước phát hành |
+| Auth hoặc migration chưa đưa vào dùng | Kiểm chuyên biệt khi viết; giữ cổng đưa vào dùng | Theo cụm trước deploy hoặc phát hành |
+| Hook, `settings.json`, workflow, ruleset, khoá chính sách `xt.yaml` (`merge_*`, `release_signoff`, `delivery_phase`, `commit_gate`, `ai_attribution`) | Phân loại từ chính sách của nhánh đích | Một lượt có trọng tâm trước merge |
+| Nhánh tự deploy production sau merge | Merge là lúc đưa vào dùng | Hoàn tất kiểm tương ứng trước merge |
+
+Nghi ngờ cụ thể ngoài lớp: xác minh hẹp (đầu vào, kết quả cần kiểm, điểm dừng rõ), không mở lại review toàn PR hay repo.
+Lỗi đã xác minh xử lý theo tác động thật; không hạ mức lỗi để vừa ngân sách review.
 
 ### Thang tin cậy T0–T4 cho mỗi việc giao (stored 23 §4.5)
 

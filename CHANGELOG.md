@@ -8,6 +8,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ### Added
 
+- [ADR-0095](docs/adr/0095-immediate-effect-early-review.md) (D-546, T-3997/T-3998): rà độc lập sớm theo tác động tức thì — thay đổi mà chính nó là lớp đỡ (hook, `settings.json`, workflow, ruleset, khoá chính sách `xt.yaml`) hoặc nhánh tự deploy sau merge cần một lượt rà ở head trước merge dù `merge_review: optional`; thu hẹp ADR-0079 và thêm một ngoại lệ vào nhịp 1 của ADR-0080. Bảng một nhà ở `stop-points-and-escalation.md`; `/complete`, bảng điều phối và `PLAN-guard-split` chỉ liên kết. Chưa có máy cưỡng chế (T-4003): tới lúc đó là kỷ luật. **Dự án đích:** không đổi hành vi.
 - `scripts/xt_guard_profile.py` (chỉ ở repo khung, không cài sang dự án đích): đo chỉ đọc chi phí compile, họ hàm theo tiền tố, cạnh gọi giữa họ và hằng dùng chung nhiều họ của `.claude/hooks/guard.py`; số đo cho việc tách guard theo ADR-0090/0091 (T-3984, D-540); cờ `--closure` in bao đóng phụ thuộc ở mức hàm của một tập hạt giống (T-3995). Thêm vào lệnh `typecheck` của `xt.yaml`.
 - [ADR-0093](docs/adr/0093-guard-split-order-and-sibling-loader.md) và báo cáo đo [`research/2026-11-23-guard-compile-cost.md`](research/2026-11-23-guard-compile-cost.md): thứ tự tách `guard.py` (lõi dùng chung, họ từ xa, phần còn lại) và bộ nạp module anh em compile-từ-nguồn; compile trung vị 398,5 ms trong ≈ 0,55 s mỗi lệnh Bash; đường nhanh để ADR riêng (D-542).
 

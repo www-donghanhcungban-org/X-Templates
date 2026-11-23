@@ -728,3 +728,10 @@
 - Chọn: Sàn 3.13: sửa 6 dòng cú pháp, runtime kiểm ≥ 3.13, bắt tay dev-task.sh bằng một dấu, CI chính giữ 3.15.2 và thêm job compat-py313 chạy đủ test trên 3.13, test cú pháp feature_version, ADR-0094 sửa ADR-0078
 - Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: runtime bị từ chối nghĩa là hook chặn Bash, nên nới sàn phải kèm bằng chứng chạy thật trên 3.13 (job CI mới, chặn merge qua quality) thay vì chỉ sửa chuỗi kiểm. (2) Đường lùi: một PR, revert. (3) Bền: ghim 3.15.2 ở CI chính giữ bắt lỗi ở bản mới; cú pháp 3.14+ bị test chặn. (4) Trải nghiệm: máy phổ biến chạy khung không cần cài Python riêng. Sàn 3.11 loại vì mã đang dùng tính năng mới hơn và tăng chi phí kiểm
 - Đường lùi: Revert PR; ADR-0078 có hiệu lực lại
+
+### D-546 · 2026-11-23T05:08:17+00:00 · ADR rà độc lập sớm theo tác động tức thì (T-3997): phạm vi lớp ngoại lệ và cách tắt? Dữ kiện: ADR-0079/0080 dồn review về cổng ký vì nhánh chính chưa là bản phát hành, tiền đề không đúng với thay đổi mà tự nó là lớp đỡ (hook, settings, workflow, ruleset, khoá chính sách xt.yaml) hoặc nhánh tự deploy sau merge; D-533 từng loại việc đòi review ở optional cho PR rủi ro nói chung; PLAN guard-split và harden-b đang đòi review ở head bằng câu riêng
+
+- Phương án: (1) Lớp ngoại lệ hẹp đọc từ nhánh đích, thu hẹp ADR-0079, khoá tắt immediate_review thuộc nhóm khoá chính sách, ngoài lớp giữ xác minh hẹp · (2) Giữ ADR-0080 nguyên, mọi review dồn về cổng ký · (3) Review ở head mọi PR chạm scripts hoặc nhãn rủi ro
+- Chọn: Lớp ngoại lệ hẹp đọc từ nhánh đích, thu hẹp ADR-0079, khoá tắt immediate_review thuộc nhóm khoá chính sách, ngoài lớp giữ xác minh hẹp
+- Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: lớp đỡ yếu đi giữa hai cổng ký là rủi ro thật, lớp ngoại lệ chỉ gồm thay đổi tự nó là hàng rào nên hẹp và đếm được. (2) Đường lùi: revert ADR, máy chưa cưỡng chế tới T-4003. (3) Đơn giản: một nhà cho lệch giữa các PLAN. (5) Chi phí: không rà scripts nói chung nên không lan thành review mọi PR
+- Đường lùi: Revert PR ADR-0095; ADR-0079/0080 có hiệu lực nguyên văn

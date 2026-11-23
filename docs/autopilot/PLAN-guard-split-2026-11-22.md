@@ -7,7 +7,7 @@
 - Dữ kiện đã đo ngày 2026-11-22 (CPython 3.15.0b4, container phiên, chưa phải máy chuẩn): `guard.py` 24 423 dòng, 1 379 538 B; hook `pre-bash-guard.sh` mất 0,51–0,59 s mỗi lệnh Bash, kể cả lệnh bị chặn (`git push --force`: 0,59 s). `AUD-PERF-013` từng đo 0,21–0,28 s ở 510 KB. Bộ nạp compile từ nguồn mỗi lần, không pyc (AUD-SEC-074).
 - Hệ quả thiết kế: không có pyc nên tách module chỉ giảm chi phí mỗi lệnh khi module được nạp lười (chỉ lệnh nhắc `git`/`gh` mới nạp luật git/gh). Tách mà nạp hết thì tổng compile không đổi, lợi ích chỉ còn bảo trì (ADR-0090). Số đo ở lát 0 quyết cụm nào nạp lười.
 - Ngoài phạm vi: tách `scripts/xt.py` (ADR-0090 mục 1, `perf trial` chạy một blob — ADR-0091); đổi hành vi bất kỳ luật nào của guard; thêm cache bytecode (bị loại ở AUD-SEC-074).
-- Mỗi lát một PR; guard là hàng rào duy nhất nên mỗi PR đổi `guard.py` hoặc module guard cần review độc lập ở head (reviewer cao hơn người viết) và chỉ merge sau review sạch (bài học #738).
+- Mỗi lát một PR; PR đổi `guard.py` hoặc module guard chạm lớp tác động tức thì (hook là hàng rào) nên cần một lượt rà độc lập ở head trước merge — quy tắc một nhà ở [ADR-0095](../adr/0095-immediate-effect-early-review.md) (bài học #738).
 - Rủi ro đã biết: guard chặn script thông dịch tự do đọc/ghi `guard.py` (D-105); phân tích phải đi qua lệnh `xt.py` có test, không qua script ad-hoc.
 
 ## Ngân sách
