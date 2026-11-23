@@ -48,6 +48,40 @@ class GitThing:
 """
 
 
+CLOSURE_SAMPLE = """\
+LIMIT = 3
+OTHER = 4
+
+
+def git_a():
+    return util_x() + LIMIT
+
+
+def git_b():
+    return git_a()
+
+
+def util_x():
+    return util_y()
+
+
+def util_y():
+    return 1
+
+
+def tool_c():
+    return util_x() + git_b()
+
+
+def lonely():
+    return OTHER
+
+
+class Box:
+    pass
+"""
+
+
 def write(directory: str, name: str, text: str) -> Path:
     path = Path(directory) / name
     path.write_text(text, encoding="utf-8")
@@ -116,6 +150,73 @@ class ProfileTest(unittest.TestCase):
         write(self.tmp, "flat.py", "def one():\n    return 1\n")
         text = gp.render(gp.profile(Path(self.tmp) / "flat.py", 1, gp.time.perf_counter), Path("flat.py"))
         self.assertIn("(không có)", text)
+
+
+class ClosureTest(unittest.TestCase):
+    """T-3995: bao đóng phụ thuộc ở mức hàm của một tập hạt giống — dữ liệu để chọn ranh giới tách."""
+
+    def setUp(self):
+        self.tmp = self.enterContext(tempfile.TemporaryDirectory())
+        self.path = write(self.tmp, "closure.py", CLOSURE_SAMPLE)
+
+    def report(self, *specs, top=10):
+        return gp.closure_report(self.path, list(specs), top)
+
+    def test_family_seed_pulls_in_helpers_and_constants(self):
+        r = self.report("family:git")
+        self.assertEqual((r["seeds"], r["seed_lines"]), (2, 4))  # git_a, git_b: 2 dòng mỗi hàm
+        self.assertEqual((r["closure_defs"], r["closure_lines"]), (4, 8))  # thêm util_x, util_y
+        self.assertEqual(r["constants"], ["LIMIT"])  # OTHER không nằm trong bao đóng
+        self.assertEqual([b["name"] for b in r["baggage"]], ["util_x", "util_y"])
+        self.assertEqual(r["baggage_total"], 2)
+        self.assertEqual(
+            r["total_def_lines"], 7 * 2
+        )  # git_a, git_b, util_x, util_y, tool_c, lonely, Box: 2 dòng mỗi cái
+
+    def test_entry_points_are_callers_outside_the_closure(self):
+        r = self.report("family:git")
+        self.assertEqual(r["entry_points"], [{"name": "tool_c", "into": ["git_b", "util_x"]}])
+        self.assertEqual(r["entry_total"], 1)
+
+    def test_exact_name_seed_and_entry_points_sorted(self):
+        r = self.report("util_x")
+        self.assertEqual((r["seeds"], r["closure_defs"], r["constants"]), (1, 2, []))
+        self.assertEqual([e["name"] for e in r["entry_points"]], ["git_a", "tool_c"])
+
+    def test_cycle_and_repeated_seed_do_not_loop_forever(self):
+        write(self.tmp, "cycle.py", "def a_x():\n    return a_y()\n\n\ndef a_y():\n    return a_x()\n")
+        r = gp.closure_report(Path(self.tmp) / "cycle.py", ["a_x", "family:a"], 10)
+        self.assertEqual((r["seeds"], r["closure_defs"], r["entry_total"]), (2, 2, 0))
+
+    def test_top_limits_tables_but_not_totals(self):
+        r = self.report("family:git", top=1)
+        self.assertEqual([b["name"] for b in r["baggage"]], ["util_x"])  # dòng bằng nhau → theo tên
+        self.assertEqual(r["baggage_total"], 2)
+
+    def test_unknown_seed_is_an_error(self):
+        for spec in ("nope", "family:nope", "LIMIT"):  # hằng không phải định nghĩa nên không làm hạt giống
+            with self.subTest(spec=spec), self.assertRaises(ValueError):
+                self.report(spec)
+
+    def test_render_closure_mentions_every_section(self):
+        text = gp.render_closure(self.report("family:git"), self.path)
+        for needle in ("closure.py", "hạt giống", "LIMIT", "util_x", "tool_c", "git_b"):
+            self.assertIn(needle, text)
+
+    def test_render_closure_without_baggage_or_entries(self):
+        write(self.tmp, "solo.py", "def solo_a():\n    return 1\n")
+        r = gp.closure_report(Path(self.tmp) / "solo.py", ["solo_a"], 10)
+        self.assertEqual(gp.render_closure(r, Path("solo.py")).count("(không có)"), 3)
+
+    def test_main_closure_text_json_and_errors(self):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(gp.main(["--path", str(self.path), "--closure", "family:git"]), 0)
+            self.assertEqual(gp.main(["--path", str(self.path), "--closure", "util_x", "--json"]), 0)
+            self.assertEqual(gp.main(["--path", str(self.path), "--closure", "nope"]), 2)
+        self.assertIn("hạt giống", out.getvalue())
+        self.assertIn('"closure_defs"', out.getvalue())
+        self.assertIn("không đọc được", err.getvalue())
 
 
 class MainTest(unittest.TestCase):

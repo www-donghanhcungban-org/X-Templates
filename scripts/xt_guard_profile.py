@@ -88,6 +88,81 @@ def shared_constants(defs: list[Definition], fam_of: dict[str, str], constants: 
     return sorted(rows, key=lambda r: (-len(r["families"]), r["name"]))
 
 
+def definition_lines(defs: list[Definition]) -> dict[str, int]:
+    """Tổng số dòng theo tên định nghĩa (tên định nghĩa hai lần cộng cả hai)."""
+    lines: Counter[str] = Counter()
+    for d in defs:
+        lines[d.name] += span(d)
+    return dict(lines)
+
+
+def dependency_edges(defs: list[Definition], constants: frozenset[str]) -> dict[str, set[str]]:
+    """Mỗi định nghĩa cấp tệp đọc những định nghĩa hoặc hằng cấp tệp nào (xấp xỉ theo tên, bỏ tự gọi)."""
+    known = frozenset(d.name for d in defs) | constants
+    edges: dict[str, set[str]] = {}
+    for d in defs:
+        edges.setdefault(d.name, set()).update(referenced(d, known) - {d.name})
+    return edges
+
+
+def resolve_seeds(specs: list[str], fam_of: dict[str, str]) -> set[str]:
+    """`family:<họ>` lấy mọi định nghĩa của họ; tên thường phải là một định nghĩa cấp tệp có thật."""
+    seeds: set[str] = set()
+    for spec in specs:
+        if spec.startswith("family:"):
+            members = {n for n, f in fam_of.items() if f == spec.removeprefix("family:")}
+        else:
+            members = {spec} & fam_of.keys()
+        if not members:
+            raise ValueError(f"hạt giống không khớp định nghĩa nào: {spec!r}")
+        seeds |= members
+    return seeds
+
+
+def transitive_closure(seeds: set[str], edges: dict[str, set[str]]) -> set[str]:
+    seen = set(seeds)
+    stack = list(seeds)
+    while stack:
+        for nxt in edges.get(stack.pop(), ()):
+            if nxt not in seen:
+                seen.add(nxt)
+                stack.append(nxt)
+    return seen
+
+
+def entry_points(closed: set[str], edges: dict[str, set[str]]) -> list[dict[str, Any]]:
+    """Định nghĩa NGOÀI bao đóng đọc vào bao đóng: những chỗ phải nhập từ module mới sau khi tách."""
+    rows = [{"name": n, "into": sorted(o & closed)} for n, o in edges.items() if n not in closed and o & closed]
+    return sorted(rows, key=lambda r: (-len(r["into"]), r["name"]))
+
+
+def closure_report(path: Path, specs: list[str], top: int = DEFAULT_TOP) -> dict[str, Any]:
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, str(path))
+    defs = top_level_definitions(tree)
+    constants = declared_constants(tree)
+    lines = definition_lines(defs)
+    seeds = resolve_seeds(specs, {d.name: family(d.name) for d in defs})
+    edges = dependency_edges(defs, constants)
+    closed = transitive_closure(seeds, edges)
+    members = {n for n in closed if n in lines}
+    baggage = sorted(members - seeds, key=lambda n: (-lines[n], n))
+    entries = entry_points(closed, edges)
+    return {
+        "path": str(path),
+        "seeds": len(seeds),
+        "seed_lines": sum(lines[s] for s in seeds),
+        "closure_defs": len(members),
+        "closure_lines": sum(lines[n] for n in members),
+        "total_def_lines": sum(lines.values()),
+        "constants": sorted(closed - members),
+        "baggage": [{"name": n, "lines": lines[n]} for n in baggage][:top],
+        "baggage_total": len(baggage),
+        "entry_points": entries[:top],
+        "entry_total": len(entries),
+    }
+
+
 def compile_runs(source: str, name: str, repeat: int, clock: Callable[[], float]) -> list[float]:
     runs: list[float] = []
     for _ in range(repeat):
@@ -139,6 +214,20 @@ def render(result: dict[str, Any], path: Path) -> str:
     return "\n".join(out)
 
 
+def render_closure(result: dict[str, Any], path: Path) -> str:
+    share = 100 * result["closure_lines"] / max(result["total_def_lines"], 1)
+    out = [
+        f"{path.name}: {result['seeds']} hạt giống ({result['seed_lines']} dòng) → bao đóng {result['closure_defs']} "
+        f"định nghĩa ({result['closure_lines']} dòng, {share:.1f} % dòng định nghĩa)",
+        "Hằng đi kèm: " + (", ".join(result["constants"]) or "(không có)"),
+        f"Hàng kèm theo (ngoài hạt giống nhưng hạt giống cần), {result['baggage_total']} định nghĩa:",
+        *([f"  {b['name']}  {b['lines']} dòng" for b in result["baggage"]] or ["  (không có)"]),
+        f"Điểm vào từ ngoài (định nghĩa ngoài bao đóng đọc vào), {result['entry_total']} định nghĩa:",
+        *([f"  {e['name']} -> {', '.join(e['into'])}" for e in result["entry_points"]] or ["  (không có)"]),
+    ]
+    return "\n".join(out)
+
+
 def positive_int(text: str) -> int:
     try:
         value = int(text)
@@ -154,19 +243,33 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--path", default=DEFAULT_PATH, help=f"tệp cần đo (mặc định {DEFAULT_PATH})")
     p.add_argument("--repeat", type=positive_int, default=DEFAULT_REPEAT, help="số lần đo thời gian compile")
     p.add_argument("--top", type=positive_int, default=DEFAULT_TOP, help="số hàng tối đa mỗi bảng")
+    p.add_argument(
+        "--closure",
+        nargs="+",
+        metavar="HẠT_GIỐNG",
+        help="thay vì đo tổng quát, in bao đóng phụ thuộc của các hạt giống: tên định nghĩa hoặc `family:<họ>`",
+    )
     p.add_argument("--json", action="store_true")
     return p
+
+
+def run(args: argparse.Namespace, path: Path) -> tuple[dict[str, Any], str]:
+    if args.closure:
+        result = closure_report(path, args.closure, args.top)
+        return result, render_closure(result, path)
+    result = profile(path, args.repeat, time.perf_counter, args.top)
+    return result, render(result, path)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     path = Path(args.path)
     try:
-        result = profile(path, args.repeat, time.perf_counter, args.top)
+        result, text = run(args, path)
     except (OSError, SyntaxError, ValueError) as exc:
         print(f"không đọc được {path}: {exc}", file=sys.stderr)
         return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else render(result, path))
+    print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else text)
     return 0
 
 
