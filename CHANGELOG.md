@@ -6,6 +6,10 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/xt_guard_profile.py` (chỉ ở repo khung, không cài sang dự án đích): đo chỉ đọc chi phí compile, họ hàm theo tiền tố, cạnh gọi giữa họ và hằng dùng chung nhiều họ của `.claude/hooks/guard.py`; số đo cho việc tách guard theo ADR-0090/0091 (T-3984, D-540). Thêm vào lệnh `typecheck` của `xt.yaml`.
+
 ### Changed
 
 - Mẫu dự án đích: dòng Plan Mode (`WF-SDD-018`, riêng Claude Code) chuyển từ `framework/templates/AGENTS.md` sang `framework/templates/CLAUDE.md` (AUD-HAR-463); `AGENTS.md` giữ dòng quy ước theo thư mục. Spec `SPEC-factory-setup` §2.2 thêm hai mục `repo-about` và `field-workflow` của `admin-plan` (AUD-DOC-317). **Dự án đích:** dự án đã sửa `AGENTS.md` hoặc `CLAUDE.md` nhận `.xtemplates-new` để gộp tay; không bắt buộc.

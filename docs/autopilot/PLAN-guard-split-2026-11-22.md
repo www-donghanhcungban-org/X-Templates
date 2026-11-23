@@ -15,7 +15,7 @@
 
 ## Task
 ### Lát 0 — đo (không đổi hành vi, không đổi guard)
-- [ ] `T-3984` Lệnh chỉ đọc `xt.py guard-profile` (hoặc module `scripts/xt_guard_profile.py`): đo thời gian compile `guard.py` và thời gian quyết định, lập họ hàm theo tiền tố (git, gh, xargs, sed, …) với số dòng, hằng dùng chung và cạnh gọi giữa họ; có test, mypy strict, chỉ stdlib — Gate: `python3 -m unittest tests.test_guard_profile`
+- [x] `T-3984` Lệnh chỉ đọc `xt.py guard-profile` (hoặc module `scripts/xt_guard_profile.py`): đo thời gian compile `guard.py` và thời gian quyết định, lập họ hàm theo tiền tố (git, gh, xargs, sed, …) với số dòng, hằng dùng chung và cạnh gọi giữa họ; có test, mypy strict, chỉ stdlib — Gate: `python3 -m unittest tests.test_guard_profile`
 - [ ] `T-3985` Chạy `guard-profile` ở repo khung, ghi `research/2026-11-22-guard-compile-cost.md` (số đo kèm ngày, máy, phiên bản Python; mỗi con số kèm lệnh) và đóng phần đo của AUD-ARCH-007 — Gate: `python3 scripts/xt.py validate` (sau: T-3984)
 - [ ] `T-3986` Quyết định theo số đo: cụm tách đầu tiên và cụm nạp lười, ghi `loop decide` (D-NNN) và ADR mới về cách nạp module anh em (đổi cấu trúc cần ADR, AGENTS §7); đóng AUD-ARCH-010 (ràng buộc `perf trial` ghi cho kế hoạch tách) — Gate: `python3 scripts/xt.py validate` (sau: T-3985)
 ### Lát 1 — hạ tầng nạp và cụm đầu tiên (chi tiết task chốt sau T-3986)
