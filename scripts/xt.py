@@ -3231,7 +3231,71 @@ def loop_record(
         print(ev["output_tail"][-2000:])
     else:
         _tick_after_green(base, st, task, cmd_str, tick and not ev.get("zero_tests_red", False))
+        _slice_task_green(base, st if clears else {}, ev)  # chỉ lần chạy đúng Gate của task mới vào sổ lát
     return code
+
+
+# Sổ lát (SPEC-slice-ledger, T-4009): mỗi lát một tệp JSONL chỉ nối thêm trong `.autopilot/slices/` (trạng thái máy theo
+# checkout như `runs.jsonl` — D-549: không làm bẩn cây, không sinh nợ review); lệnh có sẵn ghi, `xt_flow` đọc số đo.
+SLICES_SUBDIR = "slices"
+SLICE_KINDS = ("requirement", "task_green", "pr", "review", "merged", "artefact", "deployed", "incident", "cost")
+SLICE_ID_RE = re.compile(r"[A-Za-z0-9._-]+/[A-Z][A-Z0-9]*-[0-9]+")
+_SLICE_TASK_RE = re.compile(r"^\s*- \[.\] `([A-Z][A-Z0-9]*-[0-9]+)`")
+
+
+def slice_of(plan: Path, task: str) -> str:
+    """`<tên PLAN>/<task đầu của lát chứa task>`; lát = tiêu đề `### ` của PLAN. Task trước mọi tiêu đề, PLAN không đọc
+    được hay task không có trong PLAN → lát là chính task."""
+    first, in_slice = "", False
+    with contextlib.suppress(OSError, ValueError):
+        for line in plan.read_text(encoding="utf-8").splitlines():
+            if line.startswith("### "):
+                first, in_slice = "", True
+            elif m := _SLICE_TASK_RE.match(line):
+                first = first or (m[1] if in_slice else "")
+                if m[1] == task:
+                    return f"{plan.stem}/{first or task}"
+    return f"{plan.stem}/{task}"
+
+
+def slice_append(base: Path, slice_id: str, kind: str, source: str, ref: str, data: Dict[str, Any]) -> bool:
+    """Nối một sự kiện vào sổ của lát. Số đo không chặn luồng: định danh/kind sai hay lỗi ghi → False, không ném."""
+    if kind not in SLICE_KINDS or not SLICE_ID_RE.fullmatch(slice_id):
+        return False
+    event = {"schema": 1, "slice": slice_id, "kind": kind, "at": now_iso(), "source": source, "ref": ref, "data": data}
+    try:
+        folder = state_write_dir(base, SLICES_SUBDIR)  # không ghi xuyên liên kết (AUD-HAR-405)
+        folder.mkdir(parents=True, exist_ok=True)
+        with (folder / f"{slice_id.replace('/', '__')}.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(redact(json.dumps(event, ensure_ascii=False, sort_keys=True)) + "\n")
+    except OSError:
+        return False
+    return True
+
+
+def _slice_task_green(base: Path, st: Dict[str, Any], ev: Dict[str, Any]) -> None:
+    """`loop record` xanh đúng Gate của task trong PLAN → sự kiện `task_green` cho lát của task."""
+    plan = st.get("plan")
+    if isinstance(plan, str) and plan:
+        sid = slice_of(base / plan, str(ev["task"]))
+        slice_append(
+            base,
+            sid,
+            "task_green",
+            "loop record",
+            str(ev["task"]),
+            {"head": ev["head"], "cmd_sha256": ev["cmd_sha256"]},
+        )
+
+
+def current_slice(base: Path) -> Optional[str]:
+    """Lát của task có bằng chứng mới nhất trong vòng đang chạy (mặc định cho `pr reviewed`); không có → None."""
+    st = read_state(base) or {}
+    plan, d = st.get("plan"), state_dir(base) / "evidence"
+    files = sorted(d.glob("*.json"), key=lambda p: p.stat().st_mtime) if d.is_dir() else []
+    if not isinstance(plan, str) or not plan or not files:
+        return None
+    return slice_of(base / plan, files[-1].stem)
 
 
 def _warn_executor_mismatch(
@@ -17729,6 +17793,10 @@ def _pr_reviewed(args: argparse.Namespace, base: Path) -> int:
         return {**rec, "reviews": [*reviews, entry]}
 
     update_reviews(base, key, add)
+    sid = args.slice or current_slice(base)
+    if not seen and sid:
+        data = {"why": args.why, "confirmed": args.confirmed, "rejected": args.rejected, "clean": args.clean}
+        slice_append(base, sid, "review", "pr reviewed", key, data)
     cur = seen[0] if seen else entry
     word = "chưa kết luận (cần review khác)" if args.inconclusive else "sạch" if args.clean else "còn lỗi chặn"
     print(f"✓ PR #{key}: review {word} ở {args.head[:7]}" + (" (đã ghi trước đó — không ghi thêm)" if seen else ""))
@@ -22410,6 +22478,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="effort của reviewer — cùng họ model thì phải cao hơn --author-effort",
     )
     prv.add_argument("--author-effort", choices=EFFORTS, help="effort của người viết (so khi cùng họ model, D-161)")
+    prv.add_argument(
+        "--why",
+        choices=("required", "immediate", "suspect"),
+        default="required",
+        help="lý do gọi reviewer, ghi vào sổ lát: cổng đòi, lớp tác động tức thì (ADR-0095), nghi ngờ cụ thể",
+    )
+    prv.add_argument("--confirmed", type=int, default=0, help="số phát hiện được xác nhận (sổ lát)")
+    prv.add_argument("--rejected", type=int, default=0, help="số phát hiện bị bác (sổ lát)")
+    prv.add_argument("--slice", help="lát của PR trong sổ lát (mặc định: lát của task có bằng chứng mới nhất)")
     prv.add_argument(
         "--no-publish",
         action="store_true",

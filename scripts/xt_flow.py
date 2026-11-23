@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import datetime
 import math
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 if __name__ == "__main__":
     sys.dont_write_bytecode = True
@@ -280,6 +281,147 @@ def bind_release_document(base: Path, doc: Any) -> Doc:
     return {key: doc[key] for key in ("head", "fails", "human", "verdict")}
 
 
+ESCAPE_WINDOW_DAYS = 14  # cửa sổ quan sát lỗi lọt sau merge (SPEC-slice-ledger §2.4)
+
+
+def _slice_event(line: str) -> Doc | None:
+    try:
+        ev = json.loads(line)
+    except ValueError:
+        return None
+    ok = (
+        isinstance(ev, dict)
+        and ev.get("schema") == 1
+        and ev.get("kind") in xt.SLICE_KINDS
+        and all(isinstance(ev.get(k), str) for k in ("slice", "ref"))
+        and isinstance(ev.get("data"), dict)
+        and xt._deploy_utc(ev.get("at")) is not None
+    )
+    return ev if ok else None
+
+
+def read_slices(base: Path) -> tuple[list[Doc], int]:
+    """(sự kiện hợp lệ của mọi sổ lát, số dòng hỏng). Dòng hỏng bị bỏ, không làm hỏng số khác."""
+    events: list[Doc] = []
+    invalid = 0
+    folder = xt.state_dir(base) / xt.SLICES_SUBDIR
+    for path in sorted(folder.glob("*.jsonl")) if folder.is_dir() else []:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, ValueError):
+            invalid += 1
+            continue
+        for line in filter(str.strip, lines):
+            ev = _slice_event(line)
+            events += [ev] if ev else []
+            invalid += ev is None
+    return events, invalid
+
+
+def _amount(value: Any) -> TypeGuard[float]:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+
+def _cost_usd(data: Doc) -> float | None:
+    """`usd` khai thẳng, hoặc token quy đổi bằng giá có nguồn và ngày; thiếu một phần → None (không đoán giá)."""
+    if _amount(data.get("usd")):
+        return float(data["usd"])
+    price, tokens = data.get("price"), data.get("tokens")
+    if not (isinstance(price, dict) and isinstance(tokens, dict) and price.get("source") and price.get("as_of")):
+        return None
+    total = 0.0
+    for k in ("in", "out"):
+        n, p = tokens.get(k), price.get(f"usd_per_mtok_{k}")
+        if not (_amount(n) and _amount(p)):
+            return None
+        total += float(n) * float(p)
+    return total / 1_000_000
+
+
+def cost_per_slice(events: list[Doc]) -> tuple[Doc | None, str]:
+    """{lát: USD}; mỗi `cost_id` (ref) tính một lần. Không có sự kiện → `no_source`; một khoản không quy đổi → `unpriced`."""
+    costs: dict[str, Doc] = {}
+    for ev in events:
+        if ev["kind"] == "cost":
+            costs.setdefault(ev["ref"], ev)
+    if not costs:
+        return None, "no_source"
+    total: dict[str, float] = {}
+    for ev in costs.values():
+        usd = _cost_usd(ev["data"])
+        if usd is None:
+            return None, "unpriced"
+        total[ev["slice"]] = total.get(ev["slice"], 0.0) + usd
+    return {k: round(v, 6) for k, v in sorted(total.items())}, ""
+
+
+def conflicted_rate(events: list[Doc]) -> tuple[float | None, str]:
+    """Tỷ lệ PR từng thấy `mergeable: CONFLICTING` trên số PR có sự kiện `pr`."""
+    prs: dict[str, bool] = {}
+    for ev in events:
+        if ev["kind"] == "pr":
+            prs[ev["ref"]] = prs.get(ev["ref"], False) or ev["data"].get("mergeable") == "CONFLICTING"
+    if not prs:
+        return None, "no_events"
+    return round(sum(prs.values()) / len(prs), 4), ""
+
+
+def escaped(events: list[Doc], now: Any) -> tuple[Doc | None, str]:
+    """Sự cố trỏ PR đã merge, trong cửa sổ 14 ngày, chỉ tính PR đã đóng cửa sổ; còn PR mở cửa sổ → kèm `window_open`."""
+    merged: dict[str, Any] = {}
+    for ev in events:
+        if ev["kind"] == "merged":
+            merged.setdefault(ev["ref"], xt._deploy_utc(ev["at"]))
+    if not merged:
+        return None, "no_events"
+    window = datetime.timedelta(days=ESCAPE_WINDOW_DAYS)
+    closed = {pr for pr, at in merged.items() if at + window <= now}
+    if not closed:
+        return None, "window_open"
+    severity: dict[str, int] = {}
+    for ev in events:
+        pr, at = ev["data"].get("introduced_by"), xt._deploy_utc(ev["at"])
+        if (
+            ev["kind"] == "incident"
+            and isinstance(pr, str)
+            and pr in closed
+            and merged[pr] <= at <= merged[pr] + window
+        ):
+            key = str(ev["data"].get("severity") or "unknown")
+            severity[key] = severity.get(key, 0) + 1
+    doc = {"closed_prs": len(closed), "open_prs": len(merged) - len(closed), "by_severity": severity}
+    return doc, "window_open" if len(closed) < len(merged) else ""
+
+
+def lead_time_hours(events: list[Doc]) -> tuple[Doc | None, str]:
+    """{lát: giờ} từ `requirement` đầu tiên tới `deployed` production đầu tiên — theo đồng hồ, không cộng việc song song."""
+    first: dict[tuple[str, str], Any] = {}
+    for ev in events:
+        kind = f"deployed:{ev['ref']}" if ev["kind"] == "deployed" and ev["ref"] != "production" else ev["kind"]
+        at, key = xt._deploy_utc(ev["at"]), (ev["slice"], kind)
+        first[key] = at if key not in first or at < first[key] else first[key]
+    hours = {
+        s: round((at - first[(s, "requirement")]).total_seconds() / 3600, 3)
+        for (s, kind), at in sorted(first.items())
+        if kind == "deployed" and (s, "requirement") in first
+    }
+    return (hours, "") if hours else (None, "no_events")
+
+
+def slice_metrics(base: Path, as_of: str) -> tuple[Doc, Doc]:
+    """(số đo đọc từ sổ lát, mã lý do cho số `null` và số dòng hỏng) — SPEC-slice-ledger."""
+    events, invalid = read_slices(base)
+    now = xt._deploy_utc(as_of)
+    found = {
+        "cost_usd_per_slice": cost_per_slice(events),
+        "ever_conflicted_pr_rate": conflicted_rate(events),
+        "escaped_after_merge": escaped(events, now),
+        "lead_time_hours": lead_time_hours(events),
+    }
+    reasons = {k: why for k, (_, why) in found.items() if why}
+    return {k: v for k, (v, _) in found.items()}, {"invalid_lines": invalid, "null_or_partial": reasons}
+
+
 def report(base: Path, args: argparse.Namespace) -> Doc:
     if not base.is_dir():
         raise ValueError(f"Thư mục dự án không tồn tại: {base}")
@@ -304,6 +446,7 @@ def report(base: Path, args: argparse.Namespace) -> Doc:
     if isinstance(cost, bool) or not isinstance(cost, (float, int)) or not 0 <= cost <= sys.float_info.max:
         cost = None
     as_of = xt.now_iso()
+    ledger, ledger_cov = slice_metrics(base, as_of)
     waiting = {
         key: elapsed(item.get("at"), as_of) if isinstance(item, dict) else None
         for key, item in xt._deferred(state or {}).items()
@@ -332,19 +475,18 @@ def report(base: Path, args: argparse.Namespace) -> Doc:
             ],
             "pending_human_seconds_by_task": waiting if state is not None else None,
             "reported_ci_episode_cost_usd": cost,
-            "cost_usd_per_slice": None,
             "deploy_by_env": stats,
             "pr_open_to_merge": pr_lanes(args.merged_prs),
-            "ever_conflicted_pr_rate": None,
-            "escaped_after_merge": None,
+            **ledger,
             "optimization": opt,
         },
         "coverage": {
             "loop": f".autopilot/runs.jsonl: {samples} lượt Gate hợp lệ còn giữ trên checkout",
             "deploy": f"{xt.DEPLOY_LEDGER}: {len(log['events'])} receipt còn giữ",
             "approval": "Khoảng từ submit tới quyết định tính theo timestamp có UTC của từng lần trình.",
-            "cost": "episode.cost_usd chỉ phản ánh phần chi phí sửa CI được khai; chưa có sổ chi phí worker theo lát.",
-            "integration": "Lead time lấy từ các PR trong --merged-prs. Chưa có lịch sử xung đột và truy nguyên lỗi sau merge.",
+            "cost": "episode.cost_usd chỉ phản ánh phần chi phí sửa CI được khai; chi phí theo lát đọc từ sổ lát.",
+            "integration": "Lead time của PR lấy từ --merged-prs; xung đột, lỗi lọt và lead time lát đọc từ sổ lát.",
+            "slices": ledger_cov,
             "human": "Thời gian chờ theo từng việc defer → resolve. Việc cũ thiếu timestamp có giá trị null; các việc có thể chờ đồng thời.",
         },
     }

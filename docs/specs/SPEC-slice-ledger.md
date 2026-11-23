@@ -23,13 +23,15 @@ bằng cảm giác. Hôm nay `xt_flow.report()` trả `null` cho cả ba số `c
 - Yêu cầu gốc (`requirement`) là chuỗi tự do do PLAN khai (mục, issue, câu của chủ dự án) — sổ không diễn giải nó.
 
 ### 2.2 Nơi lưu
-- **Mỗi lát một tệp** `docs/ops/slices/<slice với "/" thay bằng "__">.jsonl`, chỉ nối thêm, một sự kiện một dòng. Không
-  có tệp chung nên hai lát song song không xung đột ở sổ (tránh tệp nóng).
-- Sự kiện trước merge vào cùng commit của PR lát. Sự kiện sau merge (triển khai, sự cố, chi phí đến muộn) vào PR sau,
-  như sổ triển khai hiện có. Sổ không ghi bí mật; giá trị đi qua `redact()` như `runs.jsonl`.
+- **Mỗi lát một tệp** `.autopilot/slices/<slice với "/" thay bằng "__">.jsonl`, chỉ nối thêm, một sự kiện một dòng. Không
+  có tệp chung nên hai lát song song không ghi đè nhau.
+- Sổ là **trạng thái máy theo checkout**, như `.autopilot/runs.jsonl` (D-549): không theo git, nên không làm bẩn cây,
+  không sinh nợ review và không đổi vân tay gói ký; guard chặn ghi tay; ghi không xuyên liên kết. Hệ quả: số đo chỉ phản
+  ánh các lệnh đã chạy trên checkout đó — `coverage.slices` của báo cáo nói rõ. Sổ không ghi bí mật; giá trị đi qua
+  `redact()`.
 
 ### 2.3 Sự kiện
-Mỗi dòng: `{"schema": 1, "slice", "kind", "at" (UTC ISO 8601, hậu tố Z), "source" (lệnh sinh ra), "ref", "data"}`. Chỉ
+Mỗi dòng: `{"schema": 1, "slice", "kind", "at" (UTC ISO 8601, độ lệch `+00:00` hoặc `Z`), "source" (lệnh sinh ra), "ref", "data"}`. Chỉ
 ghi từ lệnh đã có — không thêm bước tay cho agent:
 
 | `kind` | Lệnh ghi | `ref` | `data` bắt buộc |

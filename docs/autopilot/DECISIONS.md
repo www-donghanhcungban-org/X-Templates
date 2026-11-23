@@ -749,3 +749,10 @@
 - Chọn: Chia lưới đột biến thành bốn lớp test độc lập, giữ nguyên mọi biến thể và bất biến, đo lại trọng số shard.
 - Lý do (tiêu chí chất lượng cuối): Giữ nguyên bằng chứng chặn và đối chứng cho phép; phân hoạch có kiểm không thiếu, không trùng. Cân bằng đơn vị lập lịch theo lớp giải quyết quá tải mà không đổi timeout, ngưỡng coverage, bộ luật guard hoặc số vòng fuzz. Phương án 2 rẻ hơn nhưng cần chứng minh tương đương ngữ nghĩa rộng hơn phạm vi sửa CI.
 - Đường lùi: Hoàn tác thay đổi phân lớp và trọng số trong một commit; CI sẽ phản ánh lại giới hạn cũ, không tăng timeout để che lỗi.
+
+### D-549 · 2026-11-23T09:59:51+00:00 · Sổ lát (T-4009) lưu ở đâu
+
+- Phương án: (1) docs/ops/slices/ trong cây theo dõi (SPEC v1) · (2) .autopilot/slices/ — trạng thái máy theo checkout, như runs.jsonl
+- Chọn: .autopilot/slices/ — trạng thái máy theo checkout, như runs.jsonl
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: ghi vào cây theo dõi ở mỗi loop record làm bẩn cây (release-check hàng tree), sinh nợ review cho tệp máy ghi và đổi vân tay gói ký — 4 test test_flow đỏ ở cổng commit. .autopilot/ đã loại khỏi digest, vân tay và nợ review, guard chặn ghi tay. Đổi lại: số đo chỉ theo checkout, như runs.jsonl hiện nay.
+- Đường lùi: Đổi SLICES_DIR và nơi đọc trong xt_flow; sổ cũ ở .autopilot/slices/ chép sang được vì cùng định dạng JSONL.
