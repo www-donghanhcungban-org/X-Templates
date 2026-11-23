@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -17,13 +18,14 @@ gp = importlib.import_module("xt_guard_profile")  # đường dẫn scripts ph�
 SAMPLE = """\
 LIMIT = 3
 MAX_X: int = 5
+ONLY_GH = 7
 lower = 1
 left, RIGHT = 1, 2
 import os
 
 
 def git_push():
-    return gh_call() + LIMIT
+    return gh_call() + git_log() + LIMIT + MAX_X
 
 
 def gh_call():
@@ -32,14 +34,15 @@ def gh_call():
 
 
 async def gh_async():
-    return 1
+    return lower + ONLY_GH
 
 
 def git_log():
-    return LIMIT
+    return LIMIT + lower
 
 
 def _helper_a():
+    git_log = 1
     return 1
 
 
@@ -106,9 +109,10 @@ class ProfileTest(unittest.TestCase):
         return gp.profile(self.path, repeat, clock or gp.time.perf_counter)
 
     def test_compile_runs_use_the_clock_twice_per_run(self):
-        ticks = iter([0.0, 1.0, 1.0, 3.0, 3.0, 6.0])
+        # ba lần đo 1 s, 5 s, 2 s: không đối xứng và chưa sắp, nên trung bình (2,67 s) hay phần tử giữa (5 s) đều sai
+        ticks = iter([0.0, 1.0, 1.0, 6.0, 6.0, 8.0])
         result = self.profile(repeat=3, clock=lambda: next(ticks))
-        self.assertEqual(result["compile_ms"], {"runs": 3, "median": 2000.0, "min": 1000.0, "max": 3000.0})
+        self.assertEqual(result["compile_ms"], {"runs": 3, "median": 2000.0, "min": 1000.0, "max": 5000.0})
 
     def test_size_and_definition_counts(self):
         result = self.profile()
@@ -128,11 +132,14 @@ class ProfileTest(unittest.TestCase):
 
     def test_edges_only_count_calls_across_families(self):
         edges = {(e["from"], e["to"]): e["edges"] for e in self.profile()["edges"]}
-        self.assertEqual(edges, {("git", "gh"): 1, ("gh", "git"): 1})  # git_push→gh_call, gh_call→git_log
+        # git_push→gh_call, gh_call→git_log. Không có: git_push→git_log (cùng họ), `_helper_a` chỉ GÁN `git_log` (Store).
+        self.assertEqual(edges, {("git", "gh"): 1, ("gh", "git"): 1})
 
     def test_shared_constants_need_two_families(self):
         shared = {c["name"]: c["families"] for c in self.profile()["shared_constants"]}
-        self.assertEqual(shared, {"LIMIT": ["gh", "git"]})  # MAX_X chỉ họ gh; `lower`, `RIGHT` không phải hằng khai báo
+        # MAX_X khai kiểu (`NAME: int = …`) và LIMIT đều được hai họ dùng; `lower` cũng hai họ dùng nhưng không IN HOA,
+        # `RIGHT` là gán bộ.
+        self.assertEqual(shared, {"LIMIT": ["gh", "git"], "MAX_X": ["gh", "git"]})
 
     def test_top_limits_every_table(self):
         result = gp.profile(self.path, 1, gp.time.perf_counter, top=1)
@@ -239,6 +246,23 @@ class MainTest(unittest.TestCase):
         data = json.loads(out)
         self.assertEqual(data["defs"], 6)
         self.assertLessEqual(len(data["families"]), 2)
+
+    def test_valid_python_with_bom_or_coding_cookie_is_measured(self):
+        """Đọc byte như bộ nạp hook: BOM UTF-8 và coding cookie latin-1 là Python hợp lệ."""
+        Path(self.tmp, "bom.py").write_bytes(b"\xef\xbb\xbfdef a_x():\n    return 1\n")
+        Path(self.tmp, "cookie.py").write_bytes(b"# -*- coding: latin-1 -*-\ndef a_x():\n    return '\xe9'\n")
+        for name in ("bom.py", "cookie.py"):
+            with self.subTest(name=name):
+                code, out, err = self.run_main("--path", str(Path(self.tmp) / name), "--repeat", "1", "--json")
+                self.assertEqual((code, err), (0, ""))
+                self.assertEqual(json.loads(out)["defs"], 1)
+
+    def test_parser_overflow_is_exit_two_not_a_traceback(self):
+        for error in (RecursionError, MemoryError):
+            with self.subTest(error=error.__name__), mock.patch.object(gp.ast, "parse", side_effect=error("sâu quá")):
+                code, out, err = self.run_main("--path", str(self.path), "--repeat", "1")
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("không đọc được", err)
 
     def test_unreadable_inputs_exit_two_with_a_message(self):
         write(self.tmp, "bad.py", "def (:\n")

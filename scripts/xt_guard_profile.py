@@ -72,7 +72,7 @@ def cross_family_edges(defs: list[Definition], fam_of: dict[str, str]) -> list[d
     known = frozenset(fam_of)
     edges: Counter[tuple[str, str]] = Counter()
     for d in defs:
-        for name in referenced(d, known) - {d.name}:
+        for name in referenced(d, known):
             if fam_of[name] != fam_of[d.name]:
                 edges[(fam_of[d.name], fam_of[name])] += 1
     rows = [{"from": a, "to": b, "edges": n} for (a, b), n in edges.items()]
@@ -137,8 +137,7 @@ def entry_points(closed: set[str], edges: dict[str, set[str]]) -> list[dict[str,
 
 
 def closure_report(path: Path, specs: list[str], top: int = DEFAULT_TOP) -> dict[str, Any]:
-    source = path.read_text(encoding="utf-8")
-    tree = ast.parse(source, str(path))
+    tree = ast.parse(path.read_bytes(), str(path))
     defs = top_level_definitions(tree)
     constants = declared_constants(tree)
     lines = definition_lines(defs)
@@ -163,7 +162,7 @@ def closure_report(path: Path, specs: list[str], top: int = DEFAULT_TOP) -> dict
     }
 
 
-def compile_runs(source: str, name: str, repeat: int, clock: Callable[[], float]) -> list[float]:
+def compile_runs(source: bytes, name: str, repeat: int, clock: Callable[[], float]) -> list[float]:
     runs: list[float] = []
     for _ in range(repeat):
         start = clock()
@@ -178,16 +177,15 @@ def compile_summary(runs: list[float]) -> dict[str, Any]:
 
 
 def profile(path: Path, repeat: int, clock: Callable[[], float], top: int = DEFAULT_TOP) -> dict[str, Any]:
-    source = path.read_text(encoding="utf-8")
-    runs = compile_runs(source, str(path), repeat, clock)
-    tree = ast.parse(source, str(path))
+    raw = path.read_bytes()  # byte như bộ nạp hook: BOM và coding cookie được tôn trọng
+    runs = compile_runs(raw, str(path), repeat, clock)
+    tree = ast.parse(raw, str(path))
     defs = top_level_definitions(tree)
     fam_of = {d.name: family(d.name) for d in defs}
-    lines = source.count("\n")
     return {
         "path": str(path),
-        "bytes": len(source.encode("utf-8")),
-        "lines": lines,
+        "bytes": len(raw),
+        "lines": raw.count(b"\n"),
         "defs": len(defs),
         "compile_ms": compile_summary(runs),
         "families": family_table(defs, fam_of, sum(span(d) for d in defs))[:top],
@@ -266,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
     path = Path(args.path)
     try:
         result, text = run(args, path)
-    except (OSError, SyntaxError, ValueError) as exc:
+    except (OSError, SyntaxError, ValueError, RecursionError, MemoryError) as exc:
         print(f"không đọc được {path}: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else text)
