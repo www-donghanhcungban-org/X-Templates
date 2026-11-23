@@ -162,6 +162,10 @@ class DoctorTest(unittest.TestCase):
     def test_missing_xt_yaml_is_silent(self):
         self.assertEqual(xt._doctor_deploy_env(self.base), [])
 
+    def test_unreadable_xt_yaml_is_silent(self):
+        with unittest.mock.patch.object(xt, "_xt_keys", side_effect=OSError("không đọc được")):
+            self.assertEqual(xt._doctor_deploy_env(self.base), [])
+
 
 if __name__ == "__main__":
     unittest.main()

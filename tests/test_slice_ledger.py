@@ -96,6 +96,12 @@ class SliceWriteTest(unittest.TestCase):
         self.assertEqual(path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(len(xt_flow.read_slices(self.base)[0]), 1)  # bộ đọc vẫn nhận dòng
 
+    def test_redact_values_walks_lists_inside_dicts(self):
+        out = xt._redact_values({"items": ["token=abc123", {"k": "password=hunter2"}], "n": 3})
+        self.assertNotIn("abc123", repr(out))
+        self.assertNotIn("hunter2", repr(out))
+        self.assertEqual(out["n"], 3)
+
     def test_task_green_goes_to_task_slice_only_with_plan(self):
         green = {"task": "T-0011", "head": "abc", "cmd_sha256": "d"}
         xt._slice_task_green(self.base, {}, green)

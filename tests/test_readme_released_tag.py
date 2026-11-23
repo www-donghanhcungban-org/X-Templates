@@ -65,6 +65,13 @@ class ValidateIntegrationTest(unittest.TestCase):
             (root / "README.md").unlink()
             self.assertEqual([e for e in xt.validate(root / "framework") if "gắn tag" in e], [])
 
+    def test_unreadable_readme_is_not_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "framework").mkdir()
+            (root / "README.md").write_bytes(b"\xff\xfe\x00 khong phai utf-8 \xc3\x28")
+            self.assertEqual(xt._check_readme_tag(root / "framework"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
