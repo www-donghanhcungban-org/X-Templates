@@ -665,7 +665,36 @@ def validate(root: Path) -> List[str]:
         errors += _check_applies_to(d, where, profile_slugs)
         errors += _check_slug_modules(d, where, slugs, by_rel)
         errors += _check_links(d, where, links)
-    return errors + _check_refs(docs, ids) + _check_readmes(root)
+    return errors + _check_refs(docs, ids) + _check_readmes(root) + _check_readme_tag(root)
+
+
+README_TAG_MARK = "Bản đã gắn tag"
+README_PINNED_RE = re.compile(r"v\d+\.\d+\.\d+|/tree/v")
+
+
+def readme_tag_errors(text: str) -> List[str]:
+    """Dòng "Bản đã gắn tag" của README (T-4020): không ghi cứng số phiên bản (sửa tay mỗi lần cắt bản và lệch ngay khi tag mới
+    ra — README từng ghi v3.34.0 khi tag mới nhất là v3.35.0) mà trỏ tới danh sách tag `…/tags` luôn đúng. Không có dòng đó
+    (README của dự án đích) → không kiểm."""
+    errors = []
+    for line in (ln for ln in text.splitlines() if README_TAG_MARK in ln):
+        if README_PINNED_RE.search(line):
+            errors.append(
+                f"README.md: dòng '{README_TAG_MARK}' ghi cứng số phiên bản — lệch mỗi lần cắt bản; dùng liên kết tới "
+                "danh sách tag (…/tags)"
+            )
+        elif "/tags" not in line:
+            errors.append(f"README.md: dòng '{README_TAG_MARK}' cần liên kết tới danh sách tag (…/tags)")
+    return errors
+
+
+def _check_readme_tag(root: Path) -> List[str]:
+    """README cạnh thư mục khung (repo khung: `<gốc>/README.md`); vắng → không kiểm."""
+    readme = root.parent / "README.md"
+    try:
+        return readme_tag_errors(readme.read_text(encoding="utf-8")) if readme.is_file() else []
+    except (OSError, ValueError):
+        return []
 
 
 # ID trỏ tới trong văn bản (AUD-DOC-182): dạng ID checklist; `AUD-…` là ID sổ audit của repo (docs/ops), không phải mục khung.

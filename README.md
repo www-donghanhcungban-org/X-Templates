@@ -6,7 +6,7 @@
 >
 > Mã mở [MIT](LICENSE), miễn phí. Thấy hữu ích? [Ủng hộ tác giả](#ủng-hộ-và-liên-hệ) ☕
 
-Bản đã gắn tag là [`v3.34.0`](https://github.com/www-donghanhcungban-org/X-Templates/tree/v3.34.0). [CHANGELOG](CHANGELOG.md) ghi thay đổi trên `main` theo từng bản. [PROGRESS](PROGRESS.md) ghi việc đang làm và mốc bàn giao.
+Bản đã gắn tag: xem [danh sách tag](https://github.com/www-donghanhcungban-org/X-Templates/tags) hoặc chạy `git describe --tags --abbrev=0` (số bản không ghi ở đây để khỏi lệch mỗi lần cắt bản; `xt.py validate` kiểm). [CHANGELOG](CHANGELOG.md) ghi thay đổi trên `main` theo từng bản. [PROGRESS](PROGRESS.md) ghi việc đang làm và mốc bàn giao.
 
 ## Vì sao dùng X-Templates
 
