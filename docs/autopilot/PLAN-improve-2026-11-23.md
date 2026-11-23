@@ -102,7 +102,7 @@ Giữ nguyên bốn quyết định nền của đề xuất: `merge_autonomy: L
 
 ### Lát 1F — hạn cứng và chi phí mỗi phiên
 - Việc có hạn 2026-12-02, giữ ở PLAN gốc vì ID task không được trùng giữa các PLAN (`tests.test_green_release`): `T-3555` của [PLAN-harden-2026-10-27-loops](PLAN-harden-2026-10-27-loops.md) — bỏ `pull_request_target` khỏi `pr-review.yml`. Làm trong đợt 1 bằng vòng của PLAN đó; việc đầu là tra lại căn cứ và ngày của hạn từ nguồn GitHub hiện hành.
-- [ ] `T-4011` Bootstrap tối thiểu (mục 17, phần Python): một lệnh dựng CPython 3.15.x bản phát hành và công cụ cổng trên `PATH` cho container hay máy mới; `doctor` cảnh báo khi runtime là bản tiền phát hành hoặc khác bản CI ghim; hướng dẫn tách ba mốc cài khung, chạy ứng dụng, đủ điều kiện production và chỉ công bố hệ điều hành đã kiểm (files: scripts/dev-task.sh, scripts/xt.py, tests/test_bootstrap.py) — Gate: `python3 -m unittest tests.test_bootstrap`
+- [ ] `T-4011` Bootstrap tối thiểu (mục 17, phần Python): một lệnh dựng CPython ≥ 3.13 (sàn mới, ADR-0094 — máy đã có Python ≥ 3.13 không cần bước này) và công cụ cổng trên `PATH` cho container hay máy chưa có; `doctor` cảnh báo khi runtime là bản tiền phát hành; hướng dẫn tách ba mốc cài khung, chạy ứng dụng, đủ điều kiện production và chỉ công bố hệ điều hành đã kiểm (files: scripts/dev-task.sh, scripts/xt.py, tests/test_bootstrap.py) — Gate: `python3 -m unittest tests.test_bootstrap`
 
 **Cửa đợt 1:** quyết định chặn giữ được tới điểm merge theo bảng của `T-3999`; lời gọi reviewer nào cũng có lý do ghi được; mẫu ruleset tag đúng và việc áp live đã giao chủ repo; sổ số đo bắt đầu ghi và có baseline.
 
