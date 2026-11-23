@@ -754,6 +754,12 @@
    ]
   },
   {
+   "reason": "Nợ review của release-check (review_debt) là phép so diff git giữa SHA quét và HEAD, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_executable_docs dựng repo git thật và kiểm: sửa câu chữ BLUEPRINT.md hay PLAN không sinh nợ, đổi lệnh Kiểm/Gate/grant thì sinh nợ.",
+   "ids": [
+    "AUD-HAR-460"
+   ]
+  },
+  {
    "reason": "Độ dài additionalContext của hook SessionStart và hàng field-workflow của admin-plan là đầu ra của hook/công cụ, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_hooks.SessionStartUtf8Test ghim len(additionalContext) ≤ 10000; tests.test_ops_setup_edges và tests.test_admin_plan ghim field_workflow_status.",
    "ids": [
     "AUD-CI-040",

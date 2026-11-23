@@ -5341,9 +5341,11 @@ def _doctor_xt_yaml(base: Path, fw: Path) -> List[Finding]:
     gate_err = commit_gate_error(scalars)
     if gate_err:
         out.append(Finding("xt-yaml", "error", gate_err + " — sửa thành fast hoặc full"))
-    review_err = merge_review_error(scalars)
-    if review_err:
-        out.append(Finding("xt-yaml", "error", review_err))
+    out += [
+        Finding("xt-yaml", "error", err)
+        for err in (merge_review_error(scalars), immediate_review_error(scalars))
+        if err
+    ]
     rethink_err = max_rethink_error(scalars)
     if rethink_err:
         out.append(Finding("xt-yaml", "warn", f"{rethink_err} — đang dùng trần mặc định {MAX_RETHINK_DEFAULT}"))
@@ -6846,6 +6848,36 @@ def merge_review_error(keys: Dict[str, str]) -> Optional[str]:
     if "merge_review" not in keys or keys["merge_review"] in ("optional", "required"):
         return None
     return f"xt.yaml: merge_review '{keys['merge_review']}' không hợp lệ (optional|required)"
+
+
+# Lớp "tác động tức thì" (ADR-0095): thay đổi mà chính nó là lớp đỡ hoặc có hiệu lực ngay khi merge cần một lượt rà ở head
+# dù `merge_review: optional`. Tập đường dẫn cố định; chính sách (`immediate_review: on|off`) đọc từ nhánh đích.
+IMMEDIATE_KEY = "immediate_review"
+IMMEDIATE_PATHS = (
+    ".claude/hooks/",
+    ".claude/settings.json",
+    ".codex/hooks.json",
+    ".github/workflows/",
+    ".github/rulesets/",
+    "xt.yaml",
+)
+IMMEDIATE_NOTE = "chạm lớp tác động tức thì (ADR-0095) — cần review ở head dù merge_review: optional"
+
+
+def immediate_review_error(keys: Dict[str, str]) -> Optional[str]:
+    """Khoá vắng/rỗng dùng `on`; đã khai thì phải là on hoặc off."""
+    if keys.get(IMMEDIATE_KEY, "") in ("", "on", "off"):
+        return None
+    return f"xt.yaml: {IMMEDIATE_KEY} '{keys[IMMEDIATE_KEY]}' không hợp lệ (on|off)"
+
+
+def immediate_effect_paths(base: Path, ref: str, changed: List[str], prefix: str) -> List[str]:
+    """Đường dẫn đổi thuộc lớp tác động tức thì, kể cả khi đặt dưới tiền tố dự án con. Chỉ `off` đã commit ở nhánh đích
+    mới tắt (PR không tự miễn bằng cách sửa xt.yaml của nó); giá trị lạ → như `on`."""
+    if _committed_xt_keys(base, ref).get(IMMEDIATE_KEY) == "off":
+        return []
+    roots = ("", prefix)
+    return [f for f in changed if any(f.startswith(r + p) for r in roots for p in IMMEDIATE_PATHS)]
 
 
 # Cổng trước commit (D-NNN do phiên chính ghi): `fast` = hook commit chạy `dev-task.sh gate-fast` (format/lint/typecheck +
@@ -11422,6 +11454,7 @@ def cmd_ci_check(args: argparse.Namespace) -> int:
         delivery_phase_error(keys),
         commit_gate_error(keys),
         merge_review_error(keys),
+        immediate_review_error(keys),
     ):
         if cfg_err:
             print(f"✗ {cfg_err}")
@@ -12482,10 +12515,15 @@ def _merge_eval(pr: Dict[str, Any], local: bool = False) -> Tuple[Dict[str, Any]
         if module
         else []
     )
-    risk = [*risk, *protected]
+    immediate = immediate_effect_paths(project_dir(), ref, list(_risky_paths(pr)), project_prefix())
+    if immediate:
+        phase_notes = [*phase_notes, f"{IMMEDIATE_NOTE}: {', '.join(sorted(set(immediate))[:3])}"]
+    risk = [*risk, *protected]  # lớp tác động tức thì chỉ đòi review (không thành ngoại lệ cứng giữ người)
     rec = _pr_record(read_reviews(project_dir()), str(pr.get("number", ""))) if local else None
-    decision = merge_check_result(pr, autonomy, risk, hard_auto, phase, rec)
-    if not protected and _committed_xt_keys(project_dir(), ref).get("merge_review", "optional") == "optional":
+    decision = merge_check_result(pr, autonomy, risk, hard_auto, "harden" if immediate else phase, rec)
+    decision[PHASE_KEY] = phase  # lớp tác động tức thì không được hoãn review ở pha build (ADR-0095)
+    needs_review = bool(protected or immediate)
+    if not needs_review and _committed_xt_keys(project_dir(), ref).get("merge_review", "optional") == "optional":
         decision = optional_review_decision(pr, autonomy, risk, hard_auto, phase)
     return decision, notes + hard_notes + phase_notes
 
@@ -13947,6 +13985,29 @@ def _release_phase(base: Path) -> Dict[str, str]:
     return _release_row("phase", "PASS", f"`{PHASE_KEY}: {keys.get(PHASE_KEY) or 'harden'}` (vắng = harden)")
 
 
+# Tài liệu có lệnh chạy được (AUD-HAR-460, D-535): `release-check`, CI, duyệt tag và Gate của vòng lặp chạy chúng, nên đổi
+# LỆNH tính như mã; sửa mô tả thuần không sinh nợ. Mục blueprint là một dòng chứa cả mô tả lẫn `— Kiểm:`, nên so PHẦN LỆNH
+# (từ dấu `Kiểm:`/`Gate:`/`grant:` tới hết dòng) giữa bản cũ và mới, không so dòng.
+_CMD_PART = r"(?:Kiểm:|Gate:|grant:).*$"
+EXEC_DOC_LINES: Tuple[Tuple["re.Pattern[str]", "re.Pattern[str]"], ...] = (
+    (re.compile(r"(^|/)BLUEPRINT\.md$"), re.compile(_CMD_PART)),
+    (re.compile(r"(^|/)docs/(archive/)?autopilot/PLAN[^/]*\.md$"), re.compile(_CMD_PART)),
+)  # mẫu `framework/templates/*.md` không ở đây: `is_doc_path` đã coi là mã nên mọi sửa đều sinh nợ (chặt hơn)
+
+
+def _exec_doc_edited(root: Path, sha: str, path: str) -> bool:
+    """Phần lệnh của tài liệu chạy được có khác giữa `sha` và HEAD (thêm, xoá, đổi; dời chỗ không tính)? Tài liệu khác → False."""
+    part_re = next((lr for pr, lr in EXEC_DOC_LINES if pr.search(path)), None)
+    if not part_re:
+        return False
+    diff = _git(root, "--literal-pathspecs", "diff", "-U0", "--no-renames", f"{sha}..HEAD", "--", path).stdout
+    parts: Dict[str, List[str]] = {"-": [], "+": []}
+    for ln in diff.splitlines():
+        if ln[:1] in parts and not ln.startswith(("+++", "---")):
+            parts[ln[0]] += [m.group(0).strip() for m in part_re.finditer(ln[1:])]
+    return sorted(parts["-"]) != sorted(parts["+"])
+
+
 def review_debt(root: Path, status: Path) -> Tuple[List[str], List[str]]:
     """Nợ review (ADR-0031): (file ngoài tài liệu đổi sau SHA quét mà audit chưa phủ, SHA quét đã dùng). Nhóm đã quét/rút
     gọn của sổ phủ file thuộc nhóm đó (`_path_groups`) tới SHA của nhóm; file không thuộc nhóm nào (cấu hình cổng như
@@ -13969,7 +14030,7 @@ def _review_debt_since(root: Path, status: Path) -> Tuple[Dict[str, str], List[s
     for sha in set(scanned.values()):
         # -z: tên chứa `"`/`\\`/ký tự điều khiển không bị trích dẫn kiểu C (trích dẫn → lệch nhóm, bỏ sót nợ — review #317)
         names = _git(root, "diff", "-z", "--no-renames", "--name-only", f"{sha}..HEAD").stdout.split("\0")
-        changed[sha] = [f for f in names if f and not is_doc_path(f)]
+        changed[sha] = [f for f in names if f and (not is_doc_path(f) or _exec_doc_edited(root, sha, f))]
     ahead = {s: int(_git(root, "rev-list", "--count", f"{s}..HEAD").stdout.strip() or 0) for s in changed}
     since: Dict[str, str] = {}
     for no, sha in scanned.items():

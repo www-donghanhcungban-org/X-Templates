@@ -34,6 +34,8 @@ merge_risk_paths: "" # glob thêm vào đường dẫn nhạy cảm (ngoại l�
 # của dự án chấp nhận rủi ro khi giữ auto (LOOP-STOP-005). Thiếu khoá = human; PR đổi khoá luôn người merge
 merge_hard_exceptions: auto
 # delivery_phase xác định pha build hoặc harden. Review merge được cấu hình ở merge_review (ADR-0079).
+# Dù merge_review: optional, PR chạm hook, settings.json, workflow, ruleset hay xt.yaml vẫn cần một lượt review ở head
+# (ADR-0095). Tắt bằng dòng `immediate_review: off` (đọc từ nhánh đích; mặc định on) — thêm dòng đó khi dự án chấp nhận rủi ro.
 delivery_phase: build
 # max_rethink: 1              # trần `pr rethink` mỗi PR (ADR-0061): hết → `pr next` trả `split-or-close`; 0 = không trần; PR cắt bản miễn; lấy mức chặt hơn với nhánh đích
 # review_identity: ""         # khi review required, chỉ dấu của tài khoản này mở được merge (T-1508)
