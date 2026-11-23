@@ -6876,10 +6876,17 @@ def _argv_shell_check(
     của luật cũ: HOOK_BYPASS…). Chữ lỏng (guard tự dựng) không qua tập con. Cờ bỏ hook đã đặt trong `res` đi theo lỗi
     (review #433 R1 — adapter host khác đọc `push_no_verify`). Câu hỏi mã BUDGET (`gh pr close 5 ${a[@]}` — AUD-SEC-598)
     không tính: nó là ask ở strict, lỗi tập con là deny ở mọi chính sách. Câu hỏi của luật hàng rào mới (AUD-SEC-988/989,
-    `_new_fence_ask`; AUD-SEC-996a FOLLOW_TAGS_MARK) cũng không tính: thêm luật không được làm deny BUDGET của lệnh cũ
-    thành ask ở strict."""
+    `_new_fence_ask`; AUD-SEC-996a FOLLOW_TAGS_MARK) và mã merge mới (ADR-0096) cũng không tính: thêm luật không được
+    làm deny BUDGET của lệnh cũ thành ask ở strict."""
     why = _argv_shell_why(cmd, tokens, root, cwd) if strict else ""
-    kept = [a for a in asks if reason_code("ask", a) != BUDGET and not _new_fence_ask(a) and FOLLOW_TAGS_MARK not in a]
+    kept = [
+        a
+        for a in asks
+        if reason_code("ask", a) != BUDGET
+        and not _new_fence_ask(a)
+        and FOLLOW_TAGS_MARK not in a
+        and not (isinstance(a, CodedReason) and a.code in MERGE_BLOCK_CODES)
+    ]
     if why and not _asks_denied(kept):
         err = ScanTooComplex(f"ngoài tập con guard đọc chắc — {why} (ADR-0063)")
         setattr(err, "flags", {k: True for k in ("no_verify", "push_no_verify") if res.get(k)})
@@ -6897,9 +6904,8 @@ def _new_fence_ask(ask: str) -> bool:
 
 def _asks_denied(asks: List[str]) -> bool:
     """Các câu hỏi đã gom mà chính sách mặc định biến thành chặn (ask nguy hiểm/unsure)."""
-    return (
-        bool(asks) and apply_policy({"decision": "ask", "reason": ASK_PREFIX + "; ".join(asks)})["decision"] == "deny"
-    )
+    reason = _copy_reason_code(ASK_PREFIX + "; ".join(asks), *asks)
+    return bool(asks) and apply_policy(_reason_result("ask", reason))["decision"] == "deny"
 
 
 def _drop_fd_words(argv: List[str]) -> List[str]:
@@ -10350,6 +10356,39 @@ UNVERIFIED_ASK = "không xác minh được ngoại lệ cứng (ADR-0019): ngư
 # Merge khi `merge-check` báo chưa có review hợp lệ ở head (`eligible` false — ADR-0028; pha build hoãn review nên không
 # rơi vào đây, ADR-0031) → chặn ở chính sách mặc định (AUD-DOC-054).
 REVIEW_MISSING_ASK = "chưa có review hợp lệ ở head (ADR-0028)"
+# ADR-0096: verdict đã đọc được nhưng chưa cho merge khác với lỗi đọc UNVERIFIED. Mã đặt tại nơi sinh,
+# không suy từ lời giải thích; CodedReason giữ mã qua các helper vẫn nhận chuỗi của guard.
+MERGE_BLOCK_CODES = frozenset({"MERGE_INELIGIBLE", "MERGE_HEAD_MISMATCH"})
+
+
+class CodedReason(str):
+    """Lời giải thích có mã nguồn; metadata chỉ sống trong một kết quả, không có trạng thái toàn cục."""
+
+    code: str
+
+    def __new__(cls, text: str, code: str) -> CodedReason:
+        value = super().__new__(cls, text)
+        value.code = code
+        return value
+
+
+def _copy_reason_code(text: str, *sources: object) -> str:
+    """Giữ mã nguồn khi bọc/gom; lý do chặn cũ độc lập ưu tiên hơn mã merge mới (ADR-0096)."""
+    coded = [source.code for source in sources if isinstance(source, CodedReason)]
+    if not coded:
+        return text
+    codes = [source.code if isinstance(source, CodedReason) else reason_code("ask", str(source)) for source in sources]
+    old = next((code for code in codes if code not in MERGE_BLOCK_CODES and POLICY.get(code) == "deny"), "")
+    return CodedReason(text, old or coded[0])
+
+
+def _reason_result(action: str, reason: str) -> Dict[str, object]:
+    out: Dict[str, object] = {"decision": action, "reason": reason}
+    if isinstance(reason, CodedReason):
+        out["code"] = reason.code
+    return out
+
+
 # Bật auto-merge của GitHub (`gh pr merge --auto`, graphql `enablePullRequestAutoMerge`, tool MCP `enable…auto_merge`):
 # GitHub merge khi check xanh mà không ghim head đã đánh giá → deny phẳng ở mọi mức tự chủ, mọi PR, mọi chính sách (kể
 # cả strict), không gọi merge-check (ADR-0036 §3). Tắt auto-merge vẫn cho qua. Chuỗi là dấu của mã `AUTO_MERGE_ENABLE`.
@@ -10464,6 +10503,24 @@ def _gh_auto_flag(args: List[str]) -> bool:
     return any(a == "--auto" or a.startswith("--auto=") for a in args)
 
 
+def _merge_pin_values(args: List[str]) -> List[str]:
+    """Mọi pin CLI thật; chuỗi giống cờ trong body/email/tên file chỉ là dữ liệu, không phải pin."""
+    out: List[str] = []
+    skip = False
+    for i, arg in enumerate(args):
+        if skip:
+            skip = False
+            continue
+        if arg == "--":
+            break
+        if arg == "--match-head-commit" and i + 1 < len(args):
+            out.append(args[i + 1])
+        elif arg.startswith("--match-head-commit="):
+            out.append(arg.split("=", 1)[1])
+        skip = arg in GH_MERGE_VALUE_FLAGS or bool(re.fullmatch(r"-[smrd]*[bFAR]", arg))
+    return out
+
+
 def gh_pr_merge_rule(args: List[str], root: str) -> Tuple[str, str]:
     """`gh pr merge` (ADR-0013): mặc định hỏi người; `allow` chỉ khi `xt.py merge-check` = merge VÀ lệnh ghim đúng
     head đã kiểm (`--match-head-commit`). `--admin` (vượt ruleset) và `--repo` (repo khác) luôn hỏi. Bật auto-merge
@@ -10486,7 +10543,13 @@ def gh_pr_merge_rule(args: List[str], root: str) -> Tuple[str, str]:
     flags = sorted({a.split("=", 1)[0] for a in args if a.startswith("-")} - MERGE_ALLOW_FLAGS)
     if not sha or flags or repo:
         why = "tự merge cần `--match-head-commit <sha>` từ `xt.py merge-check`, chỉ cờ"
-        return _merge_ask(f"{EXTERNAL_ASK} — {why} {', '.join(sorted(MERGE_ALLOW_FLAGS))}", selector, root, repo)
+        return _merge_ask(
+            f"{EXTERNAL_ASK} — {why} {', '.join(sorted(MERGE_ALLOW_FLAGS))}",
+            selector,
+            root,
+            repo,
+            _merge_pin_values(args),
+        )
     return _merge_verdict(selector, sha, root)
 
 
@@ -12421,7 +12484,8 @@ def _mcp_merge_ask(why: str, tool_input: Dict[str, object], root: str) -> Tuple[
     """Tool MCP merge mà guard không tự cho phép: vẫn kiểm `hard` khi đọc được PR (số nguyên dương + owner/repo)."""
     n, owner, repo = tool_input.get("pullNumber"), tool_input.get("owner"), tool_input.get("repo")
     if type(n) is int and n > 0 and isinstance(owner, str) and isinstance(repo, str):
-        return _merge_ask(why, [str(n)], root, f"{owner}/{repo}")
+        pin = tool_input.get("expectedHeadSha")
+        return _merge_ask(why, [str(n)], root, f"{owner}/{repo}", [pin] if isinstance(pin, str) else [])
     return "ask", f"{EXTERNAL_ASK} — {UNVERIFIED_ASK}: tool MCP merge không rõ PR/repo"
 
 
@@ -12463,15 +12527,31 @@ def _review_block(d: Dict[str, object]) -> str:
     return ""
 
 
-def _merge_ask(why: str, selector: List[str], root: str, repo: str = "") -> Tuple[str, str]:
-    """Merge mà guard không tự cho phép (thiếu ghim, cờ lạ, repo khác…): ask `why` — trừ khi chạm/không xác minh được
-    ngoại lệ cứng (AUD-SEC-044) hoặc PR chưa có review hợp lệ ở head (AUD-HAR-093: cùng luật với merge ghim head) thì
-    ask mang dấu chặn."""
+def _merge_ask(why: str, selector: List[str], root: str, repo: str = "", pins: Iterable[str] = ()) -> Tuple[str, str]:
+    """Merge ngoài dạng tự cho phép: vẫn giữ chặn ngoại lệ cứng, review, verdict và mọi pin đọc được (ADR-0096).
+    Chỉ PR đủ điều kiện, không có pin lệch mới giữ ask `why` của dạng lệnh chưa được cho phép rõ ràng."""
     d, gate = _hard_gate(selector, root, repo)
     if gate[0]:
         return gate
-    block = _review_block(d)
+    block = _review_block(d) or _ineligible_merge(d) or _merge_head_block(d, pins)
     return ("ask", block) if block else ("ask", why)
+
+
+def _ineligible_merge(d: Dict[str, object]) -> str:
+    """ADR-0096: quyết định chưa cho merge phải giữ được qua chính sách mặc định, kể cả đường thiếu pin/cờ lạ."""
+    if d.get("verdict") == "merge":
+        return ""
+    raw = d.get("reasons")
+    reasons = "; ".join(str(x) for x in raw) if isinstance(raw, list) else ""
+    return CodedReason(f"{EXTERNAL_ASK} — merge-check: {d.get('verdict')}: {reasons}", "MERGE_INELIGIBLE")
+
+
+def _merge_head_block(d: Dict[str, object], pins: Iterable[str]) -> str:
+    """Mọi pin đọc được đều phải khớp head; thêm cờ/repo hay lặp pin không được làm mất kiểm này."""
+    pin = next((value for value in pins if d.get("head") != value), None)
+    if pin is None:
+        return ""
+    return CodedReason(f"{EXTERNAL_ASK} — head đã kiểm {d.get('head')} khác {pin}", "MERGE_HEAD_MISMATCH")
 
 
 def _merge_verdict(selector: List[str], sha: str, root: str, repo: str = "") -> Tuple[str, str]:
@@ -12484,13 +12564,9 @@ def _merge_verdict(selector: List[str], sha: str, root: str, repo: str = "") -> 
     reasons = "; ".join(str(x) for x in raw) if isinstance(raw, list) else ""
     # Điều kiện merge một nhà (ADR-0028): thiếu review hợp lệ ở head → mã chặn, không phải ask thường bị chính sách mặc
     # định cho qua (AUD-DOC-054). Kiểm trước nhánh `verdict != merge` (`_review_block`).
-    block = _review_block(d)
+    block = _review_block(d) or _ineligible_merge(d) or _merge_head_block(d, [sha])
     if block:
         return "ask", block
-    if d.get("verdict") != "merge":
-        return "ask", f"{EXTERNAL_ASK} — merge-check: {d.get('verdict')}: {reasons}"
-    if d.get("head") != sha:
-        return "ask", f"{EXTERNAL_ASK} — head đã kiểm {d.get('head')} khác {sha}"
     return "allow", f"merge-check: {reasons}"
 
 
@@ -12568,7 +12644,8 @@ def _gh_api_merge_like(args: List[str], pos: List[str], ask: Tuple[str, str], ro
     if m[1] is None:  # merge theo id repo: merge-check không ánh xạ được chủ/tên — như graphql merge (N1)
         return "ask", f"{EXTERNAL_ASK} — {UNVERIFIED_ASK}: merge qua `repositories/<id>` (không đọc được chủ/tên repo)"
     repo = "" if m[1] == "{owner}/{repo}" else m[1]
-    return _merge_ask(ask[1], [m[2]], root, repo)
+    pins = (value.removeprefix("sha=") for value in _gh_api_field_values(args) if value.startswith("sha="))
+    return _merge_ask(ask[1], [m[2]], root, repo, pins)
 
 
 GH_REPO_FLAGS = ("-R", "--repo")
@@ -13445,7 +13522,13 @@ def _pr_flag_merge_rule(args: List[str], rest: List[str], root: str) -> Tuple[st
         return "deny", SQUASH_SUBJECT_WHY
     repo = _flag_value(args, "-R") or _flag_value(args, "--repo") or next((a[2:] for a in args if a[:2] == "-R"), "")
     selector = _positionals(rest, GH_MERGE_VALUE_FLAGS)
-    return _merge_ask(f"{EXTERNAL_ASK} — `gh pr <cờ> merge` không tự merge", selector, root, repo)
+    return _merge_ask(
+        f"{EXTERNAL_ASK} — `gh pr <cờ> merge` không tự merge",
+        selector,
+        root,
+        repo,
+        _merge_pin_values(rest),
+    )
 
 
 def _gh_publish(args: List[str]) -> Tuple[str, str]:
@@ -18041,7 +18124,7 @@ def _scan_one(
     if decision == "deny":
         return f"Lệnh bị khung chặn ({why}): {' '.join(argv)[:300]}. Muốn làm thật thì người dùng tự chạy."
     if decision == "ask":
-        asks.append(f"{why}: {' '.join(argv)[:200]}")
+        asks.append(_copy_reason_code(f"{why}: {' '.join(argv)[:200]}", why))
     if decision == "allow":  # chỉ hiệu lực khi cả lệnh Bash là đúng một lệnh này (bash_decision)
         res["allow"] = why
     bypass = (
@@ -20410,7 +20493,7 @@ def _container_asks(ctr: List[Tuple[str, List[str]]], depth: int, budget: Option
             raise ScanTooComplex(f"lệnh trong container: {sub['reason']} (AUD-SEC-247)")
         why = str(sub["reason"]).removeprefix(ASK_PREFIX) if sub["decision"] in ("deny", "ask") else ""
         why = why or _wipes_bind(script, dests)
-        out += [f"lệnh trong container: {why}"] if why else []
+        out += [_copy_reason_code(f"lệnh trong container: {why}", sub["reason"])] if why else []
     return out
 
 
@@ -20459,7 +20542,7 @@ def _scan_scripts(
         if sub["decision"] in ("ask", "allow") or sub["commit"]:  # T-3952 F1: dấu commit lồng/bản viết lại
             parts = [str(sub["reason"])] * bool(sub["reason"])
             parts += [_nested_commit_note(sub, deeper, budget)] if sub["commit"] else []
-            asks.append(f"lệnh lồng trong shell: {' — '.join(parts)}")
+            asks.append(_copy_reason_code(f"lệnh lồng trong shell: {' — '.join(parts)}", sub["reason"]))
     return ""
 
 
@@ -23747,7 +23830,11 @@ def _remote_exec_scan(tokens: List[str], depth: int, asks: List[str], budget: Sc
         why = d.reason if policy_action(d) == "deny" and not local_wipe and not loose else ""
         why = why or (_remote_data_destroy(script) if remote_db else "")
         why = why or (_remote_dyn_destroy(script) if exact and root == REMOTE_EXEC_ROOT else "")
-        asks += [f"{REMOTE_EXEC_MARK} (T-3952): {why[:300]}"] if why else []
+        asks += (
+            [_copy_reason_code(f"{REMOTE_EXEC_MARK} (T-3952): {why[:300]}", sub["reason"] if why == d.reason else "")]
+            if why
+            else []
+        )
     return ""
 
 
@@ -23898,7 +23985,9 @@ def _rough_budget(res: Dict[str, object], cmd: str) -> Dict[str, object]:
     Quyết định cuối không nhẹ đi; lệnh cần hai lần đọc (`LitWord`) mà chỉ lần đọc cũ chặn thì mã có thể thành BUDGET
     (`_stricter_reading` hoà lấy lần đọc mới)."""
     # AUD-SEC-988/989: câu hỏi của luật hàng rào mới không giữ được lệnh khỏi BUDGET (không nhẹ hơn nền ở strict)
-    new_rule = res.get("decision") == "ask" and _new_fence_ask(str(res.get("reason") or ""))
+    new_rule = res.get("decision") == "ask" and (
+        _new_fence_ask(str(res.get("reason") or "")) or res.get("code") in MERGE_BLOCK_CODES
+    )
     if policy_action(decide(res)) == "deny" and not new_rule:
         return res
     return {**res, "decision": "deny", "reason": _budget_result(cmd, SHLEX_UNCLOSED_WHY)["reason"], "code": BUDGET}
@@ -24088,7 +24177,8 @@ def _bash_decision(
     if allow and (len(commands) > 1 or not PLAIN_MERGE_RE.fullmatch(cmd.strip())):
         asks.append(f"{EXTERNAL_ASK} — tự merge chỉ khi lệnh đứng một mình")
     if asks:
-        res.update(decision="ask", reason=ASK_PREFIX + "; ".join(dict.fromkeys(asks)))
+        reason = _copy_reason_code(ASK_PREFIX + "; ".join(dict.fromkeys(asks)), *asks)
+        res.update(_reason_result("ask", reason))
     elif allow:
         res.update(decision="allow", reason=f"Khung cho tự merge (ADR-0013) — {allow}")
     return res
@@ -24193,7 +24283,13 @@ UNSURE_CODES = frozenset(
     {UNPARSED, BUDGET, BRACE_OVERFLOW, NEST_TOO_DEEP, UNRESOLVED_TARGET, "OPAQUE_EXEC", "UNVERIFIED"}
 )
 # Bảng chính sách mặc định: mã → hành động. Mã vắng bảng giữ hành động gốc. ask không nguy hiểm → "" (cho qua).
-POLICY: Dict[str, str] = {**{c: "deny" for _, c in REASON_CODES}, UNPARSED: "deny", OTHER_ASK: "", RULE_DENY: "deny"}
+POLICY: Dict[str, str] = {
+    **{c: "deny" for _, c in REASON_CODES},
+    **dict.fromkeys(MERGE_BLOCK_CODES, "deny"),
+    UNPARSED: "deny",
+    OTHER_ASK: "",
+    RULE_DENY: "deny",
+}
 # Nhóm chặn: hành động gốc ask/deny. `unsure` trong nhóm chặn → deny ở mọi adapter (bash/mcp/edit/permission).
 BLOCKING = frozenset({"ask", "deny"})
 
@@ -24226,8 +24322,10 @@ def reason_code(action: str, reason: str) -> str:
 def decide(out: Dict[str, object]) -> Decision:
     """Dựng `Decision` từ kết quả bộ luật (dict của bash/edit/mcp)."""
     action = str(out.get("decision") or "")
-    reason = str(out.get("reason", "")).removeprefix(ASK_PREFIX)
-    code = str(out.get("code") or reason_code(action, reason))
+    raw_reason = out.get("reason", "")
+    reason = str(raw_reason).removeprefix(ASK_PREFIX)
+    source_code = raw_reason.code if isinstance(raw_reason, CodedReason) else ""
+    code = str(out.get("code") or source_code or reason_code(action, reason))
     unsure = code in UNSURE_CODES or out.get("confidence") == "unsure"
     missing = (code,) if unsure else ()
     return Decision(action, code, "unsure" if unsure else "sure", missing, reason)
@@ -24329,7 +24427,7 @@ def _rule_decision(mode: str, payload: Any, root: str) -> Dict[str, object]:
     if mode == "mcp":
         name = payload.get("tool_name")
         d, r = mcp_decision(name, tool_input, root) if isinstance(name, str) else ("", "")
-        return {"decision": d, "reason": r}
+        return _reason_result(d, r)
     return {"decision": ""}
 
 

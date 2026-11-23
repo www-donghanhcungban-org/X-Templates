@@ -7017,7 +7017,9 @@ class GuardReview97Test(unittest.TestCase):
                 "gh -R x/y pr merge 7",
             ),
         )
-        self.check("", ("gh -R o/r pr merge 7 --squash", "gh -R o/r pr view 7"), hard=False)
+        # ADR-0096: verdict human vẫn chặn dù không có ngoại lệ cứng; lệnh đọc giữ nguyên.
+        self.check("deny", ("gh -R o/r pr merge 7 --squash",), hard=False)
+        self.check("", ("gh -R o/r pr view 7",), hard=False)
         # Bật auto-merge sau cờ repo toàn cục: chặn cả khi PR không thuộc ngoại lệ cứng (ADR-0036).
         self.check("deny", ("gh -Ro/r pr merge 7 --auto", "gh --repo o/r pr merge 7 --auto --squash"), hard=False)
 

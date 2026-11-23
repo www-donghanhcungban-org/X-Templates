@@ -275,9 +275,8 @@ class GuardReviewMissingTest(unittest.TestCase):
                 res = self.mcp(d)
                 self.assertEqual((res["decision"], res.get("code")), ("deny", "REVIEW_MISSING"), res)
 
-    def test_default_policy_not_ready_without_review_need_not_blocked(self):
-        """Đối chứng: làn nhanh, pha build (review hoãn) và dưới L3 ở cùng verdict `wait`/`fix` không bị chặn vì review
-        (hành vi cũ: ask thường, chính sách mặc định cho qua)."""
+    def test_default_policy_not_ready_is_blocked_without_claiming_missing_review(self):
+        """ADR-0096: làn nhanh, build và dưới L3 vẫn chờ CI/sửa lỗi; mã không được báo nhầm thiếu review."""
         running = [{**GREEN[0], "status": "IN_PROGRESS", "conclusion": ""}]
         fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
         cases = {
@@ -293,9 +292,10 @@ class GuardReviewMissingTest(unittest.TestCase):
                 with self.subTest(name, cmd=cmd):
                     res = self.final(d, cmd)
                     self.assertNotEqual(res.get("code"), "REVIEW_MISSING", res)
-                    self.assertEqual(res["decision"], "", res)
+                    self.assertEqual((res["decision"], res.get("code")), ("deny", "MERGE_INELIGIBLE"), res)
             with self.subTest(name, cmd="mcp"):
-                self.assertNotEqual(self.mcp(d).get("code"), "REVIEW_MISSING")
+                result = self.mcp(d)
+                self.assertEqual((result["decision"], result.get("code")), ("deny", "MERGE_INELIGIBLE"), result)
 
     UNPINNED = (
         "gh pr merge 7 --squash",
@@ -329,8 +329,7 @@ class GuardReviewMissingTest(unittest.TestCase):
                     self.assertEqual((res["decision"], res.get("code")), ("deny", "REVIEW_MISSING"), res)
 
     def test_default_policy_review_missing_unpinned_controls(self):
-        """Đối chứng AUD-HAR-093: review sạch, pha build (review hoãn), làn nhanh, dưới L3 → merge không ghim vẫn là ask
-        thường (chính sách mặc định cho qua); strict vẫn hỏi."""
+        """Review sạch/build/làn nhanh đã đủ điều kiện giữ hành vi cũ; làn chuẩn L2 cần người, ADR-0096 chặn."""
         fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
         cases = {
             "sạch": xt.merge_check_result(std(xtReviews=[mark(True)]), 3, [], False),
@@ -339,12 +338,14 @@ class GuardReviewMissingTest(unittest.TestCase):
             "L2": xt.merge_check_result(std(), 2, [], False),
         }
         for name, d in cases.items():
+            expected = ("deny", "MERGE_INELIGIBLE") if name == "L2" else ("", "OTHER_ASK")
             for cmd in self.UNPINNED:
                 with self.subTest(name, cmd=cmd):
                     res = self.final(d, cmd)
-                    self.assertEqual((res["decision"], res.get("code")), ("", "OTHER_ASK"), res)
+                    self.assertEqual((res["decision"], res.get("code")), expected, res)
             with self.subTest(name, cmd="mcp"):
-                self.assertEqual(self.mcp_unpinned(d)["decision"], "")
+                result = self.mcp_unpinned(d)
+                self.assertEqual((result["decision"], result.get("code")), expected, result)
         d = xt.merge_check_result(std(), 3, [], False)
         with unittest.mock.patch.object(guard, "merge_check", return_value=d):
             res = guard.bash_decision(self.UNPINNED[0], str(ROOT))

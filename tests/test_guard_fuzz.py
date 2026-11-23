@@ -5,7 +5,8 @@ của bench — `xt.BenchEnv` + `xt._bench_guard` (bộ luật, `_failure_decisi
 Ba bất biến:
 1. **deny đơn điệu** — ca `allowed: false` bọc trong lệnh giữ nguyên ngữ nghĩa vẫn bị chặn;
 2. **không ngoại lệ** — `_rule_decision` không ném (ngoại lệ = fail-open với lệnh không phải merge, AUD-SEC-077/091);
-3. **allow giữ** — ca `allowed: true` bọc vô hại vẫn được cho chạy (không chặn oan).
+3. **allow giữ** — ca `allowed: true` bọc vô hại vẫn được cho chạy (không chặn oan). Ngoại lệ theo hợp đồng có sẵn:
+   merge được `allow` ở strict chỉ khi đứng một mình; biến thể bọc phải là đúng `ask/OTHER_ASK`, không allow hay deny.
 
 Lưới bậc 1 (mỗi ca × mỗi bộ bọc áp được) luôn chạy; thêm `XT_FUZZ_ROUNDS` biến thể ghép 2–3 bộ bọc chọn bằng
 `random.Random(SEED)` (mặc định nhỏ, vài giây). Biến thể đỏ đã biết nằm ở `KNOWN_RED` (kèm lý do + ID sổ audit) và trong
@@ -391,6 +392,7 @@ class _Runner:
         guard = env.module("guard")
         real = guard._rule_decision
         self.raised: List[str] = []
+        self.last: Dict[str, Any] = {}
 
         def spy(*a: Any) -> Any:
             try:
@@ -405,7 +407,13 @@ class _Runner:
         """(allowed, lỗi) — lỗi rỗng khi guard không ném."""
         self.raised.clear()
         got = xt._bench_guard({**case["input"], "command": cmd}, self.env)
+        self.last = got
         return bool(got["allowed"]), "; ".join(self.raised)
+
+
+def _strict_merge_control(case: Dict[str, Any]) -> bool:
+    """ADR-0036: allow merge ở strict là ngoại lệ chỉ cho lệnh đứng riêng, không phải allow cho cả shell bọc."""
+    return case["input"].get("policy") == "strict" and case["expect"].get("code") == "RULE_ALLOW"
 
 
 def fuzz(rounds: int = ROUNDS, seed: int = SEED) -> Dict[str, Any]:
@@ -418,8 +426,15 @@ def fuzz(rounds: int = ROUNDS, seed: int = SEED) -> Dict[str, Any]:
         for case, vid, cmd in variants:
             allowed, err = runner.run(case, cmd)
             want = bool(case["expect"]["allowed"])
-            if err or allowed != want:
-                why = "exception" if err else ("deny-monotone" if not want else "allow-kept")
+            strict_merge = _strict_merge_control(case)
+            mismatch = (
+                runner.last != {"allowed": False, "decision": "ask", "code": "OTHER_ASK"}
+                if strict_merge
+                else allowed != want
+            )
+            if err or mismatch:
+                why = "strict-merge-ask" if strict_merge else ("deny-monotone" if not want else "allow-kept")
+                why = "exception" if err else why
                 red[vid] = {"case": case, "command": cmd, "invariant": why, "error": err, "allowed": allowed}
     return {"variants": len(variants), "red": red}
 
@@ -483,6 +498,17 @@ class GuardFuzzTest(unittest.TestCase):
 class GuardFuzzWrapTest(unittest.TestCase):
     """Bộ bọc: áp đúng chỗ, từ chối chỗ đổi nghĩa; tất định theo seed."""
 
+    def test_strict_merge_controls_require_ask_for_every_wrapper(self) -> None:
+        """Không bỏ ca strict: oracle đòi đúng ask, bắt cả cho qua sai và deny oan ở 12 biến thể CLI/REST."""
+        cases = [case for case in _cases() if _strict_merge_control(case)]
+        self.assertTrue(cases)
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = _Runner(xt.BenchEnv(Path(tmp).resolve()))
+            for case, vid, cmd in _grid(cases):
+                with self.subTest(variant=vid):
+                    self.assertEqual(runner.run(case, cmd), (False, ""))
+                    self.assertEqual(runner.last, {"allowed": False, "decision": "ask", "code": "OTHER_ASK"})
+
     def test_guard_fuzz_exec_wrap_skips_shell_words(self) -> None:
         nice = WRAPS["nice"]
         self.assertEqual(nice("rm -rf ~"), "nice -n 5 rm -rf ~")
@@ -540,7 +566,12 @@ class GuardFuzzWrapTest(unittest.TestCase):
         with unittest.mock.patch.object(xt.BenchEnv, "module", broken):
             red = fuzz(rounds=0)["red"]
         kinds = {(k.split("--")[1], v["invariant"]) for k, v in red.items() if not excused(k, v)}
-        expected = {("nice", "deny-monotone"), ("timeout", "allow-kept")}
+        expected = {
+            ("nice", "deny-monotone"),
+            ("timeout", "allow-kept"),
+            ("nice", "strict-merge-ask"),
+            ("timeout", "strict-merge-ask"),
+        }
         unexpected = {
             k: {"case_id": v["case"]["id"], **{n: v[n] for n in ("command", "invariant", "error", "allowed")}}
             for k, v in red.items()

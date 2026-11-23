@@ -735,3 +735,10 @@
 - Chọn: Lớp ngoại lệ hẹp đọc từ nhánh đích, thu hẹp ADR-0079, khoá tắt immediate_review thuộc nhóm khoá chính sách, ngoài lớp giữ xác minh hẹp
 - Lý do (tiêu chí chất lượng cuối): (1) Đúng và an toàn: lớp đỡ yếu đi giữa hai cổng ký là rủi ro thật, lớp ngoại lệ chỉ gồm thay đổi tự nó là hàng rào nên hẹp và đếm được. (2) Đường lùi: revert ADR, máy chưa cưỡng chế tới T-4003. (3) Đơn giản: một nhà cho lệch giữa các PLAN. (5) Chi phí: không rà scripts nói chung nên không lan thành review mọi PR
 - Đường lùi: Revert PR ADR-0095; ADR-0079/0080 có hiệu lực nguyên văn
+
+### D-547 · 2026-11-23T06:20:16+00:00 · T-3999: giữ quyết định merge-check tới điểm merge; ma trận wait/fix/update/human/closed và head lệch đang thành OTHER_ASK nên mặc định cho qua ở CLI, REST và MCP.
+
+- Phương án: (1) Thêm mã MERGE_INELIGIBLE và MERGE_HEAD_MISMATCH tại nơi sinh, truyền metadata qua bộ gom lý do, mặc định deny và strict giữ ask; giữ nguyên các mã chặn cũ, merge đúng head và luồng người ở L1/L2 · (2) Giữ hành vi hiện tại và chỉ trông cậy ruleset phía máy chủ
+- Chọn: Thêm mã MERGE_INELIGIBLE và MERGE_HEAD_MISMATCH tại nơi sinh, truyền metadata qua bộ gom lý do, mặc định deny và strict giữ ask; giữ nguyên các mã chặn cũ, merge đúng head và luồng người ở L1/L2
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: dự án đích có thể chưa có ruleset, nên quyết định wait/fix/update/human/closed không được biến thành cho phép. Metadata tránh phụ thuộc câu giải thích; kiểm hồi quy cả hai chính sách và các adapter. Không mở rộng review mọi PR hay đổi cấu hình tự chủ.
+- Đường lùi: Revert riêng PR lát 1B; giữ ADR và quyết định trong lịch sử.
