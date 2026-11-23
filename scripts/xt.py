@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""xt.py — công cụ dòng lệnh của khung X-Templates (chỉ dùng thư viện chuẩn CPython 3.15.x).
+"""xt.py — công cụ dòng lệnh của khung X-Templates (chỉ dùng thư viện chuẩn, CPython 3.13 trở lên).
 
 Lệnh:
   validate                      Kiểm quy ước toàn khung (frontmatter, ID, liên kết, hồ sơ/gói ngành).
@@ -4849,11 +4849,14 @@ def _fix_rename(src: Path, dst: Path, what: str) -> Callable[[], str]:
     return fix
 
 
+MIN_PYTHON = (3, 13)  # sàn runtime của khung (ADR-0094, thay ADR-0078): CPython 3.13 trở lên
+
+
 def _python_runtime_error() -> Optional[Finding]:
-    if sys.implementation.name == "cpython" and sys.version_info[:2] == (3, 15):
+    if sys.implementation.name == "cpython" and sys.version_info[:2] >= MIN_PYTHON:
         return None
     detected = f"{sys.implementation.name} {sys.version.split()[0]}"
-    return Finding("runtime", "error", f"cần CPython 3.15.x — hiện là {detected}")
+    return Finding("runtime", "error", f"cần CPython 3.13 trở lên — hiện là {detected}")
 
 
 def _doctor_runtime() -> List[Finding]:
@@ -22196,7 +22199,7 @@ def _add_release_ops(sub: "argparse._SubParsersAction[argparse.ArgumentParser]")
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="xt.py",
-        description="Công cụ khung X-Templates (cần CPython 3.15.x)",
+        description="Công cụ khung X-Templates (cần CPython 3.13 trở lên)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="ví dụ:\n"
         "  xt.py list profiles\n"

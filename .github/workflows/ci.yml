@@ -204,6 +204,33 @@ jobs:
           test "$(git symbolic-ref --short HEAD)" = main
           scripts/dev-task.sh test-shard "$SHARD" 8
 
+  # Sàn runtime CPython 3.13 (ADR-0094): chạy đủ bộ test trên 3.13 mới nhất của setup-python, không đo coverage (job `coverage`
+  # đã đo ở 3.15.2). Lỗi chỉ lộ ở 3.13 (cú pháp/API 3.14+) đỏ ở đây và chặn merge qua `quality`.
+  compat-py313:
+    name: compat-py313 ${{ matrix.shard }}/8
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
+          persist-credentials: false # job không push; token không nằm lại trong .git/config (AUD-CI-028)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+          cache: pip # khoá = hash requirements-dev.txt (setup-python băm file khai ở dưới); đổi khoá → cài lại (AUD-CI-028)
+          cache-dependency-path: requirements-dev.txt
+      - name: Công cụ ghim kèm hash (requirements-dev.txt — khớp xt.yaml)
+        run: pip install --quiet --require-hashes -r requirements-dev.txt
+      - name: Test shard trên CPython 3.13
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: scripts/dev-task.sh test-shard "$SHARD" 8
+
   checks:
     name: checks
     runs-on: ubuntu-latest
@@ -298,7 +325,7 @@ jobs:
   # quả gộp (một shard đỏ → `failure`). Thêm job con mà quên `needs` → `tests/test_ci.py` đỏ.
   quality:
     name: quality
-    needs: [build, typecheck, lint, test, coverage, test-main, checks, app-e2e]
+    needs: [build, typecheck, lint, test, coverage, test-main, compat-py313, checks, app-e2e]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2

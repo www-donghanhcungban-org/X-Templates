@@ -157,8 +157,8 @@ class InstallTest(unittest.TestCase):
                 self.assertEqual(self.run_install(), 0)
         self.assertEqual(source(), {"untagged": "unknown"})
 
-    def test_install_requires_cpython_315_minor_before_writing(self):
-        for implementation, version in (("cpython", (3, 14, 10)), ("cpython", (3, 16, 0)), ("pypy", (3, 15, 2))):
+    def test_install_requires_cpython_313_floor_before_writing(self):
+        for implementation, version in (("cpython", (3, 12, 9)), ("cpython", (3, 11, 4)), ("pypy", (3, 15, 2))):
             with (
                 self.subTest(implementation=implementation, version=version),
                 mock.patch.object(sys, "version_info", version),
@@ -170,23 +170,24 @@ class InstallTest(unittest.TestCase):
                 self.assertEqual(self.run_install(), 2)
                 self.assertEqual(list(self.target.iterdir()), [])
                 self.assertEqual(out.getvalue(), "")
-                self.assertIn("CPython 3.15.x", err.getvalue())
+                self.assertIn("CPython 3.13 trở lên", err.getvalue())
                 self.assertIn(".".join(map(str, version)), err.getvalue())
 
-    def test_install_accepts_a_cpython_315_patch(self):
-        with mock.patch.object(sys, "version_info", (3, 15, 4)):
-            self.assertEqual(self.run_install(), 0)
-        self.assertTrue((self.target / ".xtemplates" / "VERSION").is_file())
+    def test_install_accepts_supported_cpython_versions(self):
+        for version in ((3, 13, 0), (3, 14, 2), (3, 15, 4), (3, 16, 0)):
+            with self.subTest(version=version), mock.patch.object(sys, "version_info", version):
+                self.assertEqual(self.run_install(), 0)
+                self.assertTrue((self.target / ".xtemplates" / "VERSION").is_file())
 
     def test_install_help_remains_available_on_unsupported_python(self):
         with (
-            mock.patch.object(sys, "version_info", (3, 14, 10)),
+            mock.patch.object(sys, "version_info", (3, 12, 9)),
             redirect_stdout(io.StringIO()) as out,
             self.assertRaises(SystemExit) as exit_status,
         ):
             install.main(["--help"])
         self.assertEqual(exit_status.exception.code, 0)
-        self.assertIn("CPython 3.15.x", out.getvalue())
+        self.assertIn("CPython 3.13 trở lên", out.getvalue())
 
     def test_fresh_install_layout(self):
         self.assertEqual(self.run_install(), 0)

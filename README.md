@@ -56,7 +56,7 @@ Agent có thể bắt đầu từ ý tưởng hoặc tiếp tục repo hiện c�
 Mặc định audit và diễn tập ở giai đoạn 2, tối ưu và thử lại ở giai đoạn 3 trước lần phát hành production đầu tiên, rồi vận hành và thử nghiệm tăng trưởng. Sản phẩm đang chạy có thể dùng số liệu vận hành làm mốc.
 Xem [quy trình factory](.claude/skills/factory/SKILL.md) và [gói web-api-ts](framework/templates/packs/web-api-ts/README.md).
 
-Để tự tạo repo khởi đầu với cùng gói, dùng CPython 3.15.x và thay `/đường/dẫn/dự-án` bằng thư mục mới hoặc rỗng.
+Để tự tạo repo khởi đầu với cùng gói, dùng CPython 3.13 trở lên và thay `/đường/dẫn/dự-án` bằng thư mục mới hoặc rỗng.
 
 ```bash
 git clone https://github.com/www-donghanhcungban-org/X-Templates /tmp/x-templates
@@ -90,10 +90,10 @@ Ghép thêm module ngoài hồ sơ bằng `--add`, ví dụ web app có tính n�
 
 Để giảm ngữ cảnh mỗi task, dùng `xt.py context --task T-NNN --plan <PLAN>` thay vì nạp toàn bộ blueprint; chọn
 quy mô theo rủi ro thật và giải trình mục không áp dụng. Thư viện dùng được qua nhiều công cụ; harness tự động
-hiện tập trung vào Claude Code + Bash + GitHub. Bộ cài và CLI dùng CPython 3.15.x trên môi trường POSIX (Linux; macOS chưa được CI kiểm — mọi workflow chạy `ubuntu-latest`;
+hiện tập trung vào Claude Code + Bash + GitHub. Bộ cài và CLI dùng CPython 3.13 trở lên (CI chính ghim 3.15.2, thêm job kiểm trên 3.13) trên môi trường POSIX (Linux; macOS chưa được CI kiểm — mọi workflow chạy `ubuntu-latest`;
 trên Windows cần chạy qua WSL2 hoặc DevContainer/Docker vì hook Bash và bộ cập nhật state cần đường dẫn POSIX, `fcntl` và
 filesystem hỗ trợ `flock` — thiếu `fcntl` lệnh ghi state thoát 2). CI trên Linux dùng bản ghim ở `.python-version`. Môi trường local
-và runner cần chọn `python3` là Python 3.15. Xem cách chuyển workflow đã cài ở [ADR-0078](docs/adr/0078-python-315-runtime.md).
+và runner cần chọn `python3` là CPython 3.13 trở lên. Sàn runtime: [ADR-0094](docs/adr/0094-python-313-floor.md); cách chuyển workflow đã cài: [ADR-0078](docs/adr/0078-python-315-runtime.md).
 Tài liệu ngành là đầu vào rà soát; yêu cầu pháp lý chưa xác minh cần người có chuyên môn xác nhận.
 
 ## Chạy tự động đến khi xong
@@ -212,7 +212,7 @@ trong blueprint, mặc định `.xtemplates/framework`; ghép lại `BLUEPRINT.m
 `loop`; không đặt thì: bản cài `.xtemplates/scripts/xt.py` → cha của `.xtemplates`; nếu không, thư mục cha gần nhất có
 `.autopilot`/`xt.yaml`/`.xtemplates`, rồi gần nhất có `.git` — thư mục cha là repo khác (vd `$HOME` dotfiles) sẽ thắng; không thấy thì cwd) · `CLAUDE_CONFIG_DIR` (thư mục cấu hình người dùng của Claude Code mà `doctor`/`loop init` đọc; mặc định `~/.claude` + `~/.claude.json`) · `XT_DEBUG=1` (in traceback khi lỗi) · `XT_GUARD_POLICY=strict` (hook hỏi người như trước ADR-0018; mặc định không hỏi) · `XT_FRAMEWORK_REPO` (repo GitHub để `doctor` so bản phát hành mới nhất, mặc định `www-donghanhcungban-org/X-Templates`) · `XT_STEWARD_UPDATE=off` (`pr steward` không tự cập nhật nhánh tụt base — workflow chạy bằng `GITHUB_TOKEN`) · `XT_CHANGED_FILES` (mỗi dòng một file đổi; `dev-task.sh gate-fast` đặt, `test-select` đọc để chọn lớp test liên quan; không đặt = chạy cả suite) · `XT_MIN_TESTS` (số lớp test tối thiểu `dev-task.sh test-shard` đòi, mặc định 1; liệt kê hỏng không được xanh) · `XT_JOBS` (số tiến trình pytest-xdist cho lệnh `test` tự dò của `dev-task.sh`: nguyên dương, trần 4×số nhân; `1` = `pytest -q` tuần tự; không đặt/rác = `auto`) · `XT_FRAMEWORK_PYTHON` (đường dẫn Python để `dev-task.sh` chạy CLI của khung, CI mẫu đặt tự động) · `XT_COV_DIR` (thư mục dữ liệu coverage `dev-task.sh test-shard`/`test-combine` dùng, đặt bởi chính script) · `XT_SHARD`, `XT_GATE_ALL_TESTS` (cổng test của `dev-task.sh`, tự đặt) · `XT_CI_WORKFLOW` (tên workflow CI khi khác `ci.yml`) · `XT_GUARD_PHASE=harden` (ép guard vào pha harden, ADR-0040) · `CLAUDE_CODE_SESSION_ID` (id phiên, do Claude Code đặt; chỉ đọc).
 
-Kiểm tra trước khi đóng góp với CPython 3.15.x và công cụ ghim kèm hash trong `requirements-dev.txt`.
+Kiểm tra trước khi đóng góp với CPython 3.13 trở lên (CI chính dùng 3.15.2) và công cụ ghim kèm hash trong `requirements-dev.txt`.
 
 ```bash
 pip install --require-hashes -r requirements-dev.txt

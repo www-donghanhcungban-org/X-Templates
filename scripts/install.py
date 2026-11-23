@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""install.py — cài khung X-Templates vào một dự án đích (POSIX: Linux đã kiểm bằng CI, macOS chưa; cần CPython 3.15.x).
+"""install.py — cài khung X-Templates vào một dự án đích (POSIX: Linux đã kiểm bằng CI, macOS chưa; cần CPython 3.13 trở lên).
 
 Kết quả trong dự án đích:
   .xtemplates/framework/        bản sao thư viện yêu cầu (chỉ đọc; cập nhật bằng cách chạy lại install)
@@ -3078,7 +3078,7 @@ def sync_flags_error(args: argparse.Namespace) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Cài khung X-Templates vào dự án đích (cần CPython 3.15.x)")
+    p = argparse.ArgumentParser(description="Cài khung X-Templates vào dự án đích (cần CPython 3.13 trở lên)")
     p.add_argument("target", help="thư mục gốc dự án đích")
     p.add_argument("--new", action="store_true", help="tạo dự án git mới từ thư mục trống, không cần mạng")
     p.add_argument("--idea", help="ý tưởng gốc (dữ liệu, 1…4000 ký tự), bắt buộc cùng --new")
@@ -3128,8 +3128,8 @@ def main(argv: list[str] | None = None) -> int:
         help="chỉ ở repo khung: sinh lại .agents/skills, .codex/agents, .codex/hooks.json từ .claude/ (ADR-0082)",
     )
     a = p.parse_args(argv)
-    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 15):
-        log(f"✗ cần CPython 3.15.x — hiện là {sys.implementation.name} {sys.version.split()[0]}")
+    if sys.implementation.name != "cpython" or sys.version_info[:2] < (3, 13):
+        log(f"✗ cần CPython 3.13 trở lên — hiện là {sys.implementation.name} {sys.version.split()[0]}")
         return 2
     if a.sync_codex:
         return 2 if sync_flags_error(a) else sync_codex(Path(a.target))

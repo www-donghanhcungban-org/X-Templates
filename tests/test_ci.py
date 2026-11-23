@@ -229,7 +229,9 @@ class GateFanOutTest(unittest.TestCase):
                     self.assertGreaterEqual(setup_step, 0)
                     if python_step is not None:
                         self.assertLess(setup_step, python_step.start())
-                    self.assertEqual(re.findall(r"(?m)^          python-version: (.+)$", body), [f'"{version}"'])
+                    # `compat-py313` (ADR-0094) kiểm sàn runtime: 3.13 mới nhất, không theo bản ghim của repo.
+                    expected = '"3.13"' if name == "compat-py313" else f'"{version}"'
+                    self.assertEqual(re.findall(r"(?m)^          python-version: (.+)$", body), [expected])
 
     def test_pip_cache_keyed_on_installed_requirements(self):
         """AUD-CI-028 (T-3654): job cài `-r requirements-*.txt` bật `cache: pip` với khoá băm đúng file đó."""

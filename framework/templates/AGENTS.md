@@ -6,7 +6,7 @@ updated: 2026-11-21
 
 # AGENTS.md — luật vận hành cho AI agent trong dự án này
 
-> Sửa phần `[ĐIỀN]`; phần còn lại là luật chung của công cụ quy trình `.xtemplates/` (nguồn, phiên bản: `.xtemplates/README.md`; `framework/` = thư viện yêu cầu; `<XT>` dưới đây = `python3 .xtemplates/scripts/xt.py`). CPython 3.15.x trên PATH; `CLAUDE.md` chỉ import file này. Hướng dẫn này **không thay cho hook/permission**: hàng rào thật là `.claude/settings.json` + hook guard.
+> Sửa phần `[ĐIỀN]`; phần còn lại là luật chung của công cụ quy trình `.xtemplates/` (nguồn, phiên bản: `.xtemplates/README.md`; `framework/` = thư viện yêu cầu; `<XT>` dưới đây = `python3 .xtemplates/scripts/xt.py`). CPython 3.13 trở lên trên PATH; `CLAUDE.md` chỉ import file này. Hướng dẫn này **không thay cho hook/permission**: hàng rào thật là `.claude/settings.json` + hook guard.
 
 ## 1. Dự án này
 - **Tên / mục tiêu:** [ĐIỀN — một câu]

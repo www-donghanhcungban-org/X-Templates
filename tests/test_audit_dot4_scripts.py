@@ -282,7 +282,7 @@ class GuardRuntimeLogTest(unittest.TestCase):
             shutil.copy(ROOT / src, self.tmp / dst)
         (self.tmp / "xt.yaml").write_text("lint: touch l\ntypecheck: true\nbuild: true\ntest: true\n", encoding="utf-8")
         self.old = self.tmp / "python-old"
-        self.old.write_text("#!/bin/sh\necho '✗ cần CPython 3.15.x — hiện là cpython 3.14.0' >&2\nexit 126\n")
+        self.old.write_text("#!/bin/sh\necho '✗ cần CPython 3.13 trở lên — hiện là cpython 3.12.0' >&2\nexit 126\n")
         self.old.chmod(0o755)
 
     def gate(self, **env: str) -> subprocess.CompletedProcess[str]:
@@ -298,7 +298,7 @@ class GuardRuntimeLogTest(unittest.TestCase):
         r = self.gate(XT_FRAMEWORK_PYTHON=str(self.old))
         self.assertEqual(r.returncode, 126, r.stderr)
         self.assertNotIn("guard cấm", r.stderr)
-        self.assertIn("cần CPython 3.15.x — ADR-0078", r.stderr)
+        self.assertIn("cần CPython 3.13 trở lên — ADR-0094", r.stderr)
         self.assertFalse((self.tmp / "l").exists())
 
     def run_task(self, task: str, **env: str) -> subprocess.CompletedProcess[str]:
@@ -311,7 +311,7 @@ class GuardRuntimeLogTest(unittest.TestCase):
         )
 
     def test_declared_runtime_without_handshake_is_closed(self) -> None:
-        """T-3958: XT_FRAMEWORK_PYTHON khai rõ mà chạy được nhưng không phải CPython 3.15 (`true` exit 0 không in gì,
+        """T-3958: XT_FRAMEWORK_PYTHON khai rõ mà chạy được nhưng không phải CPython ≥ 3.13 (`true` exit 0 không in gì,
         `echo` in lại đối số) hoặc tên không có → 126, không lệnh nào chạy — cả đường `gate` (guard_ok_all) lẫn task
         đơn (guard_ok)."""
         for runtime in ("true", "echo", str(self.tmp / "khong-co-python")):
@@ -319,12 +319,12 @@ class GuardRuntimeLogTest(unittest.TestCase):
                 with self.subTest(runtime=runtime, task=task):
                     r = self.run_task(task, XT_FRAMEWORK_PYTHON=runtime)
                     self.assertEqual(r.returncode, 126, r.stderr)
-                    self.assertIn("không qua bắt tay (cần CPython 3.15.x — ADR-0078)", r.stderr)
+                    self.assertIn("không qua bắt tay (cần CPython 3.13 trở lên — ADR-0094)", r.stderr)
                     self.assertNotIn("guard cấm", r.stderr)
                     self.assertFalse((self.tmp / "l").exists())
 
-    def test_declared_cpython_315_runs(self) -> None:
-        """Ca được phép: XT_FRAMEWORK_PYTHON là CPython 3.15 thật → qua bắt tay, guard cho lệnh lành chạy."""
+    def test_declared_supported_cpython_runs(self) -> None:
+        """Ca được phép: XT_FRAMEWORK_PYTHON là CPython ≥ 3.13 thật (ADR-0094) → qua bắt tay, guard cho lệnh lành chạy."""
         for task in ("lint", "gate"):
             with self.subTest(task=task):
                 r = self.run_task(task, XT_FRAMEWORK_PYTHON=sys.executable)

@@ -43,7 +43,7 @@ Dùng tài khoản ứng dụng đã tạo trong DB phát triển để thử đ
 
 ## Chạy thử bản dev
 
-Trong repo sản phẩm mới, dùng Node 24, CPython 3.15 và Docker Engine cục bộ với Compose v2. Lần đầu dựng ảnh cần mạng. Mỗi dự án có hai tài khoản demo và một volume PostgreSQL riêng. Cổng 4317 trên loopback cần trống.
+Trong repo sản phẩm mới, dùng Node 24, CPython 3.13 trở lên và Docker Engine cục bộ với Compose v2. Lần đầu dựng ảnh cần mạng. Mỗi dự án có hai tài khoản demo và một volume PostgreSQL riêng. Cổng 4317 trên loopback cần trống.
 
 ```bash
 node scripts/build.ts

@@ -85,7 +85,7 @@ def dev_health(url: str) -> str | None:
             )
         finally:
             conn.close()
-    except OSError, ValueError, http.client.HTTPException, UnicodeError:
+    except (OSError, ValueError, http.client.HTTPException, UnicodeError):
         return None
 
 
@@ -122,7 +122,7 @@ def release_report(base: Path, path: str | None, candidate: Doc) -> bool:
     try:
         doc = evidence_file(path)
         bound = bind_release_document(base, doc)
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return False
     promotion = doc.get("promotion")
     deploy: Doc = next((row for row in doc["rows"] if row["id"] == "deploy"), {})
@@ -312,7 +312,7 @@ def field_check(core: Core, args: argparse.Namespace) -> int:
         deployed = confirmed_after(core, core.loop_root(core.project_dir()), args.env, digest)
         metrics = field_metrics(data)
         window = field_window(core, data, deployed, args.max_age_hours)
-    except core.DeployError, OSError, ValueError, OverflowError:
+    except (core.DeployError, OSError, ValueError, OverflowError):
         report(
             {"schema": 1, "verdict": "invalid_evidence", "next": "Xuất lại cửa sổ đo cho receipt hiện tại."}, args.json
         )

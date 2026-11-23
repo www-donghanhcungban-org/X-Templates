@@ -255,10 +255,11 @@ loop_noop() { # $1=task $2=lệnh -> true (kèm log) nếu autopilot đang chạ
 
 # Lệnh xt.yaml do model viết được: qua guard của dự án trước khi chạy (LOOP-STOP-027). Không có python3/xt.py cạnh
 # script này → chạy như cũ (fail-open về luồng; dự án chưa cài harness).
-# XT_FRAMEWORK_PYTHON khai rõ thì phải qua bắt tay: in đúng dấu CPython 3.15 (ADR-0078). Tên không có (`command -v`
-# lỗi) hay chạy được mà không phải CPython 3.15 (vd `true` exit 0 không in gì) → 126, không bỏ qua guard (T-3958).
-FW_MARK="xt-cpython-3.15"
-FW_PROBE='import sys; print("xt-%s-%d.%d" % ((sys.implementation.name,) + tuple(sys.version_info[:2])))'
+# XT_FRAMEWORK_PYTHON khai rõ thì phải qua bắt tay: in đúng dấu CPython 3.13 trở lên (ADR-0094). Tên không có
+# (`command -v` lỗi) hay chạy được mà không phải CPython ≥ 3.13 (vd `true` exit 0 không in gì) → 126, không bỏ qua guard
+# (T-3958).
+FW_MARK="xt-cpython-ok"
+FW_PROBE='import sys; print("xt-cpython-ok" if sys.implementation.name == "cpython" and sys.version_info[:2] >= (3, 13) else "xt-no")'
 FW_READY=""
 fw_ready() { # -> 0 hỏi guard được; 1 python3 mặc định vắng (fail-open như cũ); 126 runtime khai rõ không qua bắt tay
   [ -n "$FW_READY" ] && return "$FW_READY"
@@ -266,7 +267,7 @@ fw_ready() { # -> 0 hỏi guard được; 1 python3 mặc định vắng (fail-o
     FW_READY=126
     [ "$("$FRAMEWORK_PYTHON" -c "$FW_PROBE" 2>/dev/null)" = "$FW_MARK" ] && FW_READY=0
     [ "$FW_READY" -eq 0 ] ||
-      log "$TASK: XT_FRAMEWORK_PYTHON='$FRAMEWORK_PYTHON' không qua bắt tay (cần CPython 3.15.x — ADR-0078) → không chạy lệnh nào"
+      log "$TASK: XT_FRAMEWORK_PYTHON='$FRAMEWORK_PYTHON' không qua bắt tay (cần CPython 3.13 trở lên — ADR-0094) → không chạy lệnh nào"
   else
     FW_READY=1
     command -v "$FRAMEWORK_PYTHON" >/dev/null 2>&1 && FW_READY=0
@@ -281,7 +282,7 @@ guard_ok() { # $1=lệnh -> 0 nếu được chạy
   local xt; xt="$(dirname "$0")/xt.py"
   fw_gate "$xt"
   case "$?" in 1) return 0 ;; 126) return 1 ;; esac
-  # Chỉ exit 126 là chặn: guard cấm lệnh, HOẶC xt.py từ chối runtime không phải CPython 3.15.x (ADR-0078 — chủ đích,
+  # Chỉ exit 126 là chặn: guard cấm lệnh, HOẶC xt.py từ chối runtime không phải CPython ≥ 3.13 (ADR-0094 — chủ đích,
   # không phải fail-open). xt.py sập kiểu khác (exit ≠ 126) → chạy như cũ (fail-open về luồng, ADR-0002).
   CLAUDE_PROJECT_DIR="$ROOT" "$FRAMEWORK_PYTHON" "$xt" guard-check -- "$1"
   [ "$?" -ne 126 ]
@@ -319,7 +320,7 @@ guard_turn() { # $@=task -> 0 nếu mọi lệnh phân giải được của lư
   if [ "$("$FRAMEWORK_PYTHON" -c "$FW_PROBE" 2>/dev/null)" = "$FW_MARK" ]; then
     log "$TASK: guard cấm một lệnh của xt.yaml → không chạy lệnh nào (LOOP-STOP-027)"
   else
-    log "$TASK: xt.py không chạy được bằng '$FRAMEWORK_PYTHON' (exit 126: cần CPython 3.15.x — ADR-0078; đặt XT_FRAMEWORK_PYTHON) → không chạy lệnh nào"
+    log "$TASK: xt.py không chạy được bằng '$FRAMEWORK_PYTHON' (exit 126: cần CPython 3.13 trở lên — ADR-0094; đặt XT_FRAMEWORK_PYTHON) → không chạy lệnh nào"
   fi
   return 126
 }

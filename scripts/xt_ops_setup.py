@@ -109,7 +109,7 @@ class Origin:
                 env={**os.environ, "GH_PROMPT_DISABLED": "1"},
             )
             doc = json.loads(result.stdout) if result.returncode == 0 else None
-        except OSError, ValueError, subprocess.TimeoutExpired:
+        except (OSError, ValueError, subprocess.TimeoutExpired):
             doc = None
         self.cache[path] = doc
         return doc
@@ -123,7 +123,7 @@ class Origin:
             return None
         try:
             return base64.b64decode("".join(doc["content"].split()), validate=True).decode("utf-8")
-        except UnicodeError, binascii.Error, ValueError:
+        except (UnicodeError, binascii.Error, ValueError):
             return None
 
     def pages(self, path: str, key: str | None = None) -> list[Doc] | None:

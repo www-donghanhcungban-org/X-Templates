@@ -262,7 +262,7 @@ def install_source(src: Path) -> dict[str, Any]:
             temp = Path(tmp)
             signed_head, archive = verified_archive(clone_source(temp, repo), repo, tag, temp)
             source["verified"] = signed_head == head and matches_checkout(src, tag, archive)
-    except OSError, ValueError, subprocess.SubprocessError:
+    except (OSError, ValueError, subprocess.SubprocessError):
         pass  # a normal development install remains usable offline
     return source
 
