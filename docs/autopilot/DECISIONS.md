@@ -791,3 +791,10 @@
 - Chọn: Chấp nhận có hạn, sửa ở lát kế của đợt 2 PLAN-improve
 - Lý do (tiêu chí chất lượng cuối): Không có 🔴; ADR-0062: 🟠 là nợ; sửa trong PR sổ đổi mã/hook và buộc review ở head thêm một vòng; hạn 2026-12-15 cho hai mục chặn blueprint/ruff, 2027-01-21 cho còn lại
 - Đường lùi: Đổi trạng thái hàng về mở rồi sửa từng mục
+
+### D-555 · 2026-11-23T21:57:12+00:00 · Mốc quét sổ audit lên bcd1c25a để trả review_debt
+
+- Phương án: (1) Đưa các nhóm đã rà lên bcd1c25a, delta chỉ tài liệu · (2) Rà lại phụ thuộc và PLAN bằng reviewer
+- Chọn: Đưa các nhóm đã rà lên bcd1c25a, delta chỉ tài liệu
+- Lý do (tiêu chí chất lượng cuối): DEP đã được lô B rà; 37399979..bcd1c25a chỉ đổi PLAN/sổ/báo cáo/GO-NO-GO, Gate của PLAN là lệnh kiểm đơn giản đã chạy xanh
+- Đường lùi: Đặt lại SHA nhóm về giá trị cũ
