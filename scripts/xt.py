@@ -151,6 +151,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Mapping,
     NamedTuple,
     NoReturn,
     Optional,
@@ -15544,6 +15545,21 @@ def _deploy_metrics(ledger: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 DEV_DRIVER = "node scripts/dev-preview.mjs"
 DEV_ACTIONS = ("deploy", "smoke", "digest", "rollback")
 
+# Biến môi trường làm trình thông dịch/bộ nạp chạy mã ngoài lệnh khai báo (T-4015, bước 1 của ADR-0095 §mục 07): script
+# khởi động shell, bộ nạp thư viện, tuỳ chọn khởi động Python/Node/Perl/Ruby/Java, hàm bash xuất ra. Lệnh triển khai chạy
+# với khoá thật của dự án nên không được thừa kế chúng từ môi trường phiên. Biến thường (PATH, HOME, khoá của dự án) giữ.
+DEPLOY_ENV_DROP = frozenset(
+    {"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4", "NODE_OPTIONS", "NODE_PATH", "PERL5OPT", "PERL5LIB"}
+    | {"RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"}
+)
+DEPLOY_ENV_DROP_PREFIX = ("LD_", "DYLD_", "PYTHON", "BASH_FUNC_", "XT_DEPLOY_")
+
+
+def deploy_command_env(environ: Mapping[str, str]) -> Dict[str, str]:
+    """Môi trường của lệnh `deploy`/`smoke`/`digest`/`rollback`: bản sao không có biến khởi động/nạp thư viện và không có
+    `XT_DEPLOY_*` (bước gán lại ở `DevPreview.invoke`). Chỉ trả tên đã giữ, không ghi log giá trị."""
+    return {k: v for k, v in environ.items() if k not in DEPLOY_ENV_DROP and not k.startswith(DEPLOY_ENV_DROP_PREFIX)}
+
 
 class DevGuardDenied(DeployError):
     """Một bước bị guard chặn trước khi đụng môi trường."""
@@ -15653,7 +15669,7 @@ class DevPreview:
     def invoke(self, action: str) -> tuple[dict[str, Any], Optional[str]]:
         """digest đọc giá trị quan sát ở đích; không truyền sẵn đáp án. Sổ không giữ stdout/stderr."""
         cmd = self.commands[action] if self.commands is not None else f"{DEV_DRIVER} {action}"
-        env = {k: v for k, v in os.environ.items() if not k.startswith("XT_DEPLOY_")}
+        env = deploy_command_env(os.environ)
         paths = self.artifacts
         if self.commands is not None and action in ("deploy", "rollback"):
             _sibling_imports()
