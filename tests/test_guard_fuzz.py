@@ -44,6 +44,7 @@ CORPUS = ROOT / "tests" / "fixtures" / "autonomy"
 PENDING = CORPUS / "pending" / "guard.json"
 SEED = 1811
 ROUNDS = int(os.environ.get("XT_FUZZ_ROUNDS") or "150")
+MUTATION_PARTS = 4  # D-548: toàn bộ lưới đột biến chia theo lớp để CI không dồn vào một shard.
 
 # Từ đầu lệnh làm bộ bọc kiểu exec (`nice`/`timeout`/`command`/gán env) đổi nghĩa: builtin đổi trạng thái shell, từ khoá,
 # gán biến, chuyển hướng đứng đầu. Bọc chúng không còn chạy cùng lệnh → không đòi bất biến.
@@ -416,9 +417,9 @@ def _strict_merge_control(case: Dict[str, Any]) -> bool:
     return case["input"].get("policy") == "strict" and case["expect"].get("code") == "RULE_ALLOW"
 
 
-def fuzz(rounds: int = ROUNDS, seed: int = SEED) -> Dict[str, Any]:
+def fuzz(rounds: int = ROUNDS, seed: int = SEED, cases: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Chạy lưới bậc 1 + `rounds` biến thể ghép; trả số biến thể và các biến thể vi phạm bất biến."""
-    cases = _cases()
+    cases = _cases() if cases is None else cases
     variants = _grid(cases) + _random(cases, rounds, seed)
     red: Dict[str, Dict[str, Any]] = {}
     with tempfile.TemporaryDirectory(prefix="xt-fuzz-") as tmp:
@@ -539,8 +540,41 @@ class GuardFuzzWrapTest(unittest.TestCase):
         self.assertEqual(a, [v[1:] for v in _random(cases, 20, SEED)])
         self.assertNotEqual(a, [v[1:] for v in _random(cases, 20, SEED + 1)])
 
-    def test_guard_fuzz_detects_wrapper_regression(self) -> None:
+    def test_mutation_partitions_keep_every_variant_once(self) -> None:
+        """Chia lớp chỉ đổi nơi chạy: không bỏ hoặc nhân đôi ca corpus và biến thể của lưới gốc."""
+        cases = _cases()
+        owners = [
+            cls
+            for cls in globals().values()
+            if isinstance(cls, type) and issubclass(cls, _GuardFuzzMutation) and issubclass(cls, unittest.TestCase)
+        ]
+        self.assertEqual(sorted(cls.part for cls in owners), list(range(MUTATION_PARTS)))
+        for cls in owners:
+            self.assertGreater(unittest.defaultTestLoader.loadTestsFromTestCase(cls).countTestCases(), 0)
+        parts = [cases[part::MUTATION_PARTS] for part in range(MUTATION_PARTS)]
+        self.assertTrue(all(parts))
+        self.assertCountEqual([case["id"] for part in parts for case in part], [case["id"] for case in cases])
+        self.assertCountEqual([vid for part in parts for _, vid, _ in _grid(part)], [vid for _, vid, _ in _grid(cases)])
+
+    def test_guard_fuzz_runner_records_exception(self) -> None:
+        """Ngoại lệ trong `_rule_decision` được ghi (bất biến 2) dù bench chuyển nó thành `_failure_decision`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = xt.BenchEnv(Path(tmp).resolve())
+            env.module("guard").bash_decision = None  # gọi None → TypeError giữa chừng
+            runner = _Runner(env)
+            allowed, err = runner.run({"input": {"tool": "bash", "policy": "default"}}, "ls")
+        self.assertTrue(err)
+        self.assertTrue(allowed)  # fail-open với lệnh không phải merge: đúng lý do bất biến 2 tồn tại
+
+
+class _GuardFuzzMutation:
+    """Mixin, không phải TestCase: mỗi lớp con chạy một phần rời nhau của TOÀN BỘ lưới đột biến (D-548)."""
+
+    part: int
+
+    def check_wrapper_regression(self, tc: unittest.TestCase) -> None:
         """Fuzz có răng: guard giả bỏ qua lệnh bọc `nice` (deny mất) và chặn oan lệnh bọc `timeout` → đỏ đúng bất biến."""
+        cases = _cases()[self.part :: MUTATION_PARTS]
         real = xt.BenchEnv.module
 
         def broken(env: xt.BenchEnv, name: str) -> Any:
@@ -564,30 +598,45 @@ class GuardFuzzWrapTest(unittest.TestCase):
             return mod
 
         with unittest.mock.patch.object(xt.BenchEnv, "module", broken):
-            red = fuzz(rounds=0)["red"]
+            red = fuzz(rounds=0, cases=cases)["red"]
         kinds = {(k.split("--")[1], v["invariant"]) for k, v in red.items() if not excused(k, v)}
-        expected = {
-            ("nice", "deny-monotone"),
-            ("timeout", "allow-kept"),
-            ("nice", "strict-merge-ask"),
-            ("timeout", "strict-merge-ask"),
-        }
+        expected = {("nice", "deny-monotone"), ("timeout", "allow-kept")}
+        if any(_strict_merge_control(case) for case in cases):
+            expected |= {("nice", "strict-merge-ask"), ("timeout", "strict-merge-ask")}
         unexpected = {
             k: {"case_id": v["case"]["id"], **{n: v[n] for n in ("command", "invariant", "error", "allowed")}}
             for k, v in red.items()
             if not excused(k, v) and (k.split("--")[1], v["invariant"]) not in expected
         }
-        self.assertEqual(kinds, expected, unexpected)
+        tc.assertEqual(kinds, expected, unexpected)
 
-    def test_guard_fuzz_runner_records_exception(self) -> None:
-        """Ngoại lệ trong `_rule_decision` được ghi (bất biến 2) dù bench chuyển nó thành `_failure_decision`."""
-        with tempfile.TemporaryDirectory() as tmp:
-            env = xt.BenchEnv(Path(tmp).resolve())
-            env.module("guard").bash_decision = None  # gọi None → TypeError giữa chừng
-            runner = _Runner(env)
-            allowed, err = runner.run({"input": {"tool": "bash", "policy": "default"}}, "ls")
-        self.assertTrue(err)
-        self.assertTrue(allowed)  # fail-open với lệnh không phải merge: đúng lý do bất biến 2 tồn tại
+
+class GuardFuzzMutationPart1Test(_GuardFuzzMutation, unittest.TestCase):
+    part = 0
+
+    def test_guard_fuzz_detects_wrapper_regression(self) -> None:
+        self.check_wrapper_regression(self)
+
+
+class GuardFuzzMutationPart2Test(_GuardFuzzMutation, unittest.TestCase):
+    part = 1
+
+    def test_guard_fuzz_detects_wrapper_regression(self) -> None:
+        self.check_wrapper_regression(self)
+
+
+class GuardFuzzMutationPart3Test(_GuardFuzzMutation, unittest.TestCase):
+    part = 2
+
+    def test_guard_fuzz_detects_wrapper_regression(self) -> None:
+        self.check_wrapper_regression(self)
+
+
+class GuardFuzzMutationPart4Test(_GuardFuzzMutation, unittest.TestCase):
+    part = 3
+
+    def test_guard_fuzz_detects_wrapper_regression(self) -> None:
+        self.check_wrapper_regression(self)
 
 
 if __name__ == "__main__":
