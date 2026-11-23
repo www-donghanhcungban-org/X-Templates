@@ -6,6 +6,10 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+### Changed
+
+- Bổ sung ví dụ và vế kiểm vào ID hiện có từ stored XT-H-159…161, không đổi mức, không thêm ID: `SEC-INFRA-027` (egress mặc định của `autoevals`), `CMP-LIC-004` (open-core: `ee/`, header Enterprise), `CMP-AUDIT-002` (test từ chối UPDATE/DELETE bảng audit), `AI-AGENTIC-008` (test đi vòng cổng duyệt không qua prompt). Ghi chú: [research/2026-11-23-stored-delta-ceiling.md](research/2026-11-23-stored-delta-ceiling.md). **Dự án đích:** chạy lại `install.py`; không có ID mới nên blueprint không đổi.
+
 ## [3.36.0] - 2026-11-23
 
 Bản thực thi [PLAN cải tiến 2026-11-23](docs/autopilot/PLAN-improve-2026-11-23.md) đợt 1–2: máy cưỡng chế rà sớm lớp tác động
