@@ -176,7 +176,7 @@ OS/devcontainer có egress allowlist (`LOOP-HARNESS-022`) và việc phiên chí
   trong cùng lệnh (ghi rồi áp tệp nêu tên do ADR-0066 chặn), header diff trỏ symlink/liên kết tên trung tính; tool MCP ghi
   file ngoài hai tool trên (server filesystem…); đổi tên file đã ký sang `-v<bản khác>.md` bằng Bash bị chặn (cả `mv`
   đi), nhưng nội dung khác ngoài tiêu đề/`subject:` của file đã ký không bị xét — lớp sau là review PR.
-- **Dấu review đăng tay** (AUD-SEC-069/156/157): guard chặn lệnh `gh` đăng chữ khi dấu `xt-review v1` ở argv, ở bất
+- **Dấu review đăng tay** (AUD-SEC-069/156/157): guard chặn lệnh `gh` đăng chữ khi dấu `xt-review v1`/`v2` ở argv, ở bất
   kỳ đâu trong chuỗi lệnh (heredoc, `printf`), hay trong nguồn thân của chính lệnh đó (`-F f`, `--body-file`, `-F k=@f`,
   `--input`, `< f`, file đọc trong `$(…)`/backtick, `cat f |`, `$(cat)` đọc stdin; cả chuỗi JSON, cả khoá) — nguồn có mà
   không đọc được (glob, fd của shell `/dev/fd/N`, không phải file thường, > 256 KiB, quá 8 nguồn, lỗi đọc, JSON lồng quá

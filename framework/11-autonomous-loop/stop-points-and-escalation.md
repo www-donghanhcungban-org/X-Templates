@@ -204,7 +204,7 @@ trị lạ, không đọc được = `human`. PR đổi chính khoá luôn ngư�
 |---|---|---|
 | `workflow_run` (`workflows: [CI]`, `completed`) | Check của GitHub Actions xong (job `quality`) | `pull_requests` trong payload; trống (push lên nhánh đích, PR từ fork) → mọi PR mở |
 | `check_suite: completed` | Check của app ngoài xong (GitHub **không** kích sự kiện này cho check suite do Actions tạo — chống đệ quy) | Như trên |
-| `issue_comment` có dấu `xt-review v1` | Review đăng lên PR (ADR-0027) | PR của comment |
+| `issue_comment` có dấu `xt-review v1` hoặc `v2` (v2 thêm `base`, `scope` — T-4014) | Review đăng lên PR (ADR-0027) | PR của comment |
 | `schedule` / `workflow_dispatch` | Lưới bù / chạy tay | Mọi PR mở hoặc `inputs.pr` |
 
 Steward merge theo đúng cơ chế của phiên (`LOOP-STOP-022`, ADR-0036): merge ghim head khi `merge-check` = `merge` ở đúng

@@ -3699,10 +3699,11 @@ class PrStewardTest(unittest.TestCase):
             self.assertEqual(run_main(*args)[0], 0)
         self.assertEqual(gh.writes, [])
         h2 = "e" * 40
-        gh = StewardGh()
+        gh = StewardGh(raw={"repos/o/r/pulls/7": json.dumps({"base": {"sha": "b" * 40}})})  # base cho dấu v2 (T-4014)
         with gh.patch():
             run_main("pr", "reviewed", "--pr", "https://github.com/o/r/pull/7", "--head", h2, "--blocking")
         self.assertEqual(gh.writes[0][4], "repos/o/r/issues/7/comments")
+        self.assertIn("xt-review v1", gh.writes[0][-1])  # compare giả rỗng: không đọc được scope → v1
         for i, fail in enumerate(("gh api -X POST", "oserror")):
             with (
                 self.subTest(fail),

@@ -6931,6 +6931,7 @@ def merge_decision(
         "autonomy": autonomy,
         "stacked": _stacked_blocker(pr) is not None,
         "base_merge_of": [str(x) for x in pr.get("baseMergeOf") or [] if isinstance(x, str)],
+        "head_scope": str(pr.get("headScope") or ""),  # chỉ so với dấu review v2 (T-4014)
         # PR cắt bản (đổi `VERSION` gốc — tag gắn lúc merge): không ghi nợ review (ADR-0059 §6, D-259)
         "release": is_release_pr(pr),
         "hard": hard,  # ngoại lệ cứng: máy không merge (ADR-0016)
@@ -7662,6 +7663,12 @@ def _pr_rest(pr_arg: Optional[str], local_check: bool = True) -> Dict[str, Any]:
         **({"strictBaseRepo": repo} if strict_base else {}),
         # Head là "cập nhật nhánh" sạch của các head này (mới → cũ): review sạch ở chúng mang sang head hiện tại.
         **({"baseMergeOf": chain} if (chain := _base_merge_chain(repo, str(base.get("sha", "")), sha)) else {}),
+        # Scope của head hiện tại, chỉ khi có chuỗi cập nhật (T-4014): dấu review v2 ở head cũ phải khớp mới được mang sang.
+        **(
+            {"headScope": scope}
+            if chain and (scope := scope_digest(_pr_change_set(repo, str(base.get("sha", "")), sha)))
+            else {}
+        ),
         "headRefOid": sha,
         "labels": [{"name": lb.get("name", "")} for lb in pr.get("labels") or [] if isinstance(lb, dict)],
         "statusCheckRollup": rollup,
@@ -17005,7 +17012,33 @@ def _pr_next_review(
 # Sổ review dùng chung (ADR-0027): `pr reviewed` đăng kết quả lên PR dưới dạng comment có dấu máy đọc; `pr next` và
 # `pr steward` (workflow pr-steward) gộp các dấu này với sổ cục bộ. Chỉ tin comment của người có quyền ghi repo (OWNER,
 # COLLABORATOR) — người ngoài comment dấu giả không mở được merge. Dấu không mang tên model (ai_attribution).
-REVIEW_MARK_RE = re.compile(r"<!--\s*xt-review v1 head=([0-9a-f]{40}) verdict=(clean|blocking|inconclusive|debt)\s*-->")
+# v1: `head`, `verdict`. v2 (T-4014, D-550): thêm `base` (SHA nhánh đích lúc rà) và `scope` (băm tập thay đổi của PR) — nhóm
+# 2 = verdict, 3 = base, 4 = scope; v1 không có hai nhóm sau. Dấu v2 sai dạng (base/scope không đủ hex) không khớp.
+REVIEW_MARK_RE = re.compile(
+    r"<!--\s*xt-review v(?:1|2) head=([0-9a-f]{40}) verdict=(clean|blocking|inconclusive|debt)"
+    r"(?: base=([0-9a-f]{40}))?(?: scope=([0-9a-f]{64}))?\s*-->"
+)
+_SCOPE_RE = re.compile(r"[0-9a-f]{64}")
+_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def scope_digest(changes: Optional[Set[Tuple[str, str, str, str]]]) -> str:
+    """Băm tập thay đổi của PR (`_pr_change_set`: file, tên cũ, trạng thái, blob SHA) — không phụ thuộc thứ tự. Không đọc
+    được hoặc rỗng → '' (không có scope)."""
+    if not changes:
+        return ""
+    return hashlib.sha256("\n".join("\t".join(c) for c in sorted(changes)).encode("utf-8")).hexdigest()
+
+
+def review_scope(repo: str, key: str, head: str) -> Tuple[str, str]:
+    """(SHA nhánh đích, scope của `head`) để đăng cùng dấu review; lỗi đọc → thiếu từng phần ('' — đăng dấu v1)."""
+    try:
+        base = str((_gh_one(f"{repo}/pulls/{key}").get("base") or {}).get("sha") or "")
+    except PrInputError:
+        return "", ""
+    return base, (scope_digest(_pr_change_set(repo, base, head)) if base else "")
+
+
 # MEMBER không đủ: thành viên org có thể chỉ có quyền đọc repo (review #141).
 TRUSTED_ASSOCIATIONS = {"OWNER", "COLLABORATOR"}
 STANDARD_LABEL = (
@@ -17015,7 +17048,13 @@ TRUSTED_BOTS = {"dependabot[bot]"}  # bot cùng repo được steward xử lý n
 
 
 def review_comment_body(
-    head: str, clean: bool, inconclusive: bool = False, debt: Sequence[str] = (), fixed: Sequence[str] = ()
+    head: str,
+    clean: bool,
+    inconclusive: bool = False,
+    debt: Sequence[str] = (),
+    fixed: Sequence[str] = (),
+    base: str = "",
+    scope: str = "",
 ) -> str:
     """Nội dung comment `pr reviewed`/`pr debt` đăng lên PR: một dòng cho người đọc + dấu cho máy (`pr next`, `pr steward`).
     `inconclusive` (ADR-0029): reviewer không kết luận được (diff bị cắt, hết ngân sách, thiếu file) — không phải lỗi chặn,
@@ -17031,7 +17070,12 @@ def review_comment_body(
         "inconclusive": "chưa kết luận được (diff cắt/hết ngân sách/thiếu bằng chứng) — cần review khác ở head này",
         "debt": "hết lượt review — " + "; ".join(parts),
     }[verdict]
-    return f"Review ở `{head[:7]}`: {text}.\n\n<!-- xt-review v1 head={head} verdict={verdict} -->"
+    # v2 chỉ khi có scope hợp lệ (base tuỳ chọn, hợp lệ mới ghi); thiếu/sai dạng → v1 như trước (đọc được ở mọi bản)
+    extra = (
+        (f" base={base}" if _SHA_RE.fullmatch(base) else "") + f" scope={scope}" if _SCOPE_RE.fullmatch(scope) else ""
+    )
+    version = "v2" if extra else "v1"
+    return f"Review ở `{head[:7]}`: {text}.\n\n<!-- xt-review {version} head={head} verdict={verdict}{extra} -->"
 
 
 def _comment_login(c: Dict[str, Any]) -> str:
@@ -17060,6 +17104,7 @@ def published_reviews(
             row = {"head": m[1], "clean": m[2] in ("clean", "debt") and not edited, "at": str(c.get("created_at", ""))}
             if m[2] in ("inconclusive", "debt"):
                 row[m[2]] = True
+            row.update({k: v for k, v in (("base", m[3]), ("scope", m[4])) if v})  # dấu v2 (T-4014)
             out.append(row)
     return sorted(out, key=lambda r: r["at"])
 
@@ -17188,6 +17233,8 @@ def review_gate(d: Dict[str, Any], reviews: List[Dict[str, Any]], standard_seen:
     at_head = [r for r in reviews if r.get("head") == head]
     last = at_head[-1] if at_head else reviews[-1] if reviews else None
     carried = last is not None and last.get("clean") and last.get("head") in (d.get("base_merge_of") or [])
+    # dấu v2 (T-4014, D-550): phạm vi PR đã đổi hoặc không chứng minh được — chỉ siết, không nới
+    carried = carried and not (last and last.get("scope") and last["scope"] != d.get("head_scope"))
     if not strict:
         state = "na"
     elif last is None or (last.get("head") != head and not carried) or last.get("inconclusive"):
@@ -17909,7 +17956,8 @@ def _publish_review(
 ) -> int:
     """Đăng kết quả review lên PR (ADR-0027) để phiên khác và workflow pr-steward thấy; lỗi → exit 3 (sổ cục bộ đã ghi)."""
     repo, _ = _pr_target(pr_arg if PR_URL_RE.search(pr_arg) else key)
-    body = review_comment_body(head, clean, inconclusive, debt, fixed)
+    base, scope = review_scope(repo, key, head)
+    body = review_comment_body(head, clean, inconclusive, debt, fixed, base, scope)
     cmd = ["gh", "api", "-X", "POST", f"{repo}/issues/{key}/comments", "-f", f"body={body}"]
     try:  # cwd = gốc dự án: `{owner}/{repo}` là repo của dự án, không phải thư mục shell đang đứng
         r = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=GH_TIMEOUT, cwd=project_dir())

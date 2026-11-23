@@ -756,3 +756,10 @@
 - Chọn: .autopilot/slices/ — trạng thái máy theo checkout, như runs.jsonl
 - Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: ghi vào cây theo dõi ở mỗi loop record làm bẩn cây (release-check hàng tree), sinh nợ review cho tệp máy ghi và đổi vân tay gói ký — 4 test test_flow đỏ ở cổng commit. .autopilot/ đã loại khỏi digest, vân tay và nợ review, guard chặn ghi tay. Đổi lại: số đo chỉ theo checkout, như runs.jsonl hiện nay.
 - Đường lùi: Đổi SLICES_DIR và nơi đọc trong xt_flow; sổ cũ ở .autopilot/slices/ chép sang được vì cùng định dạng JSONL.
+
+### D-550 · 2026-11-23T11:20:43+00:00 · T-4014: dấu review v2 dùng scope để làm gì
+
+- Phương án: (1) Scope chỉ siết: review mang sang head mới (chuỗi cập nhật nhánh) còn phải khớp scope đã ghi; v1 và v2 đều được nhận · (2) Scope thay chuỗi compare: head bất kỳ có cùng scope thì dùng lại review
+- Chọn: Scope chỉ siết: review mang sang head mới (chuỗi cập nhật nhánh) còn phải khớp scope đã ghi; v1 và v2 đều được nhận
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: cùng blob của file PR chưa chứng minh được diff so với nhánh đích còn y nguyên (giải xung đột giữ bản của mình vẫn ra cùng blob), nên phương án 2 có thể nới điều kiện mang review; chuỗi _base_merge_chain kèm _base_touches đã là bằng chứng chặt hơn. Phương án 1 chỉ thêm một điều kiện và cho guard/steward nhận cả hai dạng dấu.
+- Đường lùi: Đăng dấu v1 (bỏ base/scope) và gỡ điều kiện scope ở review_gate; guard và steward vẫn nhận v1.
