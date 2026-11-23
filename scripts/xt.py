@@ -3370,13 +3370,27 @@ def slice_append(base: Path, slice_id: str, kind: str, source: str, ref: str, da
         return False
     event = {"schema": 1, "slice": slice_id, "kind": kind, "at": now_iso(), "source": source, "ref": ref, "data": data}
     try:
-        folder = state_write_dir(base, SLICES_SUBDIR)  # không ghi xuyên liên kết (AUD-HAR-405)
+        folder = state_write_dir(base, SLICES_SUBDIR)  # không ghi xuyên liên kết ở thư mục (AUD-HAR-405)
         folder.mkdir(parents=True, exist_ok=True)
-        with (folder / f"{slice_id.replace('/', '__')}.jsonl").open("a", encoding="utf-8") as fh:
-            fh.write(redact(json.dumps(event, ensure_ascii=False, sort_keys=True)) + "\n")
+        # O_NOFOLLOW cho cả thành phần cuối và mode 0o600 như `runs.jsonl` (`_append_line`)
+        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(folder / f"{slice_id.replace('/', '__')}.jsonl", flags, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(_redact_values(event), ensure_ascii=False, sort_keys=True) + "\n")
     except OSError:
         return False
     return True
+
+
+def _redact_values(value: Any) -> Any:
+    """Che bí mật trong TỪNG giá trị chuỗi (`redact`) trước khi tuần tự hoá — che trên cả dòng JSON làm hỏng dấu nháy."""
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, dict):
+        return {k: _redact_values(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_values(v) for v in value]
+    return value
 
 
 def _slice_task_green(base: Path, st: Dict[str, Any], ev: Dict[str, Any]) -> None:
@@ -7065,11 +7079,17 @@ IMMEDIATE_KEY = "immediate_review"
 IMMEDIATE_PATHS = (
     ".claude/hooks/",
     ".claude/settings.json",
+    ".claude/settings.local.json",
     ".codex/hooks.json",
+    ".cursor/hooks.json",
+    ".github/hooks/xt.json",
+    ".grok/hooks/xt.json",
+    ".opencode/plugins/xt.ts",
+    ".gemini/settings.json",
     ".github/workflows/",
     ".github/rulesets/",
     "xt.yaml",
-)
+)  # ⊇ `FENCE_FILES` của guard.py (test giữ hai nhà khớp nhau); so không phân biệt hoa/thường như `RISK_PATH_RES`
 IMMEDIATE_NOTE = "chạm lớp tác động tức thì (ADR-0095) — cần review ở head dù merge_review: optional"
 
 
@@ -7085,8 +7105,8 @@ def immediate_effect_paths(base: Path, ref: str, changed: List[str], prefix: str
     mới tắt (PR không tự miễn bằng cách sửa xt.yaml của nó); giá trị lạ → như `on`."""
     if _committed_xt_keys(base, ref).get(IMMEDIATE_KEY) == "off":
         return []
-    roots = ("", prefix)
-    return [f for f in changed if any(f.startswith(r + p) for r in roots for p in IMMEDIATE_PATHS)]
+    roots = ("", prefix.lower())
+    return [f for f in changed if any(f.lower().startswith(r + p) for r in roots for p in IMMEDIATE_PATHS)]
 
 
 # Cổng trước commit (D-NNN do phiên chính ghi): `fast` = hook commit chạy `dev-task.sh gate-fast` (format/lint/typecheck +
@@ -12732,12 +12752,14 @@ def _merge_eval(pr: Dict[str, Any], local: bool = False) -> Tuple[Dict[str, Any]
         else []
     )
     immediate = immediate_effect_paths(project_dir(), ref, list(_risky_paths(pr)), project_prefix())
-    if immediate:
+    if (
+        immediate
+    ):  # tính pha harden như PR sửa xt.yaml (D-137): không hoãn review ở pha build, mọi bên đọc cùng pha (ADR-0095)
+        phase = "harden"
         phase_notes = [*phase_notes, f"{IMMEDIATE_NOTE}: {', '.join(sorted(set(immediate))[:3])}"]
     risk = [*risk, *protected]  # lớp tác động tức thì chỉ đòi review (không thành ngoại lệ cứng giữ người)
     rec = _pr_record(read_reviews(project_dir()), str(pr.get("number", ""))) if local else None
-    decision = merge_check_result(pr, autonomy, risk, hard_auto, "harden" if immediate else phase, rec)
-    decision[PHASE_KEY] = phase  # lớp tác động tức thì không được hoãn review ở pha build (ADR-0095)
+    decision = merge_check_result(pr, autonomy, risk, hard_auto, phase, rec)
     needs_review = bool(protected or immediate)
     if not needs_review and _committed_xt_keys(project_dir(), ref).get("merge_review", "optional") == "optional":
         decision = optional_review_decision(pr, autonomy, risk, hard_auto, phase)
@@ -14279,7 +14301,10 @@ def _merged_clean(repo: str, commit: str, subject: str, identity: str) -> Option
         return ""
     base_sha = str((pull.get("base") or {}).get("sha", "")) if isinstance(pull.get("base"), dict) else ""
     marks = _published_marks(repo, m[1], identity)
-    d = {"head": head, "lane": "chuẩn", "base_merge_of": _base_merge_chain(repo, base_sha, head)}
+    chain = _base_merge_chain(repo, base_sha, head)
+    # head_scope như `_pr_rest`: dấu review v2 mang sang qua chuỗi cập nhật phải khớp phạm vi mới được tính trả nợ (T-4014)
+    scope = scope_digest(_pr_change_set(repo, base_sha, head)) if chain else ""
+    d = {"head": head, "lane": "chuẩn", "base_merge_of": chain, "head_scope": scope}
     return m[1] if review_gate(d, marks)["state"] == "ok" else ""
 
 
@@ -15195,7 +15220,8 @@ def _release_promotion(base: Path, fails: List[str], human: List[str], subject: 
     if rejected:
         return {"state": "rejected", "reasons": rejected}
     if human:
-        return _pending_signoff(base, human)
+        # agent chỉ ký được khi chữ ký là việc người DUY NHẤT còn lại (`release_sign` từ chối nếu còn việc khác)
+        return _pending_signoff(base, human, "" if set(human) <= set(RELEASE_SIGN_HUMAN_OK) else "human")
     if not docs:
         return _pending_signoff(base, ["chưa có GO-NO-GO đã ký §5 cho VERSION — người ký"])
     pending = [p for p in problems if p]
@@ -15653,7 +15679,8 @@ DEV_ACTIONS = ("deploy", "smoke", "digest", "rollback")
 DEPLOY_ENV_DROP = frozenset(
     {"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4", "NODE_OPTIONS", "NODE_PATH", "PERL5OPT", "PERL5LIB"}
     | {"RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"}
-)
+    | {"PERLLIB", "CDPATH", "MAKEFLAGS", "MAKEFILES", "GCONV_PATH", "HOSTALIASES", "RUBYGEMS_GEMDEPS"}
+)  # danh sách chặn KHÔNG đầy đủ (bước 1); lối thoát/đầy đủ là `deploy_env_pass` (bước 2)
 DEPLOY_ENV_DROP_PREFIX = ("LD_", "DYLD_", "PYTHON", "BASH_FUNC_", "XT_DEPLOY_")
 
 

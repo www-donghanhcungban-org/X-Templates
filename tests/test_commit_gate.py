@@ -430,7 +430,7 @@ class DevTaskGateFastTest(unittest.TestCase):
         shutil.copy(ROOT / "scripts" / "dev-task.sh", self.tmp / "scripts" / "dev-task.sh")
 
     def run_task(self, *args: str) -> subprocess.CompletedProcess[str]:
-        env = {k: v for k, v in os.environ.items() if k != "XT_CHANGED_FILES"}
+        env = {k: v for k, v in os.environ.items() if k not in ("XT_CHANGED_FILES", "XT_CHANGED_TRACKED_ONLY")}
         env["CLAUDE_PROJECT_DIR"] = str(self.tmp)
         return subprocess.run(
             ["bash", str(self.tmp / "scripts" / "dev-task.sh"), *args],

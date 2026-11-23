@@ -86,6 +86,14 @@ class PromotionNamingTest(unittest.TestCase):
         self.assertEqual((got["state"], got["signer"]), ("pending_human", "human"))
         self.assertTrue(xt.promotion_pending(got["state"]))
 
+    def test_agent_is_the_signer_only_when_the_signature_is_the_sole_human_item(self):
+        """Review lô B (🟢): `release-sign` từ chối khi còn việc người ngoài chữ ký — khi đó phải gọi là chờ người."""
+        self.assertEqual(self.promotion(True, human=("go_no_go",))["signer"], "agent")
+        for human in (("prod_switch",), ("go_no_go", "acceptance"), ("acceptance",)):
+            with self.subTest(human=human):
+                got = self.promotion(True, human=human)
+                self.assertEqual((got["state"], got["signer"]), ("pending_human", "human"))
+
     def test_unsigned_without_human_rows_follows_the_same_rule(self):
         self.assertEqual(self.promotion(True, human=())["state"], "pending_signoff")
         self.assertEqual(self.promotion(False, human=())["state"], "pending_human")

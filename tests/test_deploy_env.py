@@ -38,6 +38,14 @@ STARTUP = (
     "JAVA_TOOL_OPTIONS",
     "_JAVA_OPTIONS",
     "JDK_JAVA_OPTIONS",
+    # cùng lớp, lô C chứng minh lọt: perl nạp thư viện, `cd` bị dẫn đi, make nhận cờ, bộ chuyển mã, bí danh máy chủ
+    "PERLLIB",
+    "CDPATH",
+    "MAKEFLAGS",
+    "MAKEFILES",
+    "GCONV_PATH",
+    "HOSTALIASES",
+    "RUBYGEMS_GEMDEPS",
 )
 KEEP = ("PATH", "HOME", "LANG", "AWS_REGION", "DEPLOY_TARGET", "MY_PYTHON_BIN", "NODEJS_VERSION", "LDAP_URL")
 

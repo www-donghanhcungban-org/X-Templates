@@ -36,6 +36,11 @@ NOT_ALONE = [
     "git commit -m x \\\n -q",
     "git commit --interactive",
     "git commit --interactive=yes",
+    "git commit --interact",  # git nhận tiền tố duy nhất của --interactive
+    "git commit --int",
+    "git commit -m fix#12 --interactive < feed.txt",  # shlex coi `#` giữa từ là comment, bash thì không
+    "git commit -m wip#1 | cat",
+    "git commit -m a#1 ; git add -A",
     "git -C sub commit -m x",
     "GIT_X=1 git commit -m x",
     "( git commit -m x )",
@@ -110,6 +115,14 @@ class DevTaskTrackedOnlyTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0, r.stderr)
         return sorted((self.tmp / "seen").read_text(encoding="utf-8").splitlines())
+
+    def test_flag_does_not_leak_into_the_test_command(self):
+        (self.tmp / "xt.yaml").write_text(
+            "lint: sh -c 'exit 0'\ntest_fast: sh -c 'printf \"%s\" \"${XT_CHANGED_TRACKED_ONLY-unset}\" > seen'\n",
+            encoding="utf-8",
+        )
+        subprocess.run(["git", "-C", str(self.tmp), "add", "xt.yaml"], check=True)
+        self.assertEqual(self.seen(XT_CHANGED_TRACKED_ONLY="1"), ["unset"])
 
     def test_untracked_kept_by_default_dropped_only_with_flag(self):
         self.assertEqual(self.seen(), ["a.txt", "moi.txt"])

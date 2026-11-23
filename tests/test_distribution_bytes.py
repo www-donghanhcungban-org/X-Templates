@@ -87,6 +87,7 @@ class DownloadedBytesTest(BytesFixture):
             with self.subTest(gone=gone):
                 self.publish(self.archive)
                 del self.assets[gone]
+                self.sign(TAG)  # bản dựng lại SẼ được attest: nếu mã dựng lại thay vì từ chối thì ca này xanh nhầm
                 self.assertEqual(self.verify(), 1)
 
     def test_wrong_signer_or_unattested_bytes_are_rejected(self):
@@ -141,6 +142,44 @@ class FetchAssetTest(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 1)
 
 
+class FetchAssetTransportTest(unittest.TestCase):
+    """Review lô B (🟠): kết nối đóng sớm hay HTTP hỏng là lỗi mạng (mã 3), không phải "giả mạo" (1) hay traceback."""
+
+    def fetch(self, effect):
+        with mock.patch.object(dist, "urlopen", side_effect=effect):
+            return dist.fetch_asset("test/framework", TAG, ARCHIVE)
+
+    def test_http_client_errors_are_transport_errors(self):
+        import http.client
+
+        for effect in (
+            http.client.IncompleteRead(b"ab"),
+            http.client.BadStatusLine("x"),
+            http.client.RemoteDisconnected(),
+        ):
+            with self.subTest(effect=type(effect).__name__), self.assertRaises(dist.DistributionError) as ctx:
+                self.fetch(effect)
+            self.assertEqual(ctx.exception.code, 3)
+
+    def test_short_body_against_content_length_is_a_transport_error(self):
+        class Response(io.BytesIO):
+            headers = {"Content-Length": "100"}
+
+        with self.assertRaises(dist.DistributionError) as ctx:
+            self.fetch(lambda *a, **k: Response(b"0123456789"))
+        self.assertEqual(ctx.exception.code, 3)
+
+        class Exact(io.BytesIO):
+            headers = {"Content-Length": "4"}
+
+        self.assertEqual(self.fetch(lambda *a, **k: Exact(b"data")), b"data")
+
+        class Bad(io.BytesIO):
+            headers = {"Content-Length": "abc"}
+
+        self.assertEqual(self.fetch(lambda *a, **k: Bad(b"data")), b"data")  # không tin tiêu đề hỏng, cũng không chặn
+
+
 class ArchivePrefixTest(unittest.TestCase):
     def tar(self, tmp: Path, names: list[str]) -> Path:
         path = tmp / "a.tar.gz"
@@ -161,6 +200,7 @@ class ArchivePrefixTest(unittest.TestCase):
                 [f"{NAME}/a", "other-v1.0.0/b"],
                 ["VERSION"],
                 ["../evil-v1.0.0/x"],
+                [f"{NAME}/a", f"{NAME}/../../x"],  # đúng thư mục gốc nhưng thoát ra ngoài: chỉ phép kiểm `..` bắt được
                 ["/abs-v1.0.0/x"],
                 ["framework/x"],
             ):

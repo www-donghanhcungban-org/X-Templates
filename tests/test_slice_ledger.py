@@ -74,6 +74,28 @@ class SliceWriteTest(unittest.TestCase):
         blocker.write_text("x", encoding="utf-8")
         self.assertFalse(xt.slice_append(blocker, "PLAN-x/T-0010", "cost", "t", "c3", {}))
 
+    def test_symlink_at_the_final_component_is_never_followed(self):
+        """Review lô C (🟠): `Path.open("a")` đi theo liên kết; `O_NOFOLLOW` như `runs.jsonl`."""
+        outside = self.base / "outside.txt"
+        outside.write_text("giữ nguyên\n", encoding="utf-8")
+        folder = xt.state_dir(self.base) / xt.SLICES_SUBDIR
+        folder.mkdir(parents=True)
+        os.symlink(outside, folder / "PLAN-x__T-0010.jsonl")
+        self.assertFalse(xt.slice_append(self.base, "PLAN-x/T-0010", "cost", "t", "c1", {"usd": 1}))
+        self.assertEqual(outside.read_text(encoding="utf-8"), "giữ nguyên\n")
+
+    def test_file_is_private_and_secrets_in_values_keep_the_line_valid_json(self):
+        """Review lô C (🟢): `redact()` trên chuỗi JSON đã tuần tự hoá làm hỏng dòng; che từng giá trị trước khi tuần tự hoá."""
+        self.assertTrue(
+            xt.slice_append(self.base, "PLAN-x/T-0010", "requirement", "t", "r", {"text": "set token=abc123 rồi chạy"})
+        )
+        (row,) = self.lines("PLAN-x/T-0010")
+        self.assertNotIn("abc123", row["data"]["text"])
+        self.assertEqual(row["kind"], "requirement")
+        path = xt.state_dir(self.base) / xt.SLICES_SUBDIR / "PLAN-x__T-0010.jsonl"
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(len(xt_flow.read_slices(self.base)[0]), 1)  # bộ đọc vẫn nhận dòng
+
     def test_task_green_goes_to_task_slice_only_with_plan(self):
         green = {"task": "T-0011", "head": "abc", "cmd_sha256": "d"}
         xt._slice_task_green(self.base, {}, green)

@@ -763,3 +763,10 @@
 - Chọn: Scope chỉ siết: review mang sang head mới (chuỗi cập nhật nhánh) còn phải khớp scope đã ghi; v1 và v2 đều được nhận
 - Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: cùng blob của file PR chưa chứng minh được diff so với nhánh đích còn y nguyên (giải xung đột giữ bản của mình vẫn ra cùng blob), nên phương án 2 có thể nới điều kiện mang review; chuỗi _base_merge_chain kèm _base_touches đã là bằng chứng chặt hơn. Phương án 1 chỉ thêm một điều kiện và cho guard/steward nhận cả hai dạng dấu.
 - Đường lùi: Đăng dấu v1 (bỏ base/scope) và gỡ điều kiện scope ở review_gate; guard và steward vẫn nhận v1.
+
+### D-551 · 2026-11-23T15:01:13+00:00 · Xử lý phát hiện rà độc lập PR #756 (ba lô A/B/C)
+
+- Phương án: (1) Sửa 🔴 và các 🟠 là lỗi thật của mã mới (rẻ, có test); phần còn lại ghi nợ chấp nhận có chủ và hạn · (2) Sửa toàn bộ 🟠 trước merge · (3) Gộp mọi phát hiện thành nợ, chỉ sửa 🔴
+- Chọn: Sửa 🔴 và các 🟠 là lỗi thật của mã mới (rẻ, có test); phần còn lại ghi nợ chấp nhận có chủ và hạn
+- Lý do (tiêu chí chất lượng cuối): ADR-0062: 🔴 sửa, 🟠/🟢 ghi nợ. Đúng và an toàn: hai 🔴 (lớp tác động tức thì thiếu tệp hàng rào và pr next ra wait ở pha build) đã sửa kèm test; các 🟠 sửa được rẻ và rõ nguyên nhân (biến cờ rò vào test con, commit_alone bị # lừa, _merged_clean thiếu scope, fetch_asset lỗi mạng, nháp mồ côi, O_NOFOLLOW, bootstrap) cũng sửa vì là hồi quy của chính PR. Còn lại (lách _exec_doc_edited, danh sách chặn môi trường chưa đầy đủ, thiết kế allowlist, test AUD-CI-036 cho upgrade) cần thiết kế nên chấp nhận có hạn.
+- Đường lùi: Mở lại các hàng AUD-HAR-478…482 thành mở và làm trong PR kế.

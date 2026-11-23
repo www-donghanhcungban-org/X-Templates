@@ -24401,7 +24401,8 @@ def _failure_decision(mode: str, payload: object, cmd: object) -> Dict[str, obje
 
 NUL_FIELDS = ("decision", "reason", "commit", "no_verify", "commit_dir", "commit_alone")  # trường mới nối cuối
 # Lệnh có ký tự này (kể cả trong nháy: `$(…)` trong nháy kép vẫn chạy) thì không khẳng định được là commit đứng một mình.
-_COMMIT_ALONE_BAD = re.compile(r"[$`\n\r\\]")
+# `#`: shlex coi `#` giữa từ là chú thích và cắt phần sau, bash thì không (`-m fix#12 --interactive < feed`).
+_COMMIT_ALONE_BAD = re.compile(r"[$`\n\r\\#]")
 
 
 def commit_alone(cmd: str) -> bool:
@@ -24418,7 +24419,7 @@ def commit_alone(cmd: str) -> bool:
         return False
     if words[:2] != ["git", "commit"] or any(w and set(w) <= set(";&|<>()") for w in words):
         return False
-    return not any(w == "--interactive" or w.startswith("--interactive=") for w in words[2:])
+    return not any(w.startswith("--int") for w in words[2:])  # git nhận mọi tiền tố duy nhất của --interactive
 
 
 def _sh_field(v: object) -> str:

@@ -59,7 +59,17 @@ class ReleaseAssetsTest(unittest.TestCase):
         block = self.blocks[find(self.blocks, "gh release view")]
         self.assertIn("steps.tag.outputs.archive == ''", block)
         self.assertIn("::warning::", block)
-        self.assertNotIn("exit 1", block)  # tag cũ trước T-4017 chưa có release: không chặn chạy lại
+        # tag cũ trước T-4017 chưa có release (`missing`): chỉ cảnh báo, không chặn chạy lại; nháp mồ côi (`true`) thì đỏ
+        draft = block.split("true)", 1)[1].split(";;", 1)[0]
+        self.assertIn("exit 1", draft)
+        self.assertEqual(block.count("exit 1"), 1)
+        missing = block.split("*)", 1)[1]
+        self.assertNotIn("exit 1", missing)
+
+    def test_published_receipt_is_compared_byte_for_byte(self):
+        block = self.blocks[find(self.blocks, "gh release create")]
+        self.assertIn('cmp -s "$RECEIPT"', block)
+        self.assertLess(block.index('cmp -s "$RECEIPT"'), block.index("--draft=false"))
 
     def test_asset_names_follow_repo_name_pattern_used_by_archive(self):
         self.assertIn('name="${GITHUB_REPOSITORY#*/}-v$V"', self.text)

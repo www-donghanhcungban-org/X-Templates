@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -107,6 +108,33 @@ class CarryScopeTest(unittest.TestCase):
     def test_review_at_current_head_ignores_scope(self):
         d = {"head": H1, "lane": "chuẩn", "base_merge_of": [], "head_scope": ""}
         self.assertEqual(xt.review_gate(d, [{"head": H1, "clean": True, "at": "x", "scope": SCOPE}])["state"], "ok")
+
+
+class MergedCleanScopeTest(unittest.TestCase):
+    """Review lô A (🟠): `_merged_clean` (trả nợ review sau merge) phải áp cùng điều kiện scope như `merge-check`."""
+
+    def run_case(self, mark: dict, changes=CHANGES) -> str:
+        pull = {"merged": True, "merge_commit_sha": "m" * 40, "head": {"sha": H2}, "base": {"sha": BASE}}
+        patches = (
+            mock.patch.object(xt, "_gh_one", return_value=pull),
+            mock.patch.object(xt, "_published_marks", return_value=[mark]),
+            mock.patch.object(xt, "_base_merge_chain", return_value=[H1]),
+            mock.patch.object(xt, "_pr_change_set", return_value=changes),
+        )
+        with patches[0], patches[1], patches[2], patches[3]:
+            return xt._merged_clean("o/r", "m" * 40, "feat: x (#12)", "")
+
+    def test_v1_mark_carried_through_update_chain_pays_the_debt(self):
+        self.assertEqual(self.run_case({"head": H1, "clean": True, "at": "x"}), "12")
+
+    def test_v2_mark_with_matching_scope_pays_the_debt(self):
+        mark = {"head": H1, "clean": True, "at": "x", "scope": xt.scope_digest(CHANGES)}
+        self.assertEqual(self.run_case(mark), "12")
+
+    def test_v2_mark_with_changed_scope_does_not(self):
+        mark = {"head": H1, "clean": True, "at": "x", "scope": SCOPE}
+        self.assertEqual(self.run_case(mark), "")
+        self.assertEqual(self.run_case({**mark, "scope": xt.scope_digest(CHANGES)}, changes=None), "")
 
 
 class PublishScopeTest(unittest.TestCase):

@@ -205,6 +205,8 @@ jobs:
           test "$downloaded" = "$(sha256sum "$ARCHIVE" | cut -d' ' -f1)"
           # Biên nhận do bước trên ghi bằng printf, trường `sha256` đúng 64 hex trong nháy kép (job này không dùng trình thông dịch).
           test "$(grep -oE '"sha256":"[0-9a-f]{64}"' "$dir"/*.promotion.json | cut -d'"' -f4)" = "$downloaded"
+          # Nơi dùng so biên nhận từng byte (xt_distribution): tải về phải trùng đúng tệp đã attest, không chỉ trường sha256.
+          cmp -s "$RECEIPT" "$dir"/*.promotion.json
           gh release edit "$tag" --draft=false
       - name: Báo trạng thái release của tag đã phát hành trước đó
         if: steps.tag.outputs.archive == ''
@@ -212,9 +214,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ needs.approve.outputs.version }}
         run: |
-          # Tag có từ trước T-4017 chưa có release: chỉ báo, không chặn chạy lại (archive dựng lại sẽ khác digest đã attest).
+          # Tag có từ trước T-4017 chưa có release: chỉ báo, không chặn chạy lại. Release còn NHÁP (lần trước dừng giữa chừng) thì
+          # đỏ: job xanh sẽ che việc nơi dùng chưa có bản công bố — chủ repo kiểm nháp rồi công bố hoặc xoá nháp và chạy lại.
           state=$(gh release view "v$V" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)
           case "$state" in
             false) echo "::notice::v$V đã có release công bố." ;;
+            true)
+              echo "::error::v$V có tag nhưng release vẫn là bản nháp (lần công bố trước dừng giữa chừng). Kiểm hai tệp đã tải lên rồi công bố, hoặc xoá bản nháp và chạy lại."
+              exit 1 ;;
             *) echo "::warning::v$V có tag nhưng chưa có release công bố ($state); không dựng lại archive vì digest sẽ khác bản đã attest." ;;
           esac

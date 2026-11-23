@@ -26,8 +26,32 @@ IN_CLASS = [
     ".github/workflows/ci.yml",
     ".github/rulesets/main.json",
     "xt.yaml",
+    # tệp nối guard của host khác và cấu hình cục bộ — chính guard coi là hàng rào (review lô A, 🔴)
+    ".cursor/hooks.json",
+    ".github/hooks/xt.json",
+    ".grok/hooks/xt.json",
+    ".opencode/plugins/xt.ts",
+    ".gemini/settings.json",
+    ".claude/settings.local.json",
+    ".Claude/settings.json",  # khác hoa/thường: mọi luật rủi ro khác dùng re.I
+    ".GITHUB/Workflows/ci.yml",
+    "XT.YAML",
 ]
 OUT_OF_CLASS = ["scripts/xt.py", "README.md", "docs/adr/0001-x.md", ".github/CODEOWNERS", "src/auth/login.py"]
+
+
+class ClassCoversGuardFenceTest(unittest.TestCase):
+    def test_every_file_the_guard_fences_is_in_the_class(self):
+        sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
+        import guard
+
+        for name in guard.FENCE_FILES:
+            with self.subTest(file=name):
+                self.assertEqual(xt.immediate_effect_paths(Path("/nonexistent"), "origin/main", [name], ""), [name])
+        self.assertEqual(
+            xt.immediate_effect_paths(Path("/nonexistent"), "origin/main", [".claude/hooks/guard.py"], ""),
+            [".claude/hooks/guard.py"],
+        )
 
 
 class ImmediateEffectReviewTest(unittest.TestCase):
@@ -89,9 +113,25 @@ class ImmediateEffectReviewTest(unittest.TestCase):
         self.assertEqual(d["verdict"], "review", d)
         self.assertEqual(d["hard"], [])
 
-    def test_phase_in_decision_is_the_real_one(self):
+    def test_class_is_treated_as_harden_so_every_reader_asks_for_review(self):
+        commit_base_xt(self.base, OPTIONAL)  # pha build: bình thường review chỉ là nợ
+        d = self.decide(".claude/settings.json")
+        self.assertEqual((d["delivery_phase"], d["verdict"], d["review_deferred"]), ("harden", "review", False))
+        self.assertTrue(any("tác động tức thì" in n for n in xt._merge_eval(self.pr(".claude/settings.json"))[1]))
+
+    def pr(self, *paths: str) -> dict:
+        files = [*STANDARD, *({"path": p, "additions": 1, "deletions": 0} for p in paths)]
+        return std() | {"files": files, "baseRefName": "main"}
+
+    def test_pr_next_asks_for_review_not_wait_in_build_phase(self):
         commit_base_xt(self.base, OPTIONAL)
-        self.assertEqual(self.decide(".claude/settings.json")["delivery_phase"], "build")
+        for path in (".claude/hooks/guard.py", ".github/workflows/ci.yml", ".cursor/hooks.json"):
+            with self.subTest(path=path):
+                d = xt._merge_eval(self.pr(path))[0]
+                out = xt.pr_next(d, False, {})
+                self.assertEqual(out["action"], "review", out)
+        plain = xt._merge_eval(self.pr("src/a.py"))[0]  # ngoài lớp ở pha build: review hoãn thành nợ, không đổi
+        self.assertNotEqual(xt.pr_next(plain, False, {})["action"], "review")
 
     def test_valid_review_at_head_clears_it(self):
         commit_base_xt(self.base, OPTIONAL)

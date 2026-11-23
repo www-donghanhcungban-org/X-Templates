@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -134,14 +135,17 @@ def fetch_asset(repo: str, tag: str, name: str) -> bytes | None:
     try:
         with urlopen(Request(url), timeout=60) as response:
             data: bytes = response.read(ASSET_MAX + 1)
+            declared = (getattr(response, "headers", None) or {}).get("Content-Length", "")
     except HTTPError as exc:
         if exc.code == 404:
             return None
         raise DistributionError(f"{name}: GitHub trả HTTP {exc.code}") from exc
-    except (URLError, OSError) as exc:
+    except (URLError, OSError, http.client.HTTPException) as exc:  # kết nối cắt giữa chừng, dòng trạng thái hỏng…
         raise DistributionError(f"{name}: không tải được ({exc})") from exc
     if len(data) > ASSET_MAX:
         raise DistributionError(f"{name}: lớn hơn trần {ASSET_MAX} byte", 1)
+    if declared.isdecimal() and int(declared) != len(data):  # đóng sớm: tệp cắt cụt là lỗi mạng, không phải giả mạo
+        raise DistributionError(f"{name}: nhận {len(data)}/{declared} byte — thử lại sau")
     return data
 
 
