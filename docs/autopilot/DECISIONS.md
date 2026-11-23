@@ -770,3 +770,10 @@
 - Chọn: Sửa 🔴 và các 🟠 là lỗi thật của mã mới (rẻ, có test); phần còn lại ghi nợ chấp nhận có chủ và hạn
 - Lý do (tiêu chí chất lượng cuối): ADR-0062: 🔴 sửa, 🟠/🟢 ghi nợ. Đúng và an toàn: hai 🔴 (lớp tác động tức thì thiếu tệp hàng rào và pr next ra wait ở pha build) đã sửa kèm test; các 🟠 sửa được rẻ và rõ nguyên nhân (biến cờ rò vào test con, commit_alone bị # lừa, _merged_clean thiếu scope, fetch_asset lỗi mạng, nháp mồ côi, O_NOFOLLOW, bootstrap) cũng sửa vì là hồi quy của chính PR. Còn lại (lách _exec_doc_edited, danh sách chặn môi trường chưa đầy đủ, thiết kế allowlist, test AUD-CI-036 cho upgrade) cần thiết kế nên chấp nhận có hạn.
 - Đường lùi: Mở lại các hàng AUD-HAR-478…482 thành mở và làm trong PR kế.
+
+### D-552 · 2026-11-23T21:01:16+00:00 · Duyệt PLAN-harden-2026-11-23: audit delta #746–#755 ở container 3.13, ký GO-NO-GO để môi trường 3.15.2
+
+- Phương án: (1) Làm audit delta và sổ ở đây, không ký · (2) Dừng chờ môi trường 3.15.2
+- Chọn: Làm audit delta và sổ ở đây, không ký
+- Lý do (tiêu chí chất lượng cuối): Nợ review không phụ thuộc phiên bản Python; người chọn mở cờ; không ký khi BASE-DEP-003 đỏ
+- Đường lùi: loop block lại; PLAN chỉ thêm tài liệu và sổ
