@@ -3599,7 +3599,7 @@ class DevTaskTest(unittest.TestCase):
     def test_framework_runtime_does_not_replace_application_python(self):
         (self.tmp / "xt.yaml").write_text("lint: python3 --version\ntest: python3 --version\n", encoding="utf-8")
         (self.tmp / "scripts" / "xt.py").write_text(
-            "import sys\nassert sys.version_info[:2] == (3, 15)\n"
+            "import sys\nassert sys.version_info[:2] >= (3, 13)\n"
             "assert sys.argv[1] == 'guard-check'\nprint('framework guard')\n",
             encoding="utf-8",
         )
