@@ -4923,8 +4923,22 @@ def _python_runtime_error() -> Optional[Finding]:
     return Finding("runtime", "error", f"cần CPython 3.13 trở lên — hiện là {detected}")
 
 
+def _python_prerelease_warning(info: Any = None) -> Optional[Finding]:
+    """CPython alpha/beta/rc (T-4011): cổng cục bộ chạy trên bản tiền phát hành có thể lệch CI (bản chính thức)."""
+    info = info or sys.version_info
+    level = getattr(info, "releaselevel", "final")  # tuple thường (không có releaselevel) → coi như bản chính thức
+    if level == "final":
+        return None
+    return Finding(
+        "runtime",
+        "warn",
+        f"CPython {info[0]}.{info[1]}.{info[2]} là bản tiền phát hành ({level}) — cổng cục bộ có thể lệch"
+        " CI; dựng bản chính thức: `dev-task.sh bootstrap`",
+    )
+
+
 def _doctor_runtime() -> List[Finding]:
-    runtime = _python_runtime_error()
+    runtime = _python_runtime_error() or _python_prerelease_warning()
     out = [runtime] if runtime else []
     out += [
         Finding("runtime", "error", f"thiếu `{t}` trên PATH — hook, cổng commit và commit/push của autopilot cần nó")

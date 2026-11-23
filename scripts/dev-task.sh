@@ -16,7 +16,7 @@
 #      rỗng hoặc là lệnh không kiểm gì (true, :, exit 0, echo …) → ĐỎ. Cổng rỗng không phải bằng chứng.
 #
 # Task hỗ trợ: format | lint | typecheck | test | build | gate | gate-par | gate-fast | test-shard | test-combine |
-#   test-weights | test-mode | e2e-mode | e2e | require | setup
+#   test-weights | test-mode | e2e-mode | e2e | require | setup | bootstrap (CPython ≥ 3.13 + công cụ cổng vào .venv)
 #   gate = chạy tuần tự build→typecheck→lint→test (cái nào phân giải được), đỏ 1 cái → fail. Cổng đầy đủ = CI (ADR-0056;
 #          cục bộ trước cắt bản), `xt.py loop record` dùng đúng lệnh này. Khai `test_floor` → chạy thêm sau `test`.
 #   gate-par = cùng các lệnh của `gate` nhưng chia nhóm độc lập chạy nền CÙNG LÚC (D-128, job `gate` của CI mẫu):
@@ -66,6 +66,9 @@ YAML="$ROOT/xt.yaml"
 FRAMEWORK_PYTHON="${XT_FRAMEWORK_PYTHON:-python3}"
 
 log() { printf '[dev-task] %s\n' "$*" >&2; }
+py_floor_ok() { # $1=trình thông dịch → 0 khi là CPython ≥ 3.13 (ADR-0094)
+  "$1" -c 'import sys; raise SystemExit(not (sys.implementation.name == "cpython" and sys.version_info[:2] >= (3, 13)))' 2>/dev/null
+}
 
 if [ -z "$TASK" ]; then
   log "thiếu tên task. Dùng: dev-task.sh format|lint|typecheck|test|build|gate|gate-fast|gate-par|test-shard|test-combine|test-weights|test-mode|e2e-mode|e2e|require|setup"
@@ -735,6 +738,34 @@ case "$TASK" in
     e2e_run "${2:-1}" "${3:-1}"; exit $? ;;
   require)
     shift; require_tasks "$@"; exit $? ;;
+  bootstrap)
+    # Mốc 1/3 — cài khung (T-4011): CPython ≥ 3.13 (ADR-0094) + công cụ cổng trong `.venv`. Mốc 2 (chạy ứng dụng) là
+    # `setup` của dự án, mốc 3 (đủ điều kiện production) là release-check/G7 — bootstrap không chạm hai mốc đó. Đã kiểm:
+    # Linux (Ubuntu của CI và container cloud); hệ điều hành khác chưa kiểm.
+    PY="${XT_PYTHON:-python3}"
+    if ! py_floor_ok "$PY"; then
+      command -v uv >/dev/null 2>&1 || {
+        log "bootstrap: cần CPython ≥ 3.13 (hiện: $("$PY" -V 2>&1 || echo "không chạy được $PY")) — cài bằng gói hệ điều hành hoặc uv rồi chạy lại"
+        exit 3
+      }
+      WANT="$(tr -d '[:space:]' < "$ROOT/.python-version" 2>/dev/null)"
+      WANT="${WANT:-3.13}"
+      log "run [bootstrap]: uv python install $WANT"
+      uv python install "$WANT" || exit $?
+      PY="$(uv python find "$WANT")" || exit $?
+      py_floor_ok "$PY" || { log "bootstrap: uv trả '$PY' nhưng không đạt CPython ≥ 3.13"; exit 3; }
+    fi
+    VENV="$ROOT/.venv"
+    if [ ! -x "$VENV/bin/python3" ]; then
+      log "run [bootstrap]: $PY -m venv .venv"
+      "$PY" -m venv "$VENV" || exit $?
+    fi
+    if [ -f "$ROOT/requirements-dev.txt" ]; then
+      log "run [bootstrap]: pip install --require-hashes -r requirements-dev.txt"
+      "$VENV/bin/python3" -m pip install --quiet --require-hashes -r "$ROOT/requirements-dev.txt" || exit $?
+    fi
+    log "bootstrap xong — đặt .venv đầu PATH để hook (python3 -I) thấy công cụ cổng: export PATH=\"$VENV/bin:\$PATH\""
+    exit 0 ;;
   setup)
     C="$(declared_cmd setup)"
     [ -n "$C" ] || { log "setup: không khai setup trong xt.yaml — bỏ qua (dùng toolchain sẵn có của máy)"; exit 0; }
@@ -742,5 +773,5 @@ case "$TASK" in
     guard_ok "$C" || exit 126
     ( cd "$ROOT" && bash -o pipefail -c "$C" ); exit $? ;;
   *)
-    log "task không hợp lệ: '$TASK' (format|lint|typecheck|test|build|gate|gate-fast|gate-par|test-shard|test-combine|test-weights|test-mode|e2e-mode|e2e|require|setup)"; exit 2 ;;
+    log "task không hợp lệ: '$TASK' (format|lint|typecheck|test|build|gate|gate-fast|gate-par|test-shard|test-combine|test-weights|test-mode|e2e-mode|e2e|require|setup|bootstrap)"; exit 2 ;;
 esac

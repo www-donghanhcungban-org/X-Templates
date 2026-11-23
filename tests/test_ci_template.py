@@ -441,7 +441,7 @@ class DevTaskSetupTest(unittest.TestCase):
     def test_unknown_task_lists_setup(self):
         r = subprocess.run(["bash", str(self.tmp / "scripts" / "dev-task.sh"), "nope"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 2)
-        self.assertIn("|require|setup)", r.stderr)
+        self.assertIn("|require|setup|bootstrap)", r.stderr)
 
 
 # (lệnh, là no-op?) — bảng chung cho `is_noop` của dev-task.sh và `xt.gate_noop` (không chứa `'` hay ` #`: nằm trong
