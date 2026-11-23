@@ -1,6 +1,6 @@
 # PROGRESS.md — Khung X-Templates
 
-> Giai đoạn hiện tại: G8 Vận hành & tiến hoá (khung 3.35.0, pha `harden` — D-136) · Cập nhật: 2026-11-22
+> Giai đoạn hiện tại: G8 Vận hành & tiến hoá (khung 3.35.0, pha `harden` — D-136) · Cập nhật: 2026-11-23
 
 ## Đang làm
 
@@ -12,11 +12,11 @@
 - D-457: PLAN factory-A/BE đã lưu kho. `LOOP-ORCH-020`: chỉ tăng agent khi có số. [Đã phân loại 10 nhóm phản hồi công cụ](docs/ops/FEEDBACK-ROUTINE-CHECK.md). Hoãn: T-1690/T-1691 (quét lại SEC-091…099); rà `seeker19110/stored` chờ chủ repo (hạn xét 2026-12-31).
 
 ## Tiếp theo
-1. Đợt 16–17 xong (D-516…D-518, #676–#680): CI `test` 8 shard (#696), ban đầu 6 shard, `test-select` chọn theo lớp, `/complete` chạy lại `doctor` sau `harden`, commit trong worktree cùng repo qua cổng commit. Còn mở: T-3965/AUD-HAR-443 (tệp chưa track kéo test ở cổng commit — làm cùng đợt tách `guard.py` D-142). Nợ: AUD-TEST-131, AUD-HAR-444.
+1. Đợt 16–17 xong (D-516…D-518, #676–#680): CI `test` 8 shard (#696), `test-select` chọn theo lớp, `/complete` chạy lại `doctor` sau `harden`, commit trong worktree cùng repo qua cổng commit. Nợ: AUD-HAR-444.
 1a. Đợt 18 xong (ADR-0082, D-519/D-520, #684, #685, #689, #693): harness Codex sinh từ `.claude/` (`install.py --harness codex`, `--sync-codex`, `tests.test_codex_harness`); guard bảo vệ nó và tệp nối guard host khác, chặn khôi phục tệp hàng rào từ commit cũ và giải nén vào đích máy chặn (AUD-SEC-987…990, 992 đã sửa). Chưa chạy Codex thật. Nợ 🟢: AUD-SEC-991/993, AUD-HAR-446.
-2. **3.36.0**: nâng 3.35.0 vào dự án đích (cần `XT_STEWARD_TOKEN`; X-Scanner 3.29.0 và X-Agents 2.0.0 giữ nguyên); đề xuất stored XT-H-117…139 (research 2026-11-10/16/18); tách `guard.py` theo [PLAN](docs/autopilot/PLAN-guard-split-2026-11-22.md) (D-542, ADR-0093: đo xong, kế T-3987); đưa `pre-push.sh` (kiểm bẫy trước push) vào repo; kiểm máy PROGRESS không lạc hậu (AUD-HAR-436); nợ test AUD-TEST-126.
+2. **Kế hoạch cải tiến đã chốt, CHƯA thực thi — chờ chủ dự án báo**: [PLAN](docs/autopilot/PLAN-improve-2026-11-23.md) (D-544, [đánh giá](research/2026-11-23-improvement-plan-review.md)); đợt 1 là T-3997…T-4011 và T-3555, 3.36.0 cắt ở T-4021; tách sâu `guard.py` ([PLAN](docs/autopilot/PLAN-guard-split-2026-11-22.md), D-542) về đợt 4. Ngoài PLAN: nâng 3.35.0 vào dự án đích (cần `XT_STEWARD_TOKEN`; X-Scanner 3.29.0, X-Agents 2.0.0 giữ nguyên); stored XT-H-117…139; `pre-push.sh`; AUD-HAR-436; AUD-TEST-126.
 3. Hạn: 2026-12-02 bỏ `pull_request_target` khỏi `pr-review.yml`; 2026-12-31 rà stored; **2027-01-21** xét lại hàng rào guard + đánh giá sandbox Bash opt-in (D-331/D-332, ADR-0072) và các chấp nhận AUD-SEC-406/931/943/955/965.
-4. Ruleset `main` đủ 5 check (2026-11-20). Việc của người: xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
+4. Ruleset `main` đủ 5 check (2026-11-20); ruleset tag live chưa có. Việc của người: T-4007; xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
 5. Còn: máy hoá `LOOP-HARNESS-031`, `LOOP-STOP-030`; task `[perf]` trong `loop` (D-041); URL phiên do máy chủ MCP gắn vào thân PR; ép báo "đã đo/chưa đo" cho UI (`LOOP-DESIGN-021`); `xt.pyz` (ADR-0010).
 6. Cách làm nhanh: CI là cổng đầy đủ; PR sổ gộp vào PR sửa (mở draft để steward không merge sớm); một executor cho một tệp nóng.
 7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), quy ước tên định danh ở `scripts/AGENTS.md` — không `noqa`/pragma; nới trần chỉ bằng ADR (ADR-0092).
@@ -34,5 +34,5 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- Mốc `main` `b47cdf08` (#745; tag `v3.35.0` ở `7fc43e74`). Audit delta 22/11 ([báo cáo](docs/ops/AUDIT-REPORT-2026-11-22-delta.md)): 3 🟠 sửa ở #738, 🔴 AUD-HAR-476 gỡ ở #739, nợ 🟢 trả ở #740/#744, mới AUD-TEST-149, XFEAT-054, DOC-331; `release-check` mọi hàng chặn PASS. Merge sau review ở head. Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
+- Mốc `main` `9c014bb2` (#746; tag `v3.35.0` ở `7fc43e74`). Audit delta 22/11 ([báo cáo](docs/ops/AUDIT-REPORT-2026-11-22-delta.md)): 3 🟠 sửa ở #738, 🔴 AUD-HAR-476 gỡ ở #739, nợ 🟢 trả ở #740/#744, mới AUD-TEST-149, XFEAT-054, DOC-331; `release-check` mọi hàng chặn PASS. Merge sau review ở head. Cổng commit đỏ làm mất stage: `git add` lại, kiểm `git show --stat HEAD`. PR cắt bản: review sạch TRƯỚC merge; chữ ký §5 ở PR sau (BASE-REPO-006 chấp nhận GO-NO-GO chờ ký, D-535). "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Subagent dùng scratch riêng dưới `/home/liend` (không `/tmp`: tmpfs, mất khi khởi động lại). Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv 3.15 đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
