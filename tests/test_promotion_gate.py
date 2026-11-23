@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -53,6 +54,8 @@ class ReleaseFixture(unittest.TestCase):
         self.origin = None
         self.prs = []
         self.api_rc = 0
+        self.assets = {}  # tệp release đã công bố (T-4018); rỗng = chưa có release → đường dựng lại
+        self.enterContext(mock.patch.object(dist, "fetch_asset", lambda repo, tag, name: self.assets.get(name)))
         self.enterContext(mock.patch.object(dist, "command", self.dispatch))
 
     def git(self, cwd, *argv):
@@ -69,7 +72,7 @@ class ReleaseFixture(unittest.TestCase):
         if argv[:2] == ("gh", "attestation"):
             self.gh.append(argv)
             file = Path(argv[3])
-            key = file.name.removeprefix("X-Templates-").removesuffix(".tar.gz")
+            key = re.search(r"v\d+\.\d+\.\d+", file.name)[0]  # tiền tố theo tên repo hoặc X-Templates-
             if file.name.endswith(".promotion.json"):
                 receipt = json.loads(file.read_bytes())
                 good = (

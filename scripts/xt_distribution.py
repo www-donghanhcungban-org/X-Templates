@@ -15,7 +15,7 @@ import tarfile
 import tempfile
 from typing import Any
 import unicodedata
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 CANONICAL = "www-donghanhcungban-org/X-Templates"
@@ -120,6 +120,76 @@ def clone_source(temp: Path, repo: str) -> Path:
     return git
 
 
+ASSET_MAX = 64 * 1024 * 1024  # trần một tệp release tải về (archive khung vài MB)
+ASSET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+PREFIX = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)/")
+
+
+def fetch_asset(repo: str, tag: str, name: str) -> bytes | None:
+    """Tải đúng một tệp của release đã công bố (URL công khai, không cần đăng nhập); None = release/tệp chưa có (404).
+    Lỗi khác (mạng, 5xx, quá trần) KHÔNG phải "chưa có release" nên không rơi xuống đường dựng lại: mã 3 (thử lại sau)."""
+    if not SLUG.fullmatch(repo) or not TAG.fullmatch(tag) or not ASSET_NAME.fullmatch(name):
+        raise DistributionError("repo, tag hoặc tên tệp release không hợp lệ", 2)
+    url = f"{GITHUB}{repo}/releases/download/{tag}/{name}"
+    try:
+        with urlopen(Request(url), timeout=60) as response:
+            data: bytes = response.read(ASSET_MAX + 1)
+    except HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise DistributionError(f"{name}: GitHub trả HTTP {exc.code}") from exc
+    except (URLError, OSError) as exc:
+        raise DistributionError(f"{name}: không tải được ({exc})") from exc
+    if len(data) > ASSET_MAX:
+        raise DistributionError(f"{name}: lớn hơn trần {ASSET_MAX} byte", 1)
+    return data
+
+
+def archive_prefix(archive: Path) -> str:
+    """Thư mục gốc duy nhất `<tên repo>-vX.Y.Z/` của archive đã xác minh (WF-DOC-021: tên theo repo, fork đổi tên vẫn đúng);
+    nhiều thư mục gốc, đường dẫn tuyệt đối/`..` hoặc tên không có hậu tố phiên bản → từ chối."""
+    roots: set[str] = set()
+    with tarfile.open(archive, "r:gz") as bundle:
+        for member in bundle:
+            parts = Path(member.name).parts
+            if member.name.startswith("/") or ".." in parts or not parts:
+                raise DistributionError(f"{archive.name}: đường dẫn không an toàn trong archive", 1)
+            roots.add(parts[0])
+    if len(roots) != 1 or not PREFIX.fullmatch(prefix := f"{next(iter(roots))}/"):
+        raise DistributionError(f"{archive.name}: archive cần đúng một thư mục gốc <repo>-vX.Y.Z", 1)
+    return prefix
+
+
+def downloaded_archive(repo: str, tag: str, head: str, temp: Path) -> Path | None:
+    """Archive và biên nhận đã công bố ở release, tải đúng bytes rồi kiểm: biên nhận khớp CHÍNH XÁC {repo, tag, commit, digest
+    của archive tải về, promotion}, và cả hai tệp có attestation của workflow phát hành. None = release chưa có (tag cũ)."""
+    stem = f"{repo.split('/', 1)[1]}-{tag}"
+    files = {name: fetch_asset(repo, tag, name) for name in (f"{stem}.tar.gz", f"{stem}.promotion.json")}
+    if all(data is None for data in files.values()):
+        return None
+    missing = [name for name, data in files.items() if data is None]
+    if missing:
+        raise DistributionError(f"release {tag} thiếu {', '.join(missing)} — không dựng lại thay thế", 1)
+    archive, receipt = (temp / name for name in files)
+    for path, data in zip((archive, receipt), files.values(), strict=True):
+        path.write_bytes(data or b"")
+    expected = {
+        "repo": repo.casefold(),
+        "tag": tag,
+        "commit": head,
+        "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+        "promotion": "approved",
+    }
+    # Đúng từng byte dạng chuẩn mà release-tag.yml ghi (một dòng, không khoảng trắng thừa, xuống dòng cuối) — như đường
+    # dựng lại; khoá thừa, thứ tự khác hay khoảng trắng đều là biên nhận khác bản đã ký.
+    canonical = (json.dumps(expected, separators=(",", ":")) + "\n").encode("ascii")
+    if receipt.read_bytes() != canonical:
+        raise DistributionError(f"{receipt.name}: biên nhận không khớp repo, tag, commit hoặc digest của archive", 1)
+    verify_signature(temp, repo, archive)
+    verify_signature(temp, repo, receipt)
+    return archive
+
+
 def verified_archive(git: Path, repo: str, tag: str, temp: Path, promotion: bool = False) -> tuple[str, Path]:
     if not TAG.fullmatch(tag):
         raise DistributionError("tag cần có dạng vX.Y.Z", 2)
@@ -134,6 +204,10 @@ def verified_archive(git: Path, repo: str, tag: str, temp: Path, promotion: bool
     version = command(git, "git", "show", f"{head}:VERSION", check=False)
     if version.returncode or version.stdout.strip() != tag[1:]:
         raise DistributionError(f"VERSION ở {tag} không khớp tên tag", 1)
+    published = downloaded_archive(repo, tag, head, temp)
+    if published is not None:  # đúng bytes đã attest (T-4018); biên nhận cũng đã kiểm nên `promotion` luôn thoả
+        return head, published
+    # Đường lùi duy nhất: release chưa có (tag trước T-4017) — dựng lại và đòi attestation cho đúng bytes dựng lại.
     artifact = temp / f"X-Templates-{tag}.tar.gz"
     command(git, "git", "archive", "--format=tar.gz", f"--prefix=X-Templates-{tag}/", "-o", str(artifact), head)
     verify_signature(temp, repo, artifact)
@@ -221,7 +295,7 @@ def verify_signature(temp: Path, repo: str, artifact: Path) -> None:
 
 def matches_checkout(src: Path, tag: str, archive: Path) -> bool:
     """Git index flags and checkout filters can hide differences. Read the actual files that install.py will copy."""
-    prefix = f"X-Templates-{tag}/"
+    prefix = archive_prefix(archive)
     paths = set(command(src, "git", "ls-files", "-z").stdout.split("\0")[:-1])
     with tarfile.open(archive, "r:gz") as bundle:
         for member in bundle:
@@ -367,7 +441,7 @@ def publish_upgrade(base: Path, repo: str, tag: str, head: str, archive: Path, t
     # Run only installer bytes from the verified archive. Never execute the default branch or a PR checkout upstream.
     with tarfile.open(archive, "r:gz") as bundle:
         bundle.extractall(temp / "release", filter="data")
-    release = temp / "release" / f"X-Templates-{tag}"
+    release = temp / "release" / archive_prefix(archive).rstrip("/")
     for pack in list(packs) or [None]:
         options = (["--pack", pack] if pack is not None else []) + install_options(manifest)
         command(project, sys.executable, str(release / "scripts/install.py"), ".", *options, env=local_env)
