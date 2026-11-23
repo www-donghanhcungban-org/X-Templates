@@ -6,6 +6,18 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+## [3.36.0] - 2026-11-23
+
+Bản thực thi [PLAN cải tiến 2026-11-23](docs/autopilot/PLAN-improve-2026-11-23.md) đợt 1–2: máy cưỡng chế rà sớm lớp tác động
+tức thì ([ADR-0095](docs/adr/0095-immediate-effect-early-review.md)) và quyết định chặn merge ([ADR-0096](docs/adr/0096-merge-verdict-enforcement.md));
+dấu review `v2` gắn phạm vi; mẫu ruleset tag tách tạo khỏi sửa/xoá; sổ lát đầu tiên; lệnh triển khai bỏ biến khởi động
+trình thông dịch và có `deploy_env_pass`; release lưu archive và biên nhận để nơi dùng tải đúng bytes; `release-check`
+tách ba trạng thái (schema 4). **Dự án đích:** nâng khung bằng `install.py`; thêm `deploy_env_pass` vào `xt.yaml` nếu bật
+`deploy_envs`; PR sửa hook, workflow, ruleset hoặc `xt.yaml` nay cần một lượt review ở head (tắt bằng `immediate_review: off`);
+workflow, script tự đọc `promotion.state == "pending_human"` hay `release-check` schema 3 cần nhận thêm `pending_signoff` và
+schema 4 (đã có trong `xt_release_ops`/`xt_flow`); nâng cả `pr-steward.yml` để nhận dấu review `v2`. Còn mở: áp ruleset tag
+live và cấp App phát hành (`T-4007`, cần chủ repo), baseline 20 PR (`T-4010`).
+
 ### Added
 
 - `release-tag.yml` lưu archive và biên nhận promotion vào release theo phiên bản (T-4017): sau khi đẩy tag, tạo release **nháp** có đủ `<repo>-vX.Y.Z.tar.gz` và `<repo>-vX.Y.Z.promotion.json`, tải lại và đối chiếu digest (tải về = tệp đã attest = trường `sha256` của biên nhận), rồi mới công bố; không ghi đè hay xoá. Tag đã có (kể cả tag cũ trước bản này) chỉ báo trạng thái release, không chặn và không dựng lại archive (digest sẽ khác bản đã attest). Assets chỉ bất biến khi repo bật immutable releases — cài đặt quản trị cần kiểm (research/2026-11-23-tag-ruleset-release-identity.md). Phía nơi dùng tải đúng bytes là `T-4018`. **Dự án đích:** workflow phát hành chép từ khung cần nâng để có bước này; thiếu thì tag vẫn phát hành như cũ, chỉ chưa có release.
