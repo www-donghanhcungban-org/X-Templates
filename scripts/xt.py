@@ -14704,8 +14704,41 @@ ARTIFACTS_KEY = "release_artifacts"  # đường file cách nhau bởi khoảng 
 APPROVAL_DAYS_KEY = "release_approval_days"  # chữ ký GO-NO-GO còn hiệu lực bao nhiêu ngày (mặc định 30)
 APPROVAL_DAYS = 30
 # schema của `release-check --json`: 3 = thêm subject/artifacts/results/promotion, giữ trường cũ; `subject.content`
-# (D-389) chỉ thêm trường — không tăng (người đọc schema 3 bỏ qua khoá lạ)
-RELEASE_SCHEMA = 3
+# (D-389) chỉ thêm trường — không tăng (người đọc schema 3 bỏ qua khoá lạ). 4 (T-4019) = thêm `states` (kiểm kỹ thuật ·
+# nội dung đã ký · đã phân phối), `promotion.signer`, và tên `pending_signoff` khi agent là người ký; bên đọc nhận cả schema 3
+# và tên cũ `pending_human` một chu kỳ (`RELEASE_SCHEMAS`, `promotion_pending`).
+RELEASE_SCHEMA = 4
+RELEASE_SCHEMAS = (3, 4)
+PROMO_PENDING_SIGNOFF = "pending_signoff"  # chờ dòng ký §5 mà agent ký được (`release_signoff: agent`, ADR-0074)
+PROMO_PENDING_HUMAN = "pending_human"  # chờ người ký; cũng là tên cũ của mọi ca chờ ký (schema 3)
+
+
+def promotion_pending(state: object) -> bool:
+    """`promotion.state` là "chờ chữ ký" — tên mới `pending_signoff` hoặc tên cũ `pending_human` (bên đọc nhận cả hai)."""
+    return state in (PROMO_PENDING_SIGNOFF, PROMO_PENDING_HUMAN)
+
+
+def release_states(rows: List[Dict[str, str]], fails: List[str], promotion: Dict[str, Any]) -> Dict[str, Any]:
+    """Ba trạng thái tách bạch của một ứng viên (T-4019): `technical` (hàng BLOCKER không FAIL) · `signed` (nội dung đã ký
+    đúng vân tay — suy từ `promotion`, trạng thái lạ không bao giờ là `signed`) · `distributed` (hàng `deploy`). Chỉ đọc kết
+    quả đã tính; không dùng exit code."""
+    state = promotion.get("state")
+    signed = (
+        "signed"
+        if state == "approved"
+        else "rejected"
+        if state == "rejected"
+        else "pending"
+        if promotion_pending(state)
+        else "not_ready"
+    )
+    deploy = next((r["result"] for r in rows if r["id"] == "deploy"), "")
+    distributed = {"PASS": "deployed", "FAIL": "not_distributed"}.get(deploy, "not_configured")
+    return {
+        "technical": {"state": "failed" if fails else "passed", "fails": list(fails)},
+        "signed": {"state": signed, "reasons": list(promotion.get("reasons") or [])},
+        "distributed": distributed,
+    }
 
 
 SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
@@ -15120,10 +15153,11 @@ def _approval_problem(base: Path, rel: str, text: str, subject: Dict[str, Any]) 
 
 def _release_promotion(base: Path, fails: List[str], human: List[str], subject: Dict[str, Any]) -> Dict[str, Any]:
     """`blocked` (hàng BLOCKER FAIL) · `rejected` (một dòng ký từ chối ở bất kỳ GO-NO-GO nào của VERSION) ·
-    `pending_human` (còn việc người, chữ ký thiếu/không phải GO/hết hạn/chưa gắn subject) · `approved`. Máy không nâng
-    `pending_human` (ADR-0068 câu 3): "đã duyệt" là một dòng ký §5 — của người, hoặc của agent qua `release-sign` khi
-    dự án khai `release_signoff: agent` (ADR-0074); `by` của `approved` liệt kê ô tên đã ký (`agent` = agent ký). Dòng
-    ô tên `agent` khi khoá không có hiệu lực (`release_agent_signoff`) → `pending_human` (review #480)."""
+    chờ ký (còn việc người, chữ ký thiếu/không phải GO/hết hạn/chưa gắn subject) · `approved`. Chờ ký tên `pending_signoff`
+    khi agent là người ký (`release_signoff: agent` có hiệu lực, ADR-0074), `pending_human` khi cần người; `signer` nói rõ
+    (T-4019; bên đọc nhận cả hai tên — `promotion_pending`). Máy không nâng chờ ký (ADR-0068 câu 3): "đã duyệt" là một dòng
+    ký §5 — của người, hoặc của agent qua `release-sign`; `by` của `approved` liệt kê ô tên đã ký (`agent` = agent ký).
+    Dòng ô tên `agent` khi khoá không có hiệu lực (`release_agent_signoff`) → `pending_human` (review #480)."""
     if fails:
         return {"state": "blocked", "reasons": fails}
     docs = _signed_go_no_go(base)
@@ -15132,30 +15166,42 @@ def _release_promotion(base: Path, fails: List[str], human: List[str], subject: 
     if rejected:
         return {"state": "rejected", "reasons": rejected}
     if human:
-        return {"state": "pending_human", "reasons": human}
+        return _pending_signoff(base, human)
     if not docs:
-        return {"state": "pending_human", "reasons": ["chưa có GO-NO-GO đã ký §5 cho VERSION — người ký"]}
+        return _pending_signoff(base, ["chưa có GO-NO-GO đã ký §5 cho VERSION — người ký"])
     pending = [p for p in problems if p]
     if pending:
-        return {"state": "pending_human", "reasons": pending}
+        return _pending_signoff(base, pending)
     by = sorted({name for _, text in docs for name in _go_signers(text)})
     if any(name.casefold() == RELEASE_AGENT_NAME for name in by) and not release_agent_signoff(base, fresh=True):
-        return {
-            "state": "pending_human",
-            "reasons": [
+        return _pending_signoff(
+            base,
+            [
                 f"dòng ký ô tên `{RELEASE_AGENT_NAME}`: `{RELEASE_SIGNOFF_KEY}: agent` chưa có hiệu lực (cần ở cả xt.yaml"
                 " cây làm việc lẫn nhánh chính, ADR-0074) — người ký"
             ],
-        }
+            signer="human",
+        )
     result: Dict[str, Any] = {"state": "approved", "reasons": [rel for rel, _ in docs], "by": by}
     if RELEASE_AGENT_NAME in (name.casefold() for name in by):
         scale = (_blueprint_front(base, RELEASE_SIGN_BLUEPRINT) or ("S", "", ""))[0] or "L"
         if scale != "S":
             problem = _simulated_sign_problem(base, docs, scale)
             if problem:
-                return {"state": "pending_human", "reasons": [problem]}
+                return _pending_signoff(base, [problem])
             result["simulated"] = True
     return result
+
+
+def _pending_signoff(base: Path, reasons: List[str], signer: str = "") -> Dict[str, Any]:
+    """Kết quả "chờ ký": `signer` mặc định theo `release_signoff` (agent có hiệu lực → agent ký được); tên trạng thái theo
+    người ký để không gọi việc của agent là "human"."""
+    who = signer or ("agent" if release_agent_signoff(base) else "human")
+    return {
+        "state": PROMO_PENDING_SIGNOFF if who == "agent" else PROMO_PENDING_HUMAN,
+        "reasons": reasons,
+        "signer": who,
+    }
 
 
 def _go_sign_cells(text: str) -> Iterator[List[str]]:
@@ -15269,6 +15315,7 @@ def release_check(base: Path, blueprint: str, status: str, unchecked_must: str =
     fails = [r["id"] for r in rows if r["result"] == "FAIL" and r["level"] == "BLOCKER"]
     waived = _human_na_waivers(base, rows, subject)
     human = [r["id"] for r in rows if r["result"] == "N/A" and r["level"] == "BLOCKER" and r["id"] not in waived]
+    promotion = _release_promotion(base, fails, human, subject)
     return {
         "schema": RELEASE_SCHEMA,
         "head": head,
@@ -15282,7 +15329,8 @@ def release_check(base: Path, blueprint: str, status: str, unchecked_must: str =
         "subject": subject,
         "artifacts": arts,
         "results": [res for _, res in runs.values() if res],
-        "promotion": _release_promotion(base, fails, human, subject),
+        "promotion": promotion,
+        "states": release_states(rows, fails, promotion),
     }
 
 

@@ -212,7 +212,7 @@ def release_rows(doc: Any) -> dict[str, Doc]:
     """Kiểm schema, đủ các hàng nền và kết luận từ cùng một snapshot. Caller đối chiếu ứng viên riêng."""
     if (
         not isinstance(doc, dict)
-        or doc.get("schema") != xt.RELEASE_SCHEMA
+        or doc.get("schema") not in xt.RELEASE_SCHEMAS
         or not isinstance(doc.get("rows"), list)
         or xt._deploy_utc(doc.get("at")) is None
     ):

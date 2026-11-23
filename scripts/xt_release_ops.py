@@ -34,6 +34,7 @@ class Core(ops_setup.Core, Protocol):
     _release_tree: Callable[[Path], tuple[dict[str, str], str | None, bool]]
     _signed_go_no_go: Callable[[Path], list[tuple[str, str]]]
     _xt_keys: Callable[[Path], dict[str, str]]
+    promotion_pending: Callable[[object], bool]
     release_check: Callable[..., Doc]
 
 
@@ -106,7 +107,7 @@ def approved_for_tag(core: Core, base: Path, main: Path, target: str) -> bool:
     if release["head"] != target or subject["head"] != target or not subject["content"]:
         raise ValueError("release-check chưa xác nhận đúng SHA và nội dung ứng viên")
     promotion = release["promotion"]
-    if release["go"] and promotion["state"] == "pending_human" and release["human"] == ["go_no_go"]:
+    if release["go"] and core.promotion_pending(promotion["state"]) and release["human"] == ["go_no_go"]:
         print(f"v{version} đang chờ chữ ký GO-NO-GO. Khi PR ký duyệt merge, workflow sẽ kiểm lại.")
         return False
     if release["verdict"] != "GO" or promotion["state"] != "approved":

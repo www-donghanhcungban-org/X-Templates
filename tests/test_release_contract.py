@@ -681,7 +681,9 @@ class ReleaseArtifactTest(ReleaseCase):
         self.setup_xt(acceptance="test -d .")
         rc, d = self.release()
         self.assertNotIn("artifacts", self.by_id(d))
-        self.assertEqual((d["schema"], d["artifacts"], d["subject"]["digest"]), (3, [], None))
+        self.assertEqual(
+            (d["schema"], d["artifacts"], d["subject"]["digest"]), (4, [], None)
+        )  # 4: thêm `states` (T-4019)
         self.assertEqual(d["subject"]["head"], d["head"])
         self.assertEqual(d["subject"]["tree"], xt.tree_fingerprint(self.repo))
 

@@ -64,7 +64,9 @@ def promotion(report: Path) -> str:
     if not data.get("subject", {}).get("digest"):
         return "subject.digest trống"
     state = data.get("promotion", {}).get("state")
-    return "" if state in ("pending_human", "blocked") else f"promotion = {state!r} khi chưa có chữ ký"
+    return (
+        "" if state in ("pending_signoff", "pending_human", "blocked") else f"promotion = {state!r} khi chưa có chữ ký"
+    )
 
 
 def main(argv: list[str]) -> int:

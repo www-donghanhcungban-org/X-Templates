@@ -66,7 +66,10 @@ class ScaleSignTest(fixture.SignoffRepo):
         result = xt._release_promotion(self.proj, [], [], subject)
         self.assertEqual((result["state"], result["by"], result.get("simulated")), ("approved", ["agent"], True))
         self.doc.write_text(doc.replace("A-001, A-002", "A-999"))
-        self.assertEqual(xt._release_promotion(self.proj, [], [], subject)["state"], "pending_human")
+        # agent là người ký (`release_signoff: agent` có hiệu lực): chờ ký không còn gọi là "human" (T-4019)
+        pending = xt._release_promotion(self.proj, [], [], subject)
+        self.assertEqual((pending["state"], pending["signer"]), ("pending_signoff", "agent"))
+        self.assertTrue(xt.promotion_pending(pending["state"]))
 
     def test_missing_or_waived_operational_evidence_and_partial_ids_refuse(self):
         self.prepare()
