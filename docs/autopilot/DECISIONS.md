@@ -903,3 +903,10 @@
 - Chọn: ID mới LOOP-DESIGN-029 SHOULD
 - Lý do (tiêu chí chất lượng cuối): 020 mô tả PR chồng cần đẩy nhiều nhánh; trường hợp một nhánh được phép là khác; một chủ đề một nhà, ID ổn định; SHOULD vì nhiều dự án đẩy được nhiều nhánh
 - Đường lùi: git revert commit của PR
+
+### D-571 · 2026-11-24T11:29:42+00:00 · Báo cáo đánh giá ngoài 2026-11-24 (UI/UX + bằng chứng): xử lý thế nào để nâng trần dự án
+
+- Phương án: (1) Một PLAN năm đợt theo thứ tự bằng chứng đúng → ranh giới thực thi → số đo thật → quy trình UI/UX có pilot → lan truyền và nợ lõi · (2) Chỉ ghi các phát hiện vào sổ audit, sửa dần theo hạn chấp nhận hiện có · (3) Làm pilot UI/UX trước, sửa khoảng hở bằng chứng sau
+- Chọn: Một PLAN năm đợt theo thứ tự bằng chứng đúng → ranh giới thực thi → số đo thật → quy trình UI/UX có pilot → lan truyền và nợ lõi
+- Lý do (tiêu chí chất lượng cuối): Đã tái hiện phát hiện ở b82e369 (SBOM/VEX sai kiểu exit 0, sổ lát 3/9 nguồn ghi, pack strict không đòi gói); pilot đo trên bộ kiểm báo sạch sai hoặc sổ thiếu sự kiện thì số đo không tin được, nên đúng và an toàn đi trước; đợt UI/UX nối cổng có sẵn vào sản phẩm thay vì thêm luật
+- Đường lùi: Bỏ PLAN-ceiling-2026-11-24.md bằng git revert; các mục audit giữ hạn cũ
