@@ -1,6 +1,6 @@
 # ADR-0098: Bảng bậc model theo nhà cung cấp và vai trò của từng agent, đồng bộ mọi harness
 
-- **Trạng thái:** Đã chấp nhận ngày 2026-11-24 (D-558, D-559, D-560); sửa đổi cùng ngày bởi D-568 (mục "Sửa đổi D-568"); triển khai theo hai lát (R1 bảng bậc, agent `explore`, tài liệu, đồng bộ Codex; R2 máy nhận bậc của nhà cung cấp khác và khoá `xt.yaml`).
+- **Trạng thái:** Đã chấp nhận ngày 2026-11-24 (D-558, D-559, D-560); sửa đổi cùng ngày bởi D-569 (mục "Sửa đổi D-569"); triển khai theo hai lát (R1 bảng bậc, agent `explore`, tài liệu, đồng bộ Codex; R2 máy nhận bậc của nhà cung cấp khác và khoá `xt.yaml`).
 - **Làm rõ:** ADR-0029 (hai tầng executor), ADR-0044 và D-161 (reviewer năng lực cao hơn người viết), ADR-0061 (cấu hình theo loại việc), ADR-0082 (harness Codex sinh từ `.claude/`), ADR-0097 (đích tự đặt tên, hợp đồng công khai).
 - **Căn cứ:** [báo cáo vai trò model](../../research/2026-11-24-model-roles-haiku-and-top-minus-one.md) (giá, ID và điểm chuẩn đọc 2026-11-24; ước lượng chi phí chưa phải số đo).
 
@@ -36,7 +36,7 @@ Giữ `explore` ở Haiku khi thí nghiệm nhỏ đạt: 10 câu tra cứu, m�
 - Gemini CLI đã bị thay bằng Antigravity CLI cho một số gói từ 2026-06-18 (nguồn báo cáo, chưa tự kiểm): adapter Gemini cần kiểm lại trước khi dựa vào.
 - Xét lại khi: số đo `--cost` cho thấy tiết kiệm lớn hơn hoặc nhỏ hơn dự kiến; nhà cung cấp đổi thang bậc; Codex hay Gemini công bố thứ bậc chính thức.
 
-## Sửa đổi D-568 (2026-11-24)
+## Sửa đổi D-569 (2026-11-24)
 
 Chủ dự án chia việc theo độ khó: lập kế hoạch và việc phức tạp ở Opus 5.5, việc đơn giản ở Sonnet 5.5, việc cơ học ở Haiku 5.5. Thay hai điểm của mục Quyết định, phần còn lại giữ nguyên:
 

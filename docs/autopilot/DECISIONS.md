@@ -883,7 +883,14 @@
 - Lý do (tiêu chí chất lượng cuối): Đa số ý chỉ có nguồn là đề xuất của catalog stored chưa đối chiếu nguồn gốc, nên không thể bắt buộc dự án đích. Mức theo quan hệ với ID có sẵn giúp SHOULD vẫn có căn cứ nội bộ, và mọi ID viện dẫn đã được máy kiểm là có thật. WF-CI-029 chỉ có nguồn stored và không bổ sung ID nào nên hạ xuống MAY. Riêng AI-PROTO-020 có nguồn chính thức (changelog MCP 2026-07-28) nhưng chỉ viết điều changelog nói.
 - Đường lùi: git revert commit của PR; ID chưa được ID nào khác viện dẫn ngược
 
-### D-568 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
+### D-568 · 2026-11-24T09:14:53+00:00 · Nâng skill ui-verify và adr thay vì thêm skill mới
+
+- Phương án: (1) nâng hai skill hiện có · (2) thêm skill mới · (3) giữ nguyên
+- Chọn: nâng hai skill hiện có
+- Lý do (tiêu chí chất lượng cuối): XC-DOCAI-025 đòi mỗi skill mới có câu mẫu và description không trùng; ý stored phần lớn đã có; description giữ nguyên nên định tuyến không đổi
+- Đường lùi: git revert commit nâng skill
+
+### D-569 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
 
 - Phương án: (1) Giữ ADR-0098: phiên chính lập PLAN/SPEC ở Fable, Haiku chỉ cho tra cứu chỉ đọc · (2) Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
 - Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
