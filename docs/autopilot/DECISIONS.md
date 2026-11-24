@@ -805,3 +805,10 @@
 - Chọn: Chỉ sửa SHA ở sổ, không thêm PLAN mới (tránh nợ lặp vô hạn từ dòng Gate)
 - Lý do (tiêu chí chất lượng cuối): Mỗi PLAN mới có dòng Gate tính là mã chạy được, tạo nợ sau mốc; lát tiếp nối T-4104 (cùng mục tiêu mốc quét), không thêm dòng lệnh
 - Đường lùi: Đặt SHA nhóm về bcd1c25a
+
+### D-557 · 2026-11-24T01:56:52+00:00 · Cách tách khung khỏi dự án đích (yêu cầu chủ dự án 2026-11-24)
+
+- Phương án: (1) A. Giữ nguyên, vá nhỏ · (2) B. Artefact pyz ghim digest + launcher mang tên đích + hợp đồng có schema, kèm B1-B7 · (3) C. Gói PyPI và uvx · (4) D. Plugin host
+- Chọn: B. Artefact pyz ghim digest + launcher mang tên đích + hợp đồng có schema, kèm B1-B7
+- Lý do (tiêu chí chất lượng cuối): Đích không giữ mã khung; digest và attestation kiểm được; zip stored không đổi độ trễ hook (số đo P0: 459 vs 463 ms ở 3.15, 370 vs 361 ms ở 3.13); C đòi uv và mạng, D vắng ở phiên cloud (tài liệu), A không đạt yêu cầu; mặc định giữ tên cũ nên không phá 7 đích đã đăng ký
+- Đường lùi: Giữ layout cây (--layout tree); gỡ xt_pack.py và các test đóng băng nếu bỏ hướng này
