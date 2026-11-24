@@ -20,7 +20,11 @@ argument-hint: "<URL localhost | trang/luồng cần kiểm>"
    kiểm kết quả hiển thị. Bề rộng **1280** và **375** (thêm **320** cho kiểm cuộn ngang).
 5. Mỗi bước có trạng thái thay đổi: chụp ảnh vào `docs/evidence/<T-NNN>/` (tên có bề rộng); `.autopilot/` chỉ máy ghi — guard chặn ghi tay.
 6. Đọc **console** (0 lỗi mới), **mạng** (không 4xx/5xx ngoài dự kiến), thời gian tải cảm nhận được.
-7. A11y nhanh: điều hướng bằng bàn phím tới mọi điều khiển, focus nhìn thấy, nhãn form, tương phản; có axe thì chạy.
+7. A11y nhanh: điều hướng bằng bàn phím tới mọi điều khiển, focus nhìn thấy, nhãn form, tương phản; có axe thì chạy với tag `wcag22aa`
+   (`UX-A11Y-001`). WCAG 2.2: vùng chạm ≥ 24 px (`UX-A11Y-006`) và tiêu điểm không bị che.
+7b. Tuỳ chọn người dùng: giả lập `reducedMotion: 'reduce'` (chuyển động tắt hoặc giảm — `UX-STATE-020`), `forcedColors: 'active'` và
+   `contrast: 'more'` (không mất viền/icon — `UX-A11Y-026`, `UX-DS-017`).
+7c. Quét tĩnh nguồn giao diện (chỉ đọc, thoát 0/1): `<XT> static-check motion <css>` (reduced-motion, `transition: all`, chớp), `tokens` (`var(--x)` chưa định nghĩa, màu hard-code; cần `--opt tokens=<tệp token>`) và `nfc` (chuỗi tiếng Việt phải NFC).
 
 ## Chuyển thành test
 8. Mỗi luồng đã kiểm tay thành test Playwright tất định trong repo (không đưa bước agent sống vào job required — `QA-E2E-027`): locator theo vai trò,
@@ -28,4 +32,5 @@ argument-hint: "<URL localhost | trang/luồng cần kiểm>"
 9. Chạy test mới bằng lệnh `e2e` của `xt.yaml`; `xt.py loop record` với exit code.
 
 ## Báo cáo
-Luồng · bề rộng · ảnh (đường dẫn) · lỗi console/mạng · vấn đề a11y · test đã thêm + exit code. Không khai "đẹp/ổn" khi chưa có ảnh và test.
+Mỗi kiểm có **một** trong bốn trạng thái: **Pass** · **Fail** · **Not tested** (chưa chạy) · **N/A** (không áp dụng, kèm lý do) — không ghi Pass cho điều chưa chạy (`UX-A11Y-001`). Mỗi phát hiện kèm gói bằng chứng để người khác tái hiện: ảnh (đường dẫn), bề rộng, các bước, vai trò/nhãn của phần tử.
+Luồng · bề rộng · ảnh · lỗi console/mạng · a11y · kết quả quét tĩnh · test đã thêm + exit code. Không khai "đẹp/ổn" khi chưa có ảnh và test.

@@ -882,3 +882,10 @@
 - Chọn: Chỉ SHOULD hoặc MAY: SHOULD khi bổ sung trực tiếp cho một ID có sẵn và viện dẫn ID đó, MAY khi nguồn chỉ là đề xuất của catalog stored; không có MUST
 - Lý do (tiêu chí chất lượng cuối): Đa số ý chỉ có nguồn là đề xuất của catalog stored chưa đối chiếu nguồn gốc, nên không thể bắt buộc dự án đích. Mức theo quan hệ với ID có sẵn giúp SHOULD vẫn có căn cứ nội bộ, và mọi ID viện dẫn đã được máy kiểm là có thật. WF-CI-029 chỉ có nguồn stored và không bổ sung ID nào nên hạ xuống MAY. Riêng AI-PROTO-020 có nguồn chính thức (changelog MCP 2026-07-28) nhưng chỉ viết điều changelog nói.
 - Đường lùi: git revert commit của PR; ID chưa được ID nào khác viện dẫn ngược
+
+### D-568 · 2026-11-24T09:14:53+00:00 · Nâng skill ui-verify và adr thay vì thêm skill mới
+
+- Phương án: (1) nâng hai skill hiện có · (2) thêm skill mới · (3) giữ nguyên
+- Chọn: nâng hai skill hiện có
+- Lý do (tiêu chí chất lượng cuối): XC-DOCAI-025 đòi mỗi skill mới có câu mẫu và description không trùng; ý stored phần lớn đã có; description giữ nguyên nên định tuyến không đổi
+- Đường lùi: git revert commit nâng skill
