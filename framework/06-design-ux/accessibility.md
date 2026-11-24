@@ -3,7 +3,7 @@ title: Tiếp cận (a11y) theo WCAG 2.2 AA và nền tảng mobile
 kind: module
 prefix: UX-A11Y
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-04
+updated: 2026-11-23
 ---
 
 # Tiếp cận (a11y) theo WCAG 2.2 AA và nền tảng mobile
@@ -36,7 +36,7 @@ updated: 2026-11-04
 
 ## Checklist
 
-- [ ] `UX-A11Y-001` **MUST** Mọi trang/màn hình qua quét axe-core với tag `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa` không có vi phạm (`violations.length === 0`). → Kiểm: `@axe-core/playwright` trong mọi smoke test E2E; CI đỏ nếu vi phạm. · Nguồn: WCAG 2.2 AA
+- [ ] `UX-A11Y-001` **MUST** Mọi trang/màn hình qua quét axe-core với tag `wcag2a`, `wcag2aa`, `wcag21aa`, `wcag22aa` không có vi phạm (`violations.length === 0`). → Kiểm: `@axe-core/playwright` trong mọi smoke test E2E; CI đỏ nếu vi phạm; công cụ bên thứ ba dùng làm cổng (Pa11y, Pa11y CI…) phải bật đủ các tag trên — đọc cấu hình tag thực sự chạy, không tin nhãn "WCAG 2.2" (đọc mã, chưa chạy: Pa11y và Pa11y CI chỉ bật tag axe 2.0 và 2.1); báo cáo phân Pass / Fail / Not Tested / Not Applicable, mục `incomplete` ghi Not Tested chứ không tính Pass ([`UX-A11Y-017`](accessibility.md)). · Nguồn: WCAG 2.2 AA
 - [ ] `UX-A11Y-002` **MUST** Tương phản chữ ≥ 4.5:1 (chữ lớn ≥ 3:1 — chữ lớn chỉ khi ≥ 24 px, hoặc ≥ 18,66 px **và** đậm; chữ thường 18–23 px vẫn cần 4.5:1); thành phần UI và trạng thái (viền input, icon, focus) ≥ 3:1 với nền kề. → Kiểm: `xt.py contrast` trên token (`UX-DS-003`) + axe rule `color-contrast` ở cả hai theme. · Nguồn: WCAG 2.2 SC 1.4.3, 1.4.11
 - [ ] `UX-A11Y-003` **MUST** Toàn bộ chức năng dùng được bằng bàn phím; không bẫy focus (trừ dialog modal có Esc để thoát). → Kiểm: E2E luồng chính chỉ dùng `keyboard.press('Tab'|'Enter'|'Escape')`; axe rule `focus-order-semantics`. · Nguồn: WCAG 2.2 SC 2.1.1, 2.1.2
 - [ ] `UX-A11Y-004` **MUST@L** Phần tử nhận focus không bị che hoàn toàn bởi header/footer dính hay banner cookie. → Kiểm: E2E Tab qua trang có sticky header, `boundingBox` của phần tử focus không nằm trọn dưới sticky element. · Nguồn: WCAG 2.2 SC 2.4.11

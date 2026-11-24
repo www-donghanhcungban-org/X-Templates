@@ -6,8 +6,13 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+### Added
+
+- `SEC-SUPPLY-035` **SHOULD**: đọc nội dung `.github/workflows` và script CI của repo bên thứ ba trước khi clone, fork, dùng làm template hoặc vendor; gắn cờ `curl` tới IP trần, `GITHUB_TOKEN`/secrets trong job đọc cây mã, mẫu khoá, tạo gist; fork tắt Actions cho tới khi xem xong (stored XT-H-150). **Dự án đích:** chạy lại `install.py`/`xt.py compose` để blueprint nhận ID mới; SHOULD vào `BLUEPRINT-BACKLOG.md`.
+
 ### Changed
 
+- Bổ sung ví dụ và vế kiểm vào ID hiện có từ stored XT-H-148…158, không đổi mức: `CMP-LIC-004` (LICENSE mâu thuẫn manifest), `SEC-SUPPLY-027` (đọc lại LICENSE tại commit ghim, hạn 30 ngày, kiểu đọc), `SEC-SUPPLY-025` (repository ID ổn định), `SEC-INFRA-027` (thu nội dung, TLS), `BASE-SEC-010` (`auth_basic off` theo `location`), `UX-A11Y-001` (tag thực chạy, bốn trạng thái), `AI-EVAL-004` (judged không làm cổng), `FE-SEC-001` (giao diện do model sinh). Ghi chú và đính chính đối chiếu cũ: [research/2026-11-23-stored-delta-xt-h-148-158.md](research/2026-11-23-stored-delta-xt-h-148-158.md).
 - Bổ sung ví dụ và vế kiểm vào ID hiện có từ stored XT-H-159…161, không đổi mức, không thêm ID: `SEC-INFRA-027` (egress mặc định của `autoevals`), `CMP-LIC-004` (open-core: `ee/`, header Enterprise), `CMP-AUDIT-002` (test từ chối UPDATE/DELETE bảng audit), `AI-AGENTIC-008` (test đi vòng cổng duyệt không qua prompt). Ghi chú: [research/2026-11-23-stored-delta-ceiling.md](research/2026-11-23-stored-delta-ceiling.md). **Dự án đích:** chạy lại `install.py`; không có ID mới nên blueprint không đổi.
 
 ## [3.36.0] - 2026-11-23
