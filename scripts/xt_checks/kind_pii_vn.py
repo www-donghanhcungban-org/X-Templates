@@ -25,6 +25,7 @@ PHONE = re.compile(_B + r"(?:\+?84|0)[35789]\d{8}" + _E)
 EMAIL = re.compile(r"[\w.+-]{1,64}+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
 PAIR = re.compile(r"""(?<![\w-])["']?([\w-]++)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;}]+)""")
 ALLOW = re.compile(r"xt-allow:([\sA-Z0-9,]*)")
+LINE_BREAK = re.compile(r"\r\n|\r|\n")
 DOC_DOMAINS = ("example.com", "example.org", "example.net", "test", "invalid", "localhost")
 SENSITIVE = frozenset({"cccd", "cmnd", "sodienthoai", "sdt", "phone", "email", "hoten", "diachi", "ngaysinh"})
 HIDDEN = re.compile(r"x{3,}|\*|\[redacted\]", re.IGNORECASE)
@@ -96,8 +97,9 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
             continue
         delim = "\t" if path.suffix.lower() == ".tsv" else ","
         cols: list[int] | None = None
-        for number, line in enumerate(text.split("\n"), 1):  # đếm dòng theo `\n` như editor và `grep -n`
-            line = line.removesuffix("\r")
+        # Ngắt dòng `\r\n`, `\r` hoặc `\n` (CSV xuất từ Mac cũ chỉ có `\r`: tách theo `\n` làm cả tệp thành một dòng và bỏ lọt
+        # cột nhạy cảm — rà #776 lượt hai 🟠); U+2028/form feed không tách dòng như editor và `grep -n`.
+        for number, line in enumerate(LINE_BREAK.split(text), 1):
             hits = _hits(line, allowed)
             if path.suffix.lower() in (".csv", ".tsv") and line.strip():
                 cols, extra = _columns(line, delim, cols)

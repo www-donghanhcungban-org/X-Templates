@@ -170,7 +170,8 @@ class SecondRoundTest(TmpTest):
             ("all", lambda n: "a{transition:all}" * (n // 17)),
         ):
             with self.subTest(shape=name):
-                assert_not_quadratic(self, lambda n, b=build: self.run_css(b(n)), 100000)
+                # N lớn: đếm dòng bằng count('\n') cho mỗi phát hiện chỉ lộ ra từ cỡ này (rà #776 lượt hai: N=100000 để lọt)
+                assert_not_quadratic(self, lambda n, b=build: self.run_css(b(n)), 400000)
 
     def test_motion_still_sees_vendor_prefixed_and_numbers_lines(self):
         path = self.put("v.css", "a{}\nb{ -webkit-animation: spin 1s linear }\n")
@@ -188,7 +189,27 @@ class SecondRoundTest(TmpTest):
         self.assertEqual(
             sorted((Path(f.path).name, f.code) for f in found), [("big.json", "SBM000"), ("utf16.json", "SBM000")]
         )
-        self.assertEqual(xt_checks.read_head(self.base / "absent"), "")
+        self.assertIsNone(xt_checks.read_head(self.base / "absent"))
+
+    def test_sniff_keeps_files_it_cannot_open_so_check_reports_them(self):
+        self.put("locked.json", '{"bomFormat": "CycloneDX"}')
+        with unittest.mock.patch.object(os, "open", side_effect=PermissionError("EACCES")):
+            self.assertEqual(
+                xt_checks.collect([str(self.base)], (".json",), lambda text: False), [self.base / "locked.json"]
+            )
+
+    def test_sniff_sees_a_marker_after_the_first_64_kib(self):
+        late = "\n".join(['{"resourceLogs": []}'] * 4000 + ['{"resourceSpans": []}']) + "\n"
+        self.assertGreater(late.index("resourceSpans"), 65536)
+        self.put("otel.jsonl", late)
+        self.put("other.jsonl", '{"resourceLogs": []}\n' * 10)
+        kept = xt_checks.collect([str(self.base)], (".jsonl",), lambda text: '"resourceSpans"' in text)
+        self.assertEqual([p.name for p in kept], ["otel.jsonl"])
+
+    def test_pii_csv_with_only_carriage_returns_is_still_checked(self):
+        path = self.put("mac.csv", "hoten,ghichu\rNguyen Van A,x\rTran Thi B,y\r")
+        found = kind_pii_vn.check([path], {})
+        self.assertEqual([(f.line, f.code) for f in found], [(2, "PII004"), (3, "PII004")])
 
     def test_read_errors_after_open_are_not_a_crash_and_leak_nothing(self):
         path = self.put("r.md", "xin chào")
@@ -200,7 +221,7 @@ class SecondRoundTest(TmpTest):
 
     def test_file_that_grew_after_fstat_is_refused(self):
         grown = self.put("g.md", "abc")
-        real = os.fstat(os.open(grown, os.O_RDONLY))
+        real = os.stat(grown)  # không mở fd (bản trước rò một fd)
         fake = types.SimpleNamespace(st_mode=real.st_mode, st_size=2)  # fstat nói 2 byte, trên đĩa đã 3
         with (
             unittest.mock.patch.object(xt_checks, "MAX_BYTES", 2),

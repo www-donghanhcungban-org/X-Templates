@@ -69,15 +69,22 @@ def _read_prefix(path: Path, limit: int) -> bytes | None:
         os.close(fd)
 
 
-def read_head(path: Path, limit: int = 65536) -> str:
-    """Tiền tố tệp để nhận diện sơ bộ (`SNIFF`): giải mã UTF-8 (hay UTF-16 nếu có BOM) bỏ qua byte lỗi; không đọc được → "".
-    Không phụ thuộc trần `MAX_BYTES` nên tệp lớn đúng định dạng vẫn tới `check` và được báo `…000`."""
+def read_head(path: Path, limit: int = MAX_BYTES + 1) -> str | None:
+    """Phần đầu tệp để nhận diện sơ bộ (`SNIFF`), đúng bằng phần `check` sẽ đọc (`MAX_BYTES + 1` byte) nên dấu hiệu nằm sau
+    vài chục KiB vẫn thấy. Giải mã UTF-8 (hay UTF-16 nếu có BOM) bỏ qua byte lỗi. Không đọc được (quyền, EIO) → None: tệp
+    vẫn được giữ để `check` báo `…000` thay vì bị loại im lặng (rà #776 lượt hai 🟠)."""
     data = _read_prefix(path, limit)
     if data is None:
-        return ""
+        return None
     if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
         return data.decode("utf-16", errors="replace")
     return data.decode("utf-8", errors="replace")
+
+
+def _sniffed(sniff: Callable[[str], bool], path: Path) -> bool:
+    """Giữ tệp khi mang dấu hiệu đúng định dạng, hoặc khi không đọc được để nhận diện (để `check` báo `…000`)."""
+    head = read_head(path)
+    return head is None or sniff(head)
 
 
 def _walk(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
@@ -110,7 +117,7 @@ def collect(paths: list[str], suffixes: tuple[str, ...], sniff: Callable[[str], 
             out.append(path)
         elif path.is_dir():
             found = _walk(path, suffixes)
-            out.extend(p for p in found if sniff is None or sniff(read_head(p)))
+            out.extend(p for p in found if sniff is None or _sniffed(sniff, p))
         else:
             raise CheckError(f"không thấy: {raw}")
     return out
