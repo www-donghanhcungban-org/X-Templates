@@ -9,7 +9,7 @@ updated: 2026-11-24
 # Chuyển động, hình ảnh, chống 'AI slop', kiểm bằng máy
 
 > Chuyển động có mục đích, tôn trọng `prefers-reduced-motion`, chỉ animate thuộc tính rẻ; hình ảnh/icon/minh hoạ nhất quán
-> một hệ; giao diện có "gu" được giữ bằng **cổng máy** (Lighthouse 4 category, contrast, kiểm hai theme ở zoom lớn, luật
+> một hệ; giao diện có "gu" được giữ bằng **cổng máy** (Lighthouse 4 category, contrast, kiểm hai theme trên màn hình mật độ cao và khi phóng chữ, luật
 > chống "AI slop" grep được) chứ không bằng cảm tính. Token duration/easing → [`design-system-and-tokens.md`](design-system-and-tokens.md).
 
 ## Nguyên tắc
@@ -22,7 +22,7 @@ updated: 2026-11-24
 4. **Thời lượng và easing là token** (ngắn/vừa/dài), không số lẻ trong component.
 5. **"Xoá trước khi thêm"**: mật độ vừa phải, một màu nhấn, một bộ icon, một phong cách minh hoạ. Giao diện "AI slop" nhận
    diện được bằng danh sách trope cụ thể và bị chặn khi review.
-6. **Gu chỉ bền khi có cổng máy**: Lighthouse 4 category, contrast, visual regression, kiểm hai theme ở zoom 4×.
+6. **Gu chỉ bền khi có cổng máy**: Lighthouse 4 category, contrast, visual regression, kiểm độ nét, bố cục hẹp và chữ phóng lớn ở cả hai theme.
 
 ## Quyết định
 
@@ -56,7 +56,7 @@ updated: 2026-11-24
 - [ ] `UX-VISUAL-006` **MUST** Ảnh/icon trang trí có `alt=""`/`aria-hidden`; icon có nghĩa có tên tiếp cận; không emoji làm icon. → Kiểm: axe `image-alt`, `svg-img-alt`; script regex emoji trong JSX/template UI = 0. · Nguồn: WCAG 2.2 SC 1.1.1
 - [ ] `UX-VISUAL-007` **MUST** Mọi ảnh/minh hoạ có quyền sử dụng ghi trong `assets/CREDITS.md` (nguồn, license); ảnh AI tạo gắn nhãn. → Kiểm: script so khớp file trong `public/images` với dòng trong CREDITS = 100%. · Nguồn: [`../16-compliance-privacy/licensing-and-ip.md`](../16-compliance-privacy/licensing-and-ip.md)
 - [ ] `UX-VISUAL-008` **MUST@L** Visual regression cho component dùng chung và 3–5 trang chính ở cả hai theme, viewport mobile + desktop; diff phải được duyệt. → Kiểm: `toHaveScreenshot` với `maxDiffPixelRatio` cấu hình; CI fail khi lệch chưa cập nhật baseline.
-- [ ] `UX-VISUAL-009` **SHOULD** Kiểm hai theme ở zoom 400% (và ảnh chụp ở zoom 4×) cho màn hình chính: không chữ tàng hình, không viền mất, biểu đồ đọc được. → Kiểm: Playwright `deviceScaleFactor: 4` + `data-theme` dark/light chụp ảnh so baseline. · Nguồn: catalog 06 §7 (verify ở zoom 4×, cả hai theme)
+- [ ] `UX-VISUAL-009` **SHOULD** Kiểm màn hình chính ở cả theme sáng và tối. → Kiểm: (1) giữ nguyên viewport, chụp ở DPR 1 và 4 để so độ nét của chữ, viền và biểu đồ; (2) với trang cuộn dọc, đặt bề rộng 320 CSS px (tương đương viewport 1280 CSS px ở zoom trình duyệt 400%), kiểm đủ nội dung và thao tác, chỉ vùng cần bố cục hai chiều mới được cuộn ngang; (3) tăng cỡ chữ lên 200% bằng trình duyệt, đọc nhãn và thực hiện lại luồng chính, không mất nội dung hoặc chức năng. · Nguồn: WCAG 2.2 SC 1.4.10, 1.4.4 (reflow và phóng chữ); catalog 06 §7 (kiểm hai theme)
 - [ ] `UX-VISUAL-010` **SHOULD** Một bộ icon duy nhất, cùng stroke/size, nạp theo cây (tree-shake), `aria-hidden` khi trang trí. → Kiểm: `package.json` chỉ một thư viện icon; knip không báo icon thừa.
 - [ ] `UX-VISUAL-011` **SHOULD** Không có trope "AI slop" trong bảng trên; section hero có nội dung thật (số liệu, ảnh sản phẩm) thay vì khẩu hiệu chung. → Kiểm: script `check:ui-ux-guard` (grep gradient ngoài token, `transition: all`, emoji, `backdrop-filter` > ngưỡng) = 0; review ảnh hero trong PR.
 - [ ] `UX-VISUAL-012` **SHOULD** Mật độ thông tin vừa: tối đa một màu nhấn trên một màn hình, bóng/bo góc theo 3–4 bậc token. → Kiểm: `check:contrast` + grep `box-shadow` ngoài token = 0; review mật độ bằng checklist "xoá trước".
@@ -74,7 +74,7 @@ updated: 2026-11-24
 - **Parallax/zoom nền hero** không tắt khi reduced-motion: gây chóng mặt với người rối loạn tiền đình.
 - **Carousel tự chạy không nút dừng** (2.2.2) và chuyển slide nhanh: hầu như không ai xem slide 2.
 - **Mỗi khối đều "bay vào" khi cuộn**: người dùng chờ nội dung hiện; bỏ ở nội dung chính, giữ cho vài điểm nhấn.
-- **Theme tối chỉ kiểm ở zoom 100%**: viền 1 px tương phản thấp biến mất ở zoom lớn/màn DPI thấp. Chụp ở 4×.
+- **Dùng ảnh DPR cao để kết luận về zoom**: DPR đổi số pixel thiết bị trên một CSS px. Đo reflow bằng chiều rộng viewport và chạy riêng phép thử tăng cỡ chữ.
 - **Emoji làm bullet/icon**: hiển thị khác mỗi hệ, trình đọc màn hình đọc tên emoji dài, không tô màu theo theme.
 - **Ảnh stock/ảnh AI không nguồn** → rủi ro bản quyền và nhãn AI (Art. 50). Ghi CREDITS.
 - **Visual regression trên máy dev** (font/GPU khác CI) → diff giả liên tục rồi bị tắt. Chạy trong container cố định, baseline từ CI.
@@ -86,7 +86,9 @@ updated: 2026-11-24
 | Công cụ (license) | Lệnh | Đặt ở đâu | Ngưỡng |
 |---|---|---|---|
 | `@lhci/cli` 0.15.1 + lighthouse 13.5.0 (Apache-2.0; lhci không commit từ 26/06/2025 — theo dõi thay thế) | `lhci autorun` với `categories:performance|accessibility|best-practices|seo minScore 0.9` | CI PR | ≥ 0.9 cả 4, median của 3 lần |
-| Playwright 1.64.0 (Apache-2.0) `toHaveScreenshot` | `playwright test --project=visual` (2 theme × 2 viewport, `deviceScaleFactor` 1 và 4) | CI (container cố định) | diff ≤ `maxDiffPixelRatio` đã chốt |
+| Playwright 1.64.0 (Apache-2.0) | `playwright test --project=visual` trên hai theme, mobile và desktop; cùng viewport, đặt `deviceScaleFactor` 1 và 4, chụp bằng `toHaveScreenshot({ scale: 'device' })` | CI (container cố định) | So ảnh với baseline riêng từng DPR và theme, diff ≤ `maxDiffPixelRatio` đã chốt |
+| Playwright (reflow) | Đặt viewport rộng 320 CSS px; chạy luồng chính ở hai theme | CI E2E | Trang cuộn dọc giữ đủ nội dung và thao tác, không tràn ngang ngoài vùng cần bố cục hai chiều |
+| Trình duyệt (cỡ chữ) | Bật chế độ chỉ phóng chữ, tăng đến 200%, chạy lại luồng chính ở hai theme | Kiểm tay | Nhãn đọc đủ và điều khiển vẫn dùng được |
 | Playwright `emulateMedia({ reducedMotion: 'reduce' })` + `getAnimations()` | test `@motion` | CI E2E | 0 animation transform khi reduce |
 | stylelint 17.16.0 (MIT) | cấm `transition: all`, animate thuộc tính layout, số ms ngoài token | pre-commit | 0 lỗi |
 | Script `check:ui-ux-guard` tự viết (grep trope) | `node scripts/check-ui-ux-guard.mjs src` | pre-commit + CI | 0 kết quả |
@@ -95,6 +97,9 @@ updated: 2026-11-24
 | Storybook 10.6.2 + addon-a11y | story có cả hai theme | CI | 0 vi phạm |
 
 ## Nguồn
+
+- W3C, WCAG 2.2: [Reflow (1.4.10)](https://www.w3.org/WAI/WCAG22/Understanding/reflow.html) và [Resize Text (1.4.4)](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html) — xác minh 2026-11-24.
+- Playwright: [deviceScaleFactor](https://playwright.dev/docs/api/class-testoptions#test-options-device-scale-factor) đặt DPR, [toHaveScreenshot](https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1) hỗ trợ chụp theo pixel thiết bị — xác minh 2026-11-24.
 
 - MDN — `prefers-reduced-motion` (giá trị, thay scale bằng opacity; rối loạn tiền đình; Baseline từ 01/2020): <https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion> — xác minh 2026-10-13.
 - WCAG 2.2 SC 2.2.2 Pause, Stop, Hide: <https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html>; SC 2.3.1, 2.3.3: <https://www.w3.org/TR/WCAG22/> — xác minh 2026-10-13.

@@ -17,7 +17,11 @@ argument-hint: "<URL localhost | trang/luồng cần kiểm>"
 
 ## Kiểm
 4. Với mỗi luồng chính của task: mở trang → thao tác như người dùng (theo vai trò/nhãn, không selector CSS mong manh) →
-   kiểm kết quả hiển thị. Bề rộng **1280** và **375** (thêm **320** cho kiểm cuộn ngang).
+   kiểm kết quả hiển thị. Bề rộng **1280** và **375** CSS px.
+   Theo `UX-VISUAL-009`, kiểm riêng từng phép ở cả theme sáng và tối:
+   - Độ nét: giữ nguyên viewport, chụp ở DPR 1 và 4 với `scale: 'device'`, đối chiếu chữ, viền và biểu đồ.
+   - Reflow: đặt viewport rộng 320 CSS px, kiểm trang cuộn dọc còn đủ nội dung và thao tác; chỉ vùng cần bố cục hai chiều mới được cuộn ngang.
+   - Cỡ chữ: bật chế độ chỉ phóng chữ của trình duyệt lên 200%, đọc nhãn và thực hiện lại luồng chính; ghi nhận chữ bị cắt hoặc điều khiển mất tác dụng.
 5. Mỗi bước có trạng thái thay đổi: chụp ảnh vào `docs/evidence/<T-NNN>/` (tên có bề rộng); `.autopilot/` chỉ máy ghi — guard chặn ghi tay.
 6. Đọc **console** (0 lỗi mới), **mạng** (không 4xx/5xx ngoài dự kiến), thời gian tải cảm nhận được.
 7. A11y nhanh: điều hướng bằng bàn phím tới mọi điều khiển, focus nhìn thấy, nhãn form, tương phản; có axe thì chạy với tag `wcag22aa`
@@ -32,5 +36,5 @@ argument-hint: "<URL localhost | trang/luồng cần kiểm>"
 9. Chạy test mới bằng lệnh `e2e` của `xt.yaml`; `xt.py loop record` với exit code.
 
 ## Báo cáo
-Mỗi kiểm có **một** trong bốn trạng thái: **Pass** · **Fail** · **Not tested** (chưa chạy) · **N/A** (không áp dụng, kèm lý do) — không ghi Pass cho điều chưa chạy (`UX-A11Y-001`). Mỗi phát hiện kèm gói bằng chứng để người khác tái hiện: ảnh (đường dẫn), bề rộng, các bước, vai trò/nhãn của phần tử.
+Mỗi kiểm có **một** trong bốn trạng thái: **Pass** · **Fail** · **Not tested** (chưa chạy) · **N/A** (không áp dụng, kèm lý do) — không ghi Pass cho điều chưa chạy (`UX-A11Y-001`). Mỗi phát hiện kèm gói bằng chứng để người khác tái hiện: ảnh (đường dẫn), bề rộng CSS, theme, DPR hoặc mức phóng chữ đang thử, các bước, vai trò/nhãn của phần tử.
 Luồng · bề rộng · ảnh · lỗi console/mạng · a11y · kết quả quét tĩnh · test đã thêm + exit code. Không khai "đẹp/ổn" khi chưa có ảnh và test.
