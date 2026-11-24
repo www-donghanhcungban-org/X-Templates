@@ -11870,7 +11870,7 @@ def cmd_static_check(args: argparse.Namespace) -> int:
         print("✗ static-check: khung này không có gói xt_checks — cài lại khung (ADR-0099)", file=sys.stderr)
         return 2
     try:
-        found = xt_checks.run(args.kind, args.paths or ["."], xt_checks.parse_opts(args.opt))
+        report = xt_checks.run_report(args.kind, args.paths or ["."], xt_checks.parse_opts(args.opt))
     except xt_checks.CheckError as exc:
         print(f"✗ static-check {args.kind}: {exc}", file=sys.stderr)
         return 2
@@ -11881,12 +11881,10 @@ def cmd_static_check(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+    found = report.findings
     if args.json:
-        print(
-            json.dumps(
-                {"schema": 1, "kind": args.kind, "findings": [f.as_dict() for f in found]}, ensure_ascii=False, indent=2
-            )
-        )
+        payload = {"schema": 1, "kind": args.kind, "checked": report.checked, "findings": [f.as_dict() for f in found]}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         for f in found:
             print(f"✗ {f.path}:{f.line}: [{f.code}] {f.message}")

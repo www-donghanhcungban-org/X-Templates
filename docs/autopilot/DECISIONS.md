@@ -959,3 +959,24 @@
 - Chọn: Khóa vắng là kế thừa đã lọc, khóa rỗng là không kế thừa tùy ý; production đòi khai khóa; cấm họ GIT_* mặc định và trong allowlist trừ hai biến CA khai tường minh; null/Null/NULL/~ là cấu hình lỗi
 - Lý do (tiêu chí chất lượng cuối): Giữ đường dev hiện có nhưng production không âm thầm kế thừa môi trường. Hai ngoại lệ GIT_SSL_CAINFO/GIT_SSL_CAPATH theo GO_GIT_KEEP_ENV đã có; không cho Git config/SSH/exec/repo overrides. Bộ đọc phẳng không phân biệt chữ null có quote nên dành các cách viết này cho lỗi rõ ràng. Logic vào xt_deploy hiện có, facade xt giữ tương thích và lỗi config; không tăng trần dòng.
 - Đường lùi: Revert PR adapter bằng commit mới; không tự thay allowlist production hay đọc giá trị bí mật.
+
+### D-579 · 2026-11-24T13:42:16+00:00 · T-5008 ràng buộc merge bằng host, repo, PR và SHA đầy đủ
+
+- Phương án: (1) Bản ghi bất biến MergeIntent từ dữ liệu PR đã chuẩn hóa, executor kiểm lại live và dùng đúng tuple với SHA ghim; guard xét cả đích môi trường và yêu cầu pin, giữ ưu tiên verdict/review · (2) Tiếp tục dựng lại lệnh merge từ các chuỗi repo riêng và cho phép lệnh thiếu pin sau kiểm cũ
+- Chọn: Bản ghi bất biến MergeIntent từ dữ liệu PR đã chuẩn hóa, executor kiểm lại live và dùng đúng tuple với SHA ghim; guard xét cả đích môi trường và yêu cầu pin, giữ ưu tiên verdict/review
+- Lý do (tiêu chí chất lượng cuối): AUD-HAR-492 cho thấy đích và pin không được ràng buộc xuyên suốt. Intent là dữ liệu định danh, không phải quyền bỏ qua cổng. Snapshot offline chỉ xem trước, ghi thật phải kiểm lại live đúng tuple. Tách helper kiểu chặt vào module nhỏ nếu cần để giữ trần core; ADR-0102 ghi renderer, precedence host/repo và cả CLI/REST/MCP. Thay cấu hình typecheck/install chỉ để bao phủ module mới, không nới ngưỡng.
+- Đường lùi: Revert riêng PR intent; không tắt guard, nới cổng hay chuyển sang merge không ghim SHA.
+
+### D-580 · 2026-11-24T13:42:17+00:00 · T-5009 gắn sự kiện CLI vào đúng lát và nguồn thực
+
+- Phương án: (1) Nguồn gốc xác định hoặc --slice khai rõ khi mơ hồ; giữ binding PR đã xác lập, SHA/thời điểm merge thật, receipt hash bền; incident có introduced_by tùy chọn được kiểm, không suy từ issue · (2) Gán mọi sự kiện vào lát mới nhất và suy merge/sự cố từ các số liên kết có sẵn
+- Chọn: Nguồn gốc xác định hoặc --slice khai rõ khi mơ hồ; giữ binding PR đã xác lập, SHA/thời điểm merge thật, receipt hash bền; incident có introduced_by tùy chọn được kiểm, không suy từ issue
+- Lý do (tiêu chí chất lượng cuối): Loop init ghi requirement cho từng lát đúng SPEC, qua map một lượt. PR merge phải có merge SHA và thời điểm từ nguồn; deployed chỉ sau biên nhận lưu thành công. Receipt thuộc nhiều lát chỉ gán theo lineage Git kiểm được hoặc phạm vi khai rõ, không chọn lát mới nhất. Mẫu post-mortem thêm introduced_by (PR hoặc null); null không tạo suy đoán. Ghi lặp khử trùng trong khóa trạng thái, lỗi metric không làm sai kết quả thao tác gốc. Gate phải chạy thật cả chín nguồn.
+- Đường lùi: Revert từng PR producer/report; giữ file sự kiện cũ, không sửa tay sổ hay bịa số còn thiếu.
+
+### D-581 · 2026-11-24T13:45:26+00:00 · Chuẩn bị bộ kiểm bằng chứng dù diễn tập admin, pilot và rollout chưa mở khóa
+
+- Phương án: (1) Tách T-5024 làm hợp đồng và validator có test, giữ nguyên Gate dữ liệu thật của T-5020/T-5017/T-5018 và trạng thái chờ · (2) Chờ đủ quyền và người thử mới viết cả bộ kiểm
+- Chọn: Tách T-5024 làm hợp đồng và validator có test, giữ nguyên Gate dữ liệu thật của T-5020/T-5017/T-5018 và trạng thái chờ
+- Lý do (tiêu chí chất lượng cuối): Ba task gốc còn phần mã có thể làm trong phiên. Chuẩn bị bộ kiểm khiến bước người thực hiện có tiêu chí cụ thể; test dùng fixture được ghi rõ, không xuất thành bằng chứng production. Live corroboration chỉ đọc và fail-closed khi không có quyền hay nguồn. Không tick task gốc từ kết quả unit test.
+- Đường lùi: Revert riêng validator và SPEC nếu chưa phù hợp, không động vào hệ thống hay bằng chứng thật.

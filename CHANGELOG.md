@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `static-check sbom`/`vex` báo lỗi cấu trúc có đường dẫn trường khi container hoặc phần tử sai kiểu, vẫn kiểm phần tử hợp lệ; JSON thêm `checked` đếm tệp và mục đã kiểm trong cùng lượt đọc, giữ schema 1 và API danh sách (ADR-0101, T-5001).
+
 ### Added
 
 - `LOOP-DESIGN-029` **SHOULD** (`11-autonomous-loop/loop-design.md`): khi phiên chỉ được đẩy lên một nhánh đã chỉ định hoặc PR đáy còn chờ merge, lát kế làm ở nhánh/worktree cục bộ riêng (không đẩy, không chồng PR sang nhánh khác); PR đáy merge xong mới gộp đích, gộp lát kế, chạy `loop verify --all`, đẩy và mở PR; lặp tới hết việc, mỗi lúc một PR của phiên đang mở. Ghi ở README vòng lặp (bước 12), `AGENTS.md` của khung và `framework/templates/AGENTS.md` cho dự án đích. **Dự án đích:** SHOULD, không bắt buộc; nâng khung để nhận dòng mới ở `AGENTS.md` mẫu (dự án đã sinh `AGENTS.md` tự thêm câu tương ứng).

@@ -174,8 +174,26 @@ class CliTest(TmpTest):
         self.assertEqual(rc, 1)
         doc = json.loads(out)
         self.assertEqual((doc["schema"], doc["kind"], doc["findings"][0]["code"]), (1, "nfc", "NFC001"))
+        self.assertEqual(doc["checked"], {"files": 1})
         rc, out, _ = run_cli("nfc", str(self.base), "--json", "--opt", "ignore=NFC001")
         self.assertEqual((rc, json.loads(out)["findings"]), (0, []))
+
+    def test_checked_counts_files_and_only_visited_items(self):
+        for kind, header, key, mixed, count in (
+            ("sbom", {"bomFormat": "CycloneDX"}, "components", [None, {"components": [{}]}], 2),
+            ("vex", {"@context": "https://openvex.dev/ns"}, "statements", [None, {}, {}], 2),
+        ):
+            with self.subTest(kind=kind):
+                empty, out, _ = run_cli(kind, str(self.base), "--json")
+                self.assertEqual((empty, json.loads(out)["checked"]), (0, {"files": 0, key: 0}))
+                self.put("data.json", json.dumps({**header, key: mixed}))
+                self.put("other.json", "{}")
+                invalid = self.put("broken.txt", "[")
+                rc, out, _ = run_cli(kind, str(self.base), str(invalid), "--json")
+                doc = json.loads(out)
+                self.assertEqual((rc, doc["schema"], doc["checked"]), (1, 1, {"files": 2, key: count}))
+                rc, out, _ = run_cli(kind, str(invalid), "--json")
+                self.assertEqual((rc, json.loads(out)["checked"]), (1, {"files": 1, key: 0}))
 
     def test_usage_errors_exit_two(self):
         for argv in (("khong-co",), ("nfc", "/không/có/đường/này"), ("nfc", "--opt", "sai")):
@@ -192,7 +210,10 @@ class CliTest(TmpTest):
             ZeroDivisionError("x"),
             UnicodeEncodeError("u", "x", 0, 1, "y"),
         ):
-            with self.subTest(exc=type(exc).__name__), unittest.mock.patch.object(xt_checks, "run", side_effect=exc):
+            with (
+                self.subTest(exc=type(exc).__name__),
+                unittest.mock.patch.object(xt_checks, "run_report", side_effect=exc),
+            ):
                 rc, out, err = run_cli("nfc", str(self.base))
             self.assertEqual((rc, out), (2, ""))
             self.assertIn("lỗi nội bộ", err)
@@ -200,7 +221,9 @@ class CliTest(TmpTest):
 
     def test_default_path_is_the_current_directory(self):
         self.put("a.md", NFC + "\n")
-        with unittest.mock.patch.object(xt_checks, "run", return_value=[]) as run:
+        with unittest.mock.patch.object(
+            xt_checks, "run_report", return_value=xt_checks.CheckReport([], {"files": 0})
+        ) as run:
             self.assertEqual(run_cli("nfc")[0], 0)
         self.assertEqual(run.call_args.args[1], ["."])
 

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
+from typing import Any, TypeVar
 
 KINDS: tuple[str, ...] = (
     "ac-trace",
@@ -47,6 +48,46 @@ class Finding:
 
     def as_dict(self) -> dict[str, object]:
         return {"path": self.path, "line": self.line, "code": self.code, "message": self.message}
+
+
+@dataclass
+class CheckReport:
+    findings: list[Finding]
+    checked: dict[str, int]
+
+
+_Item = TypeVar("_Item")
+
+
+@dataclass
+class JsonShape:
+    """Ghi lỗi cấu trúc ở đúng trường, giữ các phần tử cùng mảng còn kiểm được."""
+
+    path: str
+    code: str
+    findings: list[Finding]
+
+    def error(self, field: str, expected: str) -> None:
+        self.findings.append(Finding(self.path, 0, self.code, f"{field}: cần {expected}"))
+
+    def mapping(self, field: str, value: object) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        self.error(field, "object")
+        return {}
+
+    def entries(self, field: str, value: object, item_type: type[_Item]) -> list[tuple[str, _Item]]:
+        if not isinstance(value, list):
+            self.error(field, "mảng")
+            return []
+        result = []
+        for index, item in enumerate(value):
+            where = f"{field}[{index}]"
+            if isinstance(item, item_type):
+                result.append((where, item))
+            else:
+                self.error(where, "object" if item_type is dict else "chuỗi")
+        return result
 
 
 def load(kind: str) -> ModuleType:
@@ -186,9 +227,20 @@ def sniff_for(module: ModuleType, opts: dict[str, str]) -> Callable[[str], bool]
     return bound
 
 
-def run(kind: str, paths: list[str], opts: dict[str, str]) -> list[Finding]:
+def run_report(kind: str, paths: list[str], opts: dict[str, str]) -> CheckReport:
     """Chạy loại `kind` trên `paths`; kết quả sắp theo (đường dẫn, dòng, mã)."""
     module = load(kind)
     validate_opts(module, opts)
     files = collect(paths, module.SUFFIXES, sniff_for(module, opts), getattr(module, "NAMES", None))
-    return sorted(module.check(files, opts), key=lambda f: (f.path, f.line, f.code))
+    report: CheckReport
+    if hasattr(module, "check_report"):
+        report = module.check_report(files, opts)
+    else:
+        report = CheckReport(module.check(files, opts), {"files": len(files)})
+    report.findings.sort(key=lambda f: (f.path, f.line, f.code))
+    return report
+
+
+def run(kind: str, paths: list[str], opts: dict[str, str]) -> list[Finding]:
+    """API danh sách của ADR-0099."""
+    return run_report(kind, paths, opts).findings

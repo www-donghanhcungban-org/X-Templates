@@ -6,10 +6,11 @@ hợp lệ, `SBM001` thiếu metadata (timestamp, công cụ tạo, component g�
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-from . import CheckError, Finding, read_text
+from . import CheckError, CheckReport, Finding, JsonShape, read_text
 
 HELP = "SBOM CycloneDX thiếu metadata, name/version, định danh, hash, license, AI-BOM hay dependencies"
 SUFFIXES = (".json",)
@@ -36,17 +37,22 @@ def _load(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _flatten(items: object) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    stack = [items]
+def _components(shape: JsonShape, field: str, items: object) -> Iterator[tuple[str, dict[str, Any]]]:
+    stack = list(reversed(shape.entries(field, items, dict)))
     while stack:
-        cur = stack.pop()
-        if isinstance(cur, list):
-            for item in cur:
-                if isinstance(item, dict):
-                    out.append(item)
-                    stack.append(item.get("components"))
-    return out
+        where, comp = stack.pop()
+        yield where, comp
+        if "components" in comp:
+            stack.extend(reversed(shape.entries(f"{where}.components", comp["components"], dict)))
+
+
+def _component_fields(shape: JsonShape, where: str, comp: dict[str, Any]) -> None:
+    if "swid" in comp:
+        shape.mapping(f"{where}.swid", comp["swid"])
+    shape.entries(f"{where}.hashes", comp.get("hashes", []), dict)
+    for field, choice in shape.entries(f"{where}.licenses", comp.get("licenses", []), dict):
+        if "license" in choice:
+            shape.mapping(f"{field}.license", choice["license"])
 
 
 def _ratio(opts: dict[str, str]) -> float:
@@ -67,13 +73,32 @@ def _need_hashes(opts: dict[str, str]) -> bool:
     return mode == "require"
 
 
-def _meta(path: str, data: dict[str, Any]) -> list[Finding]:
-    meta = data.get("metadata")
-    meta = meta if isinstance(meta, dict) else {}
+def _meta(shape: JsonShape, data: dict[str, Any]) -> None:
+    meta = shape.mapping("metadata", data.get("metadata", {}))
     miss = [key for key in ("timestamp", "tools", "component") if not meta.get(key)]
-    if not miss:
-        return []
-    return [Finding(path, 0, "SBM001", f"metadata thiếu: {', '.join(miss)}")]
+    if miss:
+        shape.findings.append(Finding(shape.path, 0, "SBM001", f"metadata thiếu: {', '.join(miss)}"))
+    if "component" in meta:
+        root = shape.mapping("metadata.component", meta["component"])
+        _component_fields(shape, "metadata.component", root)
+        for field, comp in _components(shape, "metadata.component.components", root.get("components", [])):
+            _component_fields(shape, field, comp)
+    tools = meta.get("tools", [])
+    if isinstance(tools, dict):
+        for field, comp in _components(shape, "metadata.tools.components", tools.get("components", [])):
+            _component_fields(shape, field, comp)
+        shape.entries("metadata.tools.services", tools.get("services", []), dict)
+    else:
+        shape.entries("metadata.tools", tools, dict)
+
+
+def _dependencies(shape: JsonShape, data: dict[str, Any]) -> None:
+    deps = data.get("dependencies", [])
+    if deps == []:
+        shape.findings.append(Finding(shape.path, 0, "SBM007", "không có dependencies (quan hệ phụ thuộc)"))
+    for field, dep in shape.entries("dependencies", deps, dict):
+        for key in ("dependsOn", "provides"):
+            shape.entries(f"{field}.{key}", dep.get(key, []), str)
 
 
 def _ai(path: str, label: str, comp: dict[str, Any]) -> list[Finding]:
@@ -98,30 +123,35 @@ def _component(path: str, comp: dict[str, Any], need_hashes: bool) -> list[Findi
     return found + _ai(path, label, comp)
 
 
-def _bom(path: str, data: dict[str, Any], opts: dict[str, str]) -> list[Finding]:
-    found = _meta(path, data)
-    comps = _flatten(data.get("components"))
-    need_hashes = _need_hashes(opts)
-    for comp in comps:
-        found.extend(_component(path, comp, need_hashes))
-    with_license = sum(1 for comp in comps if comp.get("licenses"))
-    ratio = _ratio(opts)
-    if comps and with_license / len(comps) < ratio:
-        found.append(
-            Finding(path, 0, "SBM005", f"chỉ {with_license}/{len(comps)} thành phần có licenses (cần ≥ {ratio})")
+def _bom(shape: JsonShape, data: dict[str, Any], need_hashes: bool, ratio: float) -> int:
+    _meta(shape, data)
+    count = with_license = 0
+    for field, comp in _components(shape, "components", data.get("components", [])):
+        count += 1
+        _component_fields(shape, field, comp)
+        shape.findings.extend(_component(shape.path, comp, need_hashes))
+        with_license += bool(comp.get("licenses"))
+    if count and with_license / count < ratio:
+        shape.findings.append(
+            Finding(shape.path, 0, "SBM005", f"chỉ {with_license}/{count} thành phần có licenses (cần ≥ {ratio})")
         )
-    if not data.get("dependencies"):
-        found.append(Finding(path, 0, "SBM007", "không có dependencies (quan hệ phụ thuộc)"))
-    return found
+    _dependencies(shape, data)
+    return count
 
 
-def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
-    found: list[Finding] = []
+def check_report(files: list[Path], opts: dict[str, str]) -> CheckReport:
+    report = CheckReport([], {"files": len(files), "components": 0})
+    need_hashes, ratio = _need_hashes(opts), _ratio(opts)
     for path in files:
         text = read_text(path)
         data = None if text is None else _load(text)
         if data is None:
-            found.append(Finding(str(path), 0, "SBM000", "không phải JSON CycloneDX hợp lệ (hoặc quá lớn)"))
+            report.findings.append(Finding(str(path), 0, "SBM000", "không phải JSON CycloneDX hợp lệ (hoặc quá lớn)"))
         else:
-            found.extend(_bom(str(path), data, opts))
-    return found
+            shape = JsonShape(str(path), "SBM000", report.findings)
+            report.checked["components"] += _bom(shape, data, need_hashes, ratio)
+    return report
+
+
+def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
+    return check_report(files, opts).findings
