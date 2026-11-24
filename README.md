@@ -6,7 +6,7 @@ X-Templates is an open-source software development framework combining a library
 
 The framework's detailed requirement library and most supporting documentation are currently in Vietnamese. See the [Vietnamese section](#tiếng-việt) for the complete command reference, operational details, and design decisions.
 
-## What it provides
+## Why use X-Templates
 
 - **Requirements with stable IDs:** baseline practices, software profiles, industry packs, and standards. Each requirement records its priority, how to check it, and its sources. Review source dates and verify items marked as unverified before applying them.
 - **Blueprints tailored to a project:** combine software type, industry, and scale (S/M/L); preserve completion status by ID when recomposing. Additional modules can be selected for a project's needs.
@@ -15,7 +15,7 @@ The framework's detailed requirement library and most supporting documentation a
 - **Starter and installation tools:** create a new project with the `web-api-ts` pack or install the framework into an existing repository. Codex support is available through the installer; the Vietnamese guide documents limitations and other agent adapters.
 - **Local dashboard:** browse requirements and blueprints, see progress, plans, automation state, and pull requests. It listens on localhost; most actions are shown as commands to run in a terminal.
 
-## Framework map
+## What is in the framework
 
 | Area | Contents |
 | --- | --- |
@@ -30,7 +30,7 @@ The framework's detailed requirement library and most supporting documentation a
 
 Browse the full [framework index](framework/README.md). The [changelog](CHANGELOG.md), [progress log](PROGRESS.md), and [tags](https://github.com/www-donghanhcungban-org/X-Templates/tags) describe changes and releases.
 
-## Get started
+## Use it for a project
 
 The installer and CLI require **CPython 3.13 or newer** and a POSIX environment. Linux is covered by CI; macOS is not currently covered. On Windows, use WSL2 or a DevContainer/Docker environment. See the [Vietnamese section](#tiếng-việt) for filesystem and runtime details.
 
@@ -48,6 +48,12 @@ The installer creates a Git repository, starter, S-scale blueprint and stage led
 
 In Claude Code, `/factory "Team notes: build an MVP"` starts the factory workflow; in Codex, use `$factory`. The [factory guide](.claude/skills/factory/SKILL.md) and [web-api-ts pack](framework/templates/packs/web-api-ts/README.md) explain the workflow and starter.
 
+## Run automatically until completion
+
+In Claude Code, use `/autopilot <request>` after installation. The workflow plans tasks, records evidence, implements and checks each slice, then reviews and proposes completion. It stops at configured limits and mandatory human decision points; final release readiness is assessed by `release-check`. See the [autonomous loop](framework/11-autonomous-loop/README.md) for the full protocol, safeguards and exceptions. The outer loop also supports multiple agent adapters; their capabilities and integrations differ.
+
+## Local application
+
 To inspect the local dashboard:
 
 ```bash
@@ -57,13 +63,33 @@ python3 .xtemplates/scripts/xt.py app     # installed project
 
 The app prints a localhost URL with a per-run token. The PR view requires an authenticated `gh` installation. The dashboard does not run gates, merge, push, or defer tasks; its blueprint write action is the documented exception to its otherwise read-oriented interface.
 
+## Tools
+
+The table below introduces the main commands; the [full Vietnamese command reference](#công-cụ) documents options and constraints. Run `python3 scripts/xt.py --help` or a command's `--help` for the installed version. In an installed project, replace `scripts/xt.py` with `.xtemplates/scripts/xt.py`.
+
+| Command | Purpose |
+| --- | --- |
+| `validate` and `list profiles` | Check framework conventions and list available software profiles. |
+| `compose` | Build a blueprint from selected profiles, industries and scale. |
+| `blueprint-status` | Inspect completion; `--strict --run` checks applicable evidence and configured commands. |
+| `doctor` | Diagnose the installed framework, environment and configuration. |
+| `loop` | Manage tasks, decisions, evidence, stops and the agent loop. |
+| `pr` | Inspect the next pull-request action and manage review evidence. |
+| `stage` | Inspect and manage the product-stage ledger. |
+| `release-check` | Assess release readiness using the configured checks and evidence. |
+| `app` | Open the local dashboard. |
+
+## Design decisions
+
+The framework records architectural choices and their history in [design decisions (ADRs)](docs/adr/). The [Vietnamese decision index](#quyết-định-thiết-kế) provides summaries and links; individual ADRs explain their scope and any later superseding decisions.
+
 ## Practical boundaries
 
 X-Templates provides guidance and tools, not a guarantee that a project is secure, compliant, or production-ready. Requirements must be adapted to the project's risk and verified against current sources. Industry and legal material is input to review; consult qualified professionals where appropriate. The automation workflow can stop for real-money actions, real user data, paid services, credentials, or other situations defined by policy.
 
 ## Support the author and contact
 
-If X-Templates is useful to you, voluntary contributions help maintain the framework and its documentation:
+If X-Templates is useful to you, you can **[Buy me a coffee via PayPal ☕](https://paypal.me/donhanhcungban)**. Voluntary contributions help maintain the framework and its documentation:
 
 - **PayPal:** [@donghanhcungban](https://paypal.me/donhanhcungban).
 - **Vietnam bank transfer:** Techcombank account `890977819110`, or scan the [VietQR code](docs/assets/donate-vietqr-techcombank.png).
@@ -425,6 +451,8 @@ nghiệm thu A–E; lát A–E đã làm, gộp một PR (#451) theo quyết đ�
 
 X-Templates miễn phí và sẽ luôn mở mã. Nếu khung giúp bạn tiết kiệm thời gian hoặc tránh được sự cố, bạn có thể ủng
 hộ để tác giả duy trì và cập nhật nội dung (chuẩn, luật, phiên bản công cụ thay đổi liên tục):
+
+**[Mời tác giả một ly cà phê qua PayPal ☕](https://paypal.me/donhanhcungban)**
 
 <img src="docs/assets/donate-vietqr-techcombank.png" alt="Mã VietQR ủng hộ: Techcombank, số tài khoản 890977819110" width="260">
 
