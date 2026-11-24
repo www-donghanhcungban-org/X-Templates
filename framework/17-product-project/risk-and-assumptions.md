@@ -3,7 +3,7 @@ title: Rủi ro & giả định: sổ rủi ro, spike, kế hoạch B
 kind: module
 prefix: PM-RISK
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Rủi ro & giả định: sổ rủi ro, spike, kế hoạch B
@@ -53,6 +53,7 @@ updated: 2026-11-04
 - [ ] `PM-RISK-014` **SHOULD** Rủi ro "benchmark tự công bố" của nhà cung cấp: không dùng làm căn cứ chọn khi chưa tái lập trên dữ liệu của mình. → Kiểm: ADR chọn công nghệ có mục "số đo của ta" hoặc ghi "chưa tái lập".
 - [ ] `PM-RISK-015` **MAY** Mô phỏng Monte Carlo cho lịch dựa trên throughput lịch sử (xem `PM-PLAN`) để ra xác suất kịp hạn thay vì một ngày duy nhất. → Kiểm: biểu đồ/ bảng P50/P85 trong `PLAN.md`.
 - [ ] `PM-RISK-016` **MAY** Diễn tập kế hoạch B cho rủi ro cao nhất (vd nhà cung cấp API ngừng dịch vụ) ít nhất một lần trước G7. → Kiểm: ghi chú diễn tập có ngày + kết quả.
+- [ ] `PM-RISK-017` **MAY** Pre-mortem có cấu trúc (mở rộng `PM-RISK-011`): mỗi kịch bản thất bại có tín hiệu sớm kiểm được, biện pháp giảm thiểu và người chịu trách nhiệm. → Kiểm: tệp pre-mortem theo lược đồ (kịch bản, tín hiệu, giảm thiểu, chủ), thiếu trường thì đỏ. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.4 "Cổng pre-mortem có cấu trúc"), chưa đối chiếu nguồn gốc
 
 ## Bẫy thường gặp
 

@@ -3,7 +3,7 @@ title: Bảo mật AI: prompt injection, tool allowlist, OWASP LLM/ASI/MCP
 kind: module
 prefix: SEC-AI
 applies_to: [ai-agent, agentic-system, data-ml, web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Bảo mật AI: prompt injection, tool allowlist, OWASP LLM/ASI/MCP
@@ -79,6 +79,8 @@ updated: 2026-11-04
 - [ ] `SEC-AI-027` **MUST@L** Text-to-SQL (SQL do model sinh): chạy bằng vai trò CSDL riêng — `default_transaction_read_only=on`, không `BYPASSRLS`, chịu RLS/tenant của người hỏi, có `statement_timeout` và trần số dòng; trước khi chạy, parse ra AST và chỉ chấp nhận khi là đúng một câu `SELECT`, chỉ dùng bảng/cột trong allowlist hoặc semantic layer, không có CTE ghi, không gọi hàm nguy hiểm (`pg_read_file`, `dblink`, `COPY`, `pg_sleep`). → Kiểm: bộ ca độc bị chặn **trước DB** (nhiều câu nối `;`, `WITH x AS (DELETE …)`, bảng ngoài allowlist, `tenant_id` của tenant khác); test kết nối bằng vai trò này rồi thử ghi → lỗi. · Nguồn: stored 15 (text-to-SQL: sqlglot, WrenAI, SQLBot)
 - [ ] `SEC-AI-028` **SHOULD** Tài sản prompt (`SKILL.md`, định nghĩa agent, command) không bảo agent **tải chỉ dẫn lúc chạy** từ URL không ghim (nhánh `main`/`master`/`HEAD`, "latest"): ai sửa được nguồn đó là đổi được hành vi agent mà không qua review; nội dung cần dùng được vendor có lock (`SEC-SUPPLY-016`) hoặc URL ghim commit. → Kiểm: cổng quét tài sản prompt của `SEC-AI-018` thêm luật báo `raw.githubusercontent.com/<o>/<r>/(main|master|HEAD)/` và cụm "fetch the latest guidelines". · Nguồn: catalog stored 20 §3n.2 (skill `web-design-guidelines`/`writing-guidelines` của vercel-labs/agent-skills WebFetch từ nhánh `main` mỗi lần review) — rà 2026-10-31
 - [ ] `SEC-AI-029` **SHOULD** Mỗi ca red-team/adversarial (`SEC-AI-014`, `SEC-AI-019`) gắn ID kỹ thuật MITRE ATLAS (`AML.Txxxx`) và ghim phiên bản ATLAS dùng trong cấu hình bộ test — báo cáo phủ theo kỹ thuật, so được giữa các lần. → Kiểm: script quét `tests/adversarial/` mọi ca có `atlas_id` khớp `AML\.T\d{4}(\.\d{3})?`; cấu hình có `atlas_version` cố định. · Nguồn: stored§XT-H-075; MITRE ATLAS: https://atlas.mitre.org/ (tra 2026-11-04)
+- [ ] `SEC-AI-030` **SHOULD** Bộ nhớ dài hạn của agent có đường xoá và hết hạn: xoá theo yêu cầu (liên hệ `CMP-RIGHTS-007`, `AI-RAG-006`) và TTL mặc định; mọi nơi lưu (bảng, chỉ mục vector, cache, bản sao) đều được xoá. Bổ sung cho `SEC-AI-013` (cô lập và duyệt ghi), vốn chưa nói về xoá. → Kiểm: test ghi → xoá → truy vấn đối kháng → 0 bản ghi còn trả lại ở mọi nơi lưu. · Nguồn: đề xuất của catalog stored (PLAYBOOK §6.3 "Agent memory lifecycle test", §7.3 "Memory forgetting audit"), chưa đối chiếu nguồn gốc; `CMP-RIGHTS-007`, `AI-RAG-006`
+- [ ] `SEC-AI-031` **SHOULD** Canary rò khoá khi chạy agent: chạy agent trong môi trường thử với khoá MỒI (giá trị giả có dạng thật), rồi tìm khoá mồi trong toàn bộ đầu ra, log, trace và artefact; thấy là đỏ. Bổ sung `SEC-SECRET-021` (canary tĩnh) cho phần rò qua phiên chạy. → Kiểm: job CI chạy kịch bản agent với khoá mồi và grep đầu ra, exit 1 khi thấy. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.3 "Credential leak canary"), chưa đối chiếu nguồn gốc; `SEC-SECRET-021`
 
 ## Bẫy thường gặp
 

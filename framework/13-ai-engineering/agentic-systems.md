@@ -3,7 +3,7 @@ title: Hệ agentic: đa agent, durable execution, outbox, ranh giới ủy quy�
 kind: module
 prefix: AI-AGENTIC
 applies_to: [ai-agent, agentic-system, data-ml]
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Hệ agentic: đa agent, durable execution, outbox, ranh giới ủy quyền
@@ -99,6 +99,8 @@ Mỗi agent con (subagent) hiện có nhận một kết luận — bảng theo 
 - [ ] `AI-AGENTIC-017` **MAY** Kiến trúc agent-to-agent qua A2A chỉ khi cần liên tổ chức; nội bộ dùng gọi hàm/queue đơn giản hơn. · Nguồn: [`protocols-mcp-a2a.md`](protocols-mcp-a2a.md)
 - [ ] `AI-AGENTIC-018` **MAY** Mô phỏng (simulation) với tenant giả và dữ liệu tổng hợp trước khi bật tự trị mức cao cho tenant thật.
 - [ ] `AI-AGENTIC-019` **SHOULD** Gộp agent con đang có vào một vòng lặp theo bước nhỏ, đảo ngược được, mỗi bước một thay đổi: eval end-to-end nhỏ trước lần gộp đầu, có ca cho **mỗi chuỗi agent chạy cùng nhau** trong production (mọi cặp `chains_with` của kiểm kê) và mỗi luật không được vi phạm; agent con giữ lại gọi **như tool** — kết quả theo schema ([`AI-APP-003`](llm-app-foundations.md)), agent chính giữ hội thoại và kiểm lại kết luận bằng dữ liệu thật — để có baseline mà không viết lại; bàn giao hẳn (full handoff) chỉ khi agent con phải nói chuyện trực tiếp với người dùng; gộp trước cặp gắn chặt (chuỗi nhau, đọc cùng dữ liệu, hay chạy cùng) và agent con nhiều lưu lượng nhất; gộp (fold) **từng cái một** thành skill + tool, so eval theo `AI-AGENTIC-001`, rồi chạy lại ca của miền đó **không có skill** — điểm bằng nhau thì bỏ skill. Thứ tự giữa các bước chọn theo kiểm kê và ghi lý do trong ADR (kit xếp gộp cặp → fold → as-tool; bài coi as-tool là bước đầu an toàn). Giữ agent con là kết quả chấp nhận được: mục tiêu là hệ có bằng chứng, không phải ít agent nhất. → Kiểm: ADR gộp liệt kê từng bước kèm bảng `ca | baseline | sau | đổi?` (n, số lần chạy); ca đang đạt thành trượt mà ADR không giải thích → không gộp; script của dự án (ý tưởng từ `chain_coverage.py` của kit) đọc cột `chains_with` của kiểm kê và tag ca trong bộ eval, exit 1 khi một cặp không có ca; schema kết quả agent con có trong repo. · Nguồn: claude.com *When to fold subagents* §How to fold subagents (2026-10-22); kit `skill/steps/02-merge.md`, `03-fold.md`, `04-as-tool.md`, `skill/scripts/chain_coverage.py` (c437962, 2026-10-21 — bước merge và vế không-skill chưa chạy trên model thật trong kit)
+- [ ] `AI-AGENTIC-022` **MAY** Bước duyệt của người (liên hệ `AI-AGENTIC-008`) có hạn chờ, đường leo thang và người thay thế; không bước nào mồ côi (mọi đường đi đều kết thúc ở duyệt, từ chối hoặc hết hạn). → Kiểm: mô phỏng mọi đường đi của quy trình duyệt, không có trạng thái treo. · Nguồn: đề xuất của catalog stored (PLAYBOOK §6.8), chưa đối chiếu nguồn gốc.
+- [ ] `AI-AGENTIC-023` **MAY** Quy trình bền (durable): phần quyết định không phụ thuộc thời gian, ngẫu nhiên hay I/O ngoài, để phát lại lịch sử cho kết quả xác định; có test phát lại trong CI (liên hệ `AI-AGENTIC-021`, `BE-JOB-019`). → Kiểm: phát lại lịch sử đã ghi cho cùng chuỗi lệnh. · Nguồn: đề xuất của catalog stored (PLAYBOOK §6.8, §7.6), chưa đối chiếu nguồn gốc.
 
 ## Bẫy thường gặp
 

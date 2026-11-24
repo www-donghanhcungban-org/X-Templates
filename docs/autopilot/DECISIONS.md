@@ -875,3 +875,10 @@
 - Chọn: Chỉ ghi số đã tra lại từ nguồn gốc, phần chưa xác minh để nhãn chưa xác minh, không đổi mức ID trừ khi có nguồn gốc
 - Lý do (tiêu chí chất lượng cuối): Luật P2 của khung: phiên bản và luật phải xác minh từ nguồn sống kèm ngày, không được thì ghi chưa xác minh. Các báo cáo đều tự nhận có phần dựa vào bản tóm tắt của mô hình nhỏ hoặc nguồn thứ cấp; khi tôi tra lại thì bắt được hai lẫn lộn (scorecard-action so với Scorecard CLI, hồ sơ api-service chưa theo Python 3.15.2). Mốc pháp lý EU AI Act sau Omnibus chỉ có bình luận pháp lý thứ cấp vì EUR-Lex không đọc được, nên không đưa vào khung và không hạ mức CMP-AI-012.
 - Đường lùi: git revert commit của PR; mọi số cũ nằm trong lịch sử
+
+### D-567 · 2026-11-24T08:58:10+00:00 · Đưa các ý KHUNG của catalog stored vào khung bằng ID mới ở mức nào?
+
+- Phương án: (1) Chỉ SHOULD hoặc MAY: SHOULD khi bổ sung trực tiếp cho một ID có sẵn và viện dẫn ID đó, MAY khi nguồn chỉ là đề xuất của catalog stored; không có MUST · (2) Đặt mức theo đề xuất của báo cáo rà soát, kể cả MUST cho một số ý
+- Chọn: Chỉ SHOULD hoặc MAY: SHOULD khi bổ sung trực tiếp cho một ID có sẵn và viện dẫn ID đó, MAY khi nguồn chỉ là đề xuất của catalog stored; không có MUST
+- Lý do (tiêu chí chất lượng cuối): Đa số ý chỉ có nguồn là đề xuất của catalog stored chưa đối chiếu nguồn gốc, nên không thể bắt buộc dự án đích. Mức theo quan hệ với ID có sẵn giúp SHOULD vẫn có căn cứ nội bộ, và mọi ID viện dẫn đã được máy kiểm là có thật. WF-CI-029 chỉ có nguồn stored và không bổ sung ID nào nên hạ xuống MAY. Riêng AI-PROTO-020 có nguồn chính thức (changelog MCP 2026-07-28) nhưng chỉ viết điều changelog nói.
+- Đường lùi: git revert commit của PR; ID chưa được ID nào khác viện dẫn ngược

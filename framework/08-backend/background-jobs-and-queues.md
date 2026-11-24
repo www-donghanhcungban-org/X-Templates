@@ -3,7 +3,7 @@ title: Job nền, hàng đợi, lịch, idempotency, retry, DLQ
 kind: module
 prefix: BE-JOB
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Job nền, hàng đợi, lịch, idempotency, retry, DLQ
@@ -64,6 +64,7 @@ nghẽn. Mọi lựa chọn ghi ADR.
 - [ ] `BE-JOB-018` **SHOULD** Có công cụ vận hành: xem DLQ, retry một/nhiều job, huỷ job, tạm dừng hàng đợi — có kiểm quyền và audit log. → Kiểm: lệnh/UI tồn tại; thao tác ghi log.
 - [ ] `BE-JOB-019` **MAY** Dùng durable execution (Temporal/Restate/DBOS/Inngest) cho workflow nhiều bước, chờ người duyệt nhiều ngày, cần replay chính xác. → Kiểm: ADR ghi lý do và điều kiện chuyển. · Nguồn: catalog 21 §5
 - [ ] `BE-JOB-020` **MAY** Test tải hàng đợi: bơm N job/giây theo mục tiêu, đo tuổi job và tỉ lệ fail trước khi ra mắt. → Kiểm: báo cáo k6/Locust trong [`../14-testing-quality/performance-and-load.md`](../14-testing-quality/performance-and-load.md).
+- [ ] `BE-JOB-021` **SHOULD** Job định kỳ có heartbeat (dead-man's switch): mỗi lần chạy xong ping dịch vụ giám sát; quá thời gian ân hạn không thấy ping thì cảnh báo (cùng cơ chế `absent()`/heartbeat ở [`../15-operations/slo-and-alerting.md`](../15-operations/slo-and-alerting.md)). Bổ sung `BE-JOB-009` (chỉ quy định bù/bỏ lần bỏ lỡ, không phát hiện job im lặng). → Kiểm: giả lập bỏ lỡ một lần chạy, cảnh báo phát ra trong thời gian ân hạn. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.8 "Cổng heartbeat cho job định kỳ"), chưa đối chiếu nguồn gốc; `BE-JOB-009`
 
 ## Bẫy thường gặp
 

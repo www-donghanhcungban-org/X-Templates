@@ -3,7 +3,7 @@ title: Quản lý bí mật: lưu, xoay, quét, phạm vi
 kind: module
 prefix: SEC-SECRET
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Quản lý bí mật: lưu, xoay, quét, phạm vi
@@ -58,6 +58,7 @@ updated: 2026-11-04
 - [ ] `SEC-SECRET-020` **MAY** Mã hoá file bí mật trong git bằng SOPS + age/KMS cho GitOps đội nhỏ; khoá giải mã vẫn ở KMS. → Kiểm: file `*.enc.yaml` giải mã được trong CI qua OIDC; không có bản rõ trong repo. · Nguồn: SOPS docs (MPL-2.0)
 - [ ] `SEC-SECRET-021` **MAY** Canary token (khoá giả có cảnh báo khi bị dùng) đặt trong repo/`.env.example`/image để phát hiện kẻ quét. → Kiểm: canary đã kích hoạt thử 1 lần. · Nguồn: kinh nghiệm vận hành (không có chuẩn)
 - [ ] `SEC-SECRET-022` **SHOULD** Secret trong cấu hình tích hợp do người dùng/tenant nhập (webhook, SMTP, ngân hàng, kênh thông báo) là **write-only**: API chỉ trả placeholder đã che (`has_secret: true`/`••••`), không bao giờ trả giá trị; khi request đổi host/URL/đích mà vẫn giữ placeholder thì server bỏ secret cũ và trả 422 buộc nhập lại, để người sửa được cấu hình không chuyển secret đã lưu sang đích do mình kiểm soát. → Kiểm: test PATCH đổi URL webhook (hoặc host SMTP) giữ nguyên placeholder → 422 và secret cũ không còn được dùng cho đích mới; GET không chứa giá trị secret. · Nguồn: `www-donghanhcungban-org/stored` 12 §3k (CHANGELOG v0.3.15 của ARTEX: vá lỗi che credential bị bypass — đổi địa chỉ giữ nguyên credential làm rò khoá; đọc 2026-10-16)
+- [ ] `SEC-SECRET-023` **SHOULD** Sổ danh tính phi người (token, service account, khoá CI, GitHub App, khoá API): mỗi mục có chủ, quyền, ngày tạo, nơi dùng, dùng chung hay riêng; quá hạn xoay vòng (theo `SEC-SECRET-008`/`SEC-SECRET-009`) thì đỏ; danh tính không còn dùng bị thu hồi. Mở rộng sổ của `SEC-SECRET-006` sang mọi danh tính phi người. → Kiểm: tệp sổ có đủ cột và job đối chiếu với danh sách thật (CI/IdP) báo mục thiếu hoặc quá hạn. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.8 "Kiểm kê danh tính phi người"), chưa đối chiếu nguồn gốc
 
 ## Bẫy thường gặp
 

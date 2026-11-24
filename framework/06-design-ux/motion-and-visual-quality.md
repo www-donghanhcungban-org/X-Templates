@@ -66,6 +66,7 @@ updated: 2026-11-24
 - [ ] `UX-VISUAL-016` **MAY** Dùng View Transitions API cho chuyển trang/danh sách với fallback không animation. → Kiểm: `document.startViewTransition` được feature-detect. · Ghi chú: Baseline newly available từ 2025-10-14 (WebStatus), cần fallback.
 - [ ] `UX-VISUAL-017` **MAY** Thư viện animation JS chỉ nạp lazy ở route cần. → Kiểm: bundle analyzer: `motion` không nằm trong chunk đầu.
 - [ ] `UX-VISUAL-018` **MAY** Storyboard/luật chuyển động viết trong `docs/MOTION.md` (mục đích, thời lượng, easing cho từng loại). → Kiểm: file tồn tại và token motion trỏ về nó.
+- [ ] `UX-VISUAL-019` **MAY** Dự án xuất video kiểm tiêu chí chớp nháy WCAG 2.3.1 (không quá ba lần chớp trong một giây) trên clip đã render, ghi rõ giới hạn của cách đo (không thay phân tích chuyên dụng). Đo cần giải mã video: công cụ ngoài. Liên hệ `UX-VISUAL-002`, `UX-A11Y-015`. → Kiểm: báo cáo đo kèm clip; hoặc review thủ công có ghi người và ngày. · Nguồn: WCAG 2.3.1 (W3C)
 
 ## Bẫy thường gặp
 
