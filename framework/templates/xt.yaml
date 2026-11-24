@@ -43,6 +43,8 @@ delivery_phase: build
 # reviewer_model_family: ""
 # author_effort: ""           # low|medium|high|xhigh|max — cần cả hai khi cùng họ (D-161); chỉ dùng cùng model lấy từ cấu hình
 # reviewer_effort: ""
+# author_tier: ""             # bậc khai báo thay tên model cho harness máy không xếp hạng được (ADR-0098): bottom|top-2|top-1|top
+# reviewer_tier: ""           # tính từ đỉnh của nhà cung cấp; mặc định rà ở top-1; phải cao hơn author_tier (hoặc cùng bậc, effort cao hơn)
 # CI mẫu 3 job (ADR-0039): job e2e chạy cùng lúc với job gate; khoá rỗng = bỏ qua có log.
 e2e: "" # suite E2E, CI chạy (`dev-task.sh e2e I N`); dùng $XT_SHARD để chia shard, vd npx playwright test --shard=${XT_SHARD:-1/1}
 e2e_setup: "" # trước e2e: cài trình duyệt (vd npx playwright install --with-deps chromium)

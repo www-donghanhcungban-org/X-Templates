@@ -5883,7 +5883,39 @@ def _doctor_orchestration(base: Path) -> List[Finding]:
         out.append(
             Finding("orchestration", "warn", msg + "; đổi `model:` thành `inherit` hoặc tầng của khung (LOOP-ORCH-022)")
         )
-    return out + _doctor_harness_settings(base)
+    return out + _doctor_review_tiers(base) + _doctor_harness_settings(base)
+
+
+MODEL_TIERS_RELS = (
+    "framework/templates/harness/model-tiers.json",  # repo khung
+    ".xtemplates/framework/templates/harness/model-tiers.json",  # dự án đích
+)
+
+
+def _doctor_review_tiers(base: Path) -> List[Finding]:
+    """ADR-0098: `reviewer_tier` khai ở xt.yaml mà agent `reviewer*` ghim model ở bậc khác (theo bảng họ Claude đã xác
+    minh ở `model-tiers.json`) → cảnh báo. Fail-open: thiếu xt.yaml/bảng hay JSON hỏng thì bỏ qua; chỉ in tên tệp và bậc."""
+    try:
+        want = _xt_keys(base).get("reviewer_tier", "")
+    except (OSError, ValueError):
+        return []
+    if want not in TIER_ORDER:
+        return []
+    doc: Dict[str, Any] = {}
+    for rel in MODEL_TIERS_RELS:
+        doc = _read_json_obj(base / rel) or {}
+        if doc:
+            break
+    anthropic = (doc.get("vendors") or {}).get("anthropic") or {}
+    alias_tier = {v.get("alias"): t for t, v in anthropic.items() if isinstance(v, dict) and v.get("alias")}
+    out = []
+    for p in sorted((base / ".claude" / "agents").glob("reviewer*.md")):
+        m = AGENT_MODEL_RE.search(_read_text_or_empty(p))
+        have = alias_tier.get(m.group(1)) if m else None
+        if have and have != want:
+            msg = f"{p.name} ghim model ở bậc '{have}' nhưng xt.yaml reviewer_tier là '{want}'"
+            out.append(Finding("orchestration", "warn", msg + " — đổi `model:` hoặc `reviewer_tier` (ADR-0098)"))
+    return out
 
 
 SETTINGS_LOCAL_REL = ".claude/settings.local.json"  # quyền/đường dẫn máy cá nhân — không commit (LOOP-HARNESS-032)
@@ -17666,7 +17698,21 @@ def model_vendor(family: str) -> str:
 
 EFFORTS = ("low", "medium", "high", "xhigh", "max")  # mức effort, tăng dần
 REVIEW_EFFORT_KEYS = ("reviewer_effort", "author_effort")
-REVIEW_KEYS = ("review_identity", "author_model_family", "reviewer_model_family", "author_effort", "reviewer_effort")
+TIER_ORDER = (
+    "bottom",
+    "top-2",
+    "top-1",
+    "top",
+)  # bậc khai báo theo vị trí so với đỉnh của nhà cung cấp, tăng dần (ADR-0098)
+REVIEW_TIER_KEYS = ("author_tier", "reviewer_tier")
+REVIEW_KEYS = (
+    "review_identity",
+    "author_model_family",
+    "reviewer_model_family",
+    "author_effort",
+    "reviewer_effort",
+    *REVIEW_TIER_KEYS,
+)
 
 
 def review_capability_error(
@@ -17714,13 +17760,39 @@ def review_config(base: Path, ref: str) -> Dict[str, str]:
     return {k: keys[k] for k in REVIEW_KEYS if keys.get(k)}
 
 
+def review_tier_config_error(keys: Dict[str, str]) -> Optional[str]:
+    """Bậc khai báo `author_tier`/`reviewer_tier` (ADR-0098): thuộc `TIER_ORDER`; khai cả hai thì reviewer phải ở bậc cao hơn
+    người viết, hoặc cùng bậc với effort reviewer cao hơn (cần khai cả hai effort). Bậc khai báo thay tên model cho harness
+    mà máy không xếp hạng được; người khai chịu trách nhiệm ánh xạ model → bậc (bảng ở `model-tiers.json`)."""
+    for k in REVIEW_TIER_KEYS:
+        if keys.get(k) and keys[k] not in TIER_ORDER:
+            return f"xt.yaml: {k} '{keys[k]}' không thuộc các bậc {'/'.join(TIER_ORDER)}"
+    a, r = keys.get("author_tier", ""), keys.get("reviewer_tier", "")
+    if not (a and r):
+        return None
+    ia, ir = TIER_ORDER.index(a), TIER_ORDER.index(r)
+    if ir > ia:
+        return None
+    re_, ae = keys.get("reviewer_effort", ""), keys.get("author_effort", "")
+    if ir == ia and re_ in EFFORTS and ae in EFFORTS and EFFORTS.index(re_) > EFFORTS.index(ae):
+        return None
+    return (
+        f"xt.yaml reviewer_tier '{r}' không cao hơn author_tier '{a}' — reviewer phải ở bậc cao hơn người viết, hoặc cùng bậc "
+        "với reviewer_effort cao hơn author_effort (LOOP-ORCH-005, ADR-0098)"
+    )
+
+
 def review_family_config_error(keys: Dict[str, str]) -> Optional[str]:
-    """Cấu hình `*_model_family`/`*_effort` (xt.yaml): effort khai thì phải thuộc `EFFORTS`; khai cả hai họ thì phải nhận
-    diện được và reviewer năng lực cao hơn tác giả theo `review_capability_error` (D-161 kiểm theo cấu hình, vì PR không
-    mang dữ liệu model của tác giả); `ci-check` từ chối cấu hình sai luật."""
+    """Cấu hình `*_model_family`/`*_effort`/`*_tier` (xt.yaml): effort khai thì phải thuộc `EFFORTS`; bậc khai báo hợp lệ
+    (`review_tier_config_error`); khai cả hai họ thì phải nhận diện được và reviewer năng lực cao hơn tác giả theo
+    `review_capability_error` (D-161 kiểm theo cấu hình, vì PR không mang dữ liệu model của tác giả); `ci-check` từ chối
+    cấu hình sai luật."""
     bad = [k for k in REVIEW_EFFORT_KEYS if keys.get(k) and keys[k] not in EFFORTS]
     if bad:
         return f"xt.yaml: {bad[0]} '{keys[bad[0]]}' không thuộc các mức effort {'/'.join(EFFORTS)}"
+    tier_err = review_tier_config_error(keys)
+    if tier_err:
+        return tier_err
     a, r = keys.get("author_model_family", ""), keys.get("reviewer_model_family", "")
     if not (a and r):
         return None
@@ -17740,6 +17812,13 @@ def _review_models_error(args: argparse.Namespace, cfg: Optional[Dict[str, str]]
     bad_cfg = review_family_config_error(cfg)
     if bad_cfg:
         return bad_cfg
+    if cfg.get("author_tier") and cfg.get("reviewer_tier") and not (args.reviewer_model or args.author_model):
+        # Bậc khai báo ở nhánh đích thay tên model (harness máy không xếp hạng được, ADR-0098): đã kiểm ở cấu hình, ghi
+        # `tier:<bậc>` làm dấu vết thay cho tên model chưa từng được khai.
+        args.reviewer_model, args.author_model = f"tier:{cfg['reviewer_tier']}", f"tier:{cfg['author_tier']}"
+        args.reviewer_effort = args.reviewer_effort or cfg.get("reviewer_effort")
+        args.author_effort = args.author_effort or cfg.get("author_effort")
+        return None
     # Effort cấu hình đi kèm model cấu hình: model khai bằng cờ (workflow `pr-review` truyền model reviewer thật) thì
     # effort cấu hình không áp cho model đó — không ghi effort chưa từng chạy (review #247).
     if not args.reviewer_model:
