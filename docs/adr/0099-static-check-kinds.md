@@ -30,7 +30,14 @@ Khung đòi nhiều quy tắc kiểm được bằng máy mà dự án đích ph
 | `vex` | `SEC-SUPPLY-030`, `SEC-SUPPLY-031` | `VEX000`–`005` | OpenVEX JSON |
 | `pii-vn` | `CMP-PRIV-010`, `PM-METRIC-005`, `AI-GUARD-004`, `PRF-DATA-009` | `PII001`–`004` | CCCD: mã tỉnh 001–096 và chữ số thứ 4 trong 0–3 là heuristic, chưa đối chiếu danh sách chính thức; không quét `INSERT … VALUES` |
 
-Tệp không đọc được hoặc không phải UTF-8: `nfc`, `credits`, `trace`, `sbom`, `vex`, `pii-vn` báo (`…000`; `pii-vn` bắt buộc vì cổng quyền riêng tư không được lọt dữ liệu ở tệp log lớn); `tokens`, `motion`, `ac-trace` bỏ qua im lặng — loại nào cần thì thêm mã `…000` khi có ca thực tế.
+**Đợt 2 (2026-11-24):**
+
+| Loại | Yêu cầu được máy kiểm | Mã | Giả định cần biết |
+|---|---|---|---|
+| `i18n` | `XC-I18N-009` | `LOC000`–`007` | Catalog JSON, bắt buộc `--opt source=<tệp nguồn>`; ICU chỉ kiểm cân ngoặc và quote `'{`; khoá lồng làm phẳng bằng dấu chấm; `--opt min=<0-100>` cho completeness |
+| `dedup-leak` | `AI-DATA-007`, `PRF-DATA-007` | `DDL000`–`005` | JSONL/CSV; bắt buộc `--opt train=` và `--opt eval=` (tên tập = tên tệp bỏ đuôi); CSV hàng đầu là tiêu đề; near-duplicate (MinHash/LSH) chỉ chạy khi có `--opt near=`, bucket chặn 64 mục nên có thể bỏ sót |
+
+Tệp không đọc được hoặc không phải UTF-8: `i18n`, `dedup-leak` báo (`…000`); `nfc`, `credits`, `trace`, `sbom`, `vex`, `pii-vn` báo (`…000`; `pii-vn` bắt buộc vì cổng quyền riêng tư không được lọt dữ liệu ở tệp log lớn); `tokens`, `motion`, `ac-trace` bỏ qua im lặng — loại nào cần thì thêm mã `…000` khi có ca thực tế.
 
 **Giới hạn đã biết của `motion`:** `/*` nằm trong chuỗi (`content: "/*"`), trong `//` của SCSS hay trong glob sass bị coi là bắt đầu bình luận và làm trắng phần còn lại của tệp (có thể bỏ sót `MOT001`); chấp nhận vì CSS/SCSS không có bộ phân tích trong stdlib, dùng `/* xt-allow: … */` hoặc `--opt ignore=` khi gặp.
 

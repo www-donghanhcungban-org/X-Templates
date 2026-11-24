@@ -13,7 +13,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
-KINDS: tuple[str, ...] = ("ac-trace", "credits", "motion", "nfc", "pii-vn", "sbom", "tokens", "trace", "vex")
+KINDS: tuple[str, ...] = (
+    "ac-trace",
+    "credits",
+    "dedup-leak",
+    "i18n",
+    "motion",
+    "nfc",
+    "pii-vn",
+    "sbom",
+    "tokens",
+    "trace",
+    "vex",
+)
 SKIP_DIRS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__", ".mypy_cache", ".ruff_cache"})
 MAX_BYTES = 2 * 1024 * 1024
 
