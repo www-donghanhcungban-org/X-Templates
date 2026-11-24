@@ -33,6 +33,7 @@
   "stage",
   "test-select",
   "test-shard-plan",
+  "test-weights",
   "upgrade",
   "validate"
  ],
@@ -67,6 +68,10 @@
   "pr": ["debt", "next", "rethink", "reviewed", "stats", "steward", "title-check"],
   "stage": ["approve", "init", "new-cycle", "reopen", "status", "submit"]
  },
+ "subcommands_level3": {
+  "perf trial": ["abort", "finish", "log", "prepare", "start", "status"]
+ },
+ "review_verdicts": ["blocking", "clean", "debt", "inconclusive"],
  "upgrade_actions": ["check", "open-pr"],
  "config_keys": [
   "acceptance",
@@ -129,6 +134,7 @@
  ],
  "schemas": {
   "release_check": [3, 4],
-  "install_manifest": 1
+  "install_manifest": 1,
+  "stage": 1
  }
 }
