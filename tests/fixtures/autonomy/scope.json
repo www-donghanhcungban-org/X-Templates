@@ -762,6 +762,16 @@
    ]
   },
   {
+   "reason": "Artefact .pyz của khung (ADR-0097): dựng tất định, nhận ra module anh em trong zip, ghim sha256, bề mặt hợp đồng và tài liệu/số đo đi kèm là công cụ dựng, đọc tệp và tài liệu, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_pack dựng artefact từ nguồn thật, đòi đủ lệnh con của hợp đồng, đúng --version, sửa một byte, liên kết tượng trưng, ghim sai dạng; tests.test_contract_surface đóng băng lệnh con, khoá xt.yaml và số schema; research/evidence giữ số đo thô.",
+   "ids": [
+    "AUD-DOC-335",
+    "AUD-DOC-336",
+    "AUD-HAR-493",
+    "AUD-TEST-153",
+    "AUD-XFEAT-055"
+   ]
+  },
+  {
    "reason": "Phân phối khung: tải archive và biên nhận của release, kiểm digest và attestation (xt_distribution) là I/O mạng và gh attestation, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_distribution_bytes kiểm sửa một byte, thay biên nhận, thiếu tệp, thiếu release, tiền tố theo tên repo.",
    "ids": [
     "AUD-CI-036"
