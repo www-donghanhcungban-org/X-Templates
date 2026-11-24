@@ -1,7 +1,7 @@
 ---
 title: Adapter hook cho công cụ agent khác
 kind: index
-updated: 2026-11-20
+updated: 2026-11-24
 ---
 
 # Adapter hook cho công cụ agent khác Claude Code (ADR-0064 lát B)
@@ -60,3 +60,20 @@ chưa tin cậy thì Codex bỏ qua cả lớp `.codex/`. **Giới hạn:** ch�
 xong" của `/autopilot` không có ở Codex, dùng `loop run --agent codex`); `ask` không hỗ trợ; agent thừa hưởng model của phiên nên luật
 "reviewer cao hơn người viết" (`LOOP-ORCH-005`) chỉ còn effort để phân biệt — `executor` và `reviewer` đều không khai
 effort nên cặp mặc định **không** phân biệt được, chỉ `executor-deep` (high) so với `reviewer-alt` (max); tool đọc tệp không qua adapter; mức hỗ trợ vẫn **thử nghiệm**.
+Từ ADR-0098, bậc model của từng agent nằm ở [`model-tiers.json`](model-tiers.json) (bảng bậc theo nhà cung cấp và vai); lát R2 sinh `model` cho agent Codex từ đó khi dự án khai bật.
+
+## Bảng bậc model theo harness (ADR-0098, D-559)
+
+Review và rà code dùng **bậc thấp hơn đúng một nấc so với bậc cao nhất** của harness (`top-1`); model nhẹ nhất (`bottom`) chỉ cho tra cứu chỉ đọc (`explore`). Dữ liệu và ngày đọc ở `model-tiers.json`; nhà cung cấp chưa xác minh thì không dùng để xếp hạng.
+
+| Harness (adapter) | `top` | `top-1` (rà code) | `bottom` (tra cứu) | Trạng thái bậc |
+|---|---|---|---|---|
+| Claude Code (`.claude/`) | `claude-fable-5-2` | `claude-opus-5-5` | `claude-haiku-5-5` | đã xác minh; agent đồng bộ qua `model:` |
+| Codex CLI (`codex-hooks.json`) | `gpt-6.2-astra` | `gpt-6.2-sol` | `gpt-6-luna` | thứ bậc suy từ docs, chưa chính thức; R2 sinh `model` khi khai bật |
+| Gemini CLI (`gemini-settings.json`) | chưa xác minh | chưa xác minh | chưa xác minh | Carbon/Argon cùng giá; CLI có thể đã đổi sang Antigravity |
+| Grok CLI (`grok-xt.json`) | `grok-4.7` | `grok-4.6` (cùng giá) | `grok-4.3` | chưa xác minh model CLI hỗ trợ |
+| Cursor (`cursor-hooks.json`) | theo nhà cung cấp của model đã chọn | như vậy | Composer 2.5 | dùng bảng của nhà cung cấp tương ứng |
+| Copilot CLI (`copilot-xt.json`) | theo nhà cung cấp | như vậy | Haiku 5.5 / GPT-6 Luna | hệ số premium request chưa xác minh |
+| OpenCode (`opencode-xt.ts`) | theo nhà cung cấp cấu hình | như vậy | — | chưa tra |
+
+**Harness chỉ có một hoặc hai bậc, hoặc `top-1` cùng giá với `top`:** rà bằng chính bậc đỉnh với effort cao hơn người viết; người viết đã ở effort cao nhất thì reviewer khác nhà cung cấp; không có thì `pr reviewed --inconclusive` + `loop defer`. Không hạ cổng bằng cách ghi rà sạch.

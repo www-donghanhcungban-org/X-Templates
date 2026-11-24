@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "note": "Nguồn duy nhất cho bậc model theo nhà cung cấp và vai trò của agent (ADR-0098). Bậc đếm từ đỉnh: top = bậc cao nhất của nhà cung cấp, top-1 = thấp hơn một nấc (dùng cho rà code, D-558/D-559), top-2, bottom = nhẹ nhất. Giá USD/MTok vào/ra, bậc chuẩn, đọc ngày as_of từ trang chính thức; ID và giá đổi nhanh nên đọc lại trước khi dựa vào. Nhà cung cấp chưa xác minh thì không được máy dùng để xếp hạng.",
+ "as_of": "2026-11-24",
+ "tiers": ["bottom", "top-2", "top-1", "top"],
+ "vendors": {
+  "anthropic": {
+   "verified": true,
+   "source": "https://platform.claude.com/docs/en/about-claude/models/overview",
+   "bottom": {"alias": "haiku", "id": "claude-haiku-5-5", "price": "0.10/0.50 (<=100K), 0.50/2.50 (>100K)"},
+   "top-2": {"alias": "sonnet", "id": "claude-sonnet-5-5", "price": "2/10"},
+   "top-1": {"alias": "opus", "id": "claude-opus-5-5", "price": "4/20"},
+   "top": {"alias": "fable", "id": "claude-fable-5-2", "price": "8/40"}
+  },
+  "openai": {
+   "verified": false,
+   "source": "https://learn.chatgpt.com/docs/models",
+   "note": "Thứ bậc Astra > Sol > Terra > Luna suy từ mô tả trên docs, không phải bảng xếp hạng chính thức; máy dùng làm bậc chỉ khi dự án đích khai bật (lát R2).",
+   "bottom": {"id": "gpt-6-luna", "price": "0.10/0.50"},
+   "top-2": {"id": "gpt-6.1-terra", "price": "1/5"},
+   "top-1": {"id": "gpt-6.2-sol", "price": "2/10"},
+   "top": {"id": "gpt-6.2-astra", "price": "8/40"}
+  }
+ },
+ "unverified_vendors": {
+  "google": "Gemini 4 Carbon/Argon cùng giá ở thời điểm đọc (không tiết kiệm khi hạ một nấc); thứ bậc và việc Gemini CLI có chạy Gemini 4 chưa xác minh; Gemini CLI bị thay bằng Antigravity CLI cho một số gói từ 2026-06-18.",
+  "xai": "grok-4.7 và grok-4.6 cùng giá; model Grok CLI hỗ trợ chưa xác minh.",
+  "cursor": "Đa nhà cung cấp theo model đã chọn: dùng bảng của nhà cung cấp đó.",
+  "copilot": "Đa nhà cung cấp; hệ số premium request chưa xác minh.",
+  "opencode": "Theo nhà cung cấp cấu hình; chưa tra."
+ },
+ "roles": {
+  "explore": "bottom",
+  "researcher": "top-2",
+  "executor": "top-2",
+  "acceptance-author": "top-2",
+  "executor-deep": "top-1",
+  "reviewer": "top-1",
+  "reviewer-alt": "top-1"
+ },
+ "main_session": {
+  "plan_spec_decision": "top",
+  "write_code": "top-1",
+  "write_code_max_effort": "xhigh"
+ }
+}

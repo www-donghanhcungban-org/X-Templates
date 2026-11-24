@@ -826,3 +826,10 @@
 - Chọn: Mỗi harness dùng thấp hơn đúng một bậc so với bậc cao nhất; harness chỉ có một hoặc hai bậc thì chốt sau nghiên cứu
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu (áp dụng cho cả dự án đích); giảm chi phí rà; LOOP-ORCH-005 giữ cho người viết thấp hơn bậc rà, ca người viết bằng chính bậc rà xử lý theo nghiên cứu vai trò (INCONCLUSIVE hoặc Gate máy)
 - Đường lùi: Quay về bậc cao nhất ở từng harness; chưa đổi tệp cấu hình nào trước khi có nghiên cứu
+
+### D-560 · 2026-11-24T04:12:27+00:00 · Triển khai vai trò model (Haiku, rà bằng đỉnh trừ một nấc) và đồng bộ các harness
+
+- Phương án: (1) Chỉ đổi cấu hình Claude · (2) Bảng bậc theo nhà cung cấp làm nguồn duy nhất (model-tiers.json), agent explore bằng Haiku, phiên chính viết code ở Opus, đồng bộ Codex và hướng dẫn các harness khác (ADR-0098)
+- Chọn: Bảng bậc theo nhà cung cấp làm nguồn duy nhất (model-tiers.json), agent explore bằng Haiku, phiên chính viết code ở Opus, đồng bộ Codex và hướng dẫn các harness khác (ADR-0098)
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu triển khai hướng tốt nhất và đồng bộ mọi harness (áp dụng cả dự án đích); một nguồn bảng bậc giữ nhất quán giữa agent Claude, agent Codex và adapter khác; phiên chính viết bằng Opus giải xung đột D-558 với LOOP-ORCH-005; Haiku chỉ cho tra cứu chỉ đọc, kèm cách đo; không nới cổng
+- Đường lùi: Bỏ explore.md và model-tiers.json; D-558/D-559 vẫn đúng ở mức lệnh giao reviewer
