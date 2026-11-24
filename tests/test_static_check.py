@@ -184,6 +184,20 @@ class CliTest(TmpTest):
                 self.assertEqual(rc, 2)
                 self.assertIn("static-check", err)
 
+    def test_unexpected_kind_error_exits_two_not_as_findings(self):
+        """Lỗi ngoài dự kiến của một loại không được thoát mã 1 (trùng "có phát hiện") hay ném traceback."""
+        for exc in (
+            ValueError("x"),
+            RecursionError("x"),
+            ZeroDivisionError("x"),
+            UnicodeEncodeError("u", "x", 0, 1, "y"),
+        ):
+            with self.subTest(exc=type(exc).__name__), unittest.mock.patch.object(xt_checks, "run", side_effect=exc):
+                rc, out, err = run_cli("nfc", str(self.base))
+            self.assertEqual((rc, out), (2, ""))
+            self.assertIn("lỗi nội bộ", err)
+            self.assertIn(type(exc).__name__, err)
+
     def test_default_path_is_the_current_directory(self):
         self.put("a.md", NFC + "\n")
         with unittest.mock.patch.object(xt_checks, "run", return_value=[]) as run:

@@ -910,3 +910,10 @@
 - Chọn: sửa 🔴 và 🟠 rẻ ngay trước PR
 - Lý do (tiêu chí chất lượng cuối): 🔴 bắt buộc sửa (ADR-0062); 🟠 đều rẻ, cùng tệp, và một cái (biên test đột biến) đã làm CI đỏ lần trước; tránh thêm PR nợ
 - Đường lùi: git revert commit của PR
+
+### D-572 · 2026-11-24T11:50:40+00:00 · Thoát mã nào khi một loại static-check gặp lỗi ngoài dự kiến
+
+- Phương án: (1) mã 2 kèm tên lỗi · (2) để traceback mã 1
+- Chọn: mã 2 kèm tên lỗi
+- Lý do (tiêu chí chất lượng cuối): mã 1 nghĩa là có phát hiện; CI tách được hỏng công cụ khỏi phát hiện thật; không nuốt lỗi vì vẫn in tên lỗi
+- Đường lùi: git revert commit của PR

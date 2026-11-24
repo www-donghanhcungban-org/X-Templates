@@ -11874,6 +11874,13 @@ def cmd_static_check(args: argparse.Namespace) -> int:
     except xt_checks.CheckError as exc:
         print(f"✗ static-check {args.kind}: {exc}", file=sys.stderr)
         return 2
+    except (ValueError, ArithmeticError, RecursionError, KeyError, TypeError) as exc:
+        # Lỗi của loại với nội dung tệp lạ: mã 2 (hỏng), không phải 1 ("có phát hiện") và không traceback (rà #785).
+        print(
+            f"✗ static-check {args.kind}: lỗi nội bộ của loại ({type(exc).__name__}) — báo lỗi cho khung",
+            file=sys.stderr,
+        )
+        return 2
     if args.json:
         print(
             json.dumps(
