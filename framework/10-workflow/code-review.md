@@ -3,7 +3,7 @@ title: Code review: người + AI, checklist, SLA, ranh giới
 kind: module
 prefix: WF-REVIEW
 applies_to: [all]
-updated: 2026-11-21
+updated: 2026-11-24
 ---
 
 # Code review: người + AI, checklist, SLA, ranh giới
@@ -59,6 +59,7 @@ updated: 2026-11-21
 - [ ] `WF-REVIEW-019` **SHOULD** PR template có mục bắt buộc **"Hỗ trợ AI"**: phần nào do AI sinh, phần nào người đã tự kiểm và kiểm thế nào, phần nào chỉ AI kiểm; không cần (và theo [`XC-DOCAI-005`](../18-cross-cutting/docs-for-ai-agents.md) không ghi) tên model/phiên. → Kiểm: `pull_request_template.md` có mục; `pr-policy` job kiểm mục không rỗng. · Nguồn: `www-donghanhcungban-org/stored` 13 §6d (PR template của Homebrew/BrewUI)
 - [ ] `WF-REVIEW-020` **SHOULD** PR `fix:` có mục **"Rà cùng khuôn"** trong body: lệnh `rg`/Semgrep đã chạy để tìm cùng mẫu lỗi ở nơi khác, số chỗ trùng tìm thấy, cách xử lý từng chỗ (sửa trong PR / issue / không áp dụng kèm lý do); lỗi lặp còn ghi hàng rào mới theo `WF-REVIEW-016`. → Kiểm: `pr-policy` cảnh báo (không chặn) khi PR `fix:` thiếu mục hoặc mục rỗng. · Nguồn: `www-donghanhcungban-org/stored` 23 §4.5 (Sales-Hunter: template `TRAPS.md` cứng có mục "rà cả họ"; đọc 2026-10-16)
 - [ ] `WF-REVIEW-021` **SHOULD** Mỗi hunk của diff **truy được về yêu cầu** của PR (tiêu chí chấp nhận, bug, task ghi trong mô tả); dọn dẹp, đổi tên, format, refactor ngoài yêu cầu tách PR riêng; tác giả chỉ dọn phần thừa do chính thay đổi tạo ra (import, biến, hàm hết dùng). Áp như nhau cho diff do agent viết — agent hay "tiện tay" sửa thêm. → Kiểm: reviewer gắn `should` cho hunk không truy được; mô tả PR liệt kê thay đổi ngoài yêu cầu (nếu giữ) kèm lý do. · Nguồn: catalog `www-donghanhcungban-org/stored` 20 §3k.3 (nguyên tắc "Surgical Changes"); Google eng-practices Small CLs (tách refactor)
+- [ ] `WF-REVIEW-022` **SHOULD** Công cụ AI ngoài khung có thể tự commit, push, duyệt hay merge (ví dụ `/ship`, PR Steward và Claude Approvals của Claude Ship, agent cloud của nền tảng khác) **không là đường merge**: (1) đọc tài liệu công cụ xem hook và guard của dự án có áp dụng cho `git`/`gh` do nó tự chạy không — nếu không (Claude Ship: tool hooks "don't apply", git chạy với `core.hooksPath=/dev/null`, `/ship` chỉ đếm ngược vài giây trước commit và push) thì tắt hoặc chặn ở cấp tổ chức, không dựa vào hook (`skillOverrides` đặt `ship-local` và `steward` là `off` ở managed settings; **không** chặn bằng `Bash(git push *)` vì nó chặn luôn agent của dự án); (2) hàng rào thật ở nền tảng: ruleset bắt buộc review của người, app của công cụ ngoài danh sách bypass, không bật auto-merge hay merge queue với policy không đòi người duyệt, không `seats: 0`/`seats: 1`/`claude: approves` không kèm rà; (3) review của công cụ chỉ là tín hiệu phụ, không thay dấu review ghim head của khung (`LOOP-STOP-022`, ADR-0062, ADR-0096); (4) đặt trần chi phí trước khi bật (không trần mặc định ở PR Steward; tắt usage credits không dừng agent đang bật), bật ở chế độ chỉ quan sát trước. → Kiểm: export ruleset có `bypass_actors` không chứa app của công cụ ngoài; managed settings có khoá tắt lệnh tự commit; PR vào nhánh chính luôn có review của người hoặc dấu ghim head. · Nguồn: [`research/2026-11-24-claude-ship.md`](../../research/2026-11-24-claude-ship.md) (tài liệu Claude Ship, trích nguyên văn, đọc 2026-11-24); ADR-0100
 
 ## Bẫy thường gặp
 
