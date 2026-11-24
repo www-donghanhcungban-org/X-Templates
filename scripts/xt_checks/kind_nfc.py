@@ -28,7 +28,9 @@ SUFFIXES = (
     ".xliff",
     ".properties",
 )
-HIDDEN = frozenset(chr(code) for code in (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF))  # ký tự ẩn: viết bằng mã, không bằng chữ
+HIDDEN = frozenset(
+    chr(code) for code in (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF)
+)  # ký tự ẩn: viết bằng mã, không bằng chữ
 OPTS = ("ignore",)
 REPLACEMENT = chr(0xFFFD)
 
