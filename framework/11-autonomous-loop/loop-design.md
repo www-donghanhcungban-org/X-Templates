@@ -3,7 +3,7 @@ title: Thiết kế vòng lặp: 4 con số, tiêu chí dừng máy kiểm, bằ
 kind: module
 prefix: LOOP-DESIGN
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Thiết kế vòng lặp: 4 con số, tiêu chí dừng máy kiểm, bằng chứng
@@ -88,6 +88,7 @@ và `--max-budget-usd` (cùng `--permission-mode` và `--settings .claude/settin
 - [ ] `LOOP-DESIGN-027` **SHOULD** Tách nguồn tín hiệu **lặp** khỏi tín hiệu **chấm xong**: test do chính executor viết trong task chỉ để lặp; ở vùng `critical` hoặc task `topo: review`, Gate quyết định `[x]` chỉ chạy test có trước task (đã commit ở base, hoặc viết từ SPEC bởi ngữ cảnh khác chỉ nhận SPEC + giao diện công khai) và không sửa/xoá chúng trong task trừ khi reviewer năng lực cao hơn (`LOOP-ORCH-005`) duyệt; task khác giữ luồng mặc định `topo: self` + `/tdd` (cạnh `LOOP-DESIGN-013`, [`QA-STRAT-023`](../14-testing-quality/test-strategy.md)). → Kiểm: với task thuộc phạm vi đó, `git diff --name-only <base_sha> HEAD -- <glob test của Gate>` rỗng hoặc mỗi file đổi có review đúng head; test hồi quy: task bớt/xoá assertion hoặc đổi giá trị mong đợi trong file test Gate không ra `done` (công cụ chưa có). · Nguồn: stored 03 §8i (Reflexion `programming_runs/reflexion.py`; https://github.com/noahshinn/reflexion/tree/main/programming_runs, tra 2026-11-04)
 - [ ] `LOOP-DESIGN-028` **SHOULD** Spec/ADR có quyết định khó đảo ngược được rà **trước** khi lập task code bởi subagent ngữ cảnh mới chỉ đọc (tool chỉ đọc, không nạp file luật dự án); vòng rà dừng theo luật ghi trong spec — hai lượt sạch liên tiếp (reviewer không chạy được = lượt không sạch), trần lượt, churn (lỗi mới nằm trong phạm vi bản sửa vừa áp) → hỏi/ghi nợ; đây là bước thiết kế, không phải review PR (ADR-0062). → Kiểm: PR có spec mới kèm báo cáo rà (reviewer, lượt, kết luận). · Nguồn: stored 20 §3u (chưa xác minh — theo stored); tách từ `LOOP-DESIGN-013`
 - [ ] `LOOP-DESIGN-029` **SHOULD** Khi phiên chỉ được đẩy lên **một nhánh phát triển đã chỉ định** (phiên cloud, `Git Development Branch`) hoặc PR đáy còn chờ CI/merge, đừng ngồi chờ và đừng đẩy sang nhánh khác để chồng PR: (1) lát kế làm trên **nhánh/worktree cục bộ riêng** (từ nhánh đích mới nhất, không đẩy), có commit và Gate xanh như lát thường; (2) PR đáy merge (verdict `merge`, ghim head — `LOOP-STOP-022`) → `git fetch origin <đích>`, gộp đích vào nhánh phát triển, gộp nhánh cục bộ của lát kế vào, ghi lại `loop decide`/PLAN nếu có, chạy `loop verify --all`, đẩy và **mở PR của lát kế**; (3) lặp tới hết việc, mỗi lúc chỉ **một** PR của phiên đang mở; (4) việc cần quyền/khoá/bước người thì `loop defer`, không chờ. Phần của `LOOP-DESIGN-020` cho lát phụ thuộc vẫn đúng khi được đẩy nhiều nhánh. → Kiểm: lịch sử nhánh có commit của lát kế sau khi PR đáy merge, không có nhánh remote ngoài danh sách được phép; `git log` không có force-push. · Nguồn: yêu cầu của chủ dự án 2026-11-24 (làm trên nhánh riêng, chờ merge xong rồi tạo PR, lặp lại)
+- [ ] `LOOP-DESIGN-030` **SHOULD** Gate của task nối luồng chạy các lệnh thật tạo và đọc dữ liệu qua giao diện mà người dùng sẽ gọi. → Kiểm: trong repo tạm, chạy từng lệnh sinh dữ liệu thuộc phạm vi task, rồi dùng lệnh đọc hoặc kiểm tra artefact đã ghi; đối chiếu từng đầu ra mong đợi. Nếu một lệnh bỏ sót đầu ra của nó, Gate phải đỏ dù bộ tính trên dữ liệu mẫu vẫn xanh.
 
 ## Bẫy thường gặp
 
