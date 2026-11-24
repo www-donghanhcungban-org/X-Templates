@@ -89,6 +89,13 @@ class PackTest(unittest.TestCase):
         with self.assertRaisesRegex(xt_pack.PackError, "thiếu module"):
             xt_pack.build_bytes(full, strict=True)
 
+    def test_version_is_optional(self):
+        s = self.fake_scripts()
+        (self.tmp / "VERSION").unlink()
+        names = [n for n, _ in xt_pack.entries(s)]
+        self.assertNotIn("VERSION", names)
+        self.assertIn("__main__.py", names)
+
     def test_symlinks_are_refused(self):
         s = self.fake_scripts()
         outside = self.tmp / "secret.txt"
