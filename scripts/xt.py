@@ -5084,6 +5084,7 @@ DOCTOR_SKILLS = (
 DOCTOR_AGENTS = ("acceptance-author", "executor", "executor-deep", "researcher", "reviewer", "reviewer-alt")
 DOCTOR_AGENTS_OPTIONAL = (
     "explore",
+    "executor-mech",
 )  # agent của khung thêm từ ADR-0098: vắng thì không báo thiếu, có thì không coi là ghim lạ
 DOCTOR_YAML_KEYS = ("lint", "typecheck", "test", "build")  # LOOP-HARNESS-008
 HOOK_REF_RE = re.compile(r"\.claude/hooks/([\w.-]+(?:/[\w.-]+)*)")

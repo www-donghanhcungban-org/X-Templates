@@ -868,3 +868,10 @@
 - Chọn: Bậc A mặc định, bậc B (Code Review phụ) khi chủ tổ chức bật và đặt trần chi phí, bậc C chỉ sau khi có số đo từ B, không bao giờ merge mà không người duyệt
 - Lý do (tiêu chí chất lượng cuối): Tự động nhiều nhất mà không mất hàng rào: bậc A đã tự động toàn bộ vòng PR của khung; bậc B thêm một người rà độc lập với chi phí đặt trần; bậc C thêm theo dõi PR chỉ khi B cho thấy giá trị. Hiệu quả theo tuyên bố của Anthropic là số nội bộ không đối chứng nên chưa đủ căn cứ bật mọi thứ. Tài liệu chính thức cho thấy hook của dự án không áp dụng cho git và gh của lệnh ship, và approving review của Claude được tính là approval, nên phương án hai tạo đường merge ngoài kiểm soát của pr next. Bật dịch vụ trả phí là việc của người.
 - Đường lùi: Đổi ADR-0100 sang bậc khác và cập nhật mẫu cấu hình ở framework
+
+### D-566 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
+
+- Phương án: (1) Giữ ADR-0098: phiên chính lập PLAN/SPEC ở Fable, Haiku chỉ cho tra cứu chỉ đọc · (2) Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
+- Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu (2026-11-24): kế hoạch và việc phức tạp Opus 5.5, việc đơn giản Sonnet 5.5, việc cơ học Haiku 5.5. Phiên chính ở Opus bỏ hẳn ca Fable viết code mà reviewer Opus không cao hơn (LOOP-ORCH-005 vẫn giữ: người viết Opus effort ≤ xhigh, reviewer-alt Opus max). Haiku chỉ nhận việc cơ học có lệnh Gate kiểm máy, đỏ một lần chuyển executor (Sonnet), không quyết định, không bảo mật/license, không test mới; giữ cổng, không nới. Giảm chi phí: Opus bằng nửa giá Fable.
+- Đường lùi: Đặt lại main_session.plan_spec_decision = top ở model-tiers.json, xoá executor-mech.md và gương Codex, khôi phục câu Fable → Opus → Sonnet ở LOOP-ORCH-019

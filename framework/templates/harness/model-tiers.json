@@ -31,6 +31,7 @@
  },
  "roles": {
   "explore": "bottom",
+  "executor-mech": "bottom",
   "researcher": "top-2",
   "executor": "top-2",
   "acceptance-author": "top-2",
@@ -39,8 +40,9 @@
   "reviewer-alt": "top-1"
  },
  "main_session": {
-  "plan_spec_decision": "top",
+  "plan_spec_decision": "top-1",
   "write_code": "top-1",
-  "write_code_max_effort": "xhigh"
+  "write_code_max_effort": "xhigh",
+  "top_opt_in": "Fable (top) chỉ khi chủ dự án bật cho phiên lập PLAN/SPEC; viết code vẫn ở top-1 (D-566)"
  }
 }
