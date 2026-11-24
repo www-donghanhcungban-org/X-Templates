@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Phép thử hồi quy `llms-txt` đếm số byte đường dẫn qua hệ tệp để phát hiện cách duyệt tiền tố bậc hai đã lọt phép đo CPU trên CI #791 (T-5027). Hai phép đo CPU đầu-cuối vẫn kiểm mã thực.
+
 - Ma trận cấu trúc kiểm đủ 13 loại `static-check`; OTLP chấp nhận trường repeated `null` như không khai, báo `TRC000` cho attributes/phần tử/value sai cấu trúc và vẫn kiểm các thuộc tính GenAI hợp lệ (T-5002).
 
 - `xt_pack --strict` yêu cầu đủ thư mục package và `__init__.py`; `verify` chạy smoke `xt_app` và `xt_checks` từ chính byte artefact đã khớp nguồn/pin, trong thư mục cô lập và có timeout (T-5003).

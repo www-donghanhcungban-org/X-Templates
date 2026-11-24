@@ -63,3 +63,6 @@
 ### Cổng ký sau khi merge các lát máy làm được
 - [ ] `T-5022` Trả hàng FAIL audit: rà lại AUD-HAR-514 và sổ hiện hành theo bằng chứng thực, không đóng nợ chỉ bằng lời khai (sau: T-5021; files: docs/ops/AUDIT-STATUS.md; topo: audit) — Gate: `python3 scripts/xt.py audit check docs/ops/AUDIT-STATUS.md --strict`
 - [ ] `T-5023` Trả hàng FAIL review_debt: audit delta và rà độc lập diff tích luỹ từ SHA quét, sửa hoặc ghi nhận từng phát hiện rồi cập nhật mốc đã rà; chỉ ký khi release-check GO (files: docs/ops/; topo: audit; exec: deep) — Gate: `python3 scripts/xt.py release-check --json`
+
+### Khắc phục lỗi CI phát hiện khi tích hợp
+- [x] `T-5027` Sửa phép thử mutant llms.txt không ổn định trên CI #791: đo lượng đường dẫn qua OS API thật để đối chiếu implementation và mutant, giữ nguyên hai Gate CPU cùng ngưỡng hiện có (files: tests/test_check_llms_txt.py, CHANGELOG.md; topo: parallel; exec: deep) — Gate: `python3 -m unittest tests.test_check_llms_txt.RootLinearTimeTest tests.test_static_check_shape`

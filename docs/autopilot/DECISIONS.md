@@ -1001,3 +1001,10 @@
 - Chọn: Schema 1: brief, ít nhất hai phương án và lựa chọn, trial có not_tested rõ hoặc dữ liệu từng người ẩn danh; pilot yêu cầu đo được và tổng đếm khớp, checked báo phạm vi đã kiểm
 - Lý do (tiêu chí chất lượng cuối): T-5014 đã có mẫu và D-581/D-582 đã có envelope ceiling phụ trợ. Bộ kiểm phải kiểm cấu trúc/kiểu, ID duy nhất, số hữu hạn không âm, tổng số người/hoàn thành và dữ liệu thời gian/lỗi/trợ giúp; không suy dữ liệu thiếu thành 0. Draft cho not_tested kèm lý do và bước kế, pilot từ chối trạng thái đó. Đây là kiểm hồ sơ, không chứng minh người thật đã tham gia; T-5017 vẫn đòi nguồn và kết quả thật.
 - Đường lùi: Revert kind và SPEC mới, giữ API static-check hiện có và tài liệu gốc.
+
+### D-587 · 2026-11-24T14:39:07+00:00 · Khắc phục phép thử mutant llms.txt không ổn định trên CI #791
+
+- Phương án: (1) Giữ nguyên hai phép đo CPU implementation thật; đối chiếu production và mutant bằng tổng byte đường dẫn qua os.open/os.stat/os.lstat thực, tỷ lệ 6 hiện có và khẳng định đã đo · (2) Tăng kích thước hoặc chạy lại phép đo thời gian mutant cho tới khi vượt ngưỡng
+- Chọn: Giữ nguyên hai phép đo CPU implementation thật; đối chiếu production và mutant bằng tổng byte đường dẫn qua os.open/os.stat/os.lstat thực, tỷ lệ 6 hiện có và khẳng định đã đo
+- Lý do (tiêu chí chất lượng cuối): Job 138516996544 ở head b5af328 báo AssertionError not raised; tái hiện cục bộ dưới coverage sysmon cho kết quả phụ thuộc cặp thời gian, do parser/I/O và syscall che tỷ lệ concat. Đo OS API thật tại n128/512: production 24/24 byte, mutant 19764/275508 byte (13.94 lần). Kiểm tất định đúng hồi quy prefix, giữ các phép đo CPU đầu-cuối đang bảo vệ implementation và không thay cpu_budget hay ngưỡng chung. T-5027 sửa Gate CI này trong cùng PR, không rerun mù và không bỏ test.
+- Đường lùi: Revert riêng thay đổi positive-control nếu đối chứng không phân biệt được; giữ hai test CPU và yêu cầu CI xanh trước merge.

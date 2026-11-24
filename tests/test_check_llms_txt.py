@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import unittest.mock
 from collections.abc import Callable
+from contextlib import chdir
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -19,7 +20,7 @@ from xt_checks import kind_llms_txt
 
 SITE = "https" + ":" + "//" + "example.org"
 LSEP = chr(0x2028)  # bằng mã: nguồn không chứa ký tự ẩn thật
-# Bản đột biến bậc hai tốn ~16 lần khi cỡ tăng 4 lần; ngưỡng 6 cho biên rộng trên runner chậm (như test_check_i18n.py).
+# Tăng độ sâu 4 lần: tổng độ dài các tiền tố của bản đột biến tăng gần 16 lần.
 MUTANT_RATIO = 6
 GOOD = f"# Dự án\n\n> Tóm tắt.\n\n## Docs\n\n- [Bắt đầu]({SITE}/start): hướng dẫn\n- [API](/api.md)\n\n## Optional\n\n- [Thêm](./more.md): phụ\n"
 
@@ -379,13 +380,35 @@ class RootLinearTimeTest(Base):
             self.assertEqual(self.run_deep(400000), ["LLM008"])
             assert_not_quadratic(self, self.run_deep, 100000)
 
+    def walk_path_bytes(self, walk: Callable[[Path, str], bool], n: int) -> int:
+        sizes: list[int] = []
+
+        def measured(root: Path, rel: str) -> bool:
+            with (
+                unittest.mock.patch.object(os, "open", wraps=os.open) as opened,
+                unittest.mock.patch.object(os, "stat", wraps=os.stat) as stated,
+                unittest.mock.patch.object(os, "lstat", wraps=os.lstat) as lstated,
+            ):
+                result = walk(root, rel)
+            self.assertFalse(result)
+            for probe in (opened, stated, lstated):
+                sizes.extend(len(os.fsencode(call.args[0])) for call in probe.call_args_list)
+            return result
+
+        # Root tương đối giữ số byte mỗi tiền tố độc lập với độ dài đường dẫn của runner.
+        with chdir(self.base), unittest.mock.patch.object(kind_llms_txt, "_plain_file", measured):
+            self.assertEqual(self.codes(deep_link(n), root="site"), ["LLM008"])
+        self.assertTrue(sizes, "chưa quan sát được lời gọi hệ tệp nào trong walker")
+        total = sum(sizes)
+        self.assertGreater(total, 0)
+        return total
+
     def test_quadratic_walk_mutant_is_detected(self) -> None:
-        with (
-            unittest.mock.patch.object(kind_llms_txt, "MAX_DEST", 10**9),
-            unittest.mock.patch.object(kind_llms_txt, "_plain_file", old_plain_file),
-            self.assertRaises(AssertionError),
-        ):
-            assert_not_quadratic(self, self.run_deep, 50000, ratio=MUTANT_RATIO)
+        for walk, linear in ((kind_llms_txt._plain_file, True), (old_plain_file, False)):
+            with self.subTest(walk=walk.__name__):
+                small = self.walk_path_bytes(walk, 128)
+                big = self.walk_path_bytes(walk, 512)
+                self.assertEqual(big < MUTANT_RATIO * small, linear, f"{small} → {big} byte đường dẫn")
 
 
 class RobustnessTest(Base):
