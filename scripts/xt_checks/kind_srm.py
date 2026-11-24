@@ -4,8 +4,9 @@ là tiêu đề), JSON (mảng object hoặc object có khoá `records` là mả
 trường này ở mọi bản ghi thì bỏ qua kiểm đơn vị, trừ khi người dùng nêu rõ), `--opt exposed=<trường 0/1/true/false>`,
 `--opt ratio=a:b[:c…]` (thứ tự theo tên biến thể sắp tăng dần; mặc định chia đều), `--opt alpha=<0-1>` (mặc định 0,001).
 Báo: `SRM000` không đọc được/sai định dạng/thiếu trường, `SRM001` chi-bình-phương Pearson lệch tỷ lệ gán, `SRM002` đơn vị
-trùng, `SRM003` đơn vị ở nhiều biến thể, `SRM004` thiếu/sai giá trị trường, `SRM005` phơi nhiễm lệch giữa các biến thể,
-`SRM006` chưa đủ bằng chứng. Với JSON, "dòng" là số thứ tự bản ghi (từ 1)."""
+trùng, `SRM003` đơn vị ở nhiều biến thể, `SRM004` thiếu/sai giá trị trường, `SRM005` phơi nhiễm lệch giữa các biến thể
+(kiểm định đồng nhất bảng exposed/không exposed × biến thể), `SRM006` chưa đủ bằng chứng (ô kỳ vọng < 5). Với JSON, "dòng"
+là số thứ tự bản ghi (từ 1). BOM UTF-8 đầu tệp được bỏ. Quét thư mục giữ tệp có bản ghi mang trường `--opt variant=`."""
 
 from __future__ import annotations
 
@@ -31,11 +32,51 @@ TINY = 1e-300
 TRUE_TEXT = frozenset({"1", "true"})
 FALSE_TEXT = frozenset({"0", "false"})
 UNREADABLE = "không đọc được dưới dạng UTF-8 (hoặc quá lớn)"
+BOM = chr(0xFEFF)
 
 
-def sniff(text: str) -> bool:
-    """Nhận diện sơ bộ tệp gán biến thể khi duyệt thư mục."""
-    return "variant" in text or "unit_id" in text
+def sniff(text: str, opts: dict[str, str]) -> bool:
+    """Nhận diện tệp gán biến thể khi duyệt thư mục: có bản ghi mang trường `--opt variant=` (mặc định `variant`) — cột ở
+    tiêu đề CSV, khoá của object trong mảng/`records` JSON hay dòng JSONL. Object đơn kiểu `{"variant": "primary"}` (cấu
+    hình UI) không phải tệp bản ghi; dòng JSONL hỏng mà mang tên trường vẫn được giữ để `check` báo SRM000."""
+    name = _field(opts, "variant", "variant")
+    body = text.removeprefix(BOM).lstrip()
+    if not body:
+        return False
+    return (body[0] in "[{" and _json_has(body, name)) or _csv_has(body, name)
+
+
+def _json_has(body: str, name: str) -> bool:
+    try:
+        data = json.loads(body)
+    except (ValueError, RecursionError):
+        return _jsonl_has(body, name)
+    if isinstance(data, dict):
+        data = data.get("records")
+    return isinstance(data, list) and any(isinstance(item, dict) and name in item for item in data)
+
+
+def _jsonl_has(body: str, name: str) -> bool:
+    quoted = json.dumps(name)
+    for line in body.split("\n"):
+        try:
+            item = json.loads(line)
+        except (ValueError, RecursionError):
+            if quoted in line:
+                return True
+            continue
+        if isinstance(item, dict) and name in item:
+            return True
+    return False
+
+
+def _csv_has(body: str, name: str) -> bool:
+    first = body.partition("\n")[0].removesuffix("\r")
+    try:
+        header = next(csv.reader([first]), [])
+    except csv.Error:  # ô vượt field_size_limit: nhận theo chuỗi để `check` tự báo
+        return name in first
+    return name in header
 
 
 SNIFF = sniff
@@ -106,10 +147,10 @@ def _fraction_q(a: float, x: float) -> float:
 
 def chi2_pvalue(chi2: float, df: int) -> float:
     """P(X ≥ chi2) với X ~ chi-bình-phương `df` bậc tự do = Q(df/2, chi2/2), hàm gamma không hoàn chỉnh chính quy."""
-    if df < 1 or not chi2 > 0.0:
-        return 1.0
     a = df / 2.0
     x = chi2 / 2.0
+    if df < 1 or not x > 0.0:  # gồm NaN, âm và chi2 dưới chuẩn mà chi2/2 làm tròn về 0 (log(0) sẽ văng)
+        return 1.0
     if math.isinf(x):
         return 0.0
     p = 1.0 - _series_p(a, x) if x < a + 1.0 else _fraction_q(a, x)
@@ -120,6 +161,19 @@ def _chi_square(observed: list[int], weights: list[float]) -> tuple[float, float
     scale = sum(observed) / sum(weights)
     chi2 = sum((o - w * scale) ** 2 / (w * scale) for o, w in zip(observed, weights))
     return chi2, chi2_pvalue(chi2, len(observed) - 1)
+
+
+def _homogeneity(hit: list[int], miss: list[int]) -> tuple[float, float]:
+    """Chi-bình-phương đồng nhất bảng 2×k (exposed/không exposed × biến thể), bậc k−1; mọi ô kỳ vọng > 0."""
+    seen, unseen = sum(hit), sum(miss)
+    total = seen + unseen
+    chi2 = 0.0
+    for h, m in zip(hit, miss):
+        size = h + m
+        for value, share in ((h, seen), (m, unseen)):
+            want = size * share / total
+            chi2 += (value - want) ** 2 / want
+    return chi2, chi2_pvalue(chi2, len(hit) - 1)
 
 
 # ---------------------------------------------------------------- đọc bản ghi
@@ -285,7 +339,10 @@ def _counts(recs: list[_Rec]) -> dict[str, int]:
 
 
 def _describe(names: list[str], values: list[int]) -> str:
-    return ", ".join(f"{n}={v}" for n, v in zip(names, values))
+    """Tối đa `MAX_EXAMPLES` cặp `'tên'=số`; tên escape như `_shown` (surrogate, ESC, xuống dòng không lọt vào thông điệp)."""
+    shown = ", ".join(f"{_shown(n)}={v}" for n, v in zip(names[:MAX_EXAMPLES], values))
+    more = len(names) - MAX_EXAMPLES
+    return shown + (f" và {more} biến thể nữa" if more > 0 else "")
 
 
 def _weights(path: str, names: list[str], cfg: _Config) -> list[float] | Finding:
@@ -312,40 +369,48 @@ def _srm_findings(path: str, recs: list[_Rec], cfg: _Config) -> list[Finding]:
     if isinstance(weights, Finding):
         return [weights]
     k = len(names)
-    if sum(observed) < MIN_PER_VARIANT * k:
-        return [
-            Finding(path, 0, "SRM006", f"chưa đủ bằng chứng: tổng {sum(observed)} mẫu < {MIN_PER_VARIANT}×{k} biến thể")
-        ]
+    total = sum(observed)
+    least = min(weights) * total / sum(weights)
+    if least < MIN_PER_VARIANT:
+        message = (
+            f"chưa đủ bằng chứng: kỳ vọng nhỏ nhất {least:.3g} < {MIN_PER_VARIANT} (tổng {total} mẫu, {k} biến thể)"
+        )
+        return [Finding(path, 0, "SRM006", message)]
     found: list[Finding] = []
     chi2, p = _chi_square(observed, weights)
     if p < cfg.alpha:
         message = f"SRM: chi2={chi2:.4g}, bậc {k - 1}, p={p:.3g} < {cfg.alpha:g}; số đếm {_describe(names, observed)}"
         found.append(Finding(path, 0, "SRM001", message))
     if cfg.exposed is not None:
-        found.extend(_exposure_findings(path, recs, cfg, names, observed))
+        found.extend(_exposure_findings(path, recs, cfg, names))
     return found
 
 
-def _exposure_findings(
-    path: str, recs: list[_Rec], cfg: _Config, names: list[str], observed: list[int]
-) -> list[Finding]:
+def _exposure_findings(path: str, recs: list[_Rec], cfg: _Config, names: list[str]) -> list[Finding]:
+    """SRM005: tỷ lệ exposed khác nhau giữa các biến thể — kiểm định đồng nhất bảng 2×k trên bản ghi có giá trị exposed
+    hợp lệ. Không ai hay ai cũng exposed → bỏ qua (không có gì để so); ô kỳ vọng < 5 → SRM006."""
     hit = dict.fromkeys(names, 0)
+    miss = dict.fromkeys(names, 0)
     for rec in recs:
         if rec.variant is not None and rec.exposed in TRUE_TEXT:
             hit[rec.variant] += 1
+        elif rec.variant is not None and rec.exposed in FALSE_TEXT:
+            miss[rec.variant] += 1
     exposed = [hit[n] for n in names]
+    unexposed = [miss[n] for n in names]
+    seen, unseen = sum(exposed), sum(unexposed)
+    if seen == 0 or unseen == 0:
+        return []
     k = len(names)
-    if sum(exposed) < MIN_PER_VARIANT * k:
-        return [
-            Finding(
-                path, 0, "SRM006", f"chưa đủ bằng chứng: chỉ {sum(exposed)} bản ghi exposed < {MIN_PER_VARIANT}×{k}"
-            )
-        ]
-    chi2, p = _chi_square(exposed, [float(n) for n in observed])
+    least = min(e + u for e, u in zip(exposed, unexposed)) * min(seen, unseen) / (seen + unseen)
+    if least < MIN_PER_VARIANT:
+        message = f"chưa đủ bằng chứng về phơi nhiễm: ô kỳ vọng nhỏ nhất của bảng exposed×biến thể {least:.3g} < 5"
+        return [Finding(path, 0, "SRM006", message)]
+    chi2, p = _homogeneity(exposed, unexposed)
     if p >= cfg.alpha:
         return []
     message = (
-        f"phơi nhiễm lệch tỷ lệ gán: chi2={chi2:.4g}, bậc {k - 1}, p={p:.3g} < {cfg.alpha:g}; "
+        f"phơi nhiễm lệch giữa các biến thể (bảng 2×{k}): chi2={chi2:.4g}, bậc {k - 1}, p={p:.3g} < {cfg.alpha:g}; "
         f"exposed {_describe(names, exposed)}"
     )
     return [Finding(path, 0, "SRM005", message)]
@@ -357,7 +422,7 @@ def _file_findings(path: Path, cfg: _Config) -> list[Finding]:
     if text is None:
         return [Finding(name, 0, "SRM000", UNREADABLE)]
     try:
-        recs = _parse(path, text, cfg)
+        recs = _parse(path, text.removeprefix(BOM), cfg)
     except _Bad as bad:
         return [Finding(name, bad.line, "SRM000", bad.message)]
     if not any(r.variant is not None for r in recs):
@@ -390,8 +455,8 @@ def _ratio(raw: str | None) -> tuple[float, ...] | None:
         parts = tuple(float(p) for p in raw.split(":"))
     except ValueError:
         raise CheckError(f"--opt ratio cần dạng a:b[:c…] gồm số dương, không phải {raw!r}") from None
-    if len(parts) < MIN_VARIANTS or not all(0.0 < p < math.inf for p in parts):
-        raise CheckError(f"--opt ratio cần ≥ 2 số dương hữu hạn dạng a:b[:c…], không phải {raw!r}")
+    if len(parts) < MIN_VARIANTS or not all(0.0 < p < math.inf for p in parts) or math.isinf(sum(parts)):
+        raise CheckError(f"--opt ratio cần ≥ 2 số dương hữu hạn (tổng không tràn) dạng a:b[:c…], không phải {raw!r}")
     return parts
 
 

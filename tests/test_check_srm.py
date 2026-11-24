@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import math
+import random
 import sys
 import tempfile
 import unittest
@@ -17,6 +18,11 @@ sys.path.insert(0, str(ROOT / "tests"))
 import xt_checks
 from cpu_budget import assert_not_quadratic
 from xt_checks import CheckError, kind_srm
+
+BOM = chr(0xFEFF)
+# Bản đột biến bậc hai tốn ~16 lần khi cỡ tăng 4 lần; ngưỡng 6 (> 4 của tuyến tính) cho biên rộng trên runner chậm,
+# như `tests/test_check_i18n.py` (CI #783: ngưỡng mặc định 10 chỉ hở ~1,5 lần).
+MUTANT_RATIO = 6
 
 
 def csv_text(rows: list[tuple[str, str]], header: str = "unit_id,variant") -> str:
@@ -67,6 +73,10 @@ class PvalueTest(unittest.TestCase):
         self.assertEqual(kind_srm.chi2_pvalue(math.inf, 3), 0.0)
         self.assertEqual(kind_srm.chi2_pvalue(1e6, 1), 0.0)
 
+    def test_subnormal_chi2_does_not_raise(self) -> None:
+        self.assertEqual(kind_srm.chi2_pvalue(5e-324, 1), 1.0)  # chi2/2 làm tròn về 0: log(0) không được văng
+        self.assertEqual(kind_srm.chi2_pvalue(5e-324, 4), 1.0)
+
     def test_large_df(self) -> None:
         # trung vị chi2 với df lớn xấp xỉ df - 2/3; p quanh 0.5
         self.assertAlmostEqual(kind_srm.chi2_pvalue(1000 - 2 / 3, 1000), 0.5, delta=0.01)
@@ -94,9 +104,10 @@ class InterfaceTest(Base):
         self.assertEqual(kind_srm.SUFFIXES, (".csv", ".json", ".jsonl"))
         self.assertTrue(kind_srm.HELP)
         self.assertIs(kind_srm.SNIFF, kind_srm.sniff)
-        self.assertTrue(kind_srm.sniff('[{"variant": "a"}]'))
-        self.assertTrue(kind_srm.sniff("unit_id,x"))
-        self.assertFalse(kind_srm.sniff('{"bomFormat": 1}'))
+        self.assertTrue(kind_srm.sniff('[{"variant": "a"}]', {}))
+        self.assertTrue(kind_srm.sniff("unit_id,variant", {}))
+        self.assertFalse(kind_srm.sniff("unit_id,x", {}))
+        self.assertFalse(kind_srm.sniff('{"bomFormat": 1}', {}))
         xt_checks.validate_opts(kind_srm, {"variant": "v", "alpha": "0.01"})
         with self.assertRaises(CheckError):
             xt_checks.validate_opts(kind_srm, {"alfa": "1"})
@@ -104,8 +115,63 @@ class InterfaceTest(Base):
     def test_registry_scan_with_sniff(self) -> None:
         self.put("ok.csv", csv_text(balanced(40)))
         self.put("other.json", '{"bomFormat": "CycloneDX"}')
-        files = xt_checks.collect([str(self.dir)], kind_srm.SUFFIXES, kind_srm.SNIFF)
+        files = xt_checks.collect([str(self.dir)], kind_srm.SUFFIXES, xt_checks.sniff_for(kind_srm, {}))
         self.assertEqual([p.name for p in files], ["ok.csv"])
+
+
+class SniffTest(Base):
+    """Quét thư mục: SNIFF dùng tên trường từ `--opt variant=` và cấu trúc bản ghi, không chữ cố định (rà 🔴3)."""
+
+    def scan(self, **opts: str) -> list[tuple[str, str]]:
+        return [(Path(f.path).name, f.code) for f in xt_checks.run("srm", [str(self.dir)], dict(opts))]
+
+    def test_custom_variant_field_is_scanned(self) -> None:
+        rows = "uid,arm\n" + "".join(f"u{i},{'a' if i < 600 else 'b'}\n" for i in range(1000))
+        self.put("exp.csv", rows)
+        self.assertEqual(self.scan(variant="arm", unit="uid"), [("exp.csv", "SRM001")])
+        self.assertEqual(self.scan(), [])  # không có trường `variant`: không phải tệp gán biến thể
+
+    def test_ui_json_with_variant_key_is_not_scanned(self) -> None:
+        self.put("button.json", '{"variant": "primary", "size": "lg"}')
+        self.put("theme.json", '{\n  "variant": "dark"\n}\n')
+        self.put("list.json", '[{"name": "x"}, "variant"]')
+        self.put("ok.json", json.dumps({"records": [{"variant": "ab"[i % 2]} for i in range(40)]}))
+        self.assertEqual(self.scan(), [])
+        self.assertEqual(len(xt_checks.collect([str(self.dir)], kind_srm.SUFFIXES, None)), 4)
+
+    def test_sniff_shapes(self) -> None:
+        opts = {"variant": "arm"}
+        record = '{"arm": "a"}'
+        for text, expected in (
+            ("", False),
+            (" \n\n", False),
+            ("uid,arm\n", True),
+            (BOM + "arm,uid\r\n", True),
+            ("\n\nuid,arm\n", True),
+            ("uid,armed\n", False),
+            ("[" + record + "]", True),
+            ('{"records": [' + record + "]}", True),
+            ('{"records": [{"x": 1}]}', False),
+            ('{"arm": "primary"}', False),
+            ("[1, 2]", False),
+            ('{"x": 1}\n' + record + "\n", True),
+            ('{"x": 1}\n{"y": 2}\n', False),
+            ('{"x": 1}\n{"arm": oops\n', True),  # hỏng mà mang tên trường: giữ để `check` báo SRM000
+            ('{"x": 1}\n{oops\n', False),
+            ('{"x": 1}\n\n3\n', False),
+            ("arm," + "x" * 200000 + "\n", True),  # vượt field_size_limit của csv: vẫn nhận theo chuỗi
+        ):
+            with self.subTest(text=text[:40]):
+                self.assertIs(kind_srm.sniff(text, opts), expected)
+
+    def test_sniff_deep_json_does_not_raise(self) -> None:
+        with unittest.mock.patch.object(json, "loads", side_effect=RecursionError):
+            self.assertTrue(kind_srm.sniff('[{"variant": 1}]', {}))
+            self.assertFalse(kind_srm.sniff("[[[", {}))
+
+    def test_sniff_rejects_empty_field_option(self) -> None:
+        with self.assertRaises(CheckError):
+            kind_srm.sniff("variant\n", {"variant": ""})
 
 
 class SrmTest(Base):
@@ -116,8 +182,8 @@ class SrmTest(Base):
         rows = [(f"u{i}", "a" if i < 600 else "b") for i in range(1000)]
         found = self.run_check("a.csv", csv_text(rows))
         self.assertEqual(self.codes(found), ["SRM001"])
-        self.assertIn("a=600", found[0].message)
-        self.assertIn("b=400", found[0].message)
+        self.assertIn("'a'=600", found[0].message)
+        self.assertIn("'b'=400", found[0].message)
         self.assertIn("p=", found[0].message)
         self.assertEqual(found[0].line, 0)
 
@@ -151,6 +217,34 @@ class SrmTest(Base):
     def test_ratio_fewer_parts_than_variants_is_srm000(self) -> None:
         found = self.run_check("a.csv", csv_text(balanced(90, ("a", "b", "c"))), ratio="1:1")
         self.assertEqual(self.codes(found), ["SRM000"])
+
+    def test_small_expected_under_ratio_is_insufficient(self) -> None:
+        rows = [(f"u{i}", "a") for i in range(8)] + [(f"w{i}", "b") for i in range(2)]
+        found = self.run_check("a.csv", csv_text(rows), ratio="99:1")  # kỳ vọng b = 0,1 < 5
+        self.assertEqual(self.codes(found), ["SRM006"])
+        self.assertIn("kỳ vọng", found[0].message)
+        rows = [(f"u{i}", "a") for i in range(495)] + [(f"w{i}", "b") for i in range(5)]
+        self.assertEqual(self.run_check("b.csv", csv_text(rows), ratio="99:1"), [])  # kỳ vọng b = 5: chạy kiểm
+
+    def test_variant_names_are_escaped_in_message(self) -> None:
+        names = (chr(0xD800), chr(0x1B) + "[31m", "a\nb", "x" + chr(0x2028) + "y")
+        records = [{"variant": names[0]} for _ in range(400)]
+        records += [{"variant": name} for name in names[1:] for _ in range(100)]
+        found = self.run_check("a.json", json.dumps(records))
+        self.assertEqual(self.codes(found), ["SRM001"])
+        message = found[0].message
+        message.encode("utf-8")  # không văng UnicodeEncodeError
+        for raw in (chr(0xD800), chr(0x1B), "\n", chr(0x2028)):
+            self.assertNotIn(raw, message)
+        self.assertIn("\\ud800", message)
+
+    def test_many_variants_are_capped_in_message(self) -> None:
+        records = [{"variant": "v0"} for _ in range(5000)]
+        records += [{"variant": f"v{i}"} for i in range(1, 8000) for _ in range(5)]
+        found = self.run_check("a.json", json.dumps(records))
+        self.assertEqual(self.codes(found), ["SRM001"])
+        self.assertIn("và 7995 biến thể nữa", found[0].message)
+        self.assertLess(len(found[0].message), 300)
 
     def test_variant_option_and_custom_unit(self) -> None:
         text = "uid,arm\n" + "".join(f"u{i},{'a' if i % 2 else 'b'}\n" for i in range(100))
@@ -254,8 +348,41 @@ class ExposureTest(Base):
     def test_exposure_skew(self) -> None:
         found = self.run_check("a.csv", self.rows(450, 300), exposed="exposed")
         self.assertEqual(self.codes(found), ["SRM005"])
-        self.assertIn("a=450", found[0].message)
-        self.assertIn("b=300", found[0].message)
+        self.assertIn("'a'=450", found[0].message)
+        self.assertIn("'b'=300", found[0].message)
+
+    def table(self, per_arm: int, exposed: tuple[int, ...]) -> str:
+        lines = ["variant,exposed"]
+        for arm, hits in zip("abc", exposed):
+            lines += [f"{arm},{'1' if i < hits else '0'}" for i in range(per_arm)]
+        return "\n".join(lines) + "\n"
+
+    def test_homogeneity_catches_small_gap_on_high_exposure(self) -> None:
+        # Bảng 2×2: exposed 9900/9800, không exposed 100/200 trên 10000/nhánh → chi2 ≈ 33,84 (bậc 1)
+        found = self.run_check("a.csv", self.table(10000, (9900, 9800)), exposed="exposed")
+        self.assertEqual(self.codes(found), ["SRM005"])
+        self.assertIn("chi2=33.84", found[0].message)
+        self.assertIn("bậc 1", found[0].message)
+
+    def test_homogeneity_unbiased_simulation_is_clean(self) -> None:
+        rng = random.Random(20261124)
+        for rate in (0.5, 0.98):
+            lines = ["variant,exposed"]
+            for arm in "abc":
+                lines += [f"{arm},{int(rng.random() < rate)}" for _ in range(5000)]
+            with self.subTest(rate=rate):
+                self.assertEqual(self.run_check("s.csv", "\n".join(lines) + "\n", exposed="exposed"), [])
+
+    def test_all_or_none_exposed_is_skipped(self) -> None:
+        rows = ["variant,exposed", *(["a,1"] * 600), *(["b,1"] * 400)]
+        self.assertEqual(self.codes(self.run_check("a.csv", "\n".join(rows) + "\n", exposed="exposed")), ["SRM001"])
+        self.assertEqual(self.run_check("b.csv", self.table(500, (500, 500)), exposed="exposed"), [])
+        self.assertEqual(self.run_check("c.csv", self.table(500, (0, 0)), exposed="exposed"), [])
+
+    def test_small_expected_cell_is_insufficient(self) -> None:
+        found = self.run_check("a.csv", self.table(500, (498, 497)), exposed="exposed")  # kỳ vọng không exposed 2,5
+        self.assertEqual(self.codes(found), ["SRM006"])
+        self.assertIn("exposed", found[0].message)
 
     def test_exposure_not_checked_without_option(self) -> None:
         self.assertEqual(self.run_check("a.csv", self.rows(450, 300)), [])
@@ -309,6 +436,15 @@ class FormatTest(Base):
     def test_unicode_variants_and_units(self) -> None:
         rows = [(f"người{i}", "đối-chứng" if i % 2 else "thử-nghiệm") for i in range(100)]
         self.assertEqual(self.run_check("a.csv", csv_text(rows)), [])
+
+    def test_utf8_bom_is_stripped(self) -> None:
+        rows = balanced(100)
+        rows.append(("u0", "a"))  # trùng đơn vị: chỉ thấy khi cột đầu `unit_id` không dính BOM
+        self.assertEqual(self.codes(self.run_check("a.csv", BOM + csv_text(rows))), ["SRM002"])
+        self.assertEqual(self.run_check("b.csv", BOM + csv_text(balanced(100)), unit="unit_id"), [])
+        records = [{"unit_id": f"u{i}", "variant": "ab"[i % 2]} for i in range(100)]
+        self.assertEqual(self.run_check("c.json", BOM + json.dumps(records)), [])
+        self.assertEqual(self.run_check("d.jsonl", BOM + "\n".join(json.dumps(r) for r in records)), [])
 
     def test_quoted_csv_with_commas(self) -> None:
         text = "unit_id,variant\n" + "".join(f'"u,{i}","{"ab"[i % 2]}"\n' for i in range(50))
@@ -399,6 +535,7 @@ class OptionTest(Base):
             {"ratio": "1:-1"},
             {"ratio": "1:inf"},
             {"ratio": "1:nan"},
+            {"ratio": "1e308:1e308"},
             {"variant": ""},
             {"unit": ""},
             {"exposed": ""},
@@ -452,7 +589,7 @@ class MutationTest(Base):
 
         recs = [kind_srm._Rec(i, "a", f"u{i}", None) for i in range(20000)]
         with unittest.mock.patch.object(kind_srm, "_units", slow), self.assertRaises(AssertionError):
-            assert_not_quadratic(self, lambda n: kind_srm._unit_findings("p", recs[:n]), 5000)
+            assert_not_quadratic(self, lambda n: kind_srm._unit_findings("p", recs[:n]), 5000, ratio=MUTANT_RATIO)
 
 
 if __name__ == "__main__":

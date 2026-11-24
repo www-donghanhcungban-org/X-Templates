@@ -903,3 +903,10 @@
 - Chọn: ID mới LOOP-DESIGN-029 SHOULD
 - Lý do (tiêu chí chất lượng cuối): 020 mô tả PR chồng cần đẩy nhiều nhánh; trường hợp một nhánh được phép là khác; một chủ đề một nhà, ID ổn định; SHOULD vì nhiều dự án đẩy được nhiều nhánh
 - Đường lùi: git revert commit của PR
+
+### D-571 · 2026-11-24T11:31:41+00:00 · Sửa phát hiện rà Opus trước khi mở PR srm/llms-txt
+
+- Phương án: (1) sửa 🔴 và 🟠 rẻ ngay trước PR · (2) mở PR rồi ghi nợ 🟠
+- Chọn: sửa 🔴 và 🟠 rẻ ngay trước PR
+- Lý do (tiêu chí chất lượng cuối): 🔴 bắt buộc sửa (ADR-0062); 🟠 đều rẻ, cùng tệp, và một cái (biên test đột biến) đã làm CI đỏ lần trước; tránh thêm PR nợ
+- Đường lùi: git revert commit của PR

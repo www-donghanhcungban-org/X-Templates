@@ -2,14 +2,16 @@
 UTF-8/rỗng, `LLM001` dòng đầu không phải H1 (hoặc có H1 thứ hai), `LLM002` thiếu blockquote tóm tắt ngay sau H1, `LLM003` mục H2
 không có link, `LLM004` dòng link sai dạng `- [tên](đích): ghi chú`, `LLM005` `## Optional` không đứng cuối hay H2 trùng tên,
 `LLM006` link trùng đích, `LLM007` H2 rỗng hay H3 trở xuống, `LLM008` (cần `--opt root=<thư mục>`) link tương đối trỏ tệp không
-có/thoát khỏi root/đi qua liên kết tượng trưng, `LLM009` (`--opt md=1`, cần root) link `.html` thiếu bản `.md`/`.html.md`.
-Quét từng dòng, regex neo đầu dòng và chiếm hữu nên thời gian tuyến tính theo kích thước tệp."""
+có/thoát khỏi root/đi qua liên kết tượng trưng/dài quá `MAX_DEST` ký tự, `LLM009` (`--opt md=1`, cần root) link `.html` thiếu
+bản `.md`/`.html.md`. Quét thư mục chỉ nhận tệp tên `NAMES`; tệp nêu đích danh luôn được kiểm. Quét từng dòng, regex neo đầu
+dòng và chiếm hữu, dò root từng thành phần bằng `dir_fd` nên thời gian tuyến tính theo kích thước tệp."""
 
 from __future__ import annotations
 
 import os
 import posixpath
 import re
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -18,8 +20,10 @@ from . import CheckError, Finding, read_text
 
 HELP = "llms.txt v2: H1, blockquote tóm tắt, H2 chứa link `- [tên](đích): ghi chú`, Optional cuối, link trùng/chết"
 SUFFIXES = (".txt",)
+NAMES = frozenset({"llms.txt", "llms-full.txt"})
 OPTS = ("ignore", "root", "md")
-LLMS_NAMES = frozenset({"llms.txt", "llms-full.txt"})
+MAX_DEST = 4096
+DIR_FLAGS = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_DIRECTORY", 0)
 SHOW = 80
 BOM = chr(0xFEFF)
 ELLIPSIS = chr(0x2026)
@@ -35,15 +39,16 @@ def _show(text: str) -> str:
 
 
 def _valid_dest(dest: str) -> bool:
-    """Đích là http/https tuyệt đối (có máy chủ) hay đường dẫn tương đối bắt đầu `/` hoặc `./` (không phải `//máy-chủ`)."""
-    if not dest or any(ch.isspace() for ch in dest):
+    """Đích là http/https tuyệt đối (có tên máy chủ) hay đường dẫn tương đối bắt đầu `/` hoặc `./` (không phải `//máy-chủ`);
+    `\\` bị từ chối (trình duyệt coi như `/`, máy chủ thì không)."""
+    if not dest or "\\" in dest or any(ch.isspace() for ch in dest):
         return False
     try:
         parts = urlsplit(dest)
     except ValueError:
         return False
     if parts.scheme:
-        return parts.scheme in WEB_SCHEMES and bool(parts.netloc)
+        return parts.scheme in WEB_SCHEMES and bool(parts.hostname)
     return not parts.netloc and (dest.startswith("/") or dest.startswith("./"))
 
 
@@ -71,13 +76,24 @@ def _rel_path(dest: str) -> str | None:
 
 
 def _plain_file(root: Path, rel: str) -> bool:
-    """Tệp thường tại `root/rel`, không thành phần nào là liên kết tượng trưng."""
-    current = str(root)
-    for part in rel.split("/"):
-        current = os.path.join(current, part)
-        if os.path.islink(current):
-            return False
-    return os.path.isfile(current)
+    """Tệp thường tại `root/rel`, không thành phần nào là liên kết tượng trưng. Đi từng thành phần bằng `os.open(…,
+    dir_fd=…)` không theo liên kết, dừng ở thành phần thiếu: tuyến tính theo số thành phần (rà 🔴1: nối chuỗi cả đường
+    dẫn cho mỗi thành phần là bậc hai)."""
+    *dirs, leaf = rel.split("/")
+    try:
+        fd = os.open(root, DIR_FLAGS)
+    except OSError:
+        return False
+    try:
+        for part in dirs:
+            child = os.open(part, DIR_FLAGS, dir_fd=fd)
+            os.close(fd)
+            fd = child
+        return stat.S_ISREG(os.stat(leaf, dir_fd=fd, follow_symlinks=False).st_mode)
+    except (OSError, ValueError):  # ValueError: NUL trong tên
+        return False
+    finally:
+        os.close(fd)
 
 
 def _root_opt(opts: dict[str, str]) -> Path | None:
@@ -208,6 +224,9 @@ class _Scan:
             self._probe(number, dest, self.root)
 
     def _probe(self, number: int, dest: str, root: Path) -> None:
+        if len(dest) > MAX_DEST:
+            self.add(number, "LLM008", f"đích quá dài (> {MAX_DEST} ký tự): {_show(dest)}")
+            return
         rel = _rel_path(dest)
         if rel is None:
             self.add(number, "LLM008", f"link thoát khỏi root: {_show(dest)}")
@@ -233,9 +252,8 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     ignore = {code for code in opts.get("ignore", "").split(",") if code}
     root = _root_opt(opts)
     md = _md_opt(opts, root)
-    named = [p for p in files if p.name in LLMS_NAMES]
     found: list[Finding] = []
-    for path in named or files:  # quét thư mục kéo theo mọi `.txt`: có tệp đúng tên thì chỉ xét chúng
+    for path in files:  # lọc theo `NAMES` chỉ áp khi quét thư mục (`collect`); tệp nêu đích danh luôn được kiểm
         found.extend(_check_file(path, root, md))
     found = [f for f in found if f.code not in ignore]
     return sorted(found, key=lambda f: (f.path, f.line, f.code))

@@ -23,6 +23,7 @@ OPTS = ("train", "eval", "fewshot", "field", "near")
 MAX_RECORDS = 1_000_000
 MAX_PAIRS = 20
 SEP = chr(0x1F)
+BOM = chr(0xFEFF)
 HASHES = 64
 BANDS = 16
 ROWS = 4
@@ -160,6 +161,7 @@ def _load(path: Path, field: str | None) -> _Dataset:
     text = read_text(path)
     if text is None:
         return _fatal(str(path), 0, UNREADABLE)
+    text = text.removeprefix(BOM)  # BOM đầu tệp (Excel) không dính vào tiêu đề CSV hay dòng JSONL đầu
     if path.suffix.lower() == ".csv":
         return _parse_csv(str(path), text, field)
     return _parse_jsonl(str(path), text, field)
@@ -288,6 +290,7 @@ def _fewshot_findings(path: Path, train: _Dataset, evaluation: _Dataset) -> list
     text = read_text(path)
     if text is None:
         return [Finding(str(path), 0, "DDL000", UNREADABLE)]
+    text = text.removeprefix(BOM)
     eval_hashes = {_digest(norm) for _, norm in evaluation.samples}
     train_hashes = {_digest(norm) for _, norm in train.samples}
     hits: list[tuple[int, str]] = []
