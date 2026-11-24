@@ -21,6 +21,7 @@ import io
 import os
 import re
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -65,8 +66,13 @@ def entries(scripts: Path, strict: bool = False) -> List[Tuple[str, bytes]]:
     if strict and absent:
         raise PackError(f"thiếu module: {', '.join(absent)}")
     for pkg in PACKAGES:
-        names += [p.relative_to(scripts).as_posix() for p in (scripts / pkg).rglob("*.py")]
+        root = scripts / pkg
+        if root.is_symlink():
+            raise PackError(f"không đóng gói liên kết tượng trưng: {root}")
+        names += [p.relative_to(scripts).as_posix() for p in root.rglob("*.py")]
     out = [(n, _read(scripts / n)) for n in sorted(set(names))]
+    if strict and not (scripts.parent / "VERSION").is_file():
+        raise PackError(f"thiếu VERSION ở {scripts.parent}")
     if (scripts.parent / "VERSION").is_file():
         out.append(("VERSION", _read(scripts.parent / "VERSION")))
     out.append(("__main__.py", MAIN))
@@ -93,10 +99,16 @@ def build(scripts: Path, out: Path, strict: bool = False) -> str:
         raise PackError(f"đích là liên kết tượng trưng: {out}")
     data = build_bytes(scripts, strict)
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
-    tmp.write_bytes(data)
-    tmp.chmod(0o755)
-    os.replace(tmp, out)
+    fd, name = tempfile.mkstemp(dir=out.parent, prefix=f".{out.name}.", suffix=".tmp")  # tên không đoán được
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        tmp.chmod(0o755)
+        os.replace(tmp, out)
+    except BaseException:
+        tmp.unlink(missing_ok=True)  # không để tệp tạm sót khi đích không ghi được
+        raise
     return hashlib.sha256(data).hexdigest()
 
 

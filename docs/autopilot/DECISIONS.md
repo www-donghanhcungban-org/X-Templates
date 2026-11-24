@@ -812,3 +812,17 @@
 - Chọn: B. Artefact pyz ghim digest + launcher mang tên đích + hợp đồng có schema, kèm B1-B7
 - Lý do (tiêu chí chất lượng cuối): Đích không giữ mã khung; digest và attestation kiểm được; zip stored không đổi độ trễ hook (số đo P0: 459 vs 463 ms ở 3.15, 370 vs 361 ms ở 3.13); C đòi uv và mạng, D vắng ở phiên cloud (tài liệu), A không đạt yêu cầu; mặc định giữ tên cũ nên không phá 7 đích đã đăng ký
 - Đường lùi: Giữ layout cây (--layout tree); gỡ xt_pack.py và các test đóng băng nếu bỏ hướng này
+
+### D-558 · 2026-11-24T03:14:08+00:00 · Model cho lượt rà code (reviewer) từ nay
+
+- Phương án: (1) Giữ fable (bậc cao nhất, effort max) · (2) Giới hạn ở Opus mới nhất (claude-opus-5-5)
+- Chọn: Giới hạn ở Opus mới nhất (claude-opus-5-5)
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu giới hạn model rà ở Opus; LOOP-ORCH-005 vẫn đúng khi người viết là Sonnet/Haiku (Opus cao hơn); khi người viết là Opus hoặc cao hơn thì ghi INCONCLUSIVE hoặc nâng bậc có lý do (D-161); giảm chi phí so với fable
+- Đường lùi: Đổi model trong lệnh giao reviewer về fable; cấu hình agents chỉ đổi sau nghiên cứu vai trò
+
+### D-559 · 2026-11-24T03:15:38+00:00 · Quy tắc model cho review và rà code ở mọi harness (mở rộng D-558)
+
+- Phương án: (1) Mỗi harness dùng bậc cao nhất · (2) Mỗi harness dùng thấp hơn đúng một bậc so với bậc cao nhất; harness chỉ có một hoặc hai bậc thì chốt sau nghiên cứu
+- Chọn: Mỗi harness dùng thấp hơn đúng một bậc so với bậc cao nhất; harness chỉ có một hoặc hai bậc thì chốt sau nghiên cứu
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu (áp dụng cho cả dự án đích); giảm chi phí rà; LOOP-ORCH-005 giữ cho người viết thấp hơn bậc rà, ca người viết bằng chính bậc rà xử lý theo nghiên cứu vai trò (INCONCLUSIVE hoặc Gate máy)
+- Đường lùi: Quay về bậc cao nhất ở từng harness; chưa đổi tệp cấu hình nào trước khi có nghiên cứu

@@ -115,6 +115,36 @@ class PackTest(unittest.TestCase):
             xt_pack.build(s, link)
         self.assertEqual(outside.read_text(encoding="utf-8"), "bí mật\n")
 
+    def test_package_directory_symlink_is_refused(self):
+        s = self.fake_scripts()
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        (outside / "leak.py").write_text("SECRET = 1\n", encoding="utf-8")
+        for p in sorted((s / "xt_app").iterdir()):
+            p.unlink()
+        (s / "xt_app").rmdir()
+        os.symlink(outside, s / "xt_app")
+        with self.assertRaisesRegex(xt_pack.PackError, "liên kết tượng trưng"):
+            xt_pack.build_bytes(s)
+
+    def test_strict_also_requires_version(self):
+        s = self.fake_scripts()
+        for name in xt_pack.ARTIFACT_SCRIPTS[1:]:
+            (s / name).write_text("X = 1\n", encoding="utf-8")
+        xt_pack.build_bytes(s, strict=True)
+        (self.tmp / "VERSION").unlink()
+        with self.assertRaisesRegex(xt_pack.PackError, "VERSION"):
+            xt_pack.build_bytes(s, strict=True)
+
+    def test_failed_build_leaves_no_temp_file(self):
+        s = self.fake_scripts()
+        out = self.tmp / "dist" / "xt.pyz"
+        out.mkdir(parents=True)  # đích là thư mục: os.replace lỗi
+        with self.assertRaises(OSError):
+            xt_pack.build(s, out)
+        self.assertEqual(sorted(p.name for p in (self.tmp / "dist").iterdir()), ["xt.pyz"])
+        self.assertEqual(xt_pack.main(["--scripts", str(s), "build", "--out", str(out)]), 2)
+
     def test_verify_pin_rules(self):
         s = self.fake_scripts()
         out = self.tmp / "xt.pyz"
@@ -184,8 +214,18 @@ class PackTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         r = run_pyz(out, "doctor", "--offline")
         text = r.stdout + r.stderr
+        self.assertIn(r.returncode, (0, 1))  # 1 khi thiếu thư mục framework cạnh artefact; không phải lỗi sập
         self.assertIn("artefact .pyz", text)
         self.assertNotIn("xt.pyz/dev-task.sh", text)  # không báo "thiếu" sai chỗ
+
+    def test_real_artifact_runs_perf_trial_and_mutate_guard(self):
+        out = self.tmp / "xt.pyz"
+        xt_pack.build(SCRIPTS, out)
+        r = run_pyz(out, "perf", "trial", "status")
+        self.assertNotIn("Not a directory", r.stdout + r.stderr)  # tới được logic thật, không vấp đường zip
+        r = run_pyz(out, "mutate-guard", "--guard", str(ROOT / ".claude" / "hooks" / "guard.py"), "--list")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.strip())
 
     def test_artifact_scripts_match_what_install_copies(self):
         text = (SCRIPTS / "install.py").read_text(encoding="utf-8")
@@ -233,6 +273,39 @@ class ArtifactHelpersTest(unittest.TestCase):
         with self.at(bad):
             self.assertFalse(xt.sibling_exists("xt_flow.py"))
             self.assertIsNone(xt.artifact_member("VERSION"))
+
+    def corrupt(self, needle: bytes) -> Path:
+        """Bản sao của zip với một byte của nội dung `needle` bị đổi (sai CRC, tiêu đề vẫn đọc được)."""
+        raw = bytearray(self.pyz.read_bytes())
+        raw[raw.index(needle)] ^= 0x01
+        bad = self.tmp / "bad-member.pyz"
+        bad.write_bytes(bytes(raw))
+        return bad
+
+    def test_corrupt_member_is_missing_not_a_crash_and_never_falls_back_to_disk(self):
+        (self.tmp / "VERSION").write_text("1.1.1\n", encoding="utf-8")  # VERSION cạnh zip không được thay thế
+        with self.at(self.corrupt(b"7.7.7")):
+            self.assertIsNone(xt.artifact_member("VERSION"))
+            self.assertEqual(xt.framework_version(), "unknown")
+            found = xt._doctor_scripts()
+        self.assertEqual([f.level for f in found], ["warn", "error"])
+
+    def test_corrupt_module_raises_instead_of_reading_the_disk(self):
+        import types
+
+        bad = self.corrupt(b"VALUE = 41")
+        with self.at(bad), self.assertRaisesRegex(OSError, "thiếu hoặc hỏng"):
+            xt._exec_source(bad / "xt_flow.py", types.ModuleType("m"))
+
+    def test_self_source_and_entry(self):
+        with zipfile.ZipFile(self.pyz, "a") as z:
+            z.writestr("xt.py", "MAIN = 1\n")
+        xt._zip_names.cache_clear()
+        with self.at(self.pyz):
+            self.assertEqual(xt.self_source(), b"MAIN = 1\n")
+            self.assertEqual(xt.self_entry(), str(self.pyz))
+        self.assertEqual(xt.self_source(), Path(xt.__file__).read_bytes())
+        self.assertTrue(xt.self_entry().endswith("xt.py"))
 
     def test_exec_source_reads_sibling_from_zip(self):
         import types

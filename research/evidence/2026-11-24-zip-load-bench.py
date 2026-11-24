@@ -1,4 +1,4 @@
-"""P0: đo nạp guard.py từ tệp rời so với từ zip (stored / deflate). Chạy: python3 bench_zip.py <guard.py> <N>."""
+"""P0: đo nạp guard.py từ tệp rời so với từ zip (stored / deflate). Chạy: python3 2026-11-24-zip-load-bench.py <guard.py> <N> <thư mục tạm>."""
 
 import statistics
 import subprocess

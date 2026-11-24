@@ -17,7 +17,7 @@
 4. **D. Plugin host**: marketplace do repo khai không được thêm trong phiên cloud (tài liệu Claude Code, đọc 2026-11-24), nên guard vắng đúng nơi autopilot chạy; tên skill đổi thành `<plugin>:…`.
 5. **E. Reusable workflow ghim SHA**: một pha của B (P6), không thay được B.
 
-Số đo P0 (2026-11-24; script và kết quả thô ở [`research/evidence/2026-11-24-zip-load-bench.py`](../../research/evidence/2026-11-24-zip-load-bench.py) và `…-bench.txt`; 30 lượt 3.15.2 và 20 lượt 3.13.18, `guard.py` 1,38 MB, nạp rồi biên dịch từ nguồn như `py_run`): trung vị tệp rời 428 ms (3.15) và 325 ms (3.13); zip `ZIP_STORED` 431 ms và 318 ms; zip `ZIP_DEFLATED` 445 ms và 336 ms (một lượt đo trước đó trên cùng máy cho 463/459/482 ms và 361/370/373 ms: số tuyệt đối dao động theo tải máy, chênh lệch tương đối giữ nguyên). Chi phí chủ yếu là biên dịch (khoảng 0,40 s/hook, AUD-SEC-074) nên zip stored không đổi độ trễ đáng kể (trong ±3 %, deflate +4 %).
+Số đo P0 (2026-11-24; script và kết quả thô ở [`research/evidence/2026-11-24-zip-load-bench.py`](../../research/evidence/2026-11-24-zip-load-bench.py) và `…-bench.txt`; 30 lượt 3.15.2 và 20 lượt 3.13.18, `guard.py` 1,38 MB, nạp rồi biên dịch từ nguồn như `py_run`): trung vị tệp rời 428 ms (3.15) và 325 ms (3.13); zip `ZIP_STORED` 431 ms và 318 ms; zip `ZIP_DEFLATED` 445 ms và 336 ms (một lượt đo trước đó trên cùng máy cho 463/459/482 ms và 361/370/373 ms: số tuyệt đối dao động theo tải máy; chênh lệch tương đối của zip stored nằm trong ±3 % ở cả hai lượt, không đồng dấu). Chi phí chủ yếu là biên dịch (khoảng 0,40 s/hook, AUD-SEC-074) nên zip stored không đổi độ trễ đáng kể (trong ±3 %, deflate +4 %).
 
 ## Quyết định
 
@@ -52,8 +52,8 @@ Số đo P0 (2026-11-24; script và kết quả thô ở [`research/evidence/202
 - Cài với `--tool-name acme`: grep `xtemplates|xt\.py|xt\.yaml` trong đích, trừ thư mục `framework/`, chỉ còn một dòng ghi chú nguồn.
 - Zip chứa đủ lệnh con của hợp đồng (`tests/fixtures/contract-surface.json`); lệnh con duy nhất vắng là `derived` (chỉ repo khung).
 - `release-check --json`, `doctor`, `ci-check`, `pr next` cho cùng JSON và mã thoát với tên mặc định và tên `acme` trên cùng fixture.
-- Sửa một byte artefact: hook chặn và `doctor` báo lỗi.
-- Nâng bản: diff PR ở đích chỉ gồm artefact, dòng ghim ở launcher, tệp render có dấu phiên bản (skill, agent) và tài liệu yêu cầu; launcher không đổi ngoài dòng ghim.
+- Sửa một byte artefact: `doctor` và kiểm digest lúc khởi động phiên (P5) báo lỗi; mọi lệnh đọc mục hỏng thất bại rõ ràng (`OSError`), không rơi về đọc đĩa. Digest không được kiểm ở từng lượt hook PreToolUse (chi phí và đồng bộ với guard xét ở P5).
+- Nâng bản: diff PR ở đích chỉ gồm artefact, dòng ghim ở launcher, tệp render có dấu phiên bản (skill, agent), tài liệu yêu cầu, manifest và các commit migration của B6 (mỗi migration một commit); launcher không đổi ngoài dòng ghim.
 - Bản dựng `.pyz` hai lần cho cùng `sha256`.
 
 ## Hệ quả

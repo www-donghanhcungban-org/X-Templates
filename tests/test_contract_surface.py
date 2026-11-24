@@ -49,6 +49,22 @@ class ContractSurfaceTest(unittest.TestCase):
         action = next(a for a in top["upgrade"]._actions if a.dest == "upgrade_action")
         self.assertLessEqual(set(GOLDEN["upgrade_actions"]), set(action.choices))
 
+    def test_third_level_subcommands_and_review_verdicts_still_exist(self):
+        top = subparsers(xt.build_parser())
+        for path, expected in GOLDEN["subcommands_level3"].items():
+            first, second = path.split()
+            with self.subTest(path=path):
+                self.assertLessEqual(set(expected), set(subparsers(subparsers(top[first])[second])))
+        for verdict in GOLDEN["review_verdicts"]:
+            with self.subTest(verdict=verdict):
+                self.assertTrue(xt.REVIEW_MARK_RE.search(f"<!-- xt-review v1 head={'a' * 40} verdict={verdict} -->"))
+
+    def test_commands_called_by_dev_task_are_in_the_contract(self):
+        text = (ROOT / "scripts" / "dev-task.sh").read_text(encoding="utf-8")
+        called = set(re.findall(r"\bxt_py\s+([a-z][a-z-]+)", text))
+        self.assertTrue(called, "dev-task.sh không gọi lệnh con nào của xt.py?")
+        self.assertLessEqual(called, set(GOLDEN["commands"]), "dev-task.sh gọi lệnh con ngoài hợp đồng")
+
     def test_template_config_keys_still_exist(self):
         self.assertEqual(sorted(set(GOLDEN["config_keys"]) - active_keys(TEMPLATE)), [], "khoá đang bật bị xoá/đổi tên")
         optional_missing = set(GOLDEN["config_keys_optional"]) - commented_keys(TEMPLATE) - active_keys(TEMPLATE)
@@ -63,6 +79,7 @@ class ContractSurfaceTest(unittest.TestCase):
     def test_machine_readable_schema_numbers_are_still_read(self):
         self.assertTrue(set(GOLDEN["schemas"]["release_check"]) <= set(xt.RELEASE_SCHEMAS))
         self.assertIn(xt.RELEASE_SCHEMA, xt.RELEASE_SCHEMAS)
+        self.assertEqual(xt.STAGE_SCHEMA, GOLDEN["schemas"]["stage"])
         install = (ROOT / "scripts" / "install.py").read_text(encoding="utf-8")
         self.assertIn(f'doc = {{"schema": {GOLDEN["schemas"]["install_manifest"]}, "files": labelled', install)
 

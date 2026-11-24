@@ -183,13 +183,27 @@ def artifact_member(name: str) -> Optional[bytes]:
     """Nội dung mục `name` của artefact `.pyz`; None nếu không chạy từ zip, thiếu mục hoặc zip hỏng."""
     if not in_artifact() or name not in _zip_names(str(SCRIPT_DIR)):
         return None
-    with zipfile.ZipFile(SCRIPT_DIR) as z:
-        return z.read(name)
+    try:
+        with zipfile.ZipFile(SCRIPT_DIR) as z:
+            return z.read(name)
+    except (OSError, KeyError, zipfile.BadZipFile):  # mục hỏng (sai CRC) hay zip đổi giữa chừng: như không có
+        return None
 
 
 def sibling_exists(name: str) -> bool:
     """Module/tệp anh em của xt.py: tệp cạnh nó trên đĩa, hoặc mục trong artefact `.pyz`."""
     return (SCRIPT_DIR / name).is_file() or (in_artifact() and name in _zip_names(str(SCRIPT_DIR)))
+
+
+def self_source() -> bytes:
+    """Byte nguồn của xt.py đang chạy: mục `xt.py` của artefact `.pyz` hoặc tệp `__file__`."""
+    member = artifact_member("xt.py")
+    return Path(__file__).read_bytes() if member is None else member
+
+
+def self_entry() -> str:
+    """Đường chạy lại chính xt.py trong tiến trình con: tệp `.pyz` (chạy trực tiếp được) hoặc `xt.py`."""
+    return str(SCRIPT_DIR) if in_artifact() else str(Path(__file__).resolve())
 
 
 KINDS = {"method", "index", "module", "baseline", "profile", "industry", "standard", "template", "research", "progress"}
@@ -2481,6 +2495,8 @@ def _exec_source(path: Path, mod: Any) -> None:
     ngoài; định nghĩa trước điểm lỗi đã nằm trong `mod` (module dở). Import lồng trong lúc chạy không đẻ `__pycache__`."""
     mod.__file__ = str(path)
     member = artifact_member(path.name) if path.parent == SCRIPT_DIR else None  # module anh em trong artefact `.pyz`
+    if member is None and path.parent == SCRIPT_DIR and in_artifact():  # mục thiếu hoặc hỏng: không rơi về đọc đĩa
+        raise OSError(f"không đọc được {path.name} trong artefact {SCRIPT_DIR} (thiếu hoặc hỏng)")
     code = compile(path.read_bytes() if member is None else member, str(path), "exec", dont_inherit=True)
     keep = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
@@ -5130,9 +5146,14 @@ def _doctor_scripts() -> List[Finding]:
     if (
         in_artifact()
     ):  # artefact `.pyz`: dev-task.sh và app tĩnh không nằm cạnh (ADR-0097, pha P5 sẽ chuyển lệnh vào artefact)
-        return [
+        found = [
             Finding("scripts", "warn", "chạy từ artefact .pyz — chưa kiểm dev-task.sh và app cạnh xt.py (ADR-0097)")
         ]
+        if framework_version() == "unknown":
+            found.append(
+                Finding("scripts", "error", "mục VERSION của artefact .pyz thiếu hoặc hỏng — dựng lại artefact")
+            )
+        return found
     if not (SCRIPT_DIR / "dev-task.sh").is_file():
         out.append(
             Finding("scripts", "error", f"thiếu {SCRIPT_DIR / 'dev-task.sh'} — cổng commit không chạy; {INSTALL_HINT}")
@@ -19737,7 +19758,7 @@ def cmd_mutate_guard(args: argparse.Namespace) -> int:
     if args.list:
         print("\n".join(f"{i:3}  {s}" for i, s in enumerate(sites)))
         return 0
-    head = [sys.executable, str(Path(__file__).resolve()), "mutate-guard", "--guard", str(guard.resolve())]
+    head = [sys.executable, self_entry(), "mutate-guard", "--guard", str(guard.resolve())]
     head += ["--functions", ",".join(funcs), "--tests", ",".join(tests), "--run-one"]
     if _mutant_outcome([*head, "-1"], base, args.timeout) != "survived":
         print("mutate-guard: bộ test đỏ hoặc treo khi CHƯA đột biến — sửa test trước", file=sys.stderr)
@@ -20744,7 +20765,7 @@ def _trial_tool(base: Path, sha: str, argv: List[str]) -> Tuple[str, str]:
         blob = _git(base, "rev-parse", "-q", "--verify", f"{sha}:{rel}", env=_trial_genv())
         if blob.returncode == 0:
             data = _perf_git_raw(base, "cat-file", "blob", blob.stdout.strip(), env=_trial_genv())
-            if data != Path(__file__).read_bytes():
+            if data != self_source():
                 _trial_exec(base, data, argv)
             return rel, blob.stdout.strip()
     raise TrialRefused(
@@ -22459,9 +22480,11 @@ def _task_id(value: str) -> str:
 
 def framework_version() -> str:
     """Phiên bản khung: file VERSION cạnh thư mục scripts/ (repo khung hoặc .xtemplates/ của dự án)."""
-    member = artifact_member("VERSION")  # artefact `.pyz`: `xt_pack.py` đóng gói VERSION của khung
-    if member is not None:
-        return member.decode("utf-8").strip()
+    if (
+        in_artifact()
+    ):  # artefact `.pyz`: `xt_pack.py` đóng gói VERSION của khung; hỏng/thiếu thì unknown, không nhìn đĩa
+        member = artifact_member("VERSION")
+        return "unknown" if member is None else member.decode("utf-8").strip()
     try:
         return (SCRIPT_DIR.parent / "VERSION").read_text(encoding="utf-8").strip()
     except OSError:
