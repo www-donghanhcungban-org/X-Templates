@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- **Gate nối luồng:** thêm LOOP-DESIGN-030 yêu cầu SHOULD chạy lệnh thật; đính chính phạm vi T-4009 và trỏ việc nối nguồn còn thiếu sang T-5009 (T-5006).
+
 - **UX-VISUAL-009:** tách ảnh nét ở DPR cao, reflow 320 CSS px và phóng chữ 200%; hướng dẫn ui-verify không dùng deviceScaleFactor làm zoom (T-5005).
 
 - `review_debt` so cặp ID–lệnh và grant bằng chính parser thực thi ở hai cây Git, kể cả PLAN ngoài thư mục mặc định và backlog blueprint; văn xuôi, bằng chứng tĩnh và ví dụ grant trong fence không tạo nợ (AUD-HAR-478, D-576, T-5004).

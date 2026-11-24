@@ -17,7 +17,7 @@
 3. Hạn: 2026-12-02 bỏ `pull_request_target` khỏi `pr-review.yml`; 2026-12-31 rà stored; **2027-01-21** xét lại hàng rào guard + đánh giá sandbox Bash opt-in (D-331/D-332, ADR-0072) và các chấp nhận AUD-SEC-406/931/943/955/965.
 4. Ruleset `main` đủ 5 check (2026-11-20); ruleset tag live chưa có. Việc của người: T-4007; xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
 5. Còn: máy hoá `LOOP-HARNESS-031`, `LOOP-STOP-030`; task `[perf]` trong `loop` (D-041); URL phiên do máy chủ MCP gắn vào thân PR; ép báo "đã đo/chưa đo" cho UI (`LOOP-DESIGN-021`); tách khung khỏi đích bằng `.pyz` ([PLAN](docs/autopilot/PLAN-tool-independence-2026-11-24.md), ADR-0097: P0–P1 xong).
-6. Thực thi [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md), D-574/D-575, từ `ec541a2` (#792): T-5001–5004 đã merge; T-5005 sửa hướng dẫn DPR/reflow/phóng chữ, Gate validate exit 0, chờ CI. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký chưa chạy.
+6. Thực thi [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md), D-574/D-575, từ `b56c377` (#793): T-5001–5005 đã merge; T-5006 thêm Gate nối luồng chạy lệnh thật và đính chính bằng chứng T-4009. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký chưa chạy.
 7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), quy ước tên định danh ở `scripts/AGENTS.md` — không `noqa`/pragma; nới trần chỉ bằng ADR (ADR-0092).
 
 ## Quyết định
