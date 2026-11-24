@@ -1,0 +1,15 @@
+# Đo nạp .claude/hooks/guard.py: tệp rời so với zip stored/deflate (ADR-0097, P0)
+# Lệnh: python3 research/evidence/2026-11-24-zip-load-bench.py .claude/hooks/guard.py <N> <thư mục tạm> (python3 -I -B từng lượt)
+# Ngày 2026-11-24, container cloud, guard.py 1 384 897 B
+## CPython 3.15.2, N=30
+rời          median   428.0 ms  p95   444.6 ms  min   369.6 ms
+zip stored   median   431.1 ms  p95   460.1 ms  min   374.5 ms
+zip deflate  median   445.2 ms  p95   484.6 ms  min   380.9 ms
+kích thước: {'g-deflate.pyz': 445931, 'g-stored.pyz': 1385011} guard.py 1384897
+python 3.15.2
+## CPython 3.13.18, N=20
+rời          median   325.2 ms  p95   361.8 ms  min   299.8 ms
+zip stored   median   318.1 ms  p95   342.3 ms  min   295.4 ms
+zip deflate  median   336.4 ms  p95   363.3 ms  min   296.1 ms
+kích thước: {'g-deflate.pyz': 445931, 'g-stored.pyz': 1385011} guard.py 1384897
+python 3.13.18
