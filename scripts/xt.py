@@ -4995,6 +4995,9 @@ DOCTOR_SKILLS = (
     "handover",
 )
 DOCTOR_AGENTS = ("acceptance-author", "executor", "executor-deep", "researcher", "reviewer", "reviewer-alt")
+DOCTOR_AGENTS_OPTIONAL = (
+    "explore",
+)  # agent của khung thêm từ ADR-0098: vắng thì không báo thiếu, có thì không coi là ghim lạ
 DOCTOR_YAML_KEYS = ("lint", "typecheck", "test", "build")  # LOOP-HARNESS-008
 HOOK_REF_RE = re.compile(r"\.claude/hooks/([\w.-]+(?:/[\w.-]+)*)")
 # File hook nạp/gọi cạnh nó (_lib.sh, guard.py, nested/x.py, ../x.py): cả đường dẫn literal, giữ `/` lặp — đường dẫn chỉ
@@ -5873,7 +5876,7 @@ def _doctor_orchestration(base: Path) -> List[Finding]:
     pinned = []
     for p in sorted((claude / "agents").glob("*.md")):
         m = AGENT_MODEL_RE.search(_read_text_or_empty(p))
-        if p.stem not in DOCTOR_AGENTS and m and m.group(1) != "inherit":
+        if p.stem not in DOCTOR_AGENTS + DOCTOR_AGENTS_OPTIONAL and m and m.group(1) != "inherit":
             pinned.append(f"{p.name} ({m.group(1)})")
     if pinned:
         msg = f"agent ngoài bộ của khung ghim model: {', '.join(pinned)} — chạy model đó dù phiên chính rẻ hơn"
