@@ -426,6 +426,11 @@ class LinearTimeTest(Base):
         assert_not_quadratic(self, work, 50000)
 
 
+# Bản đột biến bậc hai tốn ~16 lần khi cỡ tăng 4 lần; ngưỡng 6 (> 4 của tuyến tính) cho biên rộng trên runner chậm,
+# vì ngưỡng mặc định 10 chỉ hở ~1,5 lần (CI #783: AssertionError not raised).
+MUTANT_RATIO = 6
+
+
 class MutationTest(Base):
     """Bản bậc hai của bộ quét/làm phẳng PHẢI làm các test trên đỏ — chứng minh test nhạy với việc làm chậm."""
 
@@ -439,7 +444,7 @@ class MutationTest(Base):
             return real(text)[0], frozenset({str(depth)})
 
         with unittest.mock.patch.object(kind_i18n, "scan_icu", slow), self.assertRaises(AssertionError):
-            assert_not_quadratic(self, lambda n: kind_i18n.scan_icu("{" * n), 4000)
+            assert_not_quadratic(self, lambda n: kind_i18n.scan_icu("{" * n), 4000, ratio=MUTANT_RATIO)
 
     def test_quadratic_flatten_is_detected(self) -> None:
         def slow(root: dict[str, object]) -> kind_i18n.Flat:
@@ -447,7 +452,9 @@ class MutationTest(Base):
             return {key: sum(1 for other in keys if other == key) for key in keys}
 
         with unittest.mock.patch.object(kind_i18n, "_flatten", slow), self.assertRaises(AssertionError):
-            assert_not_quadratic(self, lambda n: kind_i18n._flatten({f"k{i}": "v" for i in range(n)}), 3000)
+            assert_not_quadratic(
+                self, lambda n: kind_i18n._flatten({f"k{i}": "v" for i in range(n)}), 3000, ratio=MUTANT_RATIO
+            )
 
 
 if __name__ == "__main__":
