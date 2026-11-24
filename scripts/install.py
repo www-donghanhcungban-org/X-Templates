@@ -1490,16 +1490,35 @@ def agent_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return meta, body
 
 
+CODEX_MODELS = False  # `--codex-models`: ghi `model` cho agent Codex theo bảng bậc (ADR-0098 R2b); mặc định không ghi
+
+
+def codex_tier_model(name: str) -> str | None:
+    """ID model OpenAI của vai `name` theo `model-tiers.json` (vai → bậc → id); thiếu bảng/vai/id → None (fail-open)."""
+    try:
+        table = json.loads(
+            (SRC / "framework" / "templates" / "harness" / "model-tiers.json").read_text(encoding="utf-8")
+        )
+        model = table["vendors"]["openai"][table["roles"][name]]["id"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return model if isinstance(model, str) and model else None
+
+
 def agent_toml(text: str, source: str) -> str:
     """`.claude/agents/<tên>.md` → TOML agent của Codex: `name`, `description`, `model_reasoning_effort` (từ `effort`
     khi thuộc `CODEX_EFFORTS`), `developer_instructions` (thân sau frontmatter, bỏ dòng trống đầu, giữ đường `.claude/…`).
-    Không `model` (tên model Claude vô nghĩa với Codex). Frontmatter ngoài tập con phẳng → ValueError (`agent_frontmatter`)."""
+    Không `model` (tên model Claude vô nghĩa với Codex) trừ khi `--codex-models`: lúc đó `model` lấy từ bảng bậc theo vai.
+    Frontmatter ngoài tập con phẳng → ValueError (`agent_frontmatter`)."""
     meta, body = agent_frontmatter(text)
     out = [
         f"# Sinh từ {source} bởi install.py của X-Templates (ADR-0082) — sửa tệp nguồn rồi sinh lại, không sửa tay.",
         f"name = {toml_string(meta['name'])}",
         f"description = {toml_string(meta['description'])}",
     ]
+    model = codex_tier_model(meta["name"]) if CODEX_MODELS else None
+    if model:
+        out.append(f"model = {toml_string(model)}")
     if meta.get("effort") in CODEX_EFFORTS:
         out.append(f"model_reasoning_effort = {toml_string(meta['effort'])}")
     out.append(f"developer_instructions = {toml_multiline(body)}")
@@ -3124,11 +3143,19 @@ def main(argv: list[str] | None = None) -> int:
         help="gói sản phẩm framework/templates/packs/<id>: starter chỉ vào repo sạch, managed nâng theo hash (ADR-0068)",
     )
     p.add_argument(
+        "--codex-models",
+        action="store_true",
+        help="với --harness codex: ghi `model` cho agent Codex theo bảng bậc (OpenAI chưa xác minh — chỉ khi dự án chọn; "
+        "cài lại cùng cờ để nâng, ADR-0098)",
+    )
+    p.add_argument(
         "--sync-codex",
         action="store_true",
         help="chỉ ở repo khung: sinh lại .agents/skills, .codex/agents, .codex/hooks.json từ .claude/ (ADR-0082)",
     )
     a = p.parse_args(argv)
+    global CODEX_MODELS
+    CODEX_MODELS = a.codex_models
     if sys.implementation.name != "cpython" or sys.version_info[:2] < (3, 13):
         log(f"✗ cần CPython 3.13 trở lên — hiện là {sys.implementation.name} {sys.version.split()[0]}")
         return 2

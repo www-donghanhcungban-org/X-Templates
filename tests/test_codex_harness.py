@@ -249,6 +249,34 @@ class AgentTomlTest(unittest.TestCase):
         assert out is not None
         self.assertEqual(set(tomllib.loads(out)), {"name", "description", "developer_instructions"})
 
+    def test_codex_models_opt_in_writes_model_by_role(self):
+        reviewer = "---\nname: reviewer\ndescription: d\n---\nb\n"
+        explore = "---\nname: explore\ndescription: d\n---\nb\n"
+        self.assertNotIn("model", tomllib.loads(install.agent_toml(reviewer, "s")))  # mặc định không ghi
+        with mock.patch.object(install, "CODEX_MODELS", True):
+            self.assertEqual(tomllib.loads(install.agent_toml(reviewer, "s"))["model"], "gpt-6.2-sol")  # top-1
+            self.assertEqual(tomllib.loads(install.agent_toml(explore, "s"))["model"], "gpt-6-luna")  # bottom
+            unknown = "---\nname: lạ\ndescription: d\n---\nb\n"
+            self.assertNotIn("model", tomllib.loads(install.agent_toml(unknown, "s")))  # vai không có trong bảng
+
+    def test_codex_tier_model_fails_open(self):
+        self.assertEqual(install.codex_tier_model("reviewer"), "gpt-6.2-sol")
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(install, "SRC", Path(tmp)):
+            self.assertIsNone(install.codex_tier_model("reviewer"))  # thiếu bảng
+            table = Path(tmp) / "framework" / "templates" / "harness" / "model-tiers.json"
+            table.parent.mkdir(parents=True)
+            table.write_text('{"vendors": {"openai": {"top-1": {"id": ""}}}, "roles": {"reviewer": "top-1"}}', "utf-8")
+            self.assertIsNone(install.codex_tier_model("reviewer"))  # id rỗng
+
+    def test_codex_models_flag_sets_the_switch(self):
+        with mock.patch.object(install, "CODEX_MODELS", False), tempfile.TemporaryDirectory() as tmp:
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                install.main([tmp, "--plan", "--harness", "codex", "--codex-models"])
+            self.assertTrue(install.CODEX_MODELS)
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                install.main([tmp, "--plan", "--harness", "codex"])
+            self.assertFalse(install.CODEX_MODELS)
+
     def test_frontmatter_variants(self):
         text = "---\r\nname: \"a\"\r\ndescription: 'b: c'\r\n# chú thích cả dòng\r\n\r\ntools:\r\n---\r\nthân\r\n"
         doc = tomllib.loads(install.agent_toml(text, "s"))
