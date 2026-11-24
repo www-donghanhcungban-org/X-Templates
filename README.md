@@ -1,12 +1,187 @@
+# X-Templates — software development reference framework
+
+**English** | [Tiếng Việt](#tiếng-việt)
+
+X-Templates is an open-source software development framework combining a library of requirements, project-specific blueprints, quality checks, and an AI-agent workflow. It helps teams move from an idea or an existing repository through development, review, release, and operations, with evidence and human decision points where required.
+
+The framework's detailed requirement library and most supporting documentation are currently in Vietnamese. See the [Vietnamese section](#tiếng-việt) for the complete command reference, operational details, and design decisions.
+
+## From an idea to a maintainable application
+
+An AI assistant can turn a prompt into code in minutes. A working screen, however, is only part of an application: someone still has to decide what the product should do, connect the pieces, check failure cases, protect data, review changes, and prepare for release and ongoing operation. Developers face the same work, whether they write the code themselves or ask an agent to help.
+
+X-Templates brings those decisions and checks into a reusable workflow. It combines a requirement library, project blueprints, templates, command-line tools, and an optional agent harness. You can start with a new application or bring the framework into an existing repository. The aim is to reduce repeated setup, help people and agents keep the same project context, and make the next useful action visible.
+
+### For vibe coders and idea owners
+
+If you describe what you want in everyday language and use AI to help build it, X-Templates gives that conversation a working structure:
+
+1. **Describe the outcome.** Start with a product idea and its intended users. The `/factory` workflow in Claude Code or `$factory` in Codex can help turn that idea into a plan and a first development version. The `web-api-ts` starter is one available path; it does not mean every application type has a ready-made starter.
+2. **Make the scope visible.** Project documents, a plan, and a scale-appropriate blueprint give the agent a place to record what to build and what to check. You can review the proposed scope, try the development version, and give feedback rather than relying on a long chat alone.
+3. **Keep work moving between sessions.** Tasks, progress, decisions, and recorded evidence live in the repository. The agent can consult them to continue work, although its decisions and results still require appropriate review.
+4. **Know what needs your attention.** The workflow can collect items for a human when it reaches matters such as real money, real user data, paid services or credentials, subject to the configured policies. A local dashboard helps you inspect status; it does not execute most operational commands.
+
+For example, a team-notes MVP can begin with a short description. The factory workflow can use the starter, capture the idea, create an S-scale blueprint and work through planned tasks. Before treating it as ready for real users, its owner still needs to supply project-specific settings, check the experience and evidence, and address the applicable release requirements.
+
+### For developers and technical teams
+
+X-Templates helps reduce repeated coordination and setup while keeping technical choices in the team's hands:
+
+- **Start with a relevant checklist.** Compose a blueprint from the baseline, software profile, industry and scale, then add modules where needed. Stable requirement IDs help preserve status when the blueprint is recomposed; priorities distinguish MUST, SHOULD and MAY.
+- **Give agents bounded context.** Plans, task dependencies, file scopes and `xt.py context` help focus a task on the information it needs. An agent can work within the repository's documented workflow instead of rebuilding the project's context from every prompt.
+- **Make progress reviewable.** The loop records task evidence and the PR workflow organizes changes into reviewable slices. Existing project configuration, branch rules, CI and human review still govern what can be merged.
+- **Check readiness with real project commands.** `doctor` diagnoses the installation, `blueprint-status` reports requirement status, and `release-check` assesses release evidence. Checks are only as useful as the commands and evidence configured for that project; a checked box is not a substitute for a meaningful test.
+- **Carry knowledge into maintenance.** Specifications, architectural decisions, runbooks, progress records and release documents give the next developer or agent a place to find the reasoning and operational context.
+
+### Where the time savings come from
+
+The framework can save time by reusing a starter and standard documents, narrowing the checklist to the project's chosen scope, reducing repeated explanation to agents, and surfacing missing work earlier. It also adds planning, configuration, review and checking work. The net effect depends on project complexity, team experience, agent/tool access, and the quality of the configured checks; no universal speedup is claimed.
+
+The framework is a guide and set of tools, not proof of security, legal compliance or production readiness. Requirements and sources may need updating, and sensitive decisions and real-world deployment need appropriate human oversight. See [practical boundaries](#practical-boundaries) and the detailed [Vietnamese guide](#tiếng-việt).
+
+## Why use X-Templates
+
+- **Requirements with stable IDs:** baseline practices, software profiles, industry packs, and standards. Each requirement records its priority, how to check it, and its sources. Review source dates and verify items marked as unverified before applying them.
+- **Blueprints tailored to a project:** combine software type, industry, and scale (S/M/L); preserve completion status by ID when recomposing. Additional modules can be selected for a project's needs.
+- **Quality and release evidence:** validate the framework, inspect blueprint status, run configured checks, and use `release-check` to assess readiness. Checks depend on the project's actual configuration and evidence.
+- **AI-assisted delivery:** the factory and autopilot workflows cover planning, task execution, evidence, review, and staged delivery. Guardrails and stop points depend on configuration and the supported harness; human judgment remains necessary where required.
+- **Starter and installation tools:** create a new project with the `web-api-ts` pack or install the framework into an existing repository. Codex support is available through the installer; the Vietnamese guide documents limitations and other agent adapters.
+- **Local dashboard:** browse requirements and blueprints, see progress, plans, automation state, and pull requests. It listens on localhost; most actions are shown as commands to run in a terminal.
+
+## What is in the framework
+
+| Area | Contents |
+| --- | --- |
+| [Method](framework/00-method/README.md) and [baseline](framework/01-baseline/README.md) | Principles, lifecycle, evidence and practices common to software projects |
+| [Software profiles](framework/02-profiles/README.md) and [industries](framework/03-industries/README.md) | Requirements selected by software type and business domain |
+| [Standards](framework/04-standards/README.md) | Security, accessibility, APIs, data, process and AI references |
+| [Architecture](framework/05-architecture/README.md) through [database](framework/09-database/README.md) | Architecture, design and UI/UX, frontend, backend and data |
+| [Workflow](framework/10-workflow/README.md) and [autonomous loop](framework/11-autonomous-loop/README.md) | Git, CI/CD, delivery, agent orchestration and evidence |
+| [Security](framework/12-security/README.md) and [AI engineering](framework/13-ai-engineering/README.md) | Application and AI security, LLM applications, agents, evaluation and observability |
+| [Testing](framework/14-testing-quality/README.md) through [cross-cutting concerns](framework/18-cross-cutting/README.md) | Quality, operations, privacy, product, internationalization and other shared concerns |
+| [Templates](framework/templates/README.md) | Project, plan, specification, ADR, runbook, release and other reusable templates |
+
+Browse the full [framework index](framework/README.md). The [changelog](CHANGELOG.md), [progress log](PROGRESS.md), and [tags](https://github.com/www-donghanhcungban-org/X-Templates/tags) describe changes and releases.
+
+## Use it for a project
+
+The installer and CLI require **CPython 3.13 or newer** and a POSIX environment. Linux is covered by CI; macOS is not currently covered. On Windows, use WSL2 or a DevContainer/Docker environment. See the [Vietnamese section](#tiếng-việt) for filesystem and runtime details.
+
+Create a new project in a new or empty directory:
+
+```bash
+git clone https://github.com/www-donghanhcungban-org/X-Templates /tmp/x-templates
+python3 /tmp/x-templates/scripts/install.py /path/to/project --new --name team-notes --pack web-api-ts --idea "Team notes"
+cd /path/to/project
+python3 .xtemplates/scripts/xt.py stage status
+python3 .xtemplates/scripts/xt.py blueprint-status BLUEPRINT.md
+```
+
+The installer creates a Git repository, starter, S-scale blueprint and stage ledger. To run the development application, install the pack's dependencies and provide Docker Compose. Add `--harness codex` when creating a project for Codex. For an existing repository, see the [installation guidance](#dùng-cho-một-dự-án), including policy presets and stage adoption.
+
+In Claude Code, `/factory "Team notes: build an MVP"` starts the factory workflow; in Codex, use `$factory`. The [factory guide](.claude/skills/factory/SKILL.md) and [web-api-ts pack](framework/templates/packs/web-api-ts/README.md) explain the workflow and starter.
+
+## Run automatically until completion
+
+In Claude Code, use `/autopilot <request>` after installation. The workflow plans tasks, records evidence, implements and checks each slice, then reviews and proposes completion. It stops at configured limits and mandatory human decision points; final release readiness is assessed by `release-check`. See the [autonomous loop](framework/11-autonomous-loop/README.md) for the full protocol, safeguards and exceptions. The outer loop also supports multiple agent adapters; their capabilities and integrations differ.
+
+## Local application
+
+To inspect the local dashboard:
+
+```bash
+python3 scripts/xt.py app                 # framework repository
+python3 .xtemplates/scripts/xt.py app     # installed project
+```
+
+The app prints a localhost URL with a per-run token. The PR view requires an authenticated `gh` installation. The dashboard does not run gates, merge, push, or defer tasks; its blueprint write action is the documented exception to its otherwise read-oriented interface.
+
+## Tools
+
+The table below introduces the main commands; the [full Vietnamese command reference](#công-cụ) documents options and constraints. Run `python3 scripts/xt.py --help` or a command's `--help` for the installed version. In an installed project, replace `scripts/xt.py` with `.xtemplates/scripts/xt.py`.
+
+| Command | Purpose |
+| --- | --- |
+| `validate` and `list profiles` | Check framework conventions and list available software profiles. |
+| `compose` | Build a blueprint from selected profiles, industries and scale. |
+| `blueprint-status` | Inspect completion; `--strict --run` checks applicable evidence and configured commands. |
+| `doctor` | Diagnose the installed framework, environment and configuration. |
+| `loop` | Manage tasks, decisions, evidence, stops and the agent loop. |
+| `pr` | Inspect the next pull-request action and manage review evidence. |
+| `stage` | Inspect and manage the product-stage ledger. |
+| `release-check` | Assess release readiness using the configured checks and evidence. |
+| `app` | Open the local dashboard. |
+
+## Design decisions
+
+The framework records architectural choices and their history in [design decisions (ADRs)](docs/adr/). The [Vietnamese decision index](#quyết-định-thiết-kế) provides summaries and links; individual ADRs explain their scope and any later superseding decisions.
+
+## Practical boundaries
+
+X-Templates provides guidance and tools, not a guarantee that a project is secure, compliant, or production-ready. Requirements must be adapted to the project's risk and verified against current sources. Industry and legal material is input to review; consult qualified professionals where appropriate. The automation workflow can stop for real-money actions, real user data, paid services, credentials, or other situations defined by policy.
+
+## Support the author and contact
+
+If X-Templates is useful to you, you can **[Buy me a coffee via PayPal ☕](https://paypal.me/donhanhcungban)**. Voluntary contributions help maintain the framework and its documentation:
+
+- **PayPal:** [@donghanhcungban](https://paypal.me/donhanhcungban).
+- **Vietnam bank transfer:** Techcombank account `890977819110`, or scan the [VietQR code](docs/assets/donate-vietqr-techcombank.png).
+- **Contact and implementation support:** [Zalo / phone +84 977 819 110](https://zalo.me/0977819110) · admin@donghanhcungban.org. Support is available online or in Ho Chi Minh City, with terms agreed separately.
+
+Contributions are voluntary and do not include special benefits. Report bugs and feature requests via [issues](https://github.com/www-donghanhcungban-org/X-Templates/issues), and report security vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+## Contributing and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [framework conventions](framework/00-method/conventions.md). X-Templates is licensed under the [MIT License](LICENSE), subject to the third-party components and trademarks described in [NOTICE](NOTICE).
+
+---
+
+<a id="tiếng-việt"></a>
+
 # X-Templates — khung tham chiếu phát triển phần mềm
+
+[English](#x-templates--software-development-reference-framework) | **Tiếng Việt**
 
 > Thư viện **yêu cầu có ID** cho mọi loại phần mềm và ngành nghề, kèm công cụ ghép thành checklist dự án, kiểm "xong" bằng máy,
 > và harness để AI agent **tự làm đến khi hoàn thành** mà vẫn dừng đúng chỗ cần người.
-> Nội dung tiếng Việt; phiên bản, chuẩn và luật có nguồn và ngày kiểm tra theo từng mục. Mục ghi **chưa xác minh** cần đối chiếu trước khi áp dụng.
+> Tài liệu chi tiết chủ yếu bằng tiếng Việt; phiên bản, chuẩn và luật có nguồn và ngày kiểm tra theo từng mục. Mục ghi **chưa xác minh** cần đối chiếu trước khi áp dụng.
 >
 > Mã mở [MIT](LICENSE), miễn phí. Thấy hữu ích? [Ủng hộ tác giả](#ủng-hộ-và-liên-hệ) ☕
 
 Bản đã gắn tag: xem [danh sách tag](https://github.com/www-donghanhcungban-org/X-Templates/tags) hoặc chạy `git describe --tags --abbrev=0` (số bản không ghi ở đây để khỏi lệch mỗi lần cắt bản; `xt.py validate` kiểm). [CHANGELOG](CHANGELOG.md) ghi thay đổi trên `main` theo từng bản. [PROGRESS](PROGRESS.md) ghi việc đang làm và mốc bàn giao.
+
+## Từ ý tưởng đến ứng dụng có thể tiếp tục phát triển
+
+Trợ lý AI có thể biến một lời mô tả thành mã trong vài phút. Nhưng một màn hình chạy được mới chỉ là một phần của ứng dụng: vẫn cần xác định sản phẩm phải làm gì, kết nối các thành phần, kiểm tra tình huống lỗi, bảo vệ dữ liệu, rà soát thay đổi và chuẩn bị phát hành, vận hành. Đây cũng là công việc của lập trình viên, dù tự viết mã hay nhờ agent hỗ trợ.
+
+X-Templates đưa các quyết định và bước kiểm đó vào một quy trình có thể dùng lại. Khung kết hợp thư viện yêu cầu, blueprint theo dự án, tài liệu mẫu, công cụ dòng lệnh và harness agent tùy chọn. Bạn có thể bắt đầu dự án mới hoặc đưa khung vào repo đang có. Mục tiêu là giảm phần thiết lập lặp lại, giúp người và agent dùng chung bối cảnh dự án và thấy rõ bước tiếp theo cần làm.
+
+### Dành cho người làm vibe coding và chủ ý tưởng
+
+Nếu bạn mô tả điều mình muốn bằng ngôn ngữ thông thường và dùng AI để hỗ trợ xây dựng, X-Templates giúp cuộc trao đổi đó có cấu trúc làm việc:
+
+1. **Mô tả kết quả mong muốn.** Bắt đầu bằng ý tưởng sản phẩm và người sẽ dùng. Quy trình `/factory` trong Claude Code hoặc `$factory` trong Codex có thể hỗ trợ chuyển ý tưởng thành kế hoạch và bản phát triển đầu tiên. Gói `web-api-ts` là một cách bắt đầu có sẵn; không có nghĩa mọi loại ứng dụng đều đã có starter tương ứng.
+2. **Nhìn rõ phạm vi.** Tài liệu dự án, kế hoạch và blueprint theo quy mô cho agent nơi ghi việc cần làm và cách kiểm. Bạn có thể xem phạm vi đề xuất, thử bản phát triển và phản hồi, thay vì chỉ dựa vào một cuộc trò chuyện dài.
+3. **Tiếp tục công việc giữa các phiên.** Task, tiến độ, quyết định và bằng chứng được ghi trong repo. Agent có thể đọc lại để tiếp tục, nhưng quyết định và kết quả của agent vẫn cần được rà soát phù hợp.
+4. **Biết việc nào cần mình.** Theo chính sách cấu hình, quy trình có thể gom việc cần người khi gặp tiền thật, dữ liệu người dùng thật, dịch vụ trả phí hoặc thông tin xác thực. Dashboard cục bộ giúp xem trạng thái; phần lớn lệnh vận hành vẫn cần chạy ở terminal.
+
+Ví dụ, một MVP ghi chú cho nhóm có thể bắt đầu bằng vài câu mô tả. Quy trình factory có thể dùng starter, ghi ý tưởng, tạo blueprint quy mô S và thực hiện các task trong kế hoạch. Trước khi coi sản phẩm đã sẵn sàng cho người dùng thật, chủ dự án vẫn cần cung cấp cấu hình riêng, thử trải nghiệm, xem bằng chứng và xử lý các yêu cầu phát hành áp dụng.
+
+### Dành cho lập trình viên và nhóm kỹ thuật
+
+X-Templates giúp giảm việc thiết lập và phối hợp lặp lại, trong khi nhóm vẫn chủ động các quyết định kỹ thuật:
+
+- **Bắt đầu từ checklist phù hợp.** Ghép blueprint từ baseline, loại phần mềm, ngành và quy mô; bổ sung module khi cần. ID ổn định giúp giữ trạng thái khi ghép lại; mức MUST, SHOULD và MAY thể hiện ưu tiên.
+- **Cấp bối cảnh có giới hạn cho agent.** Kế hoạch, phụ thuộc task, phạm vi file và `xt.py context` giúp tập trung vào thông tin cần cho từng việc. Agent có thể làm theo quy trình được ghi trong repo thay vì phải dựng lại bối cảnh từ mỗi prompt.
+- **Làm cho tiến độ có thể rà soát.** Vòng lặp ghi bằng chứng task và quy trình PR chia thay đổi thành các lát có thể review. Cấu hình dự án, luật nhánh, CI và review của con người vẫn quyết định điều kiện merge.
+- **Kiểm tra mức sẵn sàng bằng lệnh thật của dự án.** `doctor` chẩn đoán bản cài, `blueprint-status` báo trạng thái yêu cầu, còn `release-check` đánh giá bằng chứng phát hành. Giá trị của bước kiểm phụ thuộc vào lệnh và bằng chứng được cấu hình; một ô đã đánh dấu không thay thế được kiểm thử có ý nghĩa.
+- **Giữ kiến thức cho giai đoạn bảo trì.** Đặc tả, quyết định kiến trúc, runbook, sổ tiến độ và tài liệu phát hành giúp người hoặc agent tiếp theo tìm lại lý do và bối cảnh vận hành.
+
+### Nhanh hơn nhờ đâu?
+
+Khung có thể tiết kiệm thời gian nhờ dùng lại starter và tài liệu mẫu, thu hẹp checklist theo phạm vi đã chọn, giảm giải thích lặp lại cho agent và phát hiện việc còn thiếu sớm hơn. Đổi lại, dự án vẫn cần thời gian lập kế hoạch, cấu hình, review và kiểm thử. Kết quả phụ thuộc độ phức tạp, kinh nghiệm nhóm, quyền truy cập agent/công cụ và chất lượng các bước kiểm; khung không cam kết một tỷ lệ tăng tốc chung.
+
+Đây là bộ hướng dẫn và công cụ, không phải bằng chứng mặc định rằng ứng dụng an toàn, tuân thủ pháp luật hay sẵn sàng production. Yêu cầu và nguồn có thể cần cập nhật; các quyết định nhạy cảm và triển khai thực tế cần được con người giám sát phù hợp. Xem [giới hạn sử dụng](#practical-boundaries) và hướng dẫn chi tiết bên dưới.
 
 ## Vì sao dùng X-Templates
 
@@ -343,8 +518,11 @@ nghiệm thu A–E; lát A–E đã làm, gộp một PR (#451) theo quyết đ�
 X-Templates miễn phí và sẽ luôn mở mã. Nếu khung giúp bạn tiết kiệm thời gian hoặc tránh được sự cố, bạn có thể ủng
 hộ để tác giả duy trì và cập nhật nội dung (chuẩn, luật, phiên bản công cụ thay đổi liên tục):
 
+**[Mời tác giả một ly cà phê qua PayPal ☕](https://paypal.me/donhanhcungban)**
+
 <img src="docs/assets/donate-vietqr-techcombank.png" alt="Mã VietQR ủng hộ: Techcombank, số tài khoản 890977819110" width="260">
 
+- **PayPal:** [@donghanhcungban](https://paypal.me/donhanhcungban).
 - Quét mã VietQR bằng ứng dụng ngân hàng bất kỳ, hoặc chuyển khoản **Techcombank — số tài khoản `890977819110`**.
 - Liên hệ, góp ý, hợp tác: điện thoại / Zalo **[+84 977 819 110](https://zalo.me/0977819110)** ·
   email **admin@donghanhcungban.org**. Lỗi và đề xuất tính năng xin mở [issue](https://github.com/www-donghanhcungban-org/X-Templates/issues).
