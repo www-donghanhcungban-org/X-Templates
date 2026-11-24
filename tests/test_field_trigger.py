@@ -143,10 +143,15 @@ class FieldTriggerTest(TmpRepoCase):
 
     def test_loop_uses_newest_default_commit_and_deduplicates_plan(self):
         day = self.now.date().isoformat()
+        # Ngày trong tên file phải trùng ngày UTC của `exported_at` (committed_field loại file lệch ngày).
+        # Bản cũ xuất ở giữa đoạn từ 00:00 UTC tới `self.now`, không lùi một khoảng cố định:
+        # lùi 10 phút làm test đỏ ngay sau nửa đêm.
+        day_start = self.now.replace(hour=0, minute=0, second=0, microsecond=0)
+        earlier = day_start + (self.now - day_start) / 2
         old = {
             **self.doc,
-            "exported_at": self.doc["window"]["from"],
-            "window": {"from": (self.now - dt.timedelta(hours=1)).isoformat(), "to": self.doc["window"]["from"]},
+            "exported_at": earlier.isoformat(),
+            "window": {"from": (earlier - dt.timedelta(hours=1)).isoformat(), "to": earlier.isoformat()},
             "metrics": [{"name": "LCP", "value_ms": 100, "budget_ms": 100}],
         }
         path = f"docs/ops/FIELD-{day}-235959Z.json"
