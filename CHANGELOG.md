@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `xt_pack --strict` yêu cầu đủ thư mục package và `__init__.py`; `verify` chạy smoke `xt_app` và `xt_checks` từ chính byte artefact đã khớp nguồn/pin, trong thư mục cô lập và có timeout (T-5003).
+
 - `static-check sbom`/`vex` báo lỗi cấu trúc có đường dẫn trường khi container hoặc phần tử sai kiểu, vẫn kiểm phần tử hợp lệ; JSON thêm `checked` đếm tệp và mục đã kiểm trong cùng lượt đọc, giữ schema 1 và API danh sách (ADR-0101, T-5001).
 
 ### Added

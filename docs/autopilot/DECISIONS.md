@@ -980,3 +980,10 @@
 - Chọn: Tách T-5024 làm hợp đồng và validator có test, giữ nguyên Gate dữ liệu thật của T-5020/T-5017/T-5018 và trạng thái chờ
 - Lý do (tiêu chí chất lượng cuối): Ba task gốc còn phần mã có thể làm trong phiên. Chuẩn bị bộ kiểm khiến bước người thực hiện có tiêu chí cụ thể; test dùng fixture được ghi rõ, không xuất thành bằng chứng production. Live corroboration chỉ đọc và fail-closed khi không có quyền hay nguồn. Không tick task gốc từ kết quả unit test.
 - Đường lùi: Revert riêng validator và SPEC nếu chưa phù hợp, không động vào hệ thống hay bằng chứng thật.
+
+### D-582 · 2026-11-24T13:52:40+00:00 · T-5011 và bộ kiểm pilot dùng chung hợp đồng xuất sổ lát có nguồn gốc
+
+- Phương án: (1) Schema 1 với entries gồm repo/commit/event; gộp theo repo và JSON sự kiện chuẩn, giữ toàn bộ nguồn ở origins khi trùng · (2) Gộp dòng sự kiện không giữ repo hoặc commit nguồn
+- Chọn: Schema 1 với entries gồm repo/commit/event; gộp theo repo và JSON sự kiện chuẩn, giữ toàn bộ nguồn ở origins khi trùng
+- Lý do (tiêu chí chất lượng cuối): Các worktree có thể chứa bản sao cùng sự kiện; đếm lại làm sai số đo. Repo là owner/name, commit là SHA đầy đủ của checkout khi xuất, event giữ schema 1 native. origins bảo toàn nhiều nguồn sau gộp, repo/commit đại diện phải nằm trong origins. Host mặc định github.com cho registry hiện tại; host tường minh phải được kiểm. Validator đối chiếu native merge_sha, head, digest và receipt với pilot thật.
+- Đường lùi: Revert exporter và validator tương ứng cùng phiên bản hợp đồng, giữ sổ nguồn nguyên vẹn.

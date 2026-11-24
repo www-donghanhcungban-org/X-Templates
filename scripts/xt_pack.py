@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Dựng artefact `.pyz` tất định của khung (ADR-0097, pha P1).
 
-Artefact là một zipapp stdlib chứa `xt.py`, các module `xt_*.py`, gói `xt_app` và `VERSION` của khung; ở pha P5 đích sẽ
-giữ tệp này thay cho mã nguồn chép vào `.xtemplates/scripts/`. Tất định: mục sắp theo tên, `mtime` và quyền cố định,
+Artefact là một zipapp stdlib chứa `xt.py`, các module `xt_*.py`, hai gói `xt_app`, `xt_checks` và `VERSION` của khung.
+Ở pha P5 đích sẽ giữ tệp này thay cho mã nguồn chép vào `.xtemplates/scripts/`. Tất định: mục sắp theo tên, `mtime` và quyền cố định,
 `ZIP_STORED` (đo P0: nạp từ zip không đổi độ trễ đáng kể, deflate chậm hơn và phụ thuộc phiên bản zlib), dòng shebang
 cố định. Hai lần dựng cùng nguồn cho cùng `sha256`. Không gồm `app/` (giao diện tĩnh của `xt.py app` đọc tệp cạnh mã, chưa
 chạy từ zip), `dev-task.sh`, guard và hook (pha P5).
@@ -10,7 +10,7 @@ chạy từ zip), `dev-task.sh`, guard và hook (pha P5).
     python3 scripts/xt_pack.py build --out DIST/xt.pyz [--strict]
     python3 scripts/xt_pack.py verify DIST/xt.pyz [--sha256 HEX]
 
-Mã thoát: 0 đạt · 1 lệch bản dựng hoặc lệch ghim · 2 dùng sai (tệp thiếu, ghim sai dạng, nguồn thiếu/symlink).
+Mã thoát: 0 đạt · 1 lệch bản dựng/ghim hoặc lệnh kiểm gói lỗi · 2 dùng sai (tệp thiếu, ghim sai dạng, nguồn lỗi).
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import hashlib
 import io
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -57,6 +58,17 @@ def _read(p: Path) -> bytes:
     return p.read_bytes()
 
 
+def _package_files(scripts: Path, pkg: str, strict: bool) -> List[str]:
+    root = scripts / pkg
+    if root.is_symlink():
+        raise PackError(f"không đóng gói liên kết tượng trưng: {root}")
+    if strict and not root.is_dir():
+        raise PackError(f"thiếu thư mục gói: {root}")
+    if strict and not (root / "__init__.py").is_file():
+        raise PackError(f"thiếu __init__.py ở {root}")
+    return [p.relative_to(scripts).as_posix() for p in root.rglob("*.py")]
+
+
 def entries(scripts: Path, strict: bool = False) -> List[Tuple[str, bytes]]:
     """(tên trong zip, nội dung) theo thứ tự tên. Thiếu `xt.py` là lỗi; module tuỳ chọn vắng thì bỏ qua, trừ khi
     `strict` (bản phát hành đòi đủ). `VERSION` của khung (cạnh `scripts/`) vào artefact khi có."""
@@ -67,10 +79,7 @@ def entries(scripts: Path, strict: bool = False) -> List[Tuple[str, bytes]]:
     if strict and absent:
         raise PackError(f"thiếu module: {', '.join(absent)}")
     for pkg in PACKAGES:
-        root = scripts / pkg
-        if root.is_symlink():
-            raise PackError(f"không đóng gói liên kết tượng trưng: {root}")
-        names += [p.relative_to(scripts).as_posix() for p in root.rglob("*.py")]
+        names.extend(_package_files(scripts, pkg, strict))
     out = [(n, _read(scripts / n)) for n in sorted(set(names))]
     if strict and not (scripts.parent / "VERSION").is_file():
         raise PackError(f"thiếu VERSION ở {scripts.parent}")
@@ -113,9 +122,47 @@ def build(scripts: Path, out: Path, strict: bool = False) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _smoke_packages(data: bytes, scripts: Path) -> List[str]:
+    """Chạy lệnh của từng gói từ bản sao các byte vừa kiểm, ngoài cây nguồn và site-packages."""
+    errors = []
+    with tempfile.TemporaryDirectory() as directory:
+        work = Path(directory).resolve()
+        archive = work / "xt.pyz"
+        archive.write_bytes(data)
+        (work / "input.txt").write_text("Tiếng Việt\n", encoding="utf-8")
+        empty_bin = work / "bin"
+        empty_bin.mkdir()
+        env = {"CLAUDE_PROJECT_DIR": str(work), "PATH": str(empty_bin)}
+        commands = {
+            "xt_app": ["--framework", str(scripts.resolve().parent / "framework"), "app", "--smoke"],
+            "xt_checks": ["static-check", "nfc", "input.txt", "--json"],
+        }
+        for pkg, args in commands.items():
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-I", "-S", str(archive), *args],
+                    cwd=work,
+                    env=env,
+                    timeout=60,
+                    capture_output=True,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+            except subprocess.TimeoutExpired:
+                errors.append(f"{pkg}: lệnh kiểm quá hạn")
+                continue
+            except OSError as exc:
+                errors.append(f"{pkg}: không chạy được lệnh kiểm: {exc}")
+                continue
+            if result.returncode:
+                detail = (result.stderr or result.stdout).strip()
+                errors.append(f"{pkg}: lệnh kiểm thoát mã {result.returncode} {detail}".rstrip())
+    return errors
+
+
 def verify(artifact: Path, scripts: Path, sha256: Optional[str] = None) -> List[str]:
-    """Lỗi nếu tệp không phải bản dựng tất định của `scripts` (hoặc lệch `sha256` ghim); rỗng là khớp. `sha256` đã
-    khai (kể cả chuỗi rỗng) mà không đúng dạng 64 hex là lỗi dùng sai, không bị bỏ qua."""
+    """So byte và ghim với bản dựng từ nguồn trước khi chạy lệnh kiểm của từng gói; rỗng là đạt.
+    Ghim đã khai (kể cả chuỗi rỗng) mà không đúng dạng 64 hex là lỗi dùng sai."""
     if sha256 is not None and not SHA256_RE.fullmatch(sha256.lower()):
         raise PackError("ghim sha256 phải là 64 ký tự hex")
     data = artifact.read_bytes()
@@ -124,7 +171,7 @@ def verify(artifact: Path, scripts: Path, sha256: Optional[str] = None) -> List[
         errors.append("sha256 không khớp giá trị ghim")
     if data != build_bytes(scripts):
         errors.append("nội dung không khớp bản dựng tất định từ nguồn")
-    return errors
+    return errors or _smoke_packages(data, scripts)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -133,8 +180,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build", help="dựng artefact")
     b.add_argument("--out", type=Path, required=True)
-    b.add_argument("--strict", action="store_true", help="đòi đủ mọi module (bản phát hành)")
-    v = sub.add_parser("verify", help="kiểm artefact khớp nguồn")
+    b.add_argument("--strict", action="store_true", help="đòi đủ module, gói và VERSION (bản phát hành)")
+    v = sub.add_parser("verify", help="đối chiếu artefact với nguồn rồi chạy lệnh kiểm từng gói")
     v.add_argument("artifact", type=Path)
     v.add_argument("--sha256", default=None)
     args = ap.parse_args(argv)
