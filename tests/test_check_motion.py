@@ -75,6 +75,14 @@ class MotionTest(unittest.TestCase):
         self.assertEqual(self.codes(other, ignore="MOT001,"), [])
         self.assertEqual(self.codes(".a { transition: all 1s; }\n", ignore="MOT001,MOT002"), [])
 
+    def test_line_numbers_follow_editor_counting(self) -> None:
+        self.assertEqual(self.codes("a { }" + chr(0x2028) + "\n.b { transition: all 1s; }\n" + REDUCED), [(2, "MOT001")])
+        allowed = "a { }" + chr(12) + "\n.b { transition: all 1s; } /* xt-allow: MOT001 */\n" + REDUCED
+        self.assertEqual(self.codes(allowed), [])
+
+    def test_opts_constant(self) -> None:
+        self.assertEqual(kind_motion.OPTS, ("ignore",))
+
     def test_unreadable_file_is_skipped(self) -> None:
         path = self.base / "b.css"
         path.write_bytes(b"\xff\xfe")

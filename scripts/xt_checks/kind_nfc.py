@@ -29,6 +29,7 @@ SUFFIXES = (
     ".properties",
 )
 HIDDEN = frozenset(chr(code) for code in (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF))  # ký tự ẩn: viết bằng mã, không bằng chữ
+OPTS = ("ignore",)
 REPLACEMENT = chr(0xFFFD)
 
 
@@ -52,6 +53,6 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
             if "NFC000" not in ignore:
                 found.append(Finding(str(path), 0, "NFC000", "không đọc được dưới dạng UTF-8 (hoặc quá lớn)"))
             continue
-        for number, line in enumerate(text.splitlines(), 1):
-            found.extend(_line_findings(str(path), number, line, ignore))
+        for number, line in enumerate(text.split("\n"), 1):
+            found.extend(_line_findings(str(path), number, line.removesuffix("\r"), ignore))
     return found

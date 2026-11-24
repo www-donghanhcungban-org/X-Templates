@@ -9,11 +9,21 @@ import json
 from pathlib import Path
 from typing import Any
 
-from . import Finding, read_text
+from . import CheckError, Finding, read_text
 
 HELP = "SBOM CycloneDX thiếu metadata, name/version, định danh, hash, license, AI-BOM hay dependencies"
 SUFFIXES = (".json",)
 DEFAULT_RATIO = 0.99
+OPTS = ("hashes", "license_ratio")
+HASH_MODES = ("require", "ignore")
+
+
+def sniff(text: str) -> bool:
+    """Nhận diện sơ bộ tệp CycloneDX khi duyệt thư mục."""
+    return '"bomFormat"' in text
+
+
+SNIFF = sniff
 
 
 def _load(text: str) -> dict[str, Any] | None:
@@ -40,10 +50,21 @@ def _flatten(items: object) -> list[dict[str, Any]]:
 
 
 def _ratio(opts: dict[str, str]) -> float:
+    raw = opts.get("license_ratio", str(DEFAULT_RATIO))
     try:
-        return float(opts.get("license_ratio", str(DEFAULT_RATIO)))
+        value = float(raw)
     except ValueError:
-        return DEFAULT_RATIO
+        raise CheckError(f"--opt license_ratio phải là số 0..1 (nhận {raw!r})") from None
+    if not 0 <= value <= 1:
+        raise CheckError(f"--opt license_ratio phải nằm trong 0..1 (nhận {raw!r})")
+    return value
+
+
+def _need_hashes(opts: dict[str, str]) -> bool:
+    mode = opts.get("hashes", "ignore")
+    if mode not in HASH_MODES:
+        raise CheckError(f"--opt hashes chỉ nhận require hoặc ignore (nhận {mode!r})")
+    return mode == "require"
 
 
 def _meta(path: str, data: dict[str, Any]) -> list[Finding]:
@@ -80,7 +101,7 @@ def _component(path: str, comp: dict[str, Any], need_hashes: bool) -> list[Findi
 def _bom(path: str, data: dict[str, Any], opts: dict[str, str]) -> list[Finding]:
     found = _meta(path, data)
     comps = _flatten(data.get("components"))
-    need_hashes = opts.get("hashes") == "require"
+    need_hashes = _need_hashes(opts)
     for comp in comps:
         found.extend(_component(path, comp, need_hashes))
     with_license = sum(1 for comp in comps if comp.get("licenses"))

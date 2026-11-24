@@ -1,6 +1,6 @@
 """Loại `tokens` (UX-DS-002, UX-DS-010, UX-DS-019): mã giao diện chỉ dùng biến thiết kế `var(--x)` từ một tệp khai báo, không
 hard-code màu và không bịa tên chưa định nghĩa. Khai `--opt tokens=<tệp css>` (bắt buộc) và `--opt allow=#fff,…` (màu được phép;
-`transparent`, `currentColor`, `inherit` luôn được phép). Mã: `TOK000` thiếu/không đọc được tệp khai báo; `TOK001` `var(--x)`
+`transparent`, `currentColor`, `inherit` luôn được phép). Mã: `TOK000` không đọc được tệp khai báo (thiếu opt → lỗi dùng sai, mã thoát 2); `TOK001` `var(--x)`
 chưa định nghĩa (tập tên = mọi `--x:` trong tệp khai báo và trong các tệp được kiểm; có fallback vẫn báo, ghi rõ trong thông
 điệp); `TOK002` màu hard-code (#rgb/#rrggbb/#rrggbbaa, rgb(, rgba(, hsl(, hsla(, oklch(, color() ngoài tệp khai báo.
 Heuristic theo dòng, không phân tích cú pháp: dòng bắt đầu bằng `//`, `/*` hay `*` coi là chú thích và bị bỏ qua với TOK002; dòng
@@ -11,16 +11,17 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import Finding, read_text
+from . import CheckError, Finding, read_text
 
 HELP = "mã giao diện dùng var(--x) chưa định nghĩa hoặc màu hard-code ngoài tệp biến thiết kế"
 SUFFIXES = (".css", ".scss", ".tsx", ".jsx", ".ts", ".js", ".vue", ".svelte", ".html")
 ALWAYS = ("transparent", "currentcolor", "inherit")
-DEFINED = re.compile(r"(--[\w-]+)\s*:")
+DEFINED = re.compile(r"(?<![\w-])(--[\w-]++)\s*:")  # neo + chiếm hữu: chỉ thử ở đầu mỗi chuỗi, tuyến tính (rà #776)
 USED = re.compile(r"var\(\s*(--[\w-]+)\s*(,?)")
 COLOR = re.compile(
     r"(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![\w-])|\b(?:rgba?|hsla?|oklch|color)\("
 )
+OPTS = ("tokens", "allow")
 COMMENT_STARTS = ("//", "/*", "*")
 
 
@@ -36,7 +37,8 @@ def _color_findings(path: str, number: int, line: str, allowed: set[str]) -> lis
 
 def _file_findings(path: str, text: str, names: set[str], allowed: set[str], is_design_file: bool) -> list[Finding]:
     found: list[Finding] = []
-    for number, line in enumerate(text.splitlines(), 1):
+    for number, line in enumerate(text.split("\n"), 1):
+        line = line.removesuffix("\r")
         for m in USED.finditer(line):
             if m.group(1) not in names:
                 extra = " (có fallback)" if m.group(2) else ""
@@ -50,13 +52,11 @@ def _file_findings(path: str, text: str, names: set[str], allowed: set[str], is_
 
 def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     design_path = opts.get("tokens", "")
-    design_text = read_text(Path(design_path)) if design_path else None
+    if not design_path:
+        raise CheckError("cần --opt tokens=<tệp token CSS>")
+    design_text = read_text(Path(design_path))
     if design_text is None:
-        return [
-            Finding(
-                design_path or "tokens", 0, "TOK000", "thiếu hoặc không đọc được tệp biến thiết kế (--opt tokens=…)"
-            )
-        ]
+        return [Finding(design_path, 0, "TOK000", "không đọc được tệp biến thiết kế (--opt tokens=…)")]
     allowed = {c.strip().lower() for c in opts.get("allow", "").split(",") if c.strip()} | set(ALWAYS)
     design_resolved = Path(design_path).resolve()
     texts = {path: read_text(path) for path in files}

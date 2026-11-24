@@ -17,10 +17,19 @@ HELP = "trace OTLP của agent: span mồ côi, con khác traceId với cha, thi
 SUFFIXES = (".json", ".jsonl", ".ndjson")
 MAX_SPANS = 200000
 DEFAULT_REQUIRED = "gen_ai.operation.name,gen_ai.provider.name|gen_ai.system"
+OPTS = ("required",)
 TRACE_ID = re.compile(r"[0-9a-f]{32}")
 SPAN_ID = re.compile(r"[0-9a-f]{16}")
 
 Span = tuple[int, dict[str, Any]]
+
+
+def sniff(text: str) -> bool:
+    """Nhận diện sơ bộ tệp OTLP khi duyệt thư mục."""
+    return '"resourceSpans"' in text
+
+
+SNIFF = sniff
 
 
 def _items(parent: dict[str, Any], key: str) -> list[dict[str, Any]]:
@@ -56,7 +65,7 @@ def _load(text: str) -> list[Span]:
 
 def _text(span: dict[str, Any], key: str) -> str:
     value = span.get(key)
-    return value if isinstance(value, str) else ""
+    return value.lower() if isinstance(value, str) else ""
 
 
 def _bad_hex(value: str, pattern: re.Pattern[str]) -> bool:
@@ -84,12 +93,12 @@ def _attr_findings(path: str, line: int, span: dict[str, Any], groups: list[list
 
 def _span_findings(path: str, span: Span, ids: set[tuple[str, str]], traces_of: dict[str, set[str]]) -> list[Finding]:
     line, data = span
-    trace, sid, parent = _text(data, "traceId"), _text(data, "spanId"), str(data.get("parentSpanId") or "")
+    trace, sid, parent = _text(data, "traceId"), _text(data, "spanId"), str(data.get("parentSpanId") or "").lower()
     found: list[Finding] = []
     if _bad_hex(trace, TRACE_ID):
-        found.append(Finding(path, line, "TRC004", f"traceId sai dạng (cần 32 hex thường, không toàn 0): {trace!r}"))
+        found.append(Finding(path, line, "TRC004", f"traceId sai dạng (cần 32 hex, không toàn 0): {trace!r}"))
     if _bad_hex(sid, SPAN_ID):
-        found.append(Finding(path, line, "TRC004", f"spanId sai dạng (cần 16 hex thường, không toàn 0): {sid!r}"))
+        found.append(Finding(path, line, "TRC004", f"spanId sai dạng (cần 16 hex, không toàn 0): {sid!r}"))
     if parent and (trace, parent) not in ids:
         found.append(Finding(path, line, "TRC001", f"span {sid!r} mồ côi: không có cha {parent!r} cùng traceId"))
     if parent in traces_of and trace not in traces_of[parent]:

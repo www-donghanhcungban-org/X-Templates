@@ -11,6 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from xt_checks import kind_ac_trace
 
 
+class AcTraceOptsTest(unittest.TestCase):
+    def test_opts(self) -> None:
+        self.assertEqual(kind_ac_trace.OPTS, ("tests", "test_suffixes"))
+
+
 class AcTraceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.base = Path(self.enterContext(tempfile.TemporaryDirectory()))

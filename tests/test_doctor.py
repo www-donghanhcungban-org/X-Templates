@@ -272,6 +272,17 @@ assert "xt_release_ops" not in sys.modules and "xt_ops_setup" not in sys.modules
         self.assertIn("thiếu app cạnh xt.py", warn[0].msg)
         self.assertNotIn("app", self.codes("error", deep=False))
 
+    def test_install_copies_xt_checks_and_doctor_warns_when_missing(self):
+        scripts = self.base / ".xtemplates" / "scripts"
+        self.assertTrue((scripts / "xt_checks" / "__init__.py").is_file())  # rà #776 🟢: cài phải chép gói
+        self.assertTrue((scripts / "xt_checks" / "kind_nfc.py").is_file())
+        self.assertFalse(list(scripts.rglob("__pycache__")))
+        self.assertNotIn("xt-checks", self.codes("warn", deep=False))
+        shutil.rmtree(scripts / "xt_checks")
+        warn = [f for f in self.findings(deep=False) if f.code == "xt-checks"]
+        self.assertEqual([f.level for f in warn], ["warn"])
+        self.assertIn("thiếu xt_checks cạnh xt.py", warn[0].msg)
+
 
 class DoctorFixTest(DoctorCase):
     def test_fix_repairs_safe_parts_and_keeps_hook_errors(self):

@@ -12,6 +12,7 @@ from . import CheckError, Finding, collect, read_text
 
 HELP = "tiêu chí AC-<số> trong spec chưa có test nhắc tới, test nhắc AC lạ, AC định nghĩa hai nơi"
 SUFFIXES = (".md",)
+OPTS = ("tests", "test_suffixes")
 TEST_SUFFIXES = ".py,.js,.jsx,.ts,.tsx,.go,.rs,.java,.rb,.feature"
 DEFINE = re.compile(r"^[\s\-*#|]*(AC-\d+)(?!\w|-\w)")
 MENTION = re.compile(r"(?<![\w-])AC-\d+(?!\w|-\w)")

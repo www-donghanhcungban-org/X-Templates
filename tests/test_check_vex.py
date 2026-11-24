@@ -10,6 +10,7 @@ import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+import xt_checks
 from xt_checks import kind_vex
 
 STMT = {
@@ -53,6 +54,40 @@ class VexTest(unittest.TestCase):
         for doc in ("không phải json", "[]", "{}", '{"@context": "https://khac.example/"}'):
             with self.subTest(doc=doc):
                 self.assertEqual(self.run_check(doc), ["VEX000"])
+
+    def test_context_strict(self) -> None:
+        for ctx in (
+            "http://openvex.dev/ns",
+            "x//openvex.dev/ns",
+            "//openvex.dev/ns",
+            "https://openvex.dev.evil.example/ns",
+            "https://evil.example/openvex.dev/ns",
+            "https://openvex.dev/other",
+            "https://[openvex.dev/ns",
+            5,
+            None,
+            ["https://openvex.dev/ns"],
+        ):
+            with self.subTest(ctx=ctx):
+                self.assertEqual(self.run_check({**GOOD, "@context": ctx}), ["VEX000"])
+        self.assertEqual(self.run_check({**GOOD, "@context": "https://openvex.dev/ns"}), [])
+
+    def test_sniff_and_opts(self) -> None:
+        self.assertEqual(kind_vex.OPTS, ())
+        self.assertTrue(kind_vex.SNIFF(json.dumps(GOOD)))
+        self.assertFalse(kind_vex.SNIFF('{"name": "package"}'))
+        self.assertFalse(kind_vex.SNIFF('{"@context": "x"}'))
+
+    def test_directory_scan_only_vex(self) -> None:
+        (self.base / "khac.json").write_text('{"name": "x"}', encoding="utf-8")
+        (self.base / "vex.json").write_text(json.dumps(GOOD), encoding="utf-8")
+        found = xt_checks.run("vex", [str(self.base)], {})
+        self.assertEqual(found, [])
+        (self.base / "bad.json").write_text('{"@context": "openvex"}', encoding="utf-8")
+        self.assertEqual([Path(f.path).name for f in xt_checks.run("vex", [str(self.base)], {})], ["bad.json"])
+        self.assertEqual(
+            [Path(f.path).name for f in xt_checks.run("vex", [str(self.base / "khac.json")], {})], ["khac.json"]
+        )
 
     def test_vex000_unreadable_and_recursion(self) -> None:
         path = self.base / "bad.json"

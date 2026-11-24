@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from xt_checks import kind_tokens
+from xt_checks import CheckError, kind_tokens
 
 DESIGN = ":root { --color-bg: #ffffff; --space-1: 4px; }\n.x { color: var(--color-bg); }\n"
 
@@ -33,9 +33,16 @@ class TokensTest(unittest.TestCase):
     def test_interface(self) -> None:
         self.assertTrue(kind_tokens.HELP and ".css" in kind_tokens.SUFFIXES and callable(kind_tokens.check))
 
-    def test_missing_option_is_tok000(self) -> None:
-        found = kind_tokens.check([], {})
-        self.assertEqual([(f.line, f.code) for f in found], [(0, "TOK000")])
+    def test_missing_option_is_usage_error(self) -> None:
+        with self.assertRaises(CheckError):
+            kind_tokens.check([], {})
+
+    def test_opts_constant(self) -> None:
+        self.assertEqual(kind_tokens.OPTS, ("tokens", "allow"))
+
+    def test_crlf_lines_keep_numbers(self) -> None:
+        file = self.put("crlf.css", "a { color: var(--color-bg); }\r\nb { color: #fff; }\r\n")
+        self.assertEqual(self.run_check([file]), [(2, "TOK002")])
 
     def test_unreadable_design_file_is_tok000(self) -> None:
         found = kind_tokens.check([], {"tokens": str(self.base / "absent.css")})

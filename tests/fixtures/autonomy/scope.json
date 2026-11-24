@@ -778,6 +778,16 @@
    ]
   },
   {
+   "reason": "Bộ kiểm tĩnh static-check (ADR-0099, gói xt_checks): đọc tệp của dự án đích và báo phát hiện, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_static_check_hardening kiểm đọc tệp an toàn (liên kết, FIFO, thiết bị), khoá --opt sai, lọc tệp khi quét thư mục và thời gian không bậc hai trên dòng dài; tests.test_check_* kiểm từng loại.",
+   "ids": [
+    "AUD-HAR-501",
+    "AUD-HAR-502",
+    "AUD-HAR-503",
+    "AUD-HAR-504",
+    "AUD-HAR-505"
+   ]
+  },
+  {
    "reason": "Phân phối khung: tải archive và biên nhận của release, kiểm digest và attestation (xt_distribution) là I/O mạng và gh attestation, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_distribution_bytes kiểm sửa một byte, thay biên nhận, thiếu tệp, thiếu release, tiền tố theo tên repo.",
    "ids": [
     "AUD-CI-036"

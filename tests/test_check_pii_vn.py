@@ -83,9 +83,20 @@ class PiiVnTest(unittest.TestCase):
             self.assertNotIn("Abc", f.message)
         self.assertEqual(kind_pii_vn._mask(CCCD), "07" + "*" * 8 + "32")
         self.assertEqual(kind_pii_vn._mask("abcd"), "****")
+        self.assertEqual(kind_pii_vn._mask("Hương"), "*****")
+        self.assertEqual(kind_pii_vn._mask("abcdefgh"), "*" * 8)
+        self.assertEqual(kind_pii_vn._mask("abcdefghi"), "ab" + "*" * 5 + "hi")
+        self.assertEqual(kind_pii_vn._mask(""), "")
+
+    def test_opts(self):
+        self.assertEqual(kind_pii_vn.OPTS, ("allow_domains", "ignore"))
 
     def test_unreadable_and_empty(self):
-        self.assertEqual(self.scan("bad.txt", b"\xff\xfe\x00"), [])
+        self.assertEqual(self.scan("bad.txt", b"\xff\xfe\x00"), [(0, "PII000")])
+        self.assertEqual(self.scan("big.log", b"a" * (2 * 1024 * 1024 + 1)), [(0, "PII000")])
+        self.assertEqual(self.scan("gone.txt", b"\xff", ignore="PII000"), [])
+        missing = self.base / "missing.txt"
+        self.assertEqual([f.code for f in kind_pii_vn.check([missing], {})], ["PII000"])
         self.assertEqual(self.scan("empty.txt", ""), [])
 
 

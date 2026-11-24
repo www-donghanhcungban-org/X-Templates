@@ -1,9 +1,9 @@
 """Loại `pii-vn` (CMP-PRIV-010, PM-METRIC-005, AI-GUARD-004, PRF-DATA-009): dữ liệu cá nhân Việt Nam chưa che trong tệp mẫu/log/fixture.
-`PII001` số CCCD 12 chữ số, `PII002` số di động, `PII003` email, `PII004` khoá/cột nhạy cảm có giá trị chưa che. Giả định CCCD
+`PII000` tệp không đọc được (không phải UTF-8, quá 2 MiB, lỗi đọc: không được bỏ qua im lặng), `PII001` số CCCD 12 chữ số, `PII002` số di động, `PII003` email, `PII004` khoá/cột nhạy cảm có giá trị chưa che. Giả định CCCD
 (heuristic, không phải kiểm số thật): 3 số đầu trong 001–096 (không đối chiếu từng mã tỉnh), số thứ 4 trong 0–3 (thế kỷ/giới
 tính 1900–2099), 2 số kế là năm sinh; biên không dính chữ/số/gạch nối để khỏi bắt timestamp, UUID, ID dài. Email bỏ miền tài liệu
 (example.*, .test, .invalid, localhost) và `--opt allow_domains=a.vn,b.vn`. Dòng có `xt-allow: PII00N` bỏ mã đó; `--opt ignore=…`
-bỏ toàn cục. Thông điệp chỉ giữ 2 ký tự đầu và cuối của giá trị."""
+bỏ toàn cục. Thông điệp che toàn bộ giá trị dài ≤ 8 ký tự, giá trị dài hơn giữ 2 ký tự đầu và cuối."""
 
 from __future__ import annotations
 
@@ -15,12 +15,14 @@ from . import Finding, read_text
 
 HELP = "dữ liệu cá nhân Việt Nam chưa che (CCCD, SĐT, email, khoá nhạy cảm) trong tệp mẫu/log/fixture"
 SUFFIXES = (".csv", ".json", ".jsonl", ".ndjson", ".sql", ".log", ".txt", ".tsv")
+OPTS = ("allow_domains", "ignore")
 _B = r"(?<![\w-])"
 _E = r"(?![\w-])"
 CCCD = re.compile(_B + r"(?:00[1-9]|0[1-8]\d|09[0-6])[0-3]\d{8}" + _E)
 PHONE = re.compile(_B + r"(?:\+?84|0)[35789]\d{8}" + _E)
-EMAIL = re.compile(r"[\w.+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
-PAIR = re.compile(r"""["']?([\w-]+)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;}]+)""")
+# Neo lookbehind + lượng từ chiếm hữu: chỉ thử ở đầu mỗi chuỗi ký tự, nên dòng dài base64/hex vẫn tuyến tính (rà #776)
+EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]++@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
+PAIR = re.compile(r"""(?<![\w-])["']?([\w-]++)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;}]+)""")
 ALLOW = re.compile(r"xt-allow:([\sA-Z0-9,]*)")
 DOC_DOMAINS = ("example.com", "example.org", "example.net", "test", "invalid", "localhost")
 SENSITIVE = frozenset({"cccd", "cmnd", "sodienthoai", "sdt", "phone", "email", "hoten", "diachi", "ngaysinh"})
@@ -28,7 +30,7 @@ HIDDEN = re.compile(r"x{3,}|\*|\[redacted\]", re.IGNORECASE)
 
 
 def _mask(value: str) -> str:
-    return value[:2] + "*" * (len(value) - 4) + value[-2:] if len(value) > 4 else "*" * len(value)
+    return value[:2] + "*" * (len(value) - 4) + value[-2:] if len(value) > 8 else "*" * len(value)
 
 
 def _norm(name: str) -> str:
@@ -77,9 +79,20 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     found: list[Finding] = []
     for path in files:
         text = read_text(path)
+        if text is None:
+            if "PII000" not in ignore:
+                found.append(
+                    Finding(
+                        str(path),
+                        0,
+                        "PII000",
+                        "không đọc được dưới dạng UTF-8 (hoặc quá lớn) — chưa kiểm dữ liệu cá nhân",
+                    )
+                )
+            continue
         delim = "\t" if path.suffix.lower() == ".tsv" else ","
         cols: list[int] | None = None
-        for number, line in enumerate(text.splitlines() if text else [], 1):
+        for number, line in enumerate(text.splitlines(), 1):
             hits = _hits(line, allowed)
             if path.suffix.lower() in (".csv", ".tsv") and line.strip():
                 cols, extra = _columns(line, delim, cols)

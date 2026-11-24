@@ -57,6 +57,14 @@ class CreditsTest(unittest.TestCase):
         self.assertEqual([(f.code, f.line) for f in found], [("CRD000", 0)])
         self.assertEqual(found[0].path, str(self.credits))
 
+    def test_nul_in_key_cell_is_crd004_not_crash(self) -> None:
+        files = self.media("a.png")
+        table = HEAD + "| a.png | An | MIT |\n| gone" + chr(0) + ".png | me | MIT |\n"
+        self.assertEqual(self.codes(self.run_check(table, files)), [("CRD004", 4)])
+
+    def test_opts_constant(self) -> None:
+        self.assertEqual(kind_credits.OPTS, ("credits", "allow"))
+
     def test_crd001_media_without_row(self) -> None:
         files = self.media("a.png", "b.mp3")
         found = self.run_check(HEAD + "| a.png | src | MIT |\nprose line\n", files)

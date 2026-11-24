@@ -10,7 +10,8 @@ import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from xt_checks import kind_sbom
+import xt_checks
+from xt_checks import CheckError, kind_sbom
 
 GOOD_COMP = {
     "name": "lib",
@@ -92,8 +93,29 @@ class SbomTest(unittest.TestCase):
         comps = [GOOD_COMP, bare]
         self.assertEqual(self.run_check(self.bom(components=comps)), ["SBM005"])
         self.assertEqual(self.run_check(self.bom(components=comps), license_ratio="0.5"), [])
-        self.assertEqual(self.run_check(self.bom(components=comps), license_ratio="abc"), ["SBM005"])
         self.assertEqual(self.run_check(self.bom(components=[GOOD_COMP] * 100)), [])
+
+    def test_bad_opts_raise(self) -> None:
+        for ratio in ("abc", "", "1.5", "-0.1", "nan", "inf"):
+            with self.subTest(ratio=ratio), self.assertRaises(CheckError):
+                self.run_check(GOOD, license_ratio=ratio)
+        for mode in ("yes", "", "Require"):
+            with self.subTest(mode=mode), self.assertRaises(CheckError):
+                self.run_check(GOOD, hashes=mode)
+        self.assertEqual(self.run_check(GOOD, hashes="ignore", license_ratio="1"), [])
+        self.assertEqual(self.run_check(GOOD, license_ratio="0"), [])
+
+    def test_sniff_and_opts(self) -> None:
+        self.assertEqual(kind_sbom.OPTS, ("hashes", "license_ratio"))
+        self.assertTrue(kind_sbom.SNIFF(json.dumps(GOOD)))
+        self.assertFalse(kind_sbom.SNIFF('{"a": 1}'))
+
+    def test_directory_scan_only_sbom(self) -> None:
+        (self.base / "khac.json").write_text('{"a": 1}', encoding="utf-8")
+        (self.base / "sbom.json").write_text(json.dumps(GOOD), encoding="utf-8")
+        self.assertEqual(xt_checks.run("sbom", [str(self.base)], {}), [])
+        found = xt_checks.run("sbom", [str(self.base / "khac.json")], {})
+        self.assertEqual([f.code for f in found], ["SBM000"])
 
     def test_sbm006_ai_bom(self) -> None:
         model = {"type": "machine-learning-model", "name": "m", "purl": "pkg:huggingface/m"}

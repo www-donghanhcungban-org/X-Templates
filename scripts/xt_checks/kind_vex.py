@@ -8,14 +8,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from . import Finding, read_text
 
 HELP = "OpenVEX thiếu trường tài liệu, vulnerability/products, status sai, justification hay action_statement"
 SUFFIXES = (".json",)
-CONTEXT = (
-    "openvex.dev/ns"  # phần sau dấu `//` của `@context`; không viết URL nguyên văn (kiểm BASE-CFG-001 cấm URL literal)
-)
+OPTS: tuple[str, ...] = ()
+# `@context` hợp lệ: scheme https, host openvex.dev, path bắt đầu /ns (viết từng phần; BASE-CFG-001 cấm URL literal)
+CONTEXT_SCHEME = "https"
+CONTEXT_HOST = "openvex.dev"
+CONTEXT_PATH = "/ns"
 STATUSES = ("not_affected", "affected", "fixed", "under_investigation")
 JUSTIFICATIONS = (
     "component_not_present",
@@ -26,12 +29,31 @@ JUSTIFICATIONS = (
 )
 
 
+def sniff(text: str) -> bool:
+    """Nhận diện sơ bộ tệp OpenVEX khi duyệt thư mục."""
+    return '"@context"' in text and "openvex" in text
+
+
+SNIFF = sniff
+
+
+def _context_ok(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname
+    except ValueError:
+        return False
+    return parts.scheme == CONTEXT_SCHEME and host == CONTEXT_HOST and parts.path.startswith(CONTEXT_PATH)
+
+
 def _load(text: str) -> dict[str, Any] | None:
     try:
         data = json.loads(text)
     except (ValueError, RecursionError):
         return None
-    if isinstance(data, dict) and str(data.get("@context", "")).partition("//")[2].startswith(CONTEXT):
+    if isinstance(data, dict) and _context_ok(data.get("@context")):
         return data
     return None
 

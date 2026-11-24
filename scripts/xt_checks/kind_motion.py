@@ -16,16 +16,32 @@ from . import Finding, read_text
 HELP = (
     "chuyển động CSS: transition all, thiếu prefers-reduced-motion, hoạt ảnh lặp vô hạn chớp nhanh hoặc không dừng được"
 )
+OPTS = ("ignore",)
 SUFFIXES = (".css", ".scss")
 MIN_SECONDS = 0.34
-COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+LOOKAHEAD = 2000  # khối khai báo dài hơn mức này không xét: giữ thời gian quét tuyến tính theo cỡ tệp (rà #776)
 ALLOW = re.compile(r"xt-allow:\s*([A-Z0-9, ]+)")
-TRANSITION_ALL = re.compile(r"\btransition(?:-property)?\s*:[^;}]*\ball\b")
-MOTION = re.compile(r"@keyframes\b|\b(?:animation|transition)[\w-]*\s*:")
-REDUCED = re.compile(r"@media[^{]*prefers-reduced-motion\s*:\s*reduce")
-INFINITE = re.compile(r"\banimation(?:-iteration-count)?\s*:[^;}]*\binfinite\b")
-DURATION = re.compile(r"animation-duration\s*:\s*(\d*\.?\d+)(ms|s)\b")
-TIME = re.compile(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b")
+TRANSITION_ALL = re.compile(r"\btransition(?:-property)?\s*:[^;}]{0,300}\ball\b")
+MOTION = re.compile(r"@keyframes\b|\b(?:animation|transition)[\w-]*+\s*:")
+REDUCED = re.compile(r"@media[^{]{0,300}prefers-reduced-motion\s*:\s*reduce")
+INFINITE = re.compile(r"\banimation(?:-iteration-count)?\s*:[^;}]{0,300}\binfinite\b")
+DURATION = re.compile(r"animation-duration\s*:\s*(\d++(?:\.\d++)?|\.\d++)(ms|s)\b")
+TIME = re.compile(r"(?<![\w.-])(\d++(?:\.\d++)?|\.\d++)(ms|s)\b")
+
+
+def _blank_comments(text: str) -> str:
+    """Thay nội dung bình luận `/* … */` bằng khoảng trắng (giữ xuống dòng để số dòng không lệch); bình luận không đóng kéo
+    tới hết tệp như CSS. Vòng `find` tuyến tính — regex `.*?` thử lại từ mỗi `/*` nên bậc hai với tệp nhiều `/*` không đóng."""
+    parts: list[str] = []
+    pos = 0
+    while (start := text.find("/*", pos)) != -1:
+        end = text.find("*/", start + 2)
+        stop = len(text) if end == -1 else end + 2
+        parts.append(text[pos:start])
+        parts.append(re.sub(r"[^\n]", " ", text[start:stop]))
+        pos = stop
+    parts.append(text[pos:])
+    return "".join(parts)
 
 
 def _seconds(match: re.Match[str]) -> float:
@@ -34,20 +50,23 @@ def _seconds(match: re.Match[str]) -> float:
 
 
 def _duration(clean: str, hit: re.Match[str]) -> float | None:
-    start = clean.rfind("{", 0, hit.start()) + 1
-    end = clean.find("}", hit.end())
-    block = clean[start : end if end >= 0 else len(clean)]
+    low = max(0, hit.start() - LOOKAHEAD)
+    opener = clean.rfind("{", low, hit.start())
+    start = opener + 1 if opener >= 0 else low
+    high = min(len(clean), hit.end() + LOOKAHEAD)
+    closer = clean.find("}", hit.end(), high)
+    block = clean[start : closer if closer >= 0 else high]
     found = DURATION.search(block) or TIME.search(hit.group())
     return _seconds(found) if found else None
 
 
 def _check_text(path: str, text: str, ignore: set[str]) -> list[Finding]:
     allow: dict[int, set[str]] = {}
-    for number, raw in enumerate(text.splitlines(), 1):
+    for number, raw in enumerate(text.split("\n"), 1):
         marker = ALLOW.search(raw)
         if marker:
             allow[number] = {c.strip() for c in marker.group(1).split(",")}
-    clean = COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    clean = _blank_comments(text)
     seen: dict[tuple[int, str], Finding] = {}
 
     def add(offset: int, code: str, message: str) -> None:

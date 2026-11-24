@@ -36,6 +36,7 @@ SUFFIXES = (
 ALLOW = (
     "CC0-1.0,CC-BY-4.0,CC-BY-SA-4.0,MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,ISC,OFL-1.1,Unlicense,LicenseRef-Project"
 )
+OPTS = ("credits", "allow")
 SRC_WORDS = ("nguồn", "source", "tác giả", "author")
 LIC_WORDS = ("license", "licence", "giấy phép")
 EMPTY = frozenset({"", "-", "?", "tbd", "todo", "n/a"})
@@ -86,7 +87,10 @@ def _is_missing(key: str, credits: Path, files: list[Path]) -> bool:
     """Tệp `key` không còn mà vị trí dự kiến nằm cùng cây với các tệp được kiểm."""
     root = Path(os.path.commonpath([str(p.resolve().parent) for p in files]))
     bases = (credits.parent, credits.parent.parent, Path("."))
-    spots = [(base / key).resolve() for base in bases]
+    try:
+        spots = [(base / key).resolve() for base in bases]
+    except (OSError, ValueError):  # tên không hợp lệ (NUL, quá dài): không thể tồn tại → coi là không còn
+        return True
     return not any(s.exists() for s in spots) and any(s.is_relative_to(root) for s in spots)
 
 

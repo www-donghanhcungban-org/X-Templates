@@ -11,7 +11,7 @@ Khung đòi nhiều quy tắc kiểm được bằng máy mà dự án đích ph
 ## Quyết định
 
 - Một lệnh `python3 scripts/xt.py static-check <loại> [ĐƯỜNG…] [--opt khoá=giá-trị] [--json]` và một gói `scripts/xt_checks/`, mỗi loại một module `kind_<tên>.py`. Hợp đồng đổi **một lần** (thêm lệnh); thêm loại sau đó không đổi hợp đồng.
-- Giao diện một loại: `HELP` (một dòng), `SUFFIXES` (đuôi tệp khi quét thư mục), `check(files, opts) -> list[Finding]`. `Finding` gồm `path`, `line`, `code` (`<LOẠI>NNN`), `message`. Bộ duyệt tệp dùng chung: không theo liên kết, bỏ `.git`/`node_modules`/`.venv`, trần 2 MiB mỗi tệp; tệp được nêu đích danh được đọc bất kể đuôi.
+- Giao diện một loại: `HELP` (một dòng), `SUFFIXES` (đuôi tệp khi quét thư mục), `OPTS` (tên các khoá `--opt` loại nhận; khoá lạ hoặc mã `ignore` sai dạng → mã thoát 2), tuỳ chọn `SNIFF` (khi quét thư mục chỉ giữ tệp mang dấu hiệu đúng định dạng, để `sbom`/`vex`/`trace` không báo mọi `.json`; tệp nêu đích danh luôn được kiểm), `check(files, opts) -> list[Finding]`. `Finding` gồm `path`, `line`, `code` (`<LOẠI>NNN`), `message`. Bộ duyệt tệp dùng chung: không theo liên kết, bỏ `.git`/`node_modules`/`.venv`, trần 2 MiB mỗi tệp; tệp được nêu đích danh được đọc bất kể đuôi.
 - Mã thoát: 0 sạch; 1 có phát hiện; 2 dùng sai (loại lạ, đường dẫn không có, `--opt` sai). `--json` in `{"schema": 1, "kind", "findings": [...]}`. Chỉ stdlib, tất định, chỉ đọc (không sửa tệp).
 - Chọn loại theo bốn tiêu chí: (1) có yêu cầu MUST/SHOULD đã đòi mà chưa có máy kiểm; (2) stdlib, tất định; (3) ít báo nhầm (có ngoại lệ khai được); (4) nhỏ (≲ 150 dòng kèm test đủ nhánh). Ý cần chạy model, trình duyệt, ffmpeg hay công cụ Java/Go ngoài **không** vào gói này.
 - Gói vào artefact `.pyz` (như `xt_app`) và được `install.py` chép như module khung.
@@ -30,7 +30,9 @@ Khung đòi nhiều quy tắc kiểm được bằng máy mà dự án đích ph
 | `vex` | `SEC-SUPPLY-030`, `SEC-SUPPLY-031` | `VEX000`–`005` | OpenVEX JSON |
 | `pii-vn` | `CMP-PRIV-010`, `PM-METRIC-005`, `AI-GUARD-004`, `PRF-DATA-009` | `PII001`–`004` | CCCD: mã tỉnh 001–096 và chữ số thứ 4 trong 0–3 là heuristic, chưa đối chiếu danh sách chính thức; không quét `INSERT … VALUES` |
 
-Tệp không đọc được hoặc không phải UTF-8: `nfc`, `credits`, `trace`, `sbom`, `vex` báo (`…000`); `tokens`, `motion`, `ac-trace`, `pii-vn` bỏ qua im lặng — loại nào cần thì thêm mã `…000` khi có ca thực tế.
+Tệp không đọc được hoặc không phải UTF-8: `nfc`, `credits`, `trace`, `sbom`, `vex`, `pii-vn` báo (`…000`; `pii-vn` bắt buộc vì cổng quyền riêng tư không được lọt dữ liệu ở tệp log lớn); `tokens`, `motion`, `ac-trace` bỏ qua im lặng — loại nào cần thì thêm mã `…000` khi có ca thực tế.
+
+**An toàn khi đọc:** mọi loại đọc qua `read_text` — không theo liên kết tượng trưng, chỉ nhận tệp thường (FIFO/thiết bị bị bỏ), trần 2 MiB; regex dùng neo lookbehind và lượng từ chiếm hữu hoặc đoạn quét có trần để thời gian tuyến tính theo độ dài dòng (test `assert_not_quadratic`, rà #776 🔴).
 
 ## Hệ quả
 

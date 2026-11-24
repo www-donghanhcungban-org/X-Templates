@@ -5257,6 +5257,12 @@ def _doctor_scripts() -> List[Finding]:
         out.append(
             Finding("app", "warn", f"thiếu {', '.join(missing)} cạnh xt.py — `xt.py app` không chạy; {INSTALL_HINT}")
         )
+    if not (SCRIPT_DIR / "xt_checks").is_dir():  # tuỳ chọn (ADR-0099): thiếu chỉ tắt `xt.py static-check`
+        out.append(
+            Finding(
+                "xt-checks", "warn", f"thiếu xt_checks cạnh xt.py — `xt.py static-check` không chạy; {INSTALL_HINT}"
+            )
+        )
     return out
 
 

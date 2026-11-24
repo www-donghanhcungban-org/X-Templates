@@ -118,6 +118,11 @@ class NfcKindTest(TmpTest):
         self.assertEqual(self.check(BOM + "xin chào\n"), [(1, "NFC003")])
         self.assertEqual(self.check("a" + ZWSP + "b\n"), [(1, "NFC003")])
 
+    def test_line_numbers_follow_editor_counting(self):
+        self.assertEqual(self.check("a" + chr(0x2028) + "b\n" + NFD + "\n"), [(2, "NFC001")])
+        self.assertEqual(self.check("a" + chr(12) + "b\r\n" + NFD + "\r\n"), [(2, "NFC001")])
+        self.assertEqual(kind_nfc.OPTS, ("ignore",))
+
     def test_invalid_utf8_is_reported_as_unreadable(self):
         self.assertEqual(self.check(b"\xa4\xb1\xff"), [(0, "NFC000")])
 

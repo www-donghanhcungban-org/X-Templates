@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
+import xt_checks
 from xt_checks import kind_trace
 
 T1 = "a" * 32
@@ -104,9 +105,39 @@ class TraceTest(unittest.TestCase):
         self.assertEqual(sorted(self.codes(json.dumps(d))), ["TRC001", "TRC003"])
 
     def test_bad_hex(self):
-        for trace, sid in (("A" * 32, S1), ("a" * 31, S1), ("0" * 32, S1), (T1, "g" * 16), (T1, "0" * 16), (5, S1)):
+        for trace, sid in (
+            ("a" * 31, S1),
+            ("A" * 33, S1),
+            ("0" * 32, S1),
+            (T1, "G" * 16),
+            ("0" * 32, S1),
+            (T1, "g" * 16),
+            (T1, "0" * 16),
+            (5, S1),
+        ):
             with self.subTest(trace=trace, sid=sid):
                 self.assertEqual(self.codes(json.dumps(doc(span(sid, trace=trace)))), ["TRC004"])
+
+    def test_uppercase_hex_valid_and_case_insensitive_links(self):
+        up_trace, up_sid = "ABCDEF" + "0" * 26, "ABCDEF0123456789"
+        self.assertEqual(self.codes(json.dumps(doc(span(up_sid, trace=up_trace)))), [])
+        child = span(S2, up_sid.lower(), trace=up_trace.lower())
+        self.assertEqual(self.codes(json.dumps(doc(span(up_sid, trace=up_trace), child))), [])
+        child = span(S2, up_sid, trace=up_trace)
+        self.assertEqual(self.codes(json.dumps(doc(span(up_sid.lower(), trace=up_trace.lower()), child))), [])
+
+    def test_sniff_and_opts(self):
+        self.assertEqual(kind_trace.OPTS, ("required",))
+        self.assertTrue(kind_trace.SNIFF(json.dumps(doc(span(S1)))))
+        self.assertFalse(kind_trace.SNIFF('{"a": 1}'))
+
+    def test_directory_scan_only_otlp(self):
+        (self.base / "khac.json").write_text('{"a": 1}', encoding="utf-8")
+        (self.base / "t.json").write_text(json.dumps(doc(span(S1, S3))), encoding="utf-8")
+        found = xt_checks.run("trace", [str(self.base)], {})
+        self.assertEqual([(Path(f.path).name, f.code) for f in found], [("t.json", "TRC001")])
+        found = xt_checks.run("trace", [str(self.base / "khac.json")], {})
+        self.assertEqual([f.code for f in found], ["TRC000"])
 
     def test_genai_required_defaults(self):
         for attrs in (["gen_ai.operation.name"], ["gen_ai.system"], ["gen_ai.request.model"]):
