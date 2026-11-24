@@ -5194,24 +5194,22 @@ def _python_prerelease_warning(info: Any = None) -> Optional[Finding]:
 
 
 def _doctor_deploy_env(base: Path) -> List[Finding]:
-    """T-4016: `deploy_env_pass` sai tên → lỗi; deploy bật (`deploy_envs`) mà chưa khai → cảnh báo (allowlist mặc định bật ở
-    bản MINOR kế; lệnh triển khai hiện chỉ bỏ biến khởi động/nạp thư viện). Không có xt.yaml → không nói gì."""
+    """Báo lỗi tên biến và nhắc khai allowlist cho adapter đã bật."""
     try:
-        keys = {k: yaml_scalar(v) for k, v in _xt_keys(base).items()}
+        keys = _xt_keys(base)
         enabled = bool(_deploy_env_names(base))
     except (OSError, ValueError):
         return []
     err = deploy_env_pass_error(keys)
     if err:
         return [Finding("xt-yaml", "error", err)]
-    if enabled and not deploy_env_pass(keys):
+    if enabled and DEPLOY_ENV_PASS_KEY not in keys:
         return [
             Finding(
                 "xt-yaml",
                 "warn",
-                f"deploy_envs đã bật nhưng chưa khai {DEPLOY_ENV_PASS_KEY} — lệnh triển khai còn thừa kế mọi biến môi"
-                " trường của phiên (trừ biến khởi động/nạp thư viện); liệt kê tên biến cần (khoá, cấu hình) để chạy"
-                " allowlist, sẽ là mặc định ở bản MINOR kế",
+                f"deploy_envs đã bật nhưng chưa khai {DEPLOY_ENV_PASS_KEY} — dev thừa kế biến thông thường của phiên;"
+                " các môi trường khác cần khai danh sách, để rỗng nếu chỉ dùng biến hệ thống",
             )
         ]
     return []
@@ -15893,61 +15891,41 @@ def _deploy_metrics(ledger: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 DEV_DRIVER = "node scripts/dev-preview.mjs"
 DEV_ACTIONS = ("deploy", "smoke", "digest", "rollback")
 
-# Biến môi trường làm trình thông dịch/bộ nạp chạy mã ngoài lệnh khai báo (T-4015, bước 1 của ADR-0095 §mục 07): script
-# khởi động shell, bộ nạp thư viện, tuỳ chọn khởi động Python/Node/Perl/Ruby/Java, hàm bash xuất ra. Lệnh triển khai chạy
-# với khoá thật của dự án nên không được thừa kế chúng từ môi trường phiên. Biến thường (PATH, HOME, khoá của dự án) giữ.
+# Hằng chính sách công khai của adapter, dùng chung với xt_deploy.
 DEPLOY_ENV_DROP = frozenset(
     {"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4", "NODE_OPTIONS", "NODE_PATH", "PERL5OPT", "PERL5LIB"}
     | {"RUBYOPT", "RUBYLIB", "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS"}
     | {"PERLLIB", "CDPATH", "MAKEFLAGS", "MAKEFILES", "GCONV_PATH", "HOSTALIASES", "RUBYGEMS_GEMDEPS"}
-)  # danh sách chặn KHÔNG đầy đủ (bước 1); lối thoát/đầy đủ là `deploy_env_pass` (bước 2)
-DEPLOY_ENV_DROP_PREFIX = ("LD_", "DYLD_", "PYTHON", "BASH_FUNC_", "XT_DEPLOY_")
-
-
-# T-4016 (bước 2): `deploy_env_pass: TÊN…` trong xt.yaml → allowlist theo tên. Biến hệ thống cần thiết luôn qua (PATH giữ
-# nguyên của host — công cụ triển khai nằm ở đó); mọi biến khác chỉ qua khi được liệt kê, kể cả khoá và cấu hình.
+)
+DEPLOY_ENV_DROP_PREFIX = ("LD_", "DYLD_", "PYTHON", "BASH_FUNC_", "XT_DEPLOY_", "GIT_")
 DEPLOY_ENV_SYSTEM = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TERM", "TMPDIR", "USER", "LOGNAME")
 DEPLOY_ENV_PASS_KEY = "deploy_env_pass"
-_ENV_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-# Không được liệt kê dù khai rõ: đường tiêm mã vào shell/bộ nạp; `PYTHON*`/`NODE_OPTIONS`… khai rõ tên thì được qua.
-_DEPLOY_ENV_NEVER = frozenset({"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4"})
-_DEPLOY_ENV_NEVER_PREFIX = ("LD_", "DYLD_", "BASH_FUNC_", "XT_DEPLOY_")
-
-
-def deploy_env_pass_error(keys: Mapping[str, str]) -> Optional[str]:
-    """Lỗi của `deploy_env_pass` (tên sai dạng hoặc thuộc nhóm không bao giờ qua), nêu tên đầu tiên sai; hợp lệ/vắng → None."""
-    for name in re.split(r"[\s,]+", yaml_scalar(keys.get(DEPLOY_ENV_PASS_KEY, "")).strip()):
-        if name and (
-            not _ENV_NAME_RE.fullmatch(name) or name in _DEPLOY_ENV_NEVER or name.startswith(_DEPLOY_ENV_NEVER_PREFIX)
-        ):
-            return f"xt.yaml: {DEPLOY_ENV_PASS_KEY} có tên không hợp lệ hoặc không được phép qua: {name}"
-    return None
 
 
 def deploy_env_pass(keys: Mapping[str, str]) -> Optional[Tuple[str, ...]]:
-    """Tên biến được khai ở `deploy_env_pass` theo thứ tự khai (bỏ trùng); chưa khai/rỗng → None (chưa bật allowlist)."""
-    err = deploy_env_pass_error(keys)
-    if err:
-        raise DeployError(err)
-    names = [n for n in re.split(r"[\s,]+", yaml_scalar(keys.get(DEPLOY_ENV_PASS_KEY, "")).strip()) if n]
-    return tuple(dict.fromkeys(names)) or None
+    """Đọc các scalar đã giải mã. None khi chưa khai, tuple rỗng khi khai rỗng."""
+    if DEPLOY_ENV_PASS_KEY not in keys:
+        return None
+    _sibling_imports()
+    import xt_deploy
+
+    return xt_deploy.env_pass_names(sys.modules[__name__], keys[DEPLOY_ENV_PASS_KEY])
+
+
+def deploy_env_pass_error(keys: Mapping[str, str]) -> Optional[str]:
+    try:
+        deploy_env_pass(keys)
+    except DeployError as exc:
+        return str(exc)
+    return None
 
 
 def deploy_command_env(environ: Mapping[str, str], names: Optional[Sequence[str]] = None) -> Dict[str, str]:
-    """Môi trường của lệnh `deploy`/`smoke`/`digest`/`rollback`. `names` None (chưa khai `deploy_env_pass`): bản sao không
-    có biến khởi động/nạp thư viện và không có `XT_DEPLOY_*` (bước 1, T-4015). `names` có (kể cả rỗng): biến hệ thống +
-    đúng các tên đã khai; thiếu tên nào → DeployError nêu tên (không giá trị), không lấy gì thay từ host. Không ghi log."""
-    if names is None:
-        return {
-            k: v for k, v in environ.items() if k not in DEPLOY_ENV_DROP and not k.startswith(DEPLOY_ENV_DROP_PREFIX)
-        }
-    missing = [n for n in names if n not in environ]
-    if missing:
-        raise DeployError(
-            f"{DEPLOY_ENV_PASS_KEY} khai {', '.join(missing)} nhưng môi trường chạy không có biến đó — đặt biến "
-            "(lệnh triển khai không tự lấy khoá khác từ host)"
-        )
-    return {k: environ[k] for k in (*DEPLOY_ENV_SYSTEM, *names) if k in environ}
+    """Trả môi trường adapter theo allowlist hoặc theo chính sách kế thừa đã lọc."""
+    _sibling_imports()
+    import xt_deploy
+
+    return xt_deploy.command_env(sys.modules[__name__], environ, names)
 
 
 class DevGuardDenied(DeployError):
@@ -15980,6 +15958,8 @@ def _dev_preflight(base: Path, env: str, config: dict[str, str]) -> int:
             raise DeployError("thiếu scripts/dev-preview.mjs của gói")
     elif any(gate_noop(cmd) for cmd in commands.values()):
         raise DeployError(f"adapter {env} có cổng rỗng. Khai đủ deploy, smoke, digest, rollback trong xt.yaml")
+    if deploy_env_pass(config) is None and env != "dev":
+        raise DeployError(f"môi trường {env} cần khai {DEPLOY_ENV_PASS_KEY} trong xt.yaml (có thể để rỗng)")
     timeout = os.environ.get("XT_DEPLOY_TIMEOUT", "1200")
     if not re.fullmatch(r"[1-9][0-9]{0,4}", timeout):
         raise DeployError("XT_DEPLOY_TIMEOUT cần số giây dương, tối đa 99999")
@@ -16040,7 +16020,7 @@ class DevPreview:
     approved_head: str = ""
     before_effect: Optional[Callable[[str], None]] = None
     touched: bool = False
-    env_pass: Optional[Tuple[str, ...]] = None  # `deploy_env_pass` (T-4016); None = chưa khai, giữ bước 1
+    env_pass: Optional[Tuple[str, ...]] = None  # None: dev chưa khai allowlist, kế thừa có lọc
 
     @contextlib.contextmanager
     def workspace(self) -> Iterator[None]:
@@ -16187,7 +16167,9 @@ def _dev_write(base: Path, ledger: dict[str, Any]) -> None:
     write_atomic(path, json.dumps(_validate_deploy_ledger(ledger), ensure_ascii=False, indent=2) + "\n", keep_mode=True)
 
 
-def _deploy_authorized_head(base: Path, env: str, commands: dict[str, str], ledger: dict[str, Any]) -> str:
+def _deploy_authorized_head(
+    base: Path, env: str, commands: dict[str, str], ledger: dict[str, Any], env_pass: Optional[Tuple[str, ...]]
+) -> str:
     if env == "dev":
         return ""
     _sibling_imports()
@@ -16195,7 +16177,8 @@ def _deploy_authorized_head(base: Path, env: str, commands: dict[str, str], ledg
 
     head = _release_git_stdout(base, "rev-parse", "--verify", "HEAD").strip()
     origin = xt_deploy.production_authority(sys.modules[__name__], base, env, head, ledger)
-    if _deploy_commands(origin.cfg or {}, env) != commands:
+    cfg = origin.cfg or {}
+    if _deploy_commands(cfg, env) != commands or env_pass is None or deploy_env_pass(cfg) != env_pass:
         raise DeployError("cấu hình triển khai đổi trong lúc kiểm")
     return head
 
@@ -16284,7 +16267,8 @@ def _dev_execute(
     commands = _deploy_commands(config, env)
     packed = _packed_preview(env, commands)
     ledger = read_deploy_ledger(base)
-    approved = _deploy_authorized_head(base, env, commands, ledger)
+    env_pass = deploy_env_pass(config)
+    approved = _deploy_authorized_head(base, env, commands, ledger, env_pass)
     slot = ledger["envs"].get(env, {"current": None, "previous": None, "unknown": False})
     current, previous = slot["current"], slot["previous"]
     if explicit:
@@ -16297,7 +16281,6 @@ def _dev_execute(
         target = current or previous
     prior_digest = target["subject"]["digest"] if target else ""
     receipt = _dev_receipt(subject, artifacts, prior_digest)
-    env_pass = deploy_env_pass(config)
     deploy_command_env(os.environ, env_pass)  # thiếu biến đã khai → dừng TRƯỚC khi đụng môi trường
     driver = DevPreview(base, state, timeout, subject, prior_digest, approved_head=approved, env_pass=env_pass)
     if not packed:

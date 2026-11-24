@@ -1,5 +1,4 @@
-"""T-4016: `deploy_env_pass` (xt.yaml) — allowlist biến môi trường cho lệnh triển khai theo TÊN; thiếu biến đã khai thì dừng nêu
-tên (không giá trị) và không lấy khoá rộng từ host; không khai thì như bước 1 và `doctor` cảnh báo."""
+"""T-5007: `deploy_env_pass` distinguishes an absent allowlist from an explicitly empty one."""
 
 from __future__ import annotations
 
@@ -28,10 +27,28 @@ HOST = {
 
 
 class ParseTest(unittest.TestCase):
-    def test_absent_or_blank_means_not_declared(self):
+    def test_absent_and_explicit_empty_have_distinct_policies(self):
         self.assertIsNone(xt.deploy_env_pass({}))
-        self.assertIsNone(xt.deploy_env_pass({"deploy_env_pass": ""}))
-        self.assertIsNone(xt.deploy_env_pass({"deploy_env_pass": "   "}))
+        for blank in ("", "  ", '""', "''", " # tên tuỳ chọn"):
+            with self.subTest(blank=blank):
+                cfg = xt._yaml_keys("deploy_env_pass: " + blank)
+                self.assertEqual(xt.deploy_env_pass(cfg), ())
+                self.assertEqual(
+                    xt.deploy_command_env(HOST, xt.deploy_env_pass(cfg)), {k: HOST[k] for k in ("HOME", "LANG", "PATH")}
+                )
+
+    def test_null_markers_are_invalid_and_never_enable_inheritance(self):
+        for raw in ("null", "Null", "NULL", "~", '"null"', "'~'"):
+            with self.subTest(raw=raw):
+                cfg = xt._yaml_keys("deploy_env_pass: " + raw)
+                self.assertIsNotNone(xt.deploy_env_pass_error(cfg))
+                with self.assertRaises(xt.DeployError):
+                    xt.deploy_env_pass(cfg)
+
+    def test_quoted_punctuation_is_not_an_empty_allowlist(self):
+        for raw in ("'\"\"'", '"# comment"', "[]", "{}"):
+            with self.subTest(raw=raw), self.assertRaises(xt.DeployError):
+                xt.deploy_env_pass(xt._yaml_keys("deploy_env_pass: " + raw))
 
     def test_names_split_on_space_and_comma_keep_order_no_duplicates(self):
         got = xt.deploy_env_pass(
@@ -51,6 +68,13 @@ class ParseTest(unittest.TestCase):
             "XT_DEPLOY_ENV",
             "PS4",
             "ENV",
+            "GIT_CONFIG",
+            "GIT_CONFIG_PARAMETERS",
+            "GIT_SSH_COMMAND",
+            "GIT_EXEC_PATH",
+            "GIT_CONFIG_KEY_1",
+            "GIT_ASKPASS",
+            "GIT_UNKNOWN",
         ):
             with self.subTest(bad=bad):
                 err = xt.deploy_env_pass_error({"deploy_env_pass": f"GOOD {bad}"})
@@ -60,6 +84,10 @@ class ParseTest(unittest.TestCase):
                     xt.deploy_env_pass({"deploy_env_pass": f"GOOD {bad}"})
         self.assertIsNone(xt.deploy_env_pass_error({"deploy_env_pass": "GOOD PYTHONPATH NODE_OPTIONS"}))
         self.assertIsNone(xt.deploy_env_pass_error({}))
+        self.assertEqual(
+            xt.deploy_env_pass({"deploy_env_pass": "GIT_SSL_CAINFO GIT_SSL_CAPATH"}),
+            ("GIT_SSL_CAINFO", "GIT_SSL_CAPATH"),
+        )
 
 
 class FilterTest(unittest.TestCase):
@@ -122,6 +150,8 @@ class InvokeTest(unittest.TestCase):
         self.assertEqual(self.seen.read_text(encoding="utf-8"), "AKIAEXAMPLE|unset|dev")
         self.run_cmd(None, env)  # không khai: bước 1 — mọi biến thường vẫn qua
         self.assertEqual(self.seen.read_text(encoding="utf-8"), "AKIAEXAMPLE|ghs_hostwide|dev")
+        self.run_cmd((), env)
+        self.assertEqual(self.seen.read_text(encoding="utf-8"), "unset|unset|dev")
 
     def test_missing_name_raises_before_running_anything(self):
         env = {k: v for k, v in os.environ.items() if k != "AWS_ACCESS_KEY_ID"}
@@ -152,12 +182,17 @@ class DoctorTest(unittest.TestCase):
         warns, _ = self.warn("deploy_envs: dev\n")
         self.assertEqual(len(warns), 1)
         self.assertEqual(self.warn("deploy_envs: dev\ndeploy_env_pass: AWS_ACCESS_KEY_ID\n")[0], [])
+        self.assertEqual(
+            self.warn("deploy_envs: dev prod\ndeploy_env_pass: # không cần biến ngoài hệ thống\n"), ([], [])
+        )
         self.assertEqual(self.warn("lint: true\n")[0], [])  # không bật deploy: không nhắc
         self.assertEqual(self.warn("deploy_envs: null\n")[0], [])
 
     def test_invalid_name_is_an_error(self):
         _, found = self.warn("deploy_envs: dev\ndeploy_env_pass: BASH_ENV\n")
         self.assertEqual([f.level for f in found if "BASH_ENV" in f.msg], ["error"])
+        _, found = self.warn("deploy_envs: prod\ndeploy_env_pass: '# literal'\n")
+        self.assertEqual([f.level for f in found], ["error"])
 
     def test_missing_xt_yaml_is_silent(self):
         self.assertEqual(xt._doctor_deploy_env(self.base), [])

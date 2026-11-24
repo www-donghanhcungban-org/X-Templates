@@ -52,6 +52,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ### Fixed
 
+- Adapter `deploy` lọc họ biến `GIT_*` khỏi môi trường kế thừa và chỉ cho khai tường minh `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH` (T-5007, D-578). `deploy_env_pass:` rỗng chỉ truyền nhóm biến hệ thống cho adapter. **Dự án đích:** khai khóa này cho `run` và `rollback` ở mọi môi trường ngoài `dev`, liệt kê tên biến cần hoặc để rỗng. Các giá trị `null`, `Null`, `NULL`, `~` báo lỗi cấu hình.
+
 - `static-check` (AUD-HAR-514): `motion` báo MOT002 khi có `view-transition-name` mà thiếu `prefers-reduced-motion: reduce`. `ac-trace`, `trace` (JSON Lines) và `credits` chỉ tách dòng ở LF, giữ nguyên U+2028 và form feed trong dòng.
 
 - Rà #776 lượt ba (AUD-HAR-511…514): `pii-vn` không còn bỏ lọt CSV chỉ xuống dòng bằng `\r` (tách theo `\r\n`, `\r`, `\n`); `SNIFF` giữ tệp không mở được để `check` báo `…000` và nhìn đúng phần `check` đọc (dấu hiệu `resourceSpans` ở byte 91 001 không còn lọt); `motion` không phân biệt hoa thường ở tên thuộc tính; test đếm dòng dùng cỡ đủ lớn và đã kiểm hai đột biến. Đính chính AUD-HAR-507: lượt trước chỉ kiểm đột biến phần regex. **Dự án đích:** `static-check pii-vn` có thể báo thêm ở tệp CSV kiểu Mac cũ.

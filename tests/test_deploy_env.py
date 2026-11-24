@@ -47,6 +47,29 @@ STARTUP = (
     "HOSTALIASES",
     "RUBYGEMS_GEMDEPS",
 )
+GIT_CONTROLS = (
+    "GIT_CONFIG",
+    "GIT_CONFIG_SYSTEM",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_NOSYSTEM",
+    "GIT_CONFIG_KEY_0",
+    "GIT_CONFIG_VALUE_0",
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "GIT_SSH_VARIANT",
+    "GIT_EXEC_PATH",
+    "GIT_ASKPASS",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_TEMPLATE_DIR",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_FUTURE_OPTION",
+)
 KEEP = ("PATH", "HOME", "LANG", "AWS_REGION", "DEPLOY_TARGET", "MY_PYTHON_BIN", "NODEJS_VERSION", "LDAP_URL")
 
 
@@ -59,6 +82,17 @@ class FilterTest(unittest.TestCase):
     def test_prefix_families(self):
         src = {"PYTHONUTF8": "1", "LD_BIND_NOW": "1", "DYLD_FALLBACK_LIBRARY_PATH": "x", "BASH_FUNC_f%%": "() { :; }"}
         self.assertEqual(xt.deploy_command_env(src), {})
+
+    def test_git_environment_is_never_inherited(self):
+        src = {name: "host" for name in (*GIT_CONTROLS, *xt.GO_GIT_KEEP_ENV, "PATH", "HOME", "GITHUB_ACTIONS")}
+        self.assertEqual(xt.deploy_command_env(src), {name: "host" for name in ("PATH", "HOME", "GITHUB_ACTIONS")})
+
+    def test_git_controls_cannot_be_requested_directly(self):
+        for name in GIT_CONTROLS:
+            with self.subTest(name=name), self.assertRaisesRegex(xt.DeployError, name):
+                xt.deploy_command_env({name: "host"}, (name,))
+        ca = {name: "fixture" for name in ("GIT_SSL_CAINFO", "GIT_SSL_CAPATH")}
+        self.assertEqual(xt.deploy_command_env(ca, tuple(ca)), ca)
 
     def test_does_not_mutate_input_and_empty_ok(self):
         src = {"BASH_ENV": "/x", "PATH": "/bin"}
