@@ -896,3 +896,10 @@
 - Chọn: một PR hai việc nhỏ cùng đợt
 - Lý do (tiêu chí chất lượng cuối): cả hai chỉ thêm tài liệu và module độc lập, không chung tệp nóng; tách thêm một vòng CI mà không giảm rủi ro
 - Đường lùi: git revert commit của PR
+
+### D-570 · 2026-11-24T10:37:00+00:00 · Ghi quy tắc làm lát kế trên nhánh cục bộ khi PR đáy chờ merge
+
+- Phương án: (1) ID mới LOOP-DESIGN-029 SHOULD · (2) chỉ sửa LOOP-DESIGN-020 · (3) chỉ ghi vào AGENTS.md
+- Chọn: ID mới LOOP-DESIGN-029 SHOULD
+- Lý do (tiêu chí chất lượng cuối): 020 mô tả PR chồng cần đẩy nhiều nhánh; trường hợp một nhánh được phép là khác; một chủ đề một nhà, ID ổn định; SHOULD vì nhiều dự án đẩy được nhiều nhánh
+- Đường lùi: git revert commit của PR
