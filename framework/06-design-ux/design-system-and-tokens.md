@@ -3,7 +3,7 @@ title: Design system, token, typography, spacing, theme sáng/tối
 kind: module
 prefix: UX-DS
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Design system, token, typography, spacing, theme sáng/tối
@@ -32,7 +32,7 @@ updated: 2026-11-04
 | Câu hỏi | Chọn | Khi nào | Không dùng khi |
 |---|---|---|---|
 | Định dạng token gốc | **DTCG JSON 2025.10** + Style Dictionary 5.6.1 sinh CSS/Swift/Kotlin | Đa nền tảng (web + mobile), có designer dùng Penpot/Figma | Chỉ một web app nhỏ → CSS variables thuần trong một file `theme.css` là đủ |
-| Nối token vào Tailwind 4.3.3 | `@theme inline { --color-surface: var(--surface) }` | Token đổi lúc chạy theo `data-theme` | `@theme` (không `inline`) khi giá trị cố định, không đổi theme |
+| Nối token vào Tailwind 4.3.5 | `@theme inline { --color-surface: var(--surface) }` | Token đổi lúc chạy theo `data-theme` | `@theme` (không `inline`) khi giá trị cố định, không đổi theme |
 | Theme mặc định | Theo hệ điều hành (`prefers-color-scheme`) + cho người dùng ghi đè (`data-theme`, lưu lại) | Ứng dụng đại chúng | Sản phẩm thương hiệu bắt buộc một theme → cố định, vẫn giữ `color-scheme` đúng |
 | Thư viện component web (React) | shadcn/ui 4.21.4 trên Base UI 1.9.0 (MIT, copy-source) | Dự án mới cần kiểm soát mã và token | Enterprise cần bộ đầy đủ sẵn → MUI 9.5.0 / Mantine 9.7.2; Vue → Vuetify; headless đa framework → Ark UI 5.39.3 |
 | Mobile native | Token hệ thống của nền tảng (Dynamic Type, Material 3 color roles) ánh xạ từ token gốc | App native | Không bỏ Dynamic Type/font scale để "giữ layout" |
@@ -61,7 +61,7 @@ updated: 2026-11-04
 - [ ] `UX-DS-014` **SHOULD** Thay đổi token đi qua PR riêng, có ảnh trước/sau (visual regression) và ghi `CHANGELOG`. → Kiểm: PR đổi `tokens/` phải kèm cập nhật snapshot ảnh (CI fail nếu snapshot lệch chưa duyệt).
 - [ ] `UX-DS-015` **SHOULD** Token sinh cho mobile native (Swift/Kotlin/Compose) từ cùng file gốc; không có hằng màu viết tay trong mã native. → Kiểm: grep `UIColor(red:|Color(0x` ngoài thư mục sinh = 0.
 - [ ] `UX-DS-016` **MAY** Dùng Style Dictionary (Apache-2.0) làm bộ sinh; ghim phiên bản trong lockfile. → Kiểm: `package.json` có `style-dictionary` ghim exact.
-- [ ] `UX-DS-017` **MAY** Hỗ trợ `prefers-contrast: more` bằng bộ token tương phản cao. → Kiểm: `emulateMedia({ contrast: 'more' })` đổi token.
+- [ ] `UX-DS-017` **SHOULD** Hỗ trợ `prefers-contrast: more` bằng bộ token tương phản cao. → Kiểm: `emulateMedia({ contrast: 'more' })` đổi token. · Nguồn: Baseline widely available (WebStatus, 2024-11-30; đọc 2026-11-24)
 - [ ] `UX-DS-018` **MAY** Xuất token sang Penpot/Figma để designer và dev cùng một bộ. → Kiểm: file token được import trong dự án thiết kế; ngày đồng bộ ghi trong `docs/`.
 - [ ] `UX-DS-019` **MUST@L** Mã UI (nhất là do agent sinh) dùng component của design system khi đã có component tương ứng; không import primitive headless (Radix, Base UI…) ngoài thư mục `components/ui/**`; biến thể theo ý định được khai bằng luật lint (hành động phá huỷ dùng `destructive`, không `primary`). → Kiểm: ESLint `no-restricted-imports` (primitive headless) + `react/forbid-elements` cho `button|input|select|dialog` ngoài thư mục ui + luật ý định; stack Tailwind v4 thêm `@shadcn/lint` (`no-arbitrary-values`, `no-raw-colors`) hoặc luật ESLint tương đương đọc class (`UX-DS-002`); CI 0 lỗi. · Nguồn: stored 06 §7f (Zen DS: 205 luật usage, `guidelines:check`, `usage:check`), §7d (XIAS `lint_intent`)
 - [ ] `UX-DS-020` **MUST@L** Mỗi token **nền hành động** (`primary`, `destructive`…) có token **chữ đi kèm** (`--on-primary` hoặc `--primary-foreground`), và component dùng token đó — không đặt chữ `white`/`#fff`/`text-white` trực tiếp lên nền token. → Kiểm: `xt.py contrast` đỏ khi `--primary`/`--destructive` thiếu token chữ (đổi danh sách bằng `--require-on`; bộ shadcn mặc định không khai `--destructive-foreground` — khai thêm hoặc chạy `--require-on primary`) và khi cặp chữ/nền dưới 4,5:1; grep `text-white|color:\s*(#fff|white)` trong `src/components` = 0 (ngoại lệ ghi lý do). · Nguồn: WCAG 2.2 SC 1.4.3; `www-donghanhcungban-org/stored` 06 §7c.3 (Ant Design: nút chính chữ trắng trên `#1677ff` = 4,10:1) và §7g.1 (40/67 màu primary của một bộ 67 style không đạt 4,5:1 với chữ trắng), đọc 2026-10-18
@@ -112,7 +112,7 @@ Ngưỡng và cách chứng minh a11y → [`accessibility.md`](accessibility.md)
 - MDN `prefers-color-scheme` (giá trị, `color-scheme` cho embedded content): <https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme> — xác minh 2026-10-13.
 - MDN `unicode-range` (subset font theo dải ký tự): <https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/unicode-range> — xác minh 2026-10-13.
 - Tailwind CSS v4.3 — `@theme` vs `@theme inline`: <https://tailwindcss.com/docs/theme> — xác minh 2026-10-13.
-- Phiên bản npm `latest` (registry.npmjs.org, 2026-10-13): tailwindcss 4.3.3 · shadcn 4.21.4 · @base-ui/react 1.9.0 · @mui/material 9.5.0 · @mantine/core 9.7.2 · @ark-ui/react 5.39.3 · storybook 10.6.2 · stylelint 17.16.0 · style-dictionary 5.6.1 · axe-core 4.14.0 · @playwright/test 1.64.0. Penpot: license MPL-2.0 (README GitHub, xác minh 2026-10-13); phiên bản mới nhất **(chưa xác minh)**.
+- Phiên bản npm `latest` (registry.npmjs.org, 2026-10-13; tailwindcss đọc lại 2026-11-24): tailwindcss 4.3.5 · shadcn 4.21.4 · @base-ui/react 1.9.0 · @mui/material 9.5.0 · @mantine/core 9.7.2 · @ark-ui/react 5.39.3 · storybook 10.6.2 · stylelint 17.16.0 · style-dictionary 5.6.1 · axe-core 4.14.0 · @playwright/test 1.64.0. Penpot: license MPL-2.0 (README GitHub, xác minh 2026-10-13); phiên bản mới nhất **(chưa xác minh)**.
 - Khung cũ X-stored commit `1b80fe4`: `styles/theme.css` (bộ token dark-blue/light, `--ring`, no-flash) và `docs/framework/quality-supplements.md` PHẦN 3.
 - Catalog `www-donghanhcungban-org/stored` mục 06 §1 (shadcn/ui + Base UI, Storybook), §2 (Penpot), đọc 2026-10-13; `research/2026-10-13-stored-catalog-extraction.md` §2.12.
 - Catalog `www-donghanhcungban-org/stored` mục 06 §7c.3 (linter `@google/design.md` 0.4.0 chấm 11 `DESIGN.md`: 1/11 sạch), §7g (skill UI), §7h (layout mẫu), đọc 2026-10-18; xác minh nguồn sống 2026-10-18: npm `@google/design.md` 0.4.0 (<https://registry.npmjs.org/@google%2fdesign.md>), LICENSE Apache-2.0 (<https://raw.githubusercontent.com/google-labs-code/design.md/main/LICENSE>), `anthropics/claude-plugins-official` (SHA `ea10b21`, 2026-10-15), `s0xDk/refactoring-ui-skill` (MIT, commit `4887214` 2026-08-27); ghi chép: [`research/2026-10-18-stored-ui-extraction.md`](../../research/2026-10-18-stored-ui-extraction.md).

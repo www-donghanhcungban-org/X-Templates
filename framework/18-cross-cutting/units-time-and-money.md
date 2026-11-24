@@ -3,7 +3,7 @@ title: Đơn vị, thời gian (UTC, timezone), tiền (số nguyên), ID, so s�
 kind: module
 prefix: XC-UNITS
 applies_to: [all]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Đơn vị, thời gian (UTC, timezone), tiền (số nguyên), ID, so sánh chuỗi
@@ -56,7 +56,7 @@ updated: 2026-10-14
 - [ ] `XC-UNITS-017` **SHOULD** Đồng hồ máy chủ đồng bộ NTP/PTP; chênh lệch > 1 s giữa các node sinh cảnh báo (ảnh hưởng token hết hạn, thứ tự sự kiện, UUIDv7). → Kiểm: metric `clock_offset_seconds` có alert; runbook có mục. · Nguồn: [`../15-operations/observability.md`](../15-operations/observability.md)
 - [ ] `XC-UNITS-018` **SHOULD** Độ dài/kích thước: `bytes` cho dữ liệu, ký tự Unicode (grapheme) cho giới hạn nhập của người, ghi rõ ở validate và CSDL (`VARCHAR(n)` là ký tự hay byte tuỳ CSDL). → Kiểm: test chuỗi tiếng Việt/emoji ở giới hạn ký tự không bị cắt giữa ký tự; tài liệu ghi đơn vị giới hạn. · Nguồn: W3C i18n (personal names: 4 ký tự Nhật = 12 byte)
 - [ ] `XC-UNITS-019` **MAY** Dùng kiểu **đơn vị có kiểm kiểu** (`newtype`/branded type: `Milliseconds`, `Cents`) để compiler chặn cộng ms với s, VND với USD. → Kiểm: hàm nhận `Money` không chấp nhận `number` thô (test kiểu). · Nguồn: P3 (đúng › nhanh)
-- [ ] `XC-UNITS-020` **MAY** Lịch phi Gregorian (âm lịch cho ngày lễ VN, Hijri, Buddhist) xử lý bằng ICU/`Intl.DateTimeFormat` với `calendar`, không tự tính; âm lịch Việt Nam tính theo múi giờ `Asia/Ho_Chi_Minh` (UTC+7). → Kiểm: test Tết 2027 (âm lịch) ra đúng ngày dương theo nguồn chính thống. · Nguồn: ECMA-402 `Intl.DateTimeFormat` `calendar`; CLDR 48.2
+- [ ] `XC-UNITS-020` **MAY** Lịch phi Gregorian (âm lịch cho ngày lễ VN, Hijri, Buddhist) xử lý bằng ICU/`Intl.DateTimeFormat` với `calendar`, không tự tính; âm lịch Việt Nam tính theo múi giờ `Asia/Ho_Chi_Minh` (UTC+7). → Kiểm: test Tết 2027 (âm lịch) ra đúng ngày dương theo nguồn chính thống. · Nguồn: ECMA-402 `Intl.DateTimeFormat` `calendar`; CLDR 49
 
 ## Bẫy thường gặp
 
@@ -83,7 +83,7 @@ updated: 2026-10-14
 | DST/biên ngày | test với clock giả (`@sinonjs/fake-timers`, `freezegun`/`time-machine`, `testing/clock`) | `test` | CI | pass |
 | Tiền | dinero.js 2.0.2 (MIT) · Python `decimal` · property test tổng bất biến (fast-check/Hypothesis 6.169.0) | `test` | CI | pass |
 | ID | test `uuid_version == 7` cho khoá; `== 4` cho token | `test` | CI | pass |
-| Collation | test sắp xếp `vi` bằng `Intl.Collator`/ICU 78.3 | `test` | CI | đúng thứ tự |
+| Collation | test sắp xếp `vi` bằng `Intl.Collator`/ICU 79.1 | `test` | CI | đúng thứ tự |
 | Đơn vị trong tên | lint schema (script) | `check:units` | CI | cảnh báo → chặn sau baseline |
 
 ## Nguồn
@@ -98,7 +98,7 @@ updated: 2026-10-14
 - Python `decimal` (ROUND_HALF_EVEN mặc định, `quantize`, `round()` bỏ qua context): <https://docs.python.org/3/library/decimal.html> — xác minh 2026-10-13
 - TC39 Temporal (Instant, ZonedDateTime, PlainDate, Duration): <https://tc39.es/proposal-temporal/> — xác minh 2026-10-13; stage hiện tại **(chưa xác minh từ trang spec)**
 - ECMA-402 14th ed. (ECMAScript 2027 Internationalization API, draft 2026-10-12; `Intl.Collator`, `DateTimeFormat`, `DurationFormat`): <https://tc39.es/ecma402/> — xác minh 2026-10-13
-- UAX #15 rev. 58 (Unicode 18.0.0): <https://unicode.org/reports/tr15/>; UTS #10 rev. 55: <https://unicode.org/reports/tr10/> — xác minh 2026-10-13; ICU 78.3 (2026-03-17, CLDR 48, Unicode 17): <https://icu.unicode.org/> — xác minh 2026-10-13
+- UAX #15 rev. 58 (Unicode 18.0.0): <https://unicode.org/reports/tr15/>; UTS #10 rev. 55: <https://unicode.org/reports/tr10/> — xác minh 2026-10-13; ICU 79.1 (2026-10-22, cập nhật Unicode 18 và CLDR 49): <https://icu.unicode.org/> — xác minh 2026-11-24
 - W3C i18n — Personal names around the world: <https://www.w3.org/International/questions/qa-personal-names> — xác minh 2026-10-13
 - dinero.js 2.0.2 (MIT), decimal.js 10.6.0, big.js 7.0.1 (npm, xác minh 2026-10-13)
 - Khung cũ X-stored `quality-supplements.md` N2 §6 (UTC, DST, float tiền), commit `1b80fe4`; catalog `www-donghanhcungban-org/stored` 23 §4.5 ("không dùng float cho tiền; không để model tính giá"), đọc 2026-10-13.

@@ -3,7 +3,7 @@ title: Dữ liệu nhạy cảm: mã hoá, RLS, quyền tối thiểu, mặt n�
 kind: module
 prefix: DB-SEC
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, mobile-app, desktop-app, embedded-iot]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Dữ liệu nhạy cảm: mã hoá, RLS, quyền tối thiểu, mặt nạ, xoá
@@ -100,7 +100,7 @@ updated: 2026-10-14
 
 ## Nguồn
 
-- PostgreSQL 18 docs: §5.9 Row Security Policies (default-deny, FORCE, BYPASSRLS, covert channel qua ràng buộc, `row_security = off`) <https://www.postgresql.org/docs/current/ddl-rowsecurity.html>; CREATE POLICY (USING/WITH CHECK, PERMISSIVE/RESTRICTIVE, LEAKPROOF) <https://www.postgresql.org/docs/current/sql-createpolicy.html>; pgcrypto (chạy trong server, khoá qua câu lệnh, side channel) <https://www.postgresql.org/docs/current/pgcrypto.html>; §5.8 Privileges / ALTER DEFAULT PRIVILEGES <https://www.postgresql.org/docs/current/ddl-priv.html>; CREATE ROLE (BYPASSRLS, NOLOGIN) <https://www.postgresql.org/docs/current/sql-createrole.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: §5.9 Row Security Policies (default-deny, FORCE, BYPASSRLS, covert channel qua ràng buộc, `row_security = off`) <https://www.postgresql.org/docs/18/ddl-rowsecurity.html>; CREATE POLICY (USING/WITH CHECK, PERMISSIVE/RESTRICTIVE, LEAKPROOF) <https://www.postgresql.org/docs/18/sql-createpolicy.html>; pgcrypto (chạy trong server, khoá qua câu lệnh, side channel) <https://www.postgresql.org/docs/18/pgcrypto.html>; §5.8 Privileges / ALTER DEFAULT PRIVILEGES <https://www.postgresql.org/docs/18/ddl-priv.html>; CREATE ROLE (BYPASSRLS, NOLOGIN) <https://www.postgresql.org/docs/18/sql-createrole.html> — xác minh 2026-10-13.
 - OWASP Database Security Cheat Sheet (TLS, least privilege, tài khoản riêng, credential, hardening, mã hoá backup): <https://cheatsheetseries.owasp.org/cheatsheets/Database_Security_Cheat_Sheet.html> — xác minh 2026-10-13.
 - OWASP ASVS 5.0 V14 Data Protection (14.1.1 phân loại L2; 14.1.2 bảo vệ at rest L2; 14.2.2 cache; 14.2.4; 14.2.7 lưu giữ/xoá L3): <https://github.com/OWASP/ASVS/blob/master/5.0/en/0x23-V14-Data-Protection.md> — xác minh 2026-10-13.
 - CIS Benchmarks PostgreSQL (18 v1.0.0, 17 v1.1.0, 16 v1.1.0): <https://www.cisecurity.org/benchmark/postgresql> — xác minh 2026-10-13.

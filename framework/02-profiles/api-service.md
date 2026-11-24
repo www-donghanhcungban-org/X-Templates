@@ -4,7 +4,7 @@ kind: profile
 slug: api-service
 prefix: PRF-API
 modules: [04-standards/*, 05-architecture/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Backend / API / dịch vụ
@@ -46,7 +46,7 @@ Quy tắc chọn phiên bản (né `x.0.0` mới ra, ưu tiên LTS): xem [`../01
 
 | Thành phần | Mặc định | Phiên bản (xác minh 2026-10-13) | Thay thế + điều kiện |
 |---|---|---|---|
-| Ngôn ngữ/runtime | Python (đội data/AI) · Node.js LTS (đội JS) · Go (hiệu năng, binary tĩnh) | Python 3.14.8 (3.15.0 ra 2026-10-09 — khuyến nghị 3.14.x tới khi có 3.15.1); Node 24 LTS 24.21.0 (22 LTS tới 2027-04); Go 1.27.2 | Java/Spring Boot 4.1.1 khi doanh nghiệp đã chuẩn Java; .NET/Rust khi đội có sẵn |
+| Ngôn ngữ/runtime | Python (đội data/AI) · Node.js LTS (đội JS) · Go (hiệu năng, binary tĩnh) | Python 3.15.2 (2026-10-25; đã qua mốc 3.15.1 nên theo khuyến nghị cũ chuyển từ 3.14.x — 3.14.10 vẫn hỗ trợ tới 2030-10); Node 26 LTS từ 2026-10-28 hoặc 24 LTS 24.22.3 (Maintenance; 22 LTS tới 2027-04); Go 1.27.4 | Java/Spring Boot 4.1.3 (4.2.0 mới ra 2026-11-20, chờ bản vá đầu) khi doanh nghiệp đã chuẩn Java; .NET/Rust khi đội có sẵn |
 | Khung API | FastAPI (Py) · NestJS hoặc Hono/Fastify (TS) · net/http + chi (Go) | fastapi 0.143.0 (2026-10-08) · `@nestjs/core` 12.1.3 · hono 4.13.13 · fastify 5.12.6 | Django 5.2 LTS (5.2.18) khi cần admin/ORM đầy đủ; Django 6.1.2 không LTS |
 | Hợp đồng API | OpenAPI (sinh từ code có kiểm, hoặc contract-first) | OAS 3.2.1 (2026-09-10); tối thiểu 3.1 | gRPC/protobuf cho nội bộ hiệu năng cao; AsyncAPI cho event |
 | Định dạng lỗi | RFC 9457 `application/problem+json` | RFC 9457 (obsoletes 7807) | — (bắt buộc) |

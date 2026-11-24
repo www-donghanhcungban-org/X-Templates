@@ -3,7 +3,7 @@ title: Hiệu năng & tải: k6/Locust, ngưỡng p95, Lighthouse, ngân sách
 kind: module
 prefix: QA-PERF
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, static-site, mobile-app, desktop-app, embedded-iot]
-updated: 2026-10-17
+updated: 2026-11-24
 ---
 
 # Hiệu năng & tải: k6/Locust, ngưỡng p95, Lighthouse, ngân sách
@@ -25,7 +25,7 @@ updated: 2026-10-17
 
 | Hồ sơ / mục tiêu | Công cụ mặc định (xác minh 2026-10-13) | Thay thế + điều kiện | Ngưỡng mặc định (đổi theo `PROJECT.md`) |
 |---|---|---|---|
-| Backend HTTP/gRPC/WebSocket | k6 2.3.0 (AGPL-3.0; script JS, CI tốt) | Locust 2.46.7 (MIT, Python, phân tán dễ); Gatling/Artillery khi đội quen | p95 ≤ 300 ms API nội bộ / ≤ 500 ms công khai; `http_req_failed` < 1% |
+| Backend HTTP/gRPC/WebSocket | k6 2.4.0 (AGPL-3.0; script JS, CI tốt) | Locust 2.46.7 (MIT, Python, phân tán dễ); Gatling/Artillery khi đội quen | p95 ≤ 300 ms API nội bộ / ≤ 500 ms công khai; `http_req_failed` < 1% |
 | Web (trang) | Lighthouse CI `@lhci/cli` 0.15.1 (Apache-2.0; **repo đứng yên từ 2025-06-26** — vẫn chạy với Lighthouse 13.5.0) | `lighthouse` CLI + script tự assert; Unlighthouse; WebPageTest API | Performance ≥ 0.9; LCP ≤ 2,5 s; INP ≤ 200 ms; CLS ≤ 0,1 (p75 trên dữ liệu thật) |
 | Bundle JS | `size-limit`/`bundlesize` (phiên bản **chưa xác minh**) | Next/Vite analyzer thủ công | Ngân sách KB theo route, ghi trong repo |
 | Thư viện/CLI | Benchmark trong test: Vitest `bench`, `pytest-benchmark`, Go `testing.B` + `benchstat`, JMH | hyperfine cho CLI | Không chậm hơn > 10% so với baseline |
@@ -68,7 +68,7 @@ updated: 2026-10-17
 
 | Công cụ | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
-| k6 2.3.0 (AGPL-3.0) | `k6 run --env BASE_URL=$STAGING load/main.js` với `thresholds` + `abortOnFail` | CI nightly; smoke 1 phút ở PR | p95, `rate<0.01` theo script |
+| k6 2.4.0 (AGPL-3.0) | `k6 run --env BASE_URL=$STAGING load/main.js` với `thresholds` + `abortOnFail` | CI nightly; smoke 1 phút ở PR | p95, `rate<0.01` theo script |
 | Locust 2.46.7 (MIT) | `locust -f locustfile.py --headless -u 100 -r 10 -t 10m --exit-code-on-error 1` | CI nightly | như trên (assert trong script) |
 | Lighthouse CI `@lhci/cli` 0.15.1 + Lighthouse 13.5.0 | `lhci autorun` (`collect.numberOfRuns: 3`, `assert.preset: lighthouse:recommended` tuỳ chỉnh) | CI PR | `categories:performance` ≥ 0.9 (`error`); LCP/CLS/TBT theo ngân sách |
 | `size-limit` (phiên bản **chưa xác minh**) | `npx size-limit` | CI PR | ≤ ngân sách từng route |
@@ -78,7 +78,7 @@ updated: 2026-10-17
 ## Nguồn
 
 - Core Web Vitals (LCP ≤ 2,5 s; INP ≤ 200 ms; CLS ≤ 0,1; p75): <https://web.dev/articles/vitals> — xác minh 2026-10-13
-- k6 thresholds (`p(95)<…`, `http_req_failed: ['rate<0.01']`, `abortOnFail`): <https://grafana.com/docs/k6/latest/using-k6/thresholds/> — xác minh 2026-10-13; k6 v2.3.0 (2026-09-21): <https://github.com/grafana/k6/releases>
+- k6 thresholds (`p(95)<…`, `http_req_failed: ['rate<0.01']`, `abortOnFail`): <https://grafana.com/docs/k6/latest/using-k6/thresholds/> — xác minh 2026-10-13; k6 v2.4.0 (2026-11-12, đọc 2026-11-24): <https://github.com/grafana/k6/releases>
 - Lighthouse CI configuration (`numberOfRuns`, `aggregationMethod: median`, `categories:performance`): <https://github.com/GoogleChrome/lighthouse-ci/blob/main/docs/configuration.md> — xác minh 2026-10-13; commit cuối 2025-06-26: <https://github.com/GoogleChrome/lighthouse-ci/commits/main>
 - Phiên bản (registry, xác minh 2026-10-13): npm `@lhci/cli` 0.15.1, `lighthouse` 13.5.0; PyPI `locust` 2.46.7 (2026-10-04).
 - Catalog `www-donghanhcungban-org/stored` 23 §2.5 (Lighthouse ≥ 0,9 + LCP/CLS/TBT trên 5 URL), 13 §4c (Lighthouse CI đứng yên) — đọc 2026-10-13.

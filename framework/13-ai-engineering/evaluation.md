@@ -3,7 +3,7 @@ title: Eval: offline/online, pass^k, negative control, record/replay, judge
 kind: module
 prefix: AI-EVAL
 applies_to: [ai-agent, agentic-system, data-ml, api-service, web-app]
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Eval: offline/online, pass^k, negative control, record/replay, judge
@@ -115,7 +115,7 @@ updated: 2026-11-23
 - Anthropic, *Demystifying evals for AI agents* (capability vs regression, grader tất định → judge → người, pass@k vs pass^k, đọc transcript): <https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents> — xác minh 2026-10-13 (`research/2026-10-13-ai-agent-research.md` §6 [F]).
 - `promptfoo` 0.124.1 <https://www.npmjs.com/package/promptfoo> · docs <https://www.promptfoo.dev/docs/intro/> · `deepeval` 4.2.8 <https://pypi.org/project/deepeval/> · `ragas` 0.4.3 <https://pypi.org/project/ragas/> · `langfuse` 4.17.0 <https://pypi.org/project/langfuse/> — xác minh 2026-10-13.
 - `www-donghanhcungban-org/stored` mục 07 (negative control, record/replay không gọi model trong CI, judge khác họ), mục 23 §2.3 (ma trận claim real-path/faithful-fixture/asserted-not-measured) — đọc 2026-10-13 (`research/2026-10-13-stored-catalog-extraction.md`).
-- OWASP Top 10 for LLM Applications 2026 cho bộ red-team (04/08/2026; mã đổi so với 2025 — bảng ở [`../12-security/ai-security.md`](../12-security/ai-security.md)): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> — xác minh 2026-10-14. Agentic Top 10 2026: <https://genai.owasp.org/> — (chưa xác minh — 403 ngày 2026-10-13).
+- OWASP Top 10 for LLM Applications 2026 cho bộ red-team (04/08/2026; mã đổi so với 2025 — bảng ở [`../12-security/ai-security.md`](../12-security/ai-security.md)): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> — xác minh 2026-10-14. Agentic Top 10 2026: <https://genai.owasp.org/> — trang chính thức đọc được 2026-11-24 (genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026, ngày 2025-12-09); tên ASI05–ASI10 vẫn từ nguồn thứ cấp, cần PDF gốc (chưa xác minh).
 - Catalog `www-donghanhcungban-org/stored` mục 08 §2f.1 (xác suất thống kê cơ bản là bắt buộc để làm eval đúng: cỡ mẫu, khoảng tin cậy, so A/B, phương sai giữa các lần chạy LLM), mục 17 §2c.3 (AnyJev: n = 300, một seed; "hạng 5/149" là hạng theo nhóm hoà, xếp theo điểm là 10/168) — đọc 2026-10-16.
 - Catalog `www-donghanhcungban-org/stored` mục 17 §2c.3, §2c.5 (AnyJev: đọc quyết định có kiểu kèm xác suất; "tự quyết được ở sai ≤ 5%" không đồng đều giữa tác vụ; API đóng không có log-prob thì dùng structured output + eval riêng; cap leo thang giới hạn số quyết định, không giới hạn thời gian từng quyết định) — đọc 2026-10-16.
 - LongMemEval (QA accuracy judge GPT-4o + Recall@k/NDCG@k retrieval): <https://arxiv.org/abs/2410.10813> · LoCoMo (QA F1 partial match, ACL 2024; repo CC BY-NC 4.0): <https://arxiv.org/abs/2402.17753> — xác minh 2026-10-18 (số liệu arXiv v1 khác bản ACL: xem `research/2026-10-18-stored-delta-extraction.md`). Catalog `www-donghanhcungban-org/stored` 10 §4b — rà 2026-10-18.

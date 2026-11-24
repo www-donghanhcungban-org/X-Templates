@@ -3,7 +3,7 @@ title: Build, tooling, lint/format/type, env công khai
 kind: module
 prefix: FE-BUILD
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-10-21
+updated: 2026-11-24
 ---
 
 # Build, tooling, lint/format/type, env công khai
@@ -27,13 +27,13 @@ updated: 2026-10-21
 
 | Câu hỏi | Chọn | Khi nào | Không dùng khi |
 |---|---|---|---|
-| Bundler/dev server | **Vite 8.3.4** (MIT) cho SPA/library; bundler tích hợp của meta-framework (Next 16.4.0, Nuxt 4.6.1, SvelteKit 3.0.1, Astro 7.3.8) | Theo framework | Webpack tự cấu hình cho dự án mới |
+| Bundler/dev server | **Vite 8.3.8** (MIT) cho SPA/library; bundler tích hợp của meta-framework (Next 16.4.6, Nuxt 4.6.1, SvelteKit 3.0.1, Astro 7.3.8) | Theo framework | Webpack tự cấu hình cho dự án mới |
 | TypeScript | **TypeScript 7.0.2** (bản native, 08/07/2026) với `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`; 6.0 (23/03/2026) là bản JS cuối — dùng khi tool chain chưa hỗ trợ 7 | Mọi dự án TS | `any`/`@ts-ignore` không lý do; tắt `strict` cho "nhanh" |
 | Lint + format | **Biome 2.5.15** (MIT/Apache-2.0; > 500 rule, format tương thích Prettier) | Repo mới, muốn một công cụ | Cần rule type-aware/plugin đặc thù (`typescript-eslint` 8.71.2, `jsx-a11y`, `tanstack/query`) → ESLint 10.12.0 + oxlint 1.87.0 chạy trước cho tốc độ |
 | Dead code/dup | knip 6.41.0 (ISC) + jscpd 5.4.1 (MIT) | Mọi dự án | — |
 | Env validate | `@t3-oss/env-nextjs` 0.13.11 (Next) hoặc `env.ts` với Zod/Valibot tách `client`/`server`; Vite: `import.meta.env` + `vite-env.d.ts` + schema | Mọi dự án | Đọc `process.env.X!` rải rác |
 | Pre-commit | lefthook 2.2.1 (MIT) hoặc husky 9.1.7 + lint-staged 17.6.0 | Mọi dự án | Hook chạy toàn repo > 10 s → chỉ staged files |
-| Node | **Node 24 LTS** (Active tới 20/10/2026 → Maintenance; EOL 30/04/2028); Node 26 thành LTS 28/10/2026 — đổi sau khi tool chain xác nhận | Mọi dự án | Node 22 chỉ bảo trì (EOL 30/04/2027); không dùng bản lẻ (25) |
+| Node | **Node 24 hoặc 26 LTS** (24 đã sang Maintenance từ 20/10/2026, EOL 30/04/2028; 26 là LTS từ 28/10/2026, hỗ trợ tới 27/10/2027, EOL 30/04/2029) — chọn 24 hoặc 26 sau khi tool chain xác nhận (đọc 2026-11-24) | Mọi dự án | Node 22 chỉ bảo trì (EOL 30/04/2027); không dùng bản lẻ (25) |
 | Package manager | Ghim bằng trường `packageManager` (corepack) + lockfile commit | Mọi dự án | Hai lockfile trong repo |
 
 ## Checklist
@@ -91,8 +91,8 @@ updated: 2026-10-21
 
 - TypeScript devblog — TypeScript 7.0 (08/07/2026, bản native), 6.0 (23/03/2026; "last release based on the current JavaScript codebase"), 5.9 (01/08/2025): <https://devblogs.microsoft.com/typescript/> — xác minh 2026-10-13.
 - Vite blog (Vite 8: 12/03/2026) <https://vite.dev/blog>; Vite build options (`build.sourcemap` mặc định `false`/`'hidden'`; `build.target` `baseline-widely-available` mốc 2026-01-01: Chrome 111, Edge 111, Firefox 114, Safari 16.4) <https://vite.dev/config/build-options>; Env and Mode (`VITE_` lộ ra client) <https://vite.dev/guide/env-and-mode> — xác minh 2026-10-13.
-- Next.js 16.4.0 — Environment variables (`NEXT_PUBLIC_` inline lúc build; runtime env qua `connection()`) <https://nextjs.org/docs/app/guides/environment-variables>; `productionBrowserSourceMaps` mặc định tắt <https://nextjs.org/docs/app/api-reference/config/next-config-js/productionBrowserSourceMaps> — xác minh 2026-10-13.
-- endoflife.date — Node.js (24 Active LTS tới 2026-10-20, EOL 2028-04-30; 22 Maintenance, EOL 2027-04-30; 26 LTS từ 2026-10-28; 20 EOL 2026-04-30): <https://endoflife.date/api/nodejs.json> — xác minh 2026-10-13.
+- Next.js 16.4.6 — Environment variables (`NEXT_PUBLIC_` inline lúc build; runtime env qua `connection()`) <https://nextjs.org/docs/app/guides/environment-variables>; `productionBrowserSourceMaps` mặc định tắt <https://nextjs.org/docs/app/api-reference/config/next-config-js/productionBrowserSourceMaps> — xác minh 2026-10-13.
+- endoflife.date — Node.js (24 Maintenance từ 2026-10-20, EOL 2028-04-30; 22 Maintenance, EOL 2027-04-30; 26 LTS từ 2026-10-28, hỗ trợ tới 2027-10-27, EOL 2029-04-30 — Node 24/26 đọc lại 2026-11-24; 20 EOL 2026-04-30): <https://endoflife.date/api/nodejs.json> — xác minh 2026-10-13.
 - Biome blog (v2.5 05/06/2026: > 500 rule; v2.4 10/02/2026: 15 rule a11y HTML): <https://biomejs.dev/blog/> — xác minh 2026-10-13.
-- Phiên bản npm `latest` (2026-10-13): typescript 7.0.2 · vite 8.3.4 · @vitejs/plugin-react 6.1.2 · next 16.4.0 · nuxt 4.6.1 · @sveltejs/kit 3.0.1 · astro 7.3.8 · @biomejs/biome 2.5.15 · eslint 10.12.0 · typescript-eslint 8.71.2 · oxlint 1.87.0 · knip 6.41.0 · jscpd 5.4.1 · lefthook 2.2.1 · husky 9.1.7 · lint-staged 17.6.0 · browserslist 4.29.3 · @t3-oss/env-nextjs 0.13.11 · size-limit 14.2.0.
+- Phiên bản npm `latest` (2026-10-13; vite, next đọc lại 2026-11-24): typescript 7.0.2 · vite 8.3.8 · @vitejs/plugin-react 6.1.2 · next 16.4.6 · nuxt 4.6.1 · @sveltejs/kit 3.0.1 · astro 7.3.8 · @biomejs/biome 2.5.15 · eslint 10.12.0 · typescript-eslint 8.71.2 · oxlint 1.87.0 · knip 6.41.0 · jscpd 5.4.1 · lefthook 2.2.1 · husky 9.1.7 · lint-staged 17.6.0 · browserslist 4.29.3 · @t3-oss/env-nextjs 0.13.11 · size-limit 14.2.0.
 - Catalog `www-donghanhcungban-org/stored` mục 13 §4b–4c (biome/oxlint + knip + jscpd; một job `quality` required; pre-commit ở máy và CI), mục 09 §1.4 (không `ignoreBuildErrors`), mục 23 §2.4 (`next dev` ghi đè AGENTS.md), đọc 2026-10-13; `research/2026-10-13-stored-catalog-extraction.md` §2.9.

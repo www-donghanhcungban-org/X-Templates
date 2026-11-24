@@ -3,7 +3,7 @@ title: Phụ thuộc: lockfile, cập nhật, license, lỗ hổng
 kind: baseline
 prefix: BASE-DEP
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Phụ thuộc: lockfile, cập nhật, license, lỗ hổng
@@ -48,7 +48,7 @@ updated: 2026-11-04
 - [ ] `BASE-DEP-011` **SHOULD** Phụ thuộc có **kiểm tra toàn vẹn** khi cài: npm `integrity` trong lockfile, pip `--require-hashes`, `go.sum` + `GOSUMDB`, Cargo checksum; registry riêng cấu hình tường minh, không "fallback" ra public khi gói nội bộ không có (dependency confusion). **Mọi** lockfile trong repo, kể cả lồng trong skill/plugin vendor, chỉ trỏ host registry đã khai (`integrity` vẫn khớp khi registry lạ nên cổng hash không bắt); kiểm thêm `lockfile-lint --type npm --allowed-hosts npm --validate-https --path '**/package-lock.json'` (glob đặt trong nháy), `uv.lock`/`pnpm-lock.yaml` grep host ngoài allowlist = 0. → Kiểm: `.npmrc`/`pip.conf`/`GOPRIVATE` khai báo scope nội bộ; tên gói nội bộ được đăng ký giữ chỗ trên registry public hoặc dùng scope riêng. · Nguồn: pip secure installs; Go modules (`GOSUMDB`, `GOPRIVATE`) · Nguồn thêm: https://github.com/lirantal/lockfile-lint/blob/main/packages/lockfile-lint/README.md (tra 2026-11-04)
 - [ ] `BASE-DEP-012` **SHOULD** Cập nhật **major** đi PR riêng do người duyệt, có ghi chú breaking từ CHANGELOG upstream và test đầy đủ; không gom major vào nhóm tự merge. → Kiểm: cấu hình bot có `ignore: update-types: ["version-update:semver-major"]` hoặc nhóm riêng; PR major có nhãn và review. · Nguồn: Dependabot `groups`/`ignore`; catalog 23 §2.5
 - [ ] `BASE-DEP-013` **SHOULD** Tài khoản registry phát hành gói công khai (npm/PyPI/crates/NuGet) bắt buộc 2FA; trusted publishing/OIDC, không token dài hạn trong CI theo `SEC-SUPPLY-021` (nhà). → Kiểm: workflow publish có `id-token: write`, không có `NPM_TOKEN`/`PYPI_TOKEN` tĩnh; cấu hình registry bật 2FA. · Nguồn: [`../12-security/supply-chain.md`](../12-security/supply-chain.md)
-- [ ] `BASE-DEP-014` **SHOULD** Có **danh sách phụ thuộc có chủ** (ít nhất SBOM sinh tự động CycloneDX/SPDX mỗi bản phát hành) để trả lời "có dùng gói X phiên bản Y không" trong vài phút khi có CVE. → Kiểm: artefact `sbom.cdx.json`/`sbom.spdx.json` kèm mỗi release (syft 1.54.x). · Nguồn: [`../12-security/supply-chain.md`](../12-security/supply-chain.md)
+- [ ] `BASE-DEP-014` **SHOULD** Có **danh sách phụ thuộc có chủ** (ít nhất SBOM sinh tự động CycloneDX/SPDX mỗi bản phát hành) để trả lời "có dùng gói X phiên bản Y không" trong vài phút khi có CVE. → Kiểm: artefact `sbom.cdx.json`/`sbom.spdx.json` kèm mỗi release (syft 1.57.x). · Nguồn: [`../12-security/supply-chain.md`](../12-security/supply-chain.md)
 - [ ] `BASE-DEP-015` **SHOULD** Cài phụ thuộc trong CI có **cache theo hash lockfile** để nhanh nhưng không bao giờ cache thay cho lockfile (cache hỏng → cài lại, không đổi kết quả). → Kiểm: `actions/cache`/`setup-*` `cache-dependency-path` trỏ lockfile; job vẫn xanh khi xoá cache. · Nguồn: [`quality-gates.md`](quality-gates.md) BASE-GATE-011
 - [ ] `BASE-DEP-016` **MAY** `cooldown` cho cập nhật tự động (vd 3–7 ngày sau khi upstream phát hành) để tránh nhận bản vừa bị rút/tiêm mã. → Kiểm: `dependabot.yml` có `cooldown.default-days` hoặc Renovate `minimumReleaseAge`. · Nguồn: Dependabot `cooldown`
 - [ ] `BASE-DEP-017` **MAY** Vendor (sao chép có lock: ghim commit, sha256 từng file, ghi lý do `rejected` cho phần bỏ) phụ thuộc nhỏ hoặc nhạy cảm của **mã ứng dụng**. Skill/MCP server/plugin của agent không thuộc mục này — bắt buộc theo [`SEC-SUPPLY-016`](../12-security/supply-chain.md). → Kiểm: `docs/integrations/*.lock.json` có commit + sha256; script `verify-vendor` chạy trong CI. · Nguồn: catalog 23 §3.1, 20 §3b (vendor-with-lock)
@@ -75,13 +75,13 @@ updated: 2026-11-04
 | Việc kiểm | Công cụ (license) | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|---|
 | Cài đóng băng | npm/pnpm/yarn · uv 0.13.0 (Apache-2.0/MIT) · pip 26.x · go · cargo · dotnet | `npm ci` · `uv sync --locked` · `pip install --require-hashes` · `go build -mod=readonly` · `cargo build --locked` | CI | lệch = đỏ |
-| Lỗ hổng | OSV-Scanner v2.7.0 (Apache-2.0) · pip-audit 2.10.1 (Apache-2.0) · `npm audit` · `cargo audit` · `govulncheck` · Trivy/Grype (Apache-2.0) | `osv-scanner scan source -r .` | PR + cron tuần | 0 high/critical chưa duyệt |
+| Lỗ hổng | OSV-Scanner v2.7.1 (2026-11-09) (Apache-2.0) · pip-audit 2.10.1 (Apache-2.0) · `npm audit` · `cargo audit` · `govulncheck` · Trivy/Grype (Apache-2.0) | `osv-scanner scan source -r .` | PR + cron tuần | 0 high/critical chưa duyệt |
 | License | license-checker / pip-licenses / go-licenses / cargo-deny / syft + script allowlist | `cargo deny check licenses` ... | CI | 0 ngoài allowlist |
 | Runtime EOL | script + endoflife.date API | `curl https://endoflife.date/api/nodejs.json` so với `.nvmrc` | cron tuần | eol > hôm nay + 90 ngày |
 | Phụ thuộc thừa | knip 6.41.0 (ISC) · depcheck · deptry · `go mod tidy` · cargo-machete | `knip` | CI | 0 |
 | Cập nhật | Dependabot (GitHub) · Renovate 44.155.1 (AGPL-3.0) | cấu hình `dependabot.yml`/`renovate.json` | nền tảng | PR gom nhóm hằng tuần |
-| Ghim SHA/digest | pinact v5.0.0 (MIT) · Dependabot `github-actions`/`docker` | `pinact run --check` | CI | 0 chưa ghim |
-| SBOM | syft v1.54.1 (Apache-2.0) | `syft . -o cyclonedx-json > sbom.cdx.json` | release | artefact kèm release |
+| Ghim SHA/digest | pinact v5.0.2 (2026-10-25) (MIT) · Dependabot `github-actions`/`docker` | `pinact run --check` | CI | 0 chưa ghim |
+| SBOM | syft v1.57.2 (2026-11-16) (Apache-2.0) | `syft . -o cyclonedx-json > sbom.cdx.json` | release | artefact kèm release |
 
 Cảnh báo: Renovate AGPL-3.0 (chỉ ảnh hưởng khi sửa và phân phối Renovate); Trivy từng bị cài backdoor (CVE-2026-33634, catalog 12 §3) → ghim SHA + kiểm checksum khi cài; uv/ruff thuộc OpenAI từ 03/2026, license không đổi (catalog 13 §4c).
 
@@ -96,5 +96,5 @@ Cảnh báo: Renovate AGPL-3.0 (chỉ ảnh hưởng khi sửa và phân phối 
 - endoflife.date API (xác minh 2026-10-13): Node 22 EOL 2027-04-30, Node 24 EOL 2028-04-30, Node 26 LTS từ 2026-10-28 (<https://endoflife.date/api/nodejs.json>); Python 3.10 EOL 2026-10-01, 3.11 EOL 2027-10-31, 3.15 mới nhất (<https://endoflife.date/api/python.json>); Go 1.27/1.26 được hỗ trợ (<https://endoflife.date/api/go.json>); .NET 8 EOL 2026-11-10, .NET 10 LTS (<https://endoflife.date/api/dotnet.json>)
 - Node.js previous releases (v24 Krypton, v22 Jod là LTS; v26 Current): <https://nodejs.org/en/about/previous-releases> — xác minh 2026-10-13; Python versions: <https://devguide.python.org/versions/> — xác minh 2026-10-13
 - OpenSSF Scorecard (Dependency-Update-Tool, Pinned-Dependencies, Vulnerabilities): <https://github.com/ossf/scorecard> — xác minh 2026-10-13
-- Phiên bản công cụ (xác minh 2026-10-13): OSV-Scanner v2.7.0, syft v1.54.1, pinact v5.0.0, Renovate 44.155.1 (release page GitHub); pip-audit 2.10.1, uv 0.13.0 (PyPI); knip 6.41.0 (npm)
+- Phiên bản công cụ (xác minh 2026-10-13; OSV-Scanner, syft, pinact xác minh lại 2026-11-24): OSV-Scanner v2.7.1 (2026-11-09), syft v1.57.2 (2026-11-16), pinact v5.0.2 (2026-10-25), Renovate 44.155.1 (release page GitHub); pip-audit 2.10.1, uv 0.13.0 (PyPI); knip 6.41.0 (npm)
 - Catalog `www-donghanhcungban-org/stored` 04 §2c, 05, 12 §3, 13 §4c, 20 §3b, 23 §2.5/§3.1/§8.1 theo [`../../research/2026-10-13-stored-catalog-extraction.md`](../../research/2026-10-13-stored-catalog-extraction.md), đọc 2026-10-13.

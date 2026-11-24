@@ -3,7 +3,7 @@ title: Chuẩn AI (ISO/IEC 42001, NIST AI RMF, EU AI Act, OWASP LLM/Agentic, MCP
 kind: standard
 prefix: STD-AI
 applies_to: [ai-agent, agentic-system, data-ml]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Chuẩn AI (ISO/IEC 42001, NIST AI RMF, EU AI Act, OWASP LLM/Agentic, MCP, A2A)
@@ -48,7 +48,7 @@ Mặc định: **OWASP LLM Top 10 2026 + Agentic Top 10 + phân loại AI Act + 
 | OWASP Top 10 for Agentic Applications | 2026 (ASI01–ASI10) | 2025-12-09 (theo research 2026-10-13) | <https://genai.owasp.org/> | Agent có tool | Bảng ASI01–10 → biện pháp + eval |
 | OWASP MCP Top 10 | MCP01–10:2025, **beta (Phase 3)** | chưa final | <https://owasp.org/www-project-mcp-top-10/> | MCP | Checklist tham khảo, không ghim ID |
 | Model Context Protocol | **2026-07-28** (stateless, `server/discover`, MRTR, Tasks extension) | 2026-07-28 | <https://modelcontextprotocol.io/specification/latest> | MCP server/client | Phiên bản khai trong `_meta`; test tool list deterministic |
-| A2A Protocol | **1.0.1** (1.0.0 2026-03-12) | 2026-05-26 | <https://a2a-protocol.org/latest/specification/> | Agent ↔ agent | Agent Card hợp lệ, header `A2A-Version` |
+| A2A Protocol | **1.0.1** (1.0.0 2026-03-12) | 2026-05-28 (trang release GitHub; changelog ghi 2026-05-26) | <https://a2a-protocol.org/latest/specification/> | Agent ↔ agent | Agent Card hợp lệ, header `A2A-Version` |
 | OTel GenAI semantic conventions | trạng thái **Development** (tên attribute có thể đổi) | — | <https://github.com/open-telemetry/semantic-conventions-genai> | Trace LLM/agent | Span `invoke_agent`/`execute_tool`, `gen_ai.usage.*` |
 
 ## Checklist
@@ -93,11 +93,11 @@ Mặc định: **OWASP LLM Top 10 2026 + Agentic Top 10 + phân loại AI Act + 
 
 ## Nguồn
 
-- ISO/IEC 42001:2023: <https://www.iso.org/standard/42001> — **(iso.org trả 403 ngày 2026-10-13; ngày 2023-12-18 theo IEC webstore <https://webstore.iec.ch/publication/90574>)**
+- ISO/IEC 42001:2023: <https://www.iso.org/standard/42001> — **(iso.org đọc được 2026-11-24 (ngày 2025-12-09); tên ASI05–ASI10 vẫn từ nguồn thứ cấp, cần PDF gốc (chưa xác minh); ngày 2023-12-18 theo IEC webstore <https://webstore.iec.ch/publication/90574>)**
 - NIST AI RMF 1.0 (2023-01-26) & AI 600-1 (2024-07-26): <https://www.nist.gov/itl/ai-risk-management-framework> — xác minh 2026-10-13
 - EU AI Act Regulation (EU) 2024/1689: <https://eur-lex.europa.eu/eli/reg/2024/1689/oj> — **(eur-lex không trả nội dung ngày 2026-10-13)**; mốc thời gian và Digital Omnibus (EU) 2026/1744: theo nhà [`../16-compliance-privacy/ai-regulation.md`](../16-compliance-privacy/ai-regulation.md) (xác minh qua nguồn thứ cấp nhất quán; đối chiếu EUR-Lex 2026/1744 trước khi áp dụng)
 - OWASP Top 10 for LLM Applications 2026 (công bố 04/08/2026): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> (README "Current release: 2026", thư mục `2026/final/`) — xác minh 2026-10-14; danh mục LLM01–10 và bảng đổi mã 2025 → 2026: [`../12-security/ai-security.md`](../12-security/ai-security.md). Đính chính 2026-10-14: bản trước trỏ repo cũ `OWASP/www-project-top-10-for-large-language-model-applications` (nay là lưu trữ) và ghi danh mục "chưa xác minh".
-- OWASP Agentic Top 10 (2025-12-09): `research/2026-10-13-ai-agent-research.md` §5.1 [F ngày]; trang gốc <https://genai.owasp.org/> trả 403 ngày 2026-10-13
+- OWASP Agentic Top 10 (2025-12-09): `research/2026-10-13-ai-agent-research.md` §5.1 [F ngày]; trang gốc <https://genai.owasp.org/> đọc được 2026-11-24 (ngày 2025-12-09); tên ASI05–ASI10 vẫn từ nguồn thứ cấp, cần PDF gốc (chưa xác minh)
 - OWASP MCP Top 10 (beta): <https://owasp.org/www-project-mcp-top-10/> — xác minh 2026-10-13
 - MCP specification 2026-07-28: <https://modelcontextprotocol.io/specification/latest> — xác minh 2026-10-13
 - A2A 1.0.1 (2026-05-26): <https://a2a-protocol.org/latest/specification/> · <https://github.com/a2aproject/A2A/releases> — xác minh 2026-10-13

@@ -3,7 +3,7 @@ title: Hồ sơ tuân thủ, audit trail, bằng chứng, chính sách, đào t�
 kind: module
 prefix: CMP-AUDIT
 applies_to: [all]
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Hồ sơ tuân thủ, audit trail, bằng chứng, chính sách, đào tạo
@@ -82,7 +82,7 @@ bằng chứng → owner → tần suất) và `evidence/<YYYY-MM>/` do CI/job �
 | Control thiếu bằng chứng trong kỳ | Script đọc `controls.yaml` + `evidence/` | `python scripts/compliance/check-evidence.py --period 2026-10` | CI nightly | 0 control quá hạn |
 | Chính sách quá hạn rà | Lint frontmatter `reviewed_at` | script | CI | 0 quá 12 tháng |
 | Rà quyền truy cập | Export IdP/cloud IAM (API) → CSV | job quý | Job | file + phê duyệt |
-| Bằng chứng kỹ thuật tự đẩy | CI job upload (SBOM syft v1.54.0 Apache-2.0, OSV-Scanner, gitleaks v8.30.1 MIT — xác minh 2026-10-13) | sau mỗi scan | CI | metadata run id |
+| Bằng chứng kỹ thuật tự đẩy | CI job upload (SBOM syft v1.57.2 (2026-11-16) Apache-2.0, OSV-Scanner, gitleaks v8.30.1 MIT — xác minh 2026-10-13; syft 2026-11-24) | sau mỗi scan | CI | metadata run id |
 | Audit log bất biến | Kiểm cấu hình kho log (object lock/WORM) | conftest | CI | pass |
 | Lịch tuân thủ | Job đọc `calendar.yaml` → nhắc | cron | Job | nhắc trước 30/7/1 ngày |
 
@@ -95,6 +95,6 @@ bằng chứng → owner → tần suất) và `evidence/<YYYY-MM>/` do CI/job �
 - NĐ 333/2026/NĐ-CP Đ.22–23 (log ≥ 12 tháng): Công báo 499 — <https://congbaocdn.chinhphu.vn/180507251028987904/2026/9/4/470335-1787890927_v1_1788486330_signed.pdf> — xác minh 2026-10-13.
 - Luật Kế toán 88/2015/QH13 Đ.41: <https://hethongphapluat.com/luat-ke-toan-2015/dieu-41>; Luật Lưu trữ 33/2024/QH15 (hiệu lực 01/07/2025): <https://hethongphapluat.com/luat-luu-tru-2024.html> — xác minh 2026-10-13.
 - HIPAA 45 CFR §164.316 (lưu tài liệu 6 năm): <https://www.hhs.gov/hipaa/for-professionals/security/laws-regulations/index.html> — xác minh 2026-10-13.
-- gitleaks v8.30.1, syft v1.54.0: <https://github.com/gitleaks/gitleaks/releases>, <https://github.com/anchore/syft/releases> — xác minh 2026-10-13 (qua kết quả tìm kiếm GitHub).
+- gitleaks v8.30.1, syft v1.57.2 (2026-11-16): <https://github.com/gitleaks/gitleaks/releases>, <https://github.com/anchore/syft/releases> — xác minh 2026-10-13, syft 2026-11-24 (qua kết quả tìm kiếm GitHub).
 - Nghiên cứu nền: `research/2026-10-13-stored-catalog-extraction.md` §2.14 (bằng chứng tách khỏi tuyên bố, `docs/bang-chung/<ngày>/`).
 - OpenSSF Scorecard (check CI-Tests chỉ hỏi CI có chạy test): <https://github.com/ossf/scorecard> — đọc 2026-10-18. Catalog `www-donghanhcungban-org/stored` 09 §2b (GESF tự chấm "100% (A)") — rà 2026-10-18.

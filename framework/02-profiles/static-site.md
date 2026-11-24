@@ -4,7 +4,7 @@ kind: profile
 slug: static-site
 prefix: PRF-STATIC
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-10-13
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Site nội dung tĩnh / tài liệu / landing
@@ -40,10 +40,10 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 
 | Thành phần | Mặc định | Phiên bản (xác minh 2026-10-13) | Thay thế + điều kiện |
 |---|---|---|---|
-| Generator | Astro (content collections, islands, 0 JS mặc định) | 7.3.8 (endoflife.date không có `astro`) | Next.js 16.4.0 `output: 'export'` khi đội đã dùng Next; Eleventy `@11ty/eleventy` 3.1.6 khi muốn tối giản; Hugo v0.167.0 (GitHub release 28/09, năm không hiển thị) khi site rất lớn cần build nhanh; MkDocs Material 9.7.7 cho docs Python |
+| Generator | Astro (content collections, islands, 0 JS mặc định) | 7.3.8 (endoflife.date không có `astro`) | Next.js 16.4.6 `output: 'export'` khi đội đã dùng Next; Eleventy `@11ty/eleventy` 3.1.6 khi muốn tối giản; Hugo v0.167.0 (GitHub release 28/09, năm không hiển thị) khi site rất lớn cần build nhanh; MkDocs Material 9.7.7 cho docs Python |
 | Ngôn ngữ | TypeScript 7.0.2 (nếu có script) + Markdown/MDX | — | — |
-| Node CI | 24 LTS | 24.21.0 | — |
-| CSS | Tailwind 4.3.3 hoặc CSS thuần với tokens | — | — |
+| Node CI | 24 LTS | 24.22.3 | — |
+| CSS | Tailwind 4.3.5 hoặc CSS thuần với tokens | — | — |
 | Search | Pagefind (index tĩnh lúc build) | v1.5.2 (GitHub release 12/04, năm không hiển thị) | Dịch vụ search ngoài khi > hàng chục nghìn trang (chưa xác minh) |
 | Link check | lychee | v0.24.2 (GitHub release 01/05, năm không hiển thị) | `linkinator` (chưa xác minh phiên bản) |
 | Hiệu năng/SEO/a11y CI | `@lhci/cli` 0.15.1 (cảnh báo repo ít hoạt động — xem [`web-app.md`](web-app.md)) + `@axe-core/playwright` 4.13.0 | — | `lighthouse` 13.5.0 trực tiếp |
@@ -100,7 +100,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 
 - Core Web Vitals: <https://web.dev/articles/vitals> — xác minh 2026-10-13. WCAG 2.2: <https://www.w3.org/TR/WCAG22/> — xác minh 2026-10-13.
 - CSP reference (trỏ W3C CSP3): <https://content-security-policy.com/> — xác minh 2026-10-13.
-- Phiên bản: npm `astro` 7.3.8, `@11ty/eleventy` 3.1.6, `next` 16.4.0, `@lhci/cli` 0.15.1, `lighthouse` 13.5.0, `@axe-core/playwright` 4.13.0, `@playwright/test` 1.64.0, `size-limit` 14.2.0, `wrangler` 4.149.0, `@biomejs/biome` 2.5.15, `tailwindcss` 4.3.3; PyPI `mkdocs-material` 9.7.7; GitHub releases Hugo v0.167.0, Pagefind v1.5.2, lychee v0.24.2 (trang không hiển thị năm) — xác minh 2026-10-13.
+- Phiên bản: npm `astro` 7.3.8, `@11ty/eleventy` 3.1.6, `next` 16.4.6, `@lhci/cli` 0.15.1, `lighthouse` 13.5.0, `@axe-core/playwright` 4.13.0, `@playwright/test` 1.64.0, `size-limit` 14.2.0, `wrangler` 4.149.0, `@biomejs/biome` 2.5.15, `tailwindcss` 4.3.5; PyPI `mkdocs-material` 9.7.7; GitHub releases Hugo v0.167.0, Pagefind v1.5.2, lychee v0.24.2 (trang không hiển thị năm) — xác minh 2026-10-13.
 - Lighthouse CI tình trạng bảo trì: `research/2026-10-13-stored-catalog-extraction.md` §3 (catalog 13 §4b); trang GitHub không hiển thị ngày commit khi fetch 2026-10-13.
 - (chưa xác minh) `linkinator`, `markdownlint`, `cspell`, Decap/Sanity/Contentful, dịch vụ search ngoài — không tra ngày 2026-10-13.
 - Khung cũ KHUNG-3 C5 (commit `1b80fe4`).

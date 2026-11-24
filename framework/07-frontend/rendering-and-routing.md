@@ -3,7 +3,7 @@ title: Render (SSR/SSG/CSR/ISR), routing, hydration
 kind: module
 prefix: FE-RENDER
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Render (SSR/SSG/CSR/ISR), routing, hydration
@@ -30,11 +30,11 @@ updated: 2026-10-14
 | Ít đổi (docs, landing, blog) | Không | Cần | **SSG/prerender** lúc build (+ ISR/`use cache` với `cacheLife` khi đổi theo giờ) | Astro 7.3.8, Next 16 `use cache`, Nuxt `prerender`, SvelteKit `prerender` |
 | Đổi thường xuyên, giống nhau cho mọi người (tin, giá, danh mục) | Không | Cần | **SSR có cache dùng chung** (CDN, `s-maxage`) hoặc ISR | Next cache components, Nuxt `routeRules` swr |
 | Khung chung + mảng cá nhân (dashboard công khai + lời chào) | Một phần | Có/không | **Streaming SSR / Partial Prerendering**: khung tĩnh + `<Suspense>` cho phần đọc cookie/header | Next 16 Cache Components (`cacheComponents: true`) |
-| Toàn bộ theo người dùng sau đăng nhập (app nội bộ, admin) | Có | Không | **CSR/SPA** hoặc SSR `private` không cache; auth guard ở server/proxy | Vite 8.3.4 + React Router 8.4.0 / TanStack Router; SvelteKit `ssr=false` cho route |
+| Toàn bộ theo người dùng sau đăng nhập (app nội bộ, admin) | Có | Không | **CSR/SPA** hoặc SSR `private` không cache; auth guard ở server/proxy | Vite 8.3.8 + React Router 8.4.0 / TanStack Router; SvelteKit `ssr=false` cho route |
 | Tương tác nặng (editor, canvas, game) | Có | Không | CSR, lazy chunk, Web Worker cho tính toán | Vite + framework tuỳ chọn |
 | Mobile/desktop native shell | — | — | Không áp dụng SSR; điều hướng theo nền tảng (navigation stack), deep link | Expo/Flutter/SwiftUI/Compose (xem hồ sơ) |
 
-**Framework** (xác minh npm 2026-10-13): Next.js 16.4.0 (React 19.3.0, RSC), Nuxt 4.6.1 (Vue 3.5.43), SvelteKit 3.0.1
+**Framework** (xác minh npm 2026-10-13; Next.js, React đọc lại 2026-11-24): Next.js 16.4.6 (React 19.3.1, RSC), Nuxt 4.6.1 (Vue 3.5.43), SvelteKit 3.0.1
 (Svelte 5.57.2), Astro 7.3.8, Angular 22.2.2, SolidJS 1.9.17, React Router 8.4.0, TanStack Router 1.170.44. Chọn theo đội và
 hệ sinh thái; ghi ADR ([`../05-architecture/decision-records.md`](../05-architecture/decision-records.md)). Không đổi framework
 cho dự án có sẵn chỉ vì "mới".
@@ -57,7 +57,7 @@ cho dự án có sẵn chỉ vì "mới".
 - [ ] `FE-RENDER-014` **SHOULD** Chuyển trang giữ focus/scroll đúng: focus vào tiêu đề trang mới hoặc vùng nội dung; scroll về đầu khi route mới, giữ khi back. → Kiểm: E2E sau điều hướng SPA, `document.activeElement` nằm trong `main`; `history.scrollRestoration` xử lý. · Nguồn: [`../06-design-ux/accessibility.md`](../06-design-ux/accessibility.md)
 - [ ] `FE-RENDER-015` **SHOULD** Component chỉ chạy client (`'use client'`, `onMount`, `ssr: false`) giới hạn ở lá cây; server component/SSR là mặc định. → Kiểm: tỉ lệ file có `'use client'` trong `app/` được theo dõi (script), không tăng không lý do.
 - [ ] `FE-RENDER-016` **SHOULD** Redirect/rewrite và trailing slash/canonical thống nhất một nơi (config framework hoặc CDN), không rải trong component. → Kiểm: grep `router.push('/old` ngoài file cấu hình redirect = 0; `curl -I` URL cũ → 301 tới canonical.
-- [ ] `FE-RENDER-017` **MAY** Dùng View Transitions cho chuyển route (tắt khi reduced-motion). → Kiểm: xem [`../06-design-ux/motion-and-visual-quality.md`](../06-design-ux/motion-and-visual-quality.md).
+- [ ] `FE-RENDER-017` **MAY** Dùng View Transitions cho chuyển route (tắt khi reduced-motion; Baseline newly available từ 2025-10-14 (WebStatus), cần fallback). → Kiểm: xem [`../06-design-ux/motion-and-visual-quality.md`](../06-design-ux/motion-and-visual-quality.md).
 - [ ] `FE-RENDER-018` **MAY** Edge runtime cho route nhẹ cần độ trễ thấp toàn cầu; không dùng khi cần thư viện Node hoặc kết nối DB giữ lâu. → Kiểm: ADR ghi lý do; test tích hợp chạy trên runtime đích.
 
 ## Bẫy thường gặp
@@ -81,15 +81,15 @@ cho dự án có sẵn chỉ vì "mới".
 | curl + script | `curl -sI -b "" <route bảo vệ>` → 302/401; `curl -A Googlebot` chứa `<title>` | CI smoke sau deploy preview | đúng mã/nội dung |
 | Grep cấu hình | `rg -n "ignoreBuildErrors|ignoreDuringBuilds" next.config.*` | pre-commit | 0 |
 | Lint tuỳ chỉnh (ESLint 10.12.0 `no-restricted-syntax`) | cấm `Date.now()|Math.random()` trong file server component/`use cache` | CI | 0 |
-| Bundle analyzer (`@next/bundle-analyzer` 16.4.0 / `rollup-plugin-visualizer` 7.1.1, MIT) + size-limit 14.2.0 | `size-limit` entry chunk | CI | ≤ ngân sách đã chốt |
+| Bundle analyzer (`@next/bundle-analyzer` 16.4.6 / `rollup-plugin-visualizer` 7.1.1, MIT) + size-limit 14.2.0 | `size-limit` entry chunk | CI | ≤ ngân sách đã chốt |
 | Lighthouse 13.5.0 (SEO/Performance) | `lhci autorun` trang công khai | CI | ≥ 0.9 |
 | `docs/ROUTES.md` ↔ cây route | `node scripts/check-routes.mjs` | CI | lệch = 0 |
 
 ## Nguồn
 
-- Next.js 16.4.0 docs — Caching (Cache Components: `use cache` + `cacheLife`; runtime APIs `cookies/headers/searchParams/params` sau `<Suspense>`; random/time cần `connection()`; Partial Prerendering; `use cache: private`; bots/crawlers): <https://nextjs.org/docs/app/getting-started/caching> — xác minh 2026-10-13 (trang ghi version 16.4.0, cập nhật 2026-10-06).
+- Next.js 16.4.6 docs — Caching (Cache Components: `use cache` + `cacheLife`; runtime APIs `cookies/headers/searchParams/params` sau `<Suspense>`; random/time cần `connection()`; Partial Prerendering; `use cache: private`; bots/crawlers): <https://nextjs.org/docs/app/getting-started/caching> — xác minh 2026-10-13 (trang ghi version 16.4.0, cập nhật 2026-10-06).
 - MDN — HTTP caching (`private` cho nội dung cá nhân; cookie không tự làm response private; `no-cache, private`; tránh `Vary: Cookie`): <https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching> — xác minh 2026-10-13.
 - React blog — React 19.3 (09/09/2026), 19.2 (01/10/2025), bản vá RSC 19.0.1/19.1.2/19.2.1 (12/2025): <https://react.dev/blog> — xác minh 2026-10-13.
 - Vite blog — Vite 8 (12/03/2026), Vite 7 (24/06/2025): <https://vite.dev/blog> — xác minh 2026-10-13.
-- Phiên bản npm `latest` (2026-10-13): next 16.4.0 · react 19.3.0 · vue 3.5.43 · nuxt 4.6.1 · svelte 5.57.2 · @sveltejs/kit 3.0.1 · astro 7.3.8 · @angular/core 22.2.2 · solid-js 1.9.17 · react-router 8.4.0 · @tanstack/react-router 1.170.44 · vite 8.3.4 · @next/bundle-analyzer 16.4.0 · rollup-plugin-visualizer 7.1.1 · size-limit 14.2.0 · eslint 10.12.0.
+- Phiên bản npm `latest` (2026-10-13; next, react, vite đọc lại 2026-11-24): next 16.4.6 · react 19.3.1 · vue 3.5.43 · nuxt 4.6.1 · svelte 5.57.2 · @sveltejs/kit 3.0.1 · astro 7.3.8 · @angular/core 22.2.2 · solid-js 1.9.17 · react-router 8.4.0 · @tanstack/react-router 1.170.44 · vite 8.3.8 · @next/bundle-analyzer 16.4.0 · rollup-plugin-visualizer 7.1.1 · size-limit 14.2.0 · eslint 10.12.0.
 - Catalog `www-donghanhcungban-org/stored` mục 09 §1.4 (không `ignoreBuildErrors`; `NEXT_PUBLIC_` chỉ công khai), mục 13 §4b (stack Next 16 + React 19), đọc 2026-10-13; `research/2026-10-13-stored-catalog-extraction.md`.

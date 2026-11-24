@@ -3,7 +3,7 @@ title: Coverage ratchet, mutation test, chất lượng test
 kind: module
 prefix: QA-COV
 applies_to: [all]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Coverage ratchet, mutation test, chất lượng test
@@ -23,7 +23,7 @@ updated: 2026-10-14
 
 | Stack | Coverage (xác minh 2026-10-13) | Ratchet | Mutation |
 |---|---|---|---|
-| JS/TS | Vitest 5.0.4 `coverage` (`@vitest/coverage-v8` 5.0.4) hoặc Jest 30.5.2 `coverageThreshold`; `c8` 12.0.0 cho Node thuần | Vitest `coverage.thresholds.autoUpdate: true` (tự nâng khi vượt) hoặc script so baseline | StrykerJS `@stryker-mutator/core` 10.0.0 (Apache-2.0), `thresholds.break`, `incremental: true` |
+| JS/TS | Vitest 5.1.1 `coverage` (`@vitest/coverage-v8` 5.1.1) hoặc Jest 30.5.2 `coverageThreshold`; `c8` 12.0.0 cho Node thuần | Vitest `coverage.thresholds.autoUpdate: true` (tự nâng khi vượt) hoặc script so baseline | StrykerJS `@stryker-mutator/core` 10.0.0 (Apache-2.0), `thresholds.break`, `incremental: true` |
 | Python | `coverage` 7.16.2 + `pytest-cov` 7.1.0 `--cov-branch --cov-fail-under` | script nâng `fail_under` theo kết quả (coverage ratchet, xboss/qlkh) | mutmut 3.8.0 (phiên bản 3 **không có** cờ ngưỡng — đọc `mutmut export-cicd-stats`/`badge` rồi tự so) |
 | Go | `go test -coverprofile -covermode=atomic` + `go tool cover -func` | script so tổng % với baseline | `go-mutesting`/`gremlins` (phiên bản **chưa xác minh**) |
 | Java/Kotlin | JaCoCo `rules` (BRANCH `minimum`) | nâng `minimum` theo kết quả | PIT 1.30.0 (`mutationThreshold`, `coverageThreshold`) |
@@ -65,7 +65,7 @@ Mặc định: **branch coverage ratchet toàn repo + mutation ≥ 70% cho thư 
 
 | Công cụ (xác minh 2026-10-13) | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
-| Vitest 5.0.4 + `@vitest/coverage-v8` 5.0.4 | `vitest run --coverage` với `coverage.thresholds: { lines, branches, functions, statements, autoUpdate: true }` | CI | ≥ baseline; `autoUpdate` commit baseline mới qua PR |
+| Vitest 5.1.1 + `@vitest/coverage-v8` 5.1.1 | `vitest run --coverage` với `coverage.thresholds: { lines, branches, functions, statements, autoUpdate: true }` | CI | ≥ baseline; `autoUpdate` commit baseline mới qua PR |
 | Jest 30.5.2 | `jest --ci --coverage` + `coverageThreshold.global.branches` | CI | ≥ baseline |
 | pytest-cov 7.1.0 / coverage 7.16.2 | `pytest --cov=src --cov-branch --cov-report=xml --cov-fail-under=$(cat .coverage-baseline)` | CI | ≥ baseline |
 | `go test` | `go test ./... -covermode=atomic -coverprofile=cover.out && python3 scripts/cov-ratchet.py cover.out` | CI | ≥ baseline |
@@ -80,6 +80,6 @@ Mặc định: **branch coverage ratchet toàn repo + mutation ≥ 70% cho thư 
 - Vitest `coverage.thresholds` (`lines/functions/branches/statements`, `autoUpdate`, `perFile`, `100`): <https://vitest.dev/config/coverage> — xác minh 2026-10-13
 - StrykerJS configuration (`thresholds` mặc định `{high: 80, low: 60, break: null}`, `incremental`): <https://stryker-mutator.io/docs/stryker-js/configuration/> — xác minh 2026-10-13; v10.0.0 (14/08/2026) catalog 13 §4c
 - mutmut 3 (cấu hình `[tool.mutmut]`, `export-cicd-stats`, `badge`; không có cờ ngưỡng): <https://mutmut.readthedocs.io/en/latest/> — xác minh 2026-10-13
-- Phiên bản (registry, xác minh 2026-10-13): npm `@stryker-mutator/core` 10.0.0, `@vitest/coverage-v8` 5.0.4, `c8` 12.0.0; PyPI `mutmut` 3.8.0 (2026-09-12), `coverage` 7.16.2, `pytest-cov` 7.1.0; PIT 1.30.0 (<https://github.com/hcoles/pitest/releases>, 27/08, năm không hiện).
+- Phiên bản (registry, xác minh 2026-10-13; `@vitest/coverage-v8` 2026-11-24): npm `@stryker-mutator/core` 10.0.0, `@vitest/coverage-v8` 5.1.1, `c8` 12.0.0; PyPI `mutmut` 3.8.0 (2026-09-12), `coverage` 7.16.2, `pytest-cov` 7.1.0; PIT 1.30.0 (<https://github.com/hcoles/pitest/releases>, 27/08, năm không hiện).
 - Catalog `www-donghanhcungban-org/stored` 23 §3.3 (qlkh: mutmut ≥ 70%, `fail_under=100` với loại trừ có lý do; xboss: coverage ratchet), 07 (mutation: cố ý phá bất biến, đòi test đỏ) — đọc 2026-10-13.
 - Khung cũ X-stored `quality-supplements.md` Nhóm 2 mục 4 "coverage là sàn, không phải mục tiêu", commit `1b80fe4`.

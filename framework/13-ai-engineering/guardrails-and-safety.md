@@ -3,7 +3,7 @@ title: Guardrail runtime, chính sách nội dung, fallback, an toàn người d
 kind: module
 prefix: AI-GUARD
 applies_to: [ai-agent, agentic-system, data-ml, api-service, web-app]
-updated: 2026-11-05
+updated: 2026-11-24
 ---
 
 # Guardrail runtime, chính sách nội dung, fallback, an toàn người dùng
@@ -102,7 +102,7 @@ updated: 2026-11-05
 - PyPI: `guardrails-ai` 0.11.0 (2026-08-14) <https://pypi.org/project/guardrails-ai/> · `nemoguardrails` 0.24.1 (2026-09-16) <https://pypi.org/project/nemoguardrails/> · `llm-guard` 0.3.16 (2025-05-19) <https://pypi.org/project/llm-guard/> · `presidio-analyzer` 2.2.364 (2026-07-22) <https://pypi.org/project/presidio-analyzer/> — xác minh 2026-10-13.
 - Presidio (Data Privacy Stack: analyzer, anonymizer, image redactor, structured): <https://presidio.dataprivacystack.org/> — xác minh 2026-10-13 (đính chính: tài liệu cũ trỏ microsoft.github.io/presidio đã chuyển hướng).
 - NIST AI RMF 1.0 (2023-01-26) và AI 600-1 Generative AI Profile (2024-07-26): <https://www.nist.gov/itl/ai-risk-management-framework> — xác minh 2026-10-13 (`research/2026-10-13-ai-agent-research.md` §5).
-- OWASP Top 10 for LLM Applications 2026 (04/08/2026; mã đổi so với 2025 — bảng ở [`../12-security/ai-security.md`](../12-security/ai-security.md)): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> — xác minh 2026-10-14. Agentic Top 10 2026: <https://genai.owasp.org/> — (chưa xác minh — 403 ngày 2026-10-13).
+- OWASP Top 10 for LLM Applications 2026 (04/08/2026; mã đổi so với 2025 — bảng ở [`../12-security/ai-security.md`](../12-security/ai-security.md)): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> — xác minh 2026-10-14. Agentic Top 10 2026: <https://genai.owasp.org/> — trang chính thức đọc được 2026-11-24 (genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026, ngày 2025-12-09); tên ASI05–ASI10 vẫn từ nguồn thứ cấp, cần PDF gốc (chưa xác minh).
 - `www-donghanhcungban-org/stored` mục 12 §2 (hai tầng: từ khoá tất định + model nhỏ; fallback khi model lỗi; fail-closed) — đọc 2026-10-13 (`research/2026-10-13-stored-catalog-extraction.md`).
 - AWS Security Blog 2025-09-30: khối Tag U+E0000–U+E007F giấu payload; lọc lặp 'until no more changes are made'; gỡ surrogate đứng riêng; gỡ tag có thể làm hỏng cờ England/Scotland/Wales; Bedrock Guardrails chặn ở prompt và response; một lớp trong defense-in-depth (`AI-GUARD-018`): <https://aws.amazon.com/blogs/security/defending-llm-applications-against-unicode-character-smuggling/> — xác minh 2026-10-30.
 - Crescendo (Russinovich, Salem, Eldan; USENIX Security 2025): jailbreak nhiều lượt bắt đầu bằng câu hỏi vô hại rồi leo thang dựa trên câu trả lời trước; tỉ lệ thành công cao trên mọi model và tác vụ đã đánh giá (`AI-GUARD-019`): <https://arxiv.org/abs/2404.01833> — xác minh 2026-10-30.

@@ -3,7 +3,7 @@ title: Giao thức: MCP, A2A, AG-UI, Agent Skills, AGENTS.md
 kind: module
 prefix: AI-PROTO
 applies_to: [ai-agent, agentic-system, data-ml]
-updated: 2026-11-01
+updated: 2026-11-24
 ---
 
 # Giao thức: MCP, A2A, AG-UI, Agent Skills, AGENTS.md
@@ -47,7 +47,7 @@ Owner là ai (tổ chức chính chủ của dịch vụ?) · repo còn maintain
 | MCP Python | `mcp` | 2.3.0 (PyPI 2026-10-02) |
 | MCP TypeScript | `@modelcontextprotocol/server` · `@modelcontextprotocol/client` (dòng v2) | 2.3.1 (npm); tag `latest` của `@modelcontextprotocol/sdk` vẫn là 1.32.1 (dòng v1) — chọn có chủ đích |
 | MCP Inspector | `@modelcontextprotocol/inspector` | 2.10.1 (npm) |
-| A2A Python | `a2a-sdk` | 1.2.2 (PyPI 2026-10-05) |
+| A2A Python | `a2a-sdk` | 1.3.1 (PyPI 2026-11-17) |
 
 ### Remote MCP — yêu cầu auth (spec 2026-07-28, MUST của spec)
 
@@ -103,9 +103,9 @@ passthrough · scope tối thiểu. Server phát `WWW-Authenticate` chuẩn; cli
 
 - MCP specification 2026-07-28 (stateless, handles, `tools/list` tất định, `_meta.traceparent`, `CacheableResult`): <https://modelcontextprotocol.io/specification/2026-07-28> · Authorization (OAuth 2.1, PRM RFC 9728, RFC 8707, PKCE, RFC 9207): <https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization> · Security Best Practices (no token passthrough): <https://modelcontextprotocol.io/specification/2026-07-28/basic/security_best_practices> — xác minh 2026-10-13 (`research/2026-10-13-ai-agent-research.md` §4).
 - SDK: `mcp` 2.3.0 <https://pypi.org/project/mcp/> · `@modelcontextprotocol/server` 2.3.1 <https://www.npmjs.com/package/@modelcontextprotocol/server> · `@modelcontextprotocol/client` 2.3.1 · `@modelcontextprotocol/sdk` latest 1.32.1 <https://www.npmjs.com/package/@modelcontextprotocol/sdk> · `@modelcontextprotocol/inspector` 2.10.1 <https://www.npmjs.com/package/@modelcontextprotocol/inspector> · `a2a-sdk` 1.2.2 <https://pypi.org/project/a2a-sdk/> — xác minh 2026-10-13.
-- A2A protocol v1.0.1 (Agent Card có chữ ký, task states, auth schemes): <https://a2a-protocol.org/latest/specification/> — xác minh 2026-10-13 (`research/2026-10-13-ai-agent-research.md` §4).
+- A2A protocol v1.0.1 (Agent Card có chữ ký, task states, auth schemes): <https://a2a-protocol.org/latest/specification/> — xác minh 2026-10-13; v1.0.1 phát hành 2026-05-28 (trang release GitHub; changelog ghi 2026-05-26); header `A2A-Version` chỉ dùng dạng Major.Minor (ví dụ `1.0`), rỗng = 0.3 (đọc 2026-11-24) (`research/2026-10-13-ai-agent-research.md` §4).
 - AG-UI (bản release/2026-10-12): <https://docs.ag-ui.com/> — xác minh 2026-10-13 theo research; số phiên bản gói (chưa xác minh).
 - Agent Skills spec (SKILL.md `name`/`description`, progressive disclosure, < 500 dòng): <https://agentskills.io/specification> · AGENTS.md (quy ước, > 60k dự án): <https://agents.md/> — xác minh 2026-10-13.
-- Roots/Sampling/Logging (SEP-2577) và Dynamic Client Registration (PR #2858) deprecated ở 2026-07-28, gỡ sớm nhất ở bản phát hành từ 2027-07-28; includeContext thisServer/allServers deprecated 2025-11-25; HTTP+SSE deprecated 2025-03-26, gỡ sớm nhất 3 tháng sau khi SEP-2596 Final; 'new implementations SHOULD NOT adopt it, existing implementations SHOULD migrate' (`AI-PROTO-018`): <https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md> — xác minh 2026-10-30.
+- Roots/Sampling/Logging (SEP-2577) và Dynamic Client Registration (PR #2858) deprecated ở 2026-07-28 (thay bằng Client ID Metadata Documents (CIMD) — changelog: <https://modelcontextprotocol.io/specification/2026-07-28/changelog>, đọc 2026-11-24), gỡ sớm nhất ở bản phát hành từ 2027-07-28; includeContext thisServer/allServers deprecated 2025-11-25; HTTP+SSE deprecated 2025-03-26, gỡ sớm nhất 3 tháng sau khi SEP-2596 Final; 'new implementations SHOULD NOT adopt it, existing implementations SHOULD migrate' (`AI-PROTO-018`): <https://modelcontextprotocol.io/specification/2026-07-28/deprecated.md> — xác minh 2026-10-30.
 - Spec latest = 2026-07-28 (`AI-PROTO-018`): <https://modelcontextprotocol.io/specification/latest> — chưa đọc trọn trang 2026-10-30 (chưa xác minh trọn).
 - Servers MUST NOT dùng form mode cho mật khẩu, API key, access token, thông tin thanh toán và MUST dùng URL mode; URL MUST NOT chứa thông tin nhạy cảm/PII và MUST NOT tiền xác thực; client MUST NOT prefetch, MUST NOT mở khi chưa đồng ý, MUST hiện URL đầy đủ, MUST mở sao cho client/LLM không xem được; server MUST bảo đảm người hoàn tất trùng người khởi tạo (so `sub` là ví dụ không chuẩn tắc); URL mode có từ 2025-11-25 (`AI-PROTO-019`): <https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation> — xác minh 2026-10-30.

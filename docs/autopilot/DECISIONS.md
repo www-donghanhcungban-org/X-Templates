@@ -868,3 +868,10 @@
 - Chọn: Bậc A mặc định, bậc B (Code Review phụ) khi chủ tổ chức bật và đặt trần chi phí, bậc C chỉ sau khi có số đo từ B, không bao giờ merge mà không người duyệt
 - Lý do (tiêu chí chất lượng cuối): Tự động nhiều nhất mà không mất hàng rào: bậc A đã tự động toàn bộ vòng PR của khung; bậc B thêm một người rà độc lập với chi phí đặt trần; bậc C thêm theo dõi PR chỉ khi B cho thấy giá trị. Hiệu quả theo tuyên bố của Anthropic là số nội bộ không đối chứng nên chưa đủ căn cứ bật mọi thứ. Tài liệu chính thức cho thấy hook của dự án không áp dụng cho git và gh của lệnh ship, và approving review của Claude được tính là approval, nên phương án hai tạo đường merge ngoài kiểm soát của pr next. Bật dịch vụ trả phí là việc của người.
 - Đường lùi: Đổi ADR-0100 sang bậc khác và cập nhật mẫu cấu hình ở framework
+
+### D-566 · 2026-11-24T08:40:59+00:00 · Cập nhật dữ kiện lỗi thời của khung theo nghiên cứu nguồn sống thế nào?
+
+- Phương án: (1) Chỉ ghi số đã tra lại từ nguồn gốc, phần chưa xác minh để nhãn chưa xác minh, không đổi mức ID trừ khi có nguồn gốc · (2) Áp mọi đề xuất của báo cáo nghiên cứu kể cả mốc pháp lý từ nguồn thứ cấp
+- Chọn: Chỉ ghi số đã tra lại từ nguồn gốc, phần chưa xác minh để nhãn chưa xác minh, không đổi mức ID trừ khi có nguồn gốc
+- Lý do (tiêu chí chất lượng cuối): Luật P2 của khung: phiên bản và luật phải xác minh từ nguồn sống kèm ngày, không được thì ghi chưa xác minh. Các báo cáo đều tự nhận có phần dựa vào bản tóm tắt của mô hình nhỏ hoặc nguồn thứ cấp; khi tôi tra lại thì bắt được hai lẫn lộn (scorecard-action so với Scorecard CLI, hồ sơ api-service chưa theo Python 3.15.2). Mốc pháp lý EU AI Act sau Omnibus chỉ có bình luận pháp lý thứ cấp vì EUR-Lex không đọc được, nên không đưa vào khung và không hạ mức CMP-AI-012.
+- Đường lùi: git revert commit của PR; mọi số cũ nằm trong lịch sử

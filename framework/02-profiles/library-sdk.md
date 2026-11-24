@@ -4,7 +4,7 @@ kind: profile
 slug: library-sdk
 prefix: PRF-LIB
 modules: [04-standards/*, 05-architecture/*, 08-backend/reliability-and-errors, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/maintenance-and-lifecycle, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-11-14
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Thư viện / SDK / package
@@ -40,7 +40,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 
 | Thành phần | Mặc định (JS/TS) | Phiên bản (xác minh 2026-10-13) | Hệ sinh thái khác + điều kiện |
 |---|---|---|---|
-| Ngôn ngữ/runtime | TypeScript 7.0.2 `strict`; Node 24 LTS (24.21.0); hỗ trợ mọi Node còn LTS (22 Maintenance tới 2027-04-30) | — | Python 3.14.8 (hỗ trợ ≥ 3 phiên bản còn bảo trì); Go 1.27.2 (2 bản mới nhất); Rust 1.99.0 + MSRV ghi rõ |
+| Ngôn ngữ/runtime | TypeScript 7.0.2 `strict`; Node 24 LTS (24.22.3); hỗ trợ mọi Node còn LTS (22 Maintenance tới 2027-04-30) | — | Python 3.14.8 (hỗ trợ ≥ 3 phiên bản còn bảo trì); Go 1.27.2 (2 bản mới nhất); Rust 1.99.0 + MSRV ghi rõ |
 | Build | `tsdown` (rolldown) xuất ESM + CJS + `.d.ts` | 0.23.1 | `tsup` 8.5.1; `tsc` thuần khi không bundle; Python `hatch` 1.18.1 / `uv build` 0.13.0; `cargo` |
 | Kiểm package | `publint` + `@arethetypeswrong/cli` | 0.3.25 + 0.18.5 | `twine check` (chưa xác minh phiên bản); `cargo package --list` |
 | API report | `@microsoft/api-extractor` (API report + diff) | 7.59.4 | `cargo-semver-checks` (chưa xác minh); Python `griffe` (chưa xác minh) |

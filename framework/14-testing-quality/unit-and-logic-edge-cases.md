@@ -3,7 +3,7 @@ title: Unit test & chống lỗi logic: ca biên, null/0, race, thời gian, ti�
 kind: module
 prefix: QA-UNIT
 applies_to: [all]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Unit test & chống lỗi logic: ca biên, null/0, race, thời gian, tiền
@@ -24,7 +24,7 @@ updated: 2026-10-14
 
 | Loại logic | Kỹ thuật test | Công cụ (xác minh 2026-10-13) | Khi nào không dùng |
 |---|---|---|---|
-| Hàm thuần, quy tắc nghiệp vụ | Table-driven/parameterized với bảng ca biên | Vitest 5.0.4 `test.each`, Jest 30.5.2, pytest 9.1.1 `parametrize`, Go table tests, JUnit 6 `@ParameterizedTest` | — |
+| Hàm thuần, quy tắc nghiệp vụ | Table-driven/parameterized với bảng ca biên | Vitest 5.1.1 `test.each`, Jest 30.5.2, pytest 9.1.1 `parametrize`, Go table tests, JUnit 6 `@ParameterizedTest` | — |
 | Miền đầu vào lớn (parser, tính toán, serializer) | Property-based: bất biến + round-trip + so với oracle chậm | fast-check 4.10.2 (MIT), Hypothesis 6.169.0 (MPL-2.0), Go `testing/quick` hoặc `rapid`, jqwik (Java) | Logic phụ thuộc I/O |
 | Phụ thuộc thời gian | Fake clock tiêm vào, không `Date.now()` trực tiếp | `vi.useFakeTimers`, `jest.useFakeTimers`, `freezegun`/`time-machine` (Python, phiên bản **chưa xác minh**), Go `clock` interface | — |
 | Ngẫu nhiên | Seed cố định tiêm vào | `seedrandom`, `random.Random(seed)`, `rand.New(rand.NewSource(1))` | — |
@@ -70,7 +70,7 @@ updated: 2026-10-14
 
 | Công cụ | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
-| Vitest 5.0.4 / Jest 30.5.2 | `vitest run --coverage` · `jest --ci` | pre-commit (file liên quan) + CI | 0 fail |
+| Vitest 5.1.1 / Jest 30.5.2 | `vitest run --coverage` · `jest --ci` | pre-commit (file liên quan) + CI | 0 fail |
 | pytest 9.1.1 + `pytest-xdist` 3.8.0 + `pytest-socket` | `pytest -q -n auto -p randomly --disable-socket` | CI | 0 fail |
 | `go test` (Go 1.27) | `go test ./... -race -shuffle=on -count=1` | CI | 0 fail, 0 race |
 | JUnit 6.1.3 | `mvn -q test` / `gradle test` | CI | 0 fail |
@@ -80,7 +80,7 @@ updated: 2026-10-14
 
 ## Nguồn
 
-- Phiên bản công cụ (registry, xác minh 2026-10-13): npm `vitest` 5.0.4, `jest` 30.5.2, `fast-check` 4.10.2; PyPI `pytest` 9.1.1, `hypothesis` 6.169.0 (2026-10-11), `pytest-xdist` 3.8.0, `ruff` 0.17.0; Go 1.27 (<https://endoflife.date/api/go.json>); JUnit 6.1.3 (<https://github.com/junit-team/junit-framework/releases>).
+- Phiên bản công cụ (registry, xác minh 2026-10-13; `vitest` 2026-11-24): npm `vitest` 5.1.1, `jest` 30.5.2, `fast-check` 4.10.2; PyPI `pytest` 9.1.1, `hypothesis` 6.169.0 (2026-10-11), `pytest-xdist` 3.8.0, `ruff` 0.17.0; Go 1.27 (<https://endoflife.date/api/go.json>); JUnit 6.1.3 (<https://github.com/junit-team/junit-framework/releases>).
 - fast-check: <https://fast-check.dev/> · Hypothesis: <https://hypothesis.readthedocs.io/> — tra cứu 2026-10-13 (phiên bản từ registry).
 - Khung cũ X-stored `quality-supplements.md` Nhóm 2 mục 6 "Chống lỗi logic" (bảng ca biên: rỗng, null vs 0, off-by-one, tiền, chia 0, UTC/DST, race, idempotency, stale response, all-or-nothing), commit `1b80fe4` — đọc 2026-10-13.
 - Catalog `www-donghanhcungban-org/stored` 13 §4b (fast-check trong quality gate stack của REA) — đọc 2026-10-13.

@@ -3,7 +3,7 @@ title: E2E & a11y: Playwright/axe, mobile, flaky, trace
 kind: module
 prefix: QA-E2E
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-10-31
+updated: 2026-11-24
 ---
 
 # E2E & a11y: Playwright/axe, mobile, flaky, trace
@@ -24,7 +24,7 @@ updated: 2026-10-31
 
 | Nền tảng | Mặc định (xác minh 2026-10-13) | Thay thế + điều kiện | Không dùng |
 |---|---|---|---|
-| Web | Playwright `@playwright/test` 1.64.0 (Apache-2.0) + `@axe-core/playwright` 4.13.0 (MPL-2.0); project `desktop` (Chromium) + `mobile` (Pixel/iPhone emulation) | Cypress khi đội đã có suite lớn; WebdriverIO khi cần Appium chung | Selenium thuần cho dự án mới |
+| Web | Playwright `@playwright/test` 1.65.1 (Apache-2.0) + `@axe-core/playwright` 4.13.0 (MPL-2.0); project `desktop` (Chromium) + `mobile` (Pixel/iPhone emulation) | Cypress khi đội đã có suite lớn; WebdriverIO khi cần Appium chung | Selenium thuần cho dự án mới |
 | Desktop (Electron/Tauri) | Playwright Electron API / Tauri WebDriver | WinAppDriver, XCUITest native khi app native | — |
 | Mobile native | XCUITest (iOS), Espresso/Compose UI test (Android) | Appium/Detox cho cross-platform; Maestro (phiên bản **chưa xác minh**) | Chỉ test trên simulator một kích thước |
 | Static site | Playwright smoke + `pa11y-ci` 5.0.0 (LGPL-3.0) cho nhiều URL | Lighthouse CI a11y category | — |
@@ -84,7 +84,7 @@ updated: 2026-10-31
 
 | Công cụ | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
-| `@playwright/test` 1.64.0 | `npx playwright test --grep @smoke` (PR) · `npx playwright test` (nightly) | CI job `e2e` | 0 fail, 0 flaky trong required |
+| `@playwright/test` 1.65.1 | `npx playwright test --grep @smoke` (PR) · `npx playwright test` (nightly) | CI job `e2e` | 0 fail, 0 flaky trong required |
 | `@axe-core/playwright` 4.13.0 | `new AxeBuilder({page}).withTags([...,'wcag22aa']).analyze()` | trong mọi spec `@smoke` | 0 `critical`/`serious` |
 | `eslint-plugin-playwright` (phiên bản **chưa xác minh**) | rule `no-wait-for-timeout`, `no-focused-test`, `prefer-web-first-assertions` | CI lint | 0 error |
 | `pa11y-ci` 5.0.0 | `pa11y-ci --sitemap https://staging/sitemap.xml` | CI nightly (static-site) | 0 error |
@@ -101,7 +101,7 @@ updated: 2026-10-31
 - Playwright sharding (`--shard=x/y`, blob reporter + `merge-reports`, `fullyParallel` để shard cân bằng theo từng test, ví dụ ma trận `fail-fast: false`): <https://playwright.dev/docs/test-sharding> — xác minh 2026-10-18. Trang không nêu phiên bản cho blob reporter/`merge-reports` (chưa xác minh phiên bản).
 - Playwright auth (`storageState`, project `setup` + `dependencies`, thư mục `playwright/.auth` vào `.gitignore`): <https://playwright.dev/docs/auth> — xác minh 2026-10-18.
 - Playwright parallelism (`fullyParallel`, `--max-failures`/`maxFailures`; trang không nêu số `workers` mặc định): <https://playwright.dev/docs/test-parallel> — xác minh 2026-10-18.
-- Phiên bản (npm, xác minh 2026-10-13): `@playwright/test` 1.64.0, `@axe-core/playwright` 4.13.0, `pa11y-ci` 5.0.0.
+- Phiên bản (npm, xác minh 2026-10-13; `@playwright/test` 2026-11-24): `@playwright/test` 1.65.1, `@axe-core/playwright` 4.13.0, `pa11y-ci` 5.0.0.
 - Lighthouse CI commit cuối 2025-06-26: <https://github.com/GoogleChrome/lighthouse-ci/commits/main> — xác minh 2026-10-13
 - WCAG 2.2: <https://www.w3.org/TR/WCAG22/> — xác minh 2026-10-13
 - Catalog `www-donghanhcungban-org/stored` 23 §2.5 (Playwright CI: `workers: 4` đo 80/150s, cache browser −29s, `retries: 2`, `trace: on-first-retry`, desktop+mobile+axe), 11 (agent browser, telemetry) — đọc 2026-10-13.
