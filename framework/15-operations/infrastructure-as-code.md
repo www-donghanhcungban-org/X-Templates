@@ -29,7 +29,7 @@ updated: 2026-11-02
 | IaC bằng ngôn ngữ lập trình | **Pulumi** (Apache-2.0; TS/Python/Go/.NET) khi đội mạnh lập trình và cần logic phức tạp/test đơn vị | CDK/CDKTF khi khoá một cloud; vẫn xuất plan trước apply |
 | Dev/local và dự án S | **Docker Compose** (`compose.yaml`) cho stack local; `.env.example` không giá trị thật | Compose cho production chỉ với 1 máy, có backup/monitor; ≥ M → managed container/K8s qua IaC |
 | Kubernetes manifest | Helm/Kustomize commit trong repo, deploy qua GitOps (Argo CD/Flux) | `kubectl apply` tay chỉ ở dev |
-| Policy-as-code | **checkov** 3.3.28 (Apache-2.0) cho Terraform/K8s/Dockerfile/CloudFormation + **conftest** v0.71.1 (Rego) cho rule riêng | Trivy `config` nếu đã dùng Trivy; OPA Gatekeeper/Kyverno trong cluster cho admission |
+| Policy-as-code | **checkov** 3.4.8 (Apache-2.0) cho Terraform/K8s/Dockerfile/CloudFormation + **conftest** v0.71.1 (Rego) cho rule riêng | Trivy `config` nếu đã dùng Trivy; OPA Gatekeeper/Kyverno trong cluster cho admission |
 | State backend | Object storage có versioning + mã hoá + khoá (S3+DynamoDB, GCS, Azure Blob) hoặc HCP/Spacelift/env0 | Local state **chỉ** cho thử nghiệm bỏ đi |
 | Drift | Job lịch `plan -detailed-exitcode` → cảnh báo khi exit 2; hoặc dịch vụ drift detection | Với K8s GitOps: Argo CD/Flux tự báo OutOfSync |
 | Chi phí trước apply | Infracost (Apache-2.0) comment ước tính chi phí vào PR | Bỏ qua ở S; bắt buộc ≥ M (xem [`cost-management.md`](cost-management.md)) |
@@ -76,7 +76,7 @@ updated: 2026-11-02
 |---|---|---|---|---|
 | Format/validate | `tofu fmt -check -recursive`; `tofu validate`; `pulumi preview` | — | pre-commit + CI | lỗi = đỏ |
 | Lint | tflint (MPL-2.0); hadolint (GPL-3.0); `docker compose config -q` | — | pre-commit + CI | lỗi = đỏ |
-| Policy trên code | checkov 3.3.28 (Apache-2.0) | `checkov -d infra --framework terraform,kubernetes,dockerfile,helm` | CI PR | HIGH/CRITICAL = đỏ |
+| Policy trên code | checkov 3.4.8 (Apache-2.0) | `checkov -d infra --framework terraform,kubernetes,dockerfile,helm` | CI PR | HIGH/CRITICAL = đỏ |
 | Policy trên plan | conftest v0.71.1 (Apache-2.0) | `tofu show -json plan.tfplan > plan.json && conftest test plan.json -p policy/` | CI PR | deny = đỏ |
 | Plan trong PR | CI job + comment | `tofu plan -out=plan.tfplan -detailed-exitcode` | CI PR | destroy tài nguyên dữ liệu → cần label duyệt |
 | Apply | CI job với OIDC + environment approval | `tofu apply plan.tfplan` | sau merge | chỉ từ CI |
@@ -90,7 +90,7 @@ updated: 2026-11-02
 - OpenTofu v1.13.1, license MPL-2.0 (LICENSE repo), dưới Linux Foundation: <https://github.com/opentofu/opentofu/releases/latest>, <https://github.com/opentofu/opentofu/blob/main/LICENSE>, <https://opentofu.org/> — xác minh 2026-10-13.
 - Terraform license Business Source License 1.1: <https://github.com/hashicorp/terraform/blob/main/LICENSE> — xác minh 2026-10-13; Terraform state locking & `force-unlock`: <https://developer.hashicorp.com/terraform/language/state/locking> — xác minh 2026-10-13.
 - Pulumi Apache-2.0: <https://github.com/pulumi/pulumi/blob/master/LICENSE> — xác minh 2026-10-13.
-- checkov 3.3.28 (Apache-2.0): <https://pypi.org/pypi/checkov/json>; conftest v0.71.1: <https://github.com/open-policy-agent/conftest/releases/latest> — xác minh 2026-10-13 (trang GitHub không hiện năm).
+- checkov 3.4.8 (Apache-2.0): <https://pypi.org/pypi/checkov/json>; conftest v0.71.1: <https://github.com/open-policy-agent/conftest/releases/latest> — xác minh 2026-10-13 (trang GitHub không hiện năm; checkov xác minh lại 2026-11-24).
 - endoflife.date: Terraform 1.13 EOL 2026-04-29, 1.14 EOL 2026-08-26; OpenTofu 1.10 EOL 2026-09-30, 1.11 EOL 2026-08-19, 1.12 EOL 2027-02-01, 1.13 EOL 2027-08-01: <https://endoflife.date/api/terraform.json>, <https://endoflife.date/api/opentofu.json> — xác minh 2026-10-13.
 - CIS Benchmarks (cloud): <https://www.cisecurity.org/cis-benchmarks> — xác minh 2026-10-13.
 - GitHub Actions security hardening (OIDC, environment): <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions> — xác minh 2026-10-13.

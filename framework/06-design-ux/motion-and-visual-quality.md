@@ -3,7 +3,7 @@ title: Chuyển động, hình ảnh, chống 'AI slop', kiểm bằng máy
 kind: module
 prefix: UX-VISUAL
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Chuyển động, hình ảnh, chống 'AI slop', kiểm bằng máy
@@ -63,9 +63,10 @@ updated: 2026-10-14
 - [ ] `UX-VISUAL-013` **SHOULD** Chuyển trang/animation không làm giảm INP: không chặn main thread > 50 ms khi animation chạy. → Kiểm: Lighthouse TBT, DevTools Performance recording trên luồng chính; web-vitals INP p75 ≤ 200 ms (xem [`../07-frontend/performance-web-vitals.md`](../07-frontend/performance-web-vitals.md)).
 - [ ] `UX-VISUAL-014` **SHOULD** Mobile native tôn trọng Reduce Motion của hệ (`UIAccessibility.isReduceMotionEnabled`, `Settings.Global.ANIMATOR_DURATION_SCALE`). → Kiểm: UI test bật Reduce Motion → không parallax/zoom. · Nguồn: Apple HIG Accessibility
 - [ ] `UX-VISUAL-015` **SHOULD** Ảnh có `width`/`height` hoặc `aspect-ratio` để không gây CLS; LCP image không lazy. → Kiểm: Lighthouse `unsized-images` = 0; CLS ≤ 0.1.
-- [ ] `UX-VISUAL-016` **MAY** Dùng View Transitions API cho chuyển trang/danh sách với fallback không animation. → Kiểm: `document.startViewTransition` được feature-detect.
+- [ ] `UX-VISUAL-016` **MAY** Dùng View Transitions API cho chuyển trang/danh sách với fallback không animation. → Kiểm: `document.startViewTransition` được feature-detect. · Ghi chú: Baseline newly available từ 2025-10-14 (WebStatus), cần fallback.
 - [ ] `UX-VISUAL-017` **MAY** Thư viện animation JS chỉ nạp lazy ở route cần. → Kiểm: bundle analyzer: `motion` không nằm trong chunk đầu.
 - [ ] `UX-VISUAL-018` **MAY** Storyboard/luật chuyển động viết trong `docs/MOTION.md` (mục đích, thời lượng, easing cho từng loại). → Kiểm: file tồn tại và token motion trỏ về nó.
+- [ ] `UX-VISUAL-019` **MAY** Dự án xuất video kiểm tiêu chí chớp nháy WCAG 2.3.1 (không quá ba lần chớp trong một giây) trên clip đã render, ghi rõ giới hạn của cách đo (không thay phân tích chuyên dụng). Đo cần giải mã video: công cụ ngoài. Liên hệ `UX-VISUAL-002`, `UX-A11Y-015`. → Kiểm: báo cáo đo kèm clip; hoặc review thủ công có ghi người và ngày. · Nguồn: WCAG 2.3.1 (W3C)
 
 ## Bẫy thường gặp
 

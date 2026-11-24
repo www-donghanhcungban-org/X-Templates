@@ -92,7 +92,7 @@ updated: 2026-11-24
 
 | Việc kiểm | Công cụ (giấy phép; xác minh 2026-10-13) | Lệnh/cấu hình | Đặt ở | Ngưỡng |
 |---|---|---|---|---|
-| SBOM + license | syft v1.54.0 (Apache-2.0) hoặc `@cyclonedx/cyclonedx-npm` 6.0.1 (Apache-2.0) | `syft dir:. -o cyclonedx-json > sbom.cdx.json` | CI build | license null ≤ 1% |
+| SBOM + license | syft v1.57.2 (2026-11-16) (Apache-2.0) hoặc `@cyclonedx/cyclonedx-npm` 6.0.1 (Apache-2.0) | `syft dir:. -o cyclonedx-json > sbom.cdx.json` | CI build | license null ≤ 1% |
 | Cổng license JS/TS | `license-checker-rseidelsohn` 5.0.1 (BSD-3-Clause) | `license-checker-rseidelsohn --failOn "AGPL-3.0;SSPL-1.0;UNLICENSED"` | CI (PR) | 0 vi phạm |
 | Cổng license Python | `pip-licenses` 5.5.5 (MIT) | `pip-licenses --fail-on="AGPL-3.0-only;AGPL-3.0-or-later"` | CI | 0 |
 | Cổng license Rust/Go | `cargo-deny` (MIT/Apache-2.0) · `go-licenses` (Apache-2.0) — (chưa xác minh phiên bản: GitHub API trả 403 ngày 2026-10-13) | `cargo deny check licenses` · `go-licenses check ./...` | CI | 0 |
@@ -111,7 +111,7 @@ updated: 2026-11-24
 - Luật BVQLNTD 19/2023/QH15 và NĐ 55/2024/NĐ-CP (hợp đồng mẫu, hiệu lực 01/07/2024): <https://moit.gov.vn/tin-tuc/bao-chi-voi-nguoi-dan/cac-van-ban-quy-pham-phap-luat-ve-bao-ve-quyen-loi-nguoi-tieu-dung-co-hieu-luc-tu-ngay-01-7-2024.html> — xác minh 2026-10-13.
 - NĐ 147/2024/NĐ-CP (25/12/2024) Đ.36: <https://lsvn.vn/quy-dinh-moi-ve-quan-ly-trang-thong-tin-dien-tu-mang-xa-hoi-a150603.html> — nguồn thứ cấp, 2026-10-13.
 - EU AI Act Art. 53 (GPAI: bản quyền, tóm tắt dữ liệu): xem [`ai-regulation.md`](ai-regulation.md); Directive (EU) 2019/790 Art. 4 (TDM opt-out) — (chưa xác minh trực tiếp EUR-Lex ngày 2026-10-13).
-- Phiên bản công cụ (registry, 2026-10-13): scancode-toolkit 32.5.0 <https://pypi.org/pypi/scancode-toolkit/json>; pip-licenses 5.5.5 <https://pypi.org/pypi/pip-licenses/json>; reuse 6.2.0 <https://pypi.org/pypi/reuse/json>; license-checker-rseidelsohn 5.0.1 <https://registry.npmjs.org/license-checker-rseidelsohn/latest>; @cyclonedx/cyclonedx-npm 6.0.1 <https://registry.npmjs.org/@cyclonedx/cyclonedx-npm/latest>; syft v1.54.0 <https://github.com/anchore/syft/releases>.
+- Phiên bản công cụ (registry, 2026-10-13; syft 2026-11-24): scancode-toolkit 32.5.0 <https://pypi.org/pypi/scancode-toolkit/json>; pip-licenses 5.5.5 <https://pypi.org/pypi/pip-licenses/json>; reuse 6.2.0 <https://pypi.org/pypi/reuse/json>; license-checker-rseidelsohn 5.0.1 <https://registry.npmjs.org/license-checker-rseidelsohn/latest>; @cyclonedx/cyclonedx-npm 6.0.1 <https://registry.npmjs.org/@cyclonedx/cyclonedx-npm/latest>; syft v1.57.2 (2026-11-16) <https://github.com/anchore/syft/releases>.
 - Nghiên cứu nền: `research/2026-10-13-stored-catalog-extraction.md` §2.6 (SBOM + cổng license, exception có `approved_by`/`expires`), §3 (bẫy license không OSI, repo không LICENSE).
 - `gitleaks-action` LICENSE.txt (EULA độc quyền; Organization Account cần `GITLEAKS_LICENSE`): <https://raw.githubusercontent.com/gitleaks/gitleaks-action/master/LICENSE.txt> — xác minh 2026-10-21 qua `research/2026-10-21-next-level-speed-automation-quality.md` §4.2 (CL-9).
 - Catalog `www-donghanhcungban-org/stored` 19 §1b (OpenCreator/KrillinAI đổi GPL-3.0 → Apache-2.0 trên mã nhiều tác giả, không CLA/DCO) — đọc 2026-10-15.

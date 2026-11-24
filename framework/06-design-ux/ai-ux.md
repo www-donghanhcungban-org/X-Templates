@@ -3,7 +3,7 @@ title: UX cho tính năng AI: minh bạch, streaming, xác nhận, sửa sai
 kind: module
 prefix: UX-AI
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo, ai-agent, agentic-system, data-ml]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # UX cho tính năng AI: minh bạch, streaming, xác nhận, sửa sai
@@ -60,6 +60,8 @@ updated: 2026-11-04
 - [ ] `UX-AI-018` **SHOULD** Thay đổi hành vi mô hình (đổi phiên bản, đổi prompt hệ thống) được thông báo cho người dùng khi ảnh hưởng kết quả. → Kiểm: changelog trong sản phẩm có mục AI; test eval trước khi đổi. · Nguồn: HAX G18
 - [ ] `UX-AI-019` **MAY** Cho người dùng chỉnh "giọng/độ dài/ngôn ngữ" của output qua tuỳ chọn thay vì phải viết prompt. → Kiểm: tuỳ chọn tồn tại trong UI và được truyền vào request.
 - [ ] `UX-AI-020` **MAY** Ngừng dùng 2026-11-04 — gộp vào [`CMP-AI-017`](../16-compliance-privacy/ai-regulation.md) (nay SHOULD): media AI tạo gắn Content Credentials (C2PA) ngoài nhãn nhìn thấy, ký sau bước nén cuối, kèm watermark ẩn.
+- [ ] `UX-AI-021` **SHOULD** UI do model sinh (generative UI) chọn một trong ba mức: chỉ hiển thị dữ liệu · ghép từ danh mục thành phần cho phép · mã tuỳ ý trong sandbox. Mức ba cần sandbox và CSP chặt; đặc tả UI do model sinh đi qua JSON Schema; liên kết chỉ qua allowlist; không tự GET URL do model sinh. Liên hệ `UX-AI-007` (output AI là dữ liệu không tin cậy), `FE-SEC-001` (DOM sink). → Kiểm: bộ test đặc tả xấu (script, URL ngoài allowlist, trường lạ) bị từ chối. · Nguồn: đề xuất skill `guarding-generative-ui` của catalog stored (PLAYBOOK §5.3), chưa đối chiếu nguồn gốc; [`../12-security/ai-security.md`](../12-security/ai-security.md) `SEC-AI-004`, `SEC-AI-015` (LLM10 Improper Output Handling)
+- [ ] `UX-AI-022` **SHOULD** Hành động agent chạy nền có nhật ký người dùng xem được, dừng được và đảo được; hành động không hoàn tác được thì bắt buộc xem trước (`UX-AI-004` Intent Preview). Mức tự chủ chỉnh được (hỏi mỗi lần / hỏi một lần / tự động) là gợi ý, có thể áp dụng tuỳ rủi ro. → Kiểm: E2E — bật chế độ nền, có mục nhật ký cho mỗi hành động, nút dừng và hoàn tác hoạt động. · Nguồn: Smashing Magazine 2026-02 "Designing for Agentic AI"; arXiv 2506.12469 (bài viết và bản thảo, chưa phải chuẩn; thứ cấp, đọc 2026-11-24)
 
 ## Bẫy thường gặp
 

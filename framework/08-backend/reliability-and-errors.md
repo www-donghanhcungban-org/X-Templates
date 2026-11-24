@@ -3,7 +3,7 @@ title: Độ tin cậy: timeout, retry, graceful shutdown, health, rate limit
 kind: module
 prefix: BE-REL
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Độ tin cậy: timeout, retry, graceful shutdown, health, rate limit
@@ -95,5 +95,5 @@ updated: 2026-10-14
 - draft-inadarei-api-health-check-06 — **Expired** (2021-10-16), không dùng làm chuẩn: <https://datatracker.ietf.org/doc/draft-inadarei-api-health-check/> — xác minh 2026-10-13
 - gRPC Deadlines (propagation): <https://grpc.io/docs/guides/deadlines/> — xác minh 2026-10-13
 - OWASP REST Security Cheat Sheet (giới hạn kích thước request 413): <https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html> — xác minh 2026-10-13
-- Phiên bản framework (npm/PyPI/endoflife.date, xác minh 2026-10-13): @nestjs/core 12.1.3, fastify 5.12.6, express 5.3.0, hono 4.13.13, fastapi 0.143.0, django 6.1.2 (5.2 LTS EOL 2028-04-30), Spring Boot 4.1.1 (3.5 EOL 2026-06-30 đã qua), Go 1.27.2 (1.25 EOL 2026-08-19 đã qua), Node 24 LTS (active support tới 2026-10-20), Python: hồ sơ [`../02-profiles/api-service.md`](../02-profiles/api-service.md) khuyến nghị 3.14.x tới khi có 3.15.1 (3.15.0 ra 2026-10-09; 3.13 hết full support 2026-10-01).
+- Phiên bản framework (npm/PyPI/endoflife.date, xác minh 2026-10-13; django/Spring Boot/Go/Node/Python xác minh 2026-11-24): @nestjs/core 12.1.3, fastify 5.12.6, express 5.3.0, hono 4.13.13, fastapi 0.143.0, django 6.1.3 (5.2 LTS EOL 2028-04-30), Spring Boot 4.2.0 (phát hành 2026-11-20, EOL 2027-12-31; 4.1.3; 3.5 chỉ còn hỗ trợ trả phí, EOL mã nguồn mở 2026-06-30), Go 1.27.4 (và 1.26.11; 1.25 EOL 2026-08-19 đã qua), Node 26 LTS từ 2026-10-28 (hỗ trợ tới 2027-10-27, EOL 2029-04-30), Node 24 đã sang Maintenance (hết Active 2026-10-20, EOL 2028-04-30), Python: hồ sơ [`../02-profiles/api-service.md`](../02-profiles/api-service.md) khuyến nghị 3.15.2 (ra 2026-10-25, hỗ trợ đầy đủ tới 2028-10-09, EOL 2031-10-31); 3.14.10 (EOL 2030-10-31); 3.13 hết full support 2026-10-01 (EOL 2029-10-31).
 - `research/2026-10-13-stored-catalog-extraction.md` §4 (body 2 MB, 8 đồng thời; cooldown gateway 401→300 s, 429→3600 s, `Retry-After` thắng); catalog `23-own-repos-lessons` §5, §8.1.

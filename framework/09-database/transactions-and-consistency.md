@@ -3,7 +3,7 @@ title: Giao dịch, cô lập, khoá, idempotency, tính nhất quán
 kind: module
 prefix: DB-TX
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, mobile-app, desktop-app, embedded-iot]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Giao dịch, cô lập, khoá, idempotency, tính nhất quán
@@ -95,7 +95,7 @@ updated: 2026-10-14
 
 ## Nguồn
 
-- PostgreSQL 18 docs: §13.2 Transaction Isolation (Read Committed mặc định; RR/Serializable phải retry `40001`; READ ONLY DEFERRABLE) <https://www.postgresql.org/docs/current/transaction-iso.html>; §13.3 Explicit Locking (deadlock, advisory lock session/transaction, LIMIT caveat) <https://www.postgresql.org/docs/current/explicit-locking.html>; SELECT locking clause (`FOR UPDATE`, `NOWAIT`, `SKIP LOCKED` cho queue-like table) <https://www.postgresql.org/docs/current/sql-select.html>; SET CONSTRAINTS <https://www.postgresql.org/docs/current/sql-set-constraints.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: §13.2 Transaction Isolation (Read Committed mặc định; RR/Serializable phải retry `40001`; READ ONLY DEFERRABLE) <https://www.postgresql.org/docs/18/transaction-iso.html>; §13.3 Explicit Locking (deadlock, advisory lock session/transaction, LIMIT caveat) <https://www.postgresql.org/docs/18/explicit-locking.html>; SELECT locking clause (`FOR UPDATE`, `NOWAIT`, `SKIP LOCKED` cho queue-like table) <https://www.postgresql.org/docs/18/sql-select.html>; SET CONSTRAINTS <https://www.postgresql.org/docs/18/sql-set-constraints.html> — xác minh 2026-10-13.
 - MySQL 8.4 InnoDB transaction isolation levels (REPEATABLE READ mặc định, gap/next-key lock): <https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html> — xác minh 2026-10-13.
 - MongoDB transactions (4.0 replica set / 4.2 sharded; ưu tiên schema atomic đơn document): <https://www.mongodb.com/docs/manual/core/transactions/> — xác minh 2026-10-13 (giới hạn 60 s: **chưa xác minh** trên trang đó).
 - Catalog `www-donghanhcungban-org/stored` 23 §4.1 (SePay VietQR webhook HMAC + idempotent), 21 §8 (outbox/reconcile) — đọc 2026-10-13.

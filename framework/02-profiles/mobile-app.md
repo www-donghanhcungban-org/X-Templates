@@ -4,7 +4,7 @@ kind: profile
 slug: mobile-app
 prefix: PRF-MOB
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-10-30
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Ứng dụng di động (iOS/Android, native & cross-platform)
@@ -54,7 +54,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**; mốc
 | Crash/perf | Sentry React Native | 8.30.0 | Firebase Crashlytics (chưa xác minh phiên bản); luôn kèm Android vitals + Xcode Organizer/MetricKit |
 | Push | APNs + FCM | — | Expo Notifications bọc cả hai (chưa xác minh phiên bản) |
 | Web view/hybrid | Capacitor | `@capacitor/core` 8.5.3 | Chỉ khi web app có sẵn và cần phát hành store nhanh; vẫn phải qua PRF-MOB-001…006 |
-| Runtime CI | Node 24 LTS | 24.21.0 | xem [`web-app.md`](web-app.md) |
+| Runtime CI | Node 24 LTS | 24.22.3 | xem [`web-app.md`](web-app.md) |
 
 ## Checklist
 

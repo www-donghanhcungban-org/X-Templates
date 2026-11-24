@@ -3,7 +3,7 @@ title: Chiến lược kiểm thử: tháp, mức bao phủ, cổng, trách nhi�
 kind: module
 prefix: QA-STRAT
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Chiến lược kiểm thử: tháp, mức bao phủ, cổng, trách nhiệm
@@ -117,7 +117,7 @@ Hiệu năng, bảo mật, độ tin cậy **không phải tầng của tháp**:
 | Công cụ | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
 | `scripts/dev-task.sh test` (đọc `xt.yaml`) | `scripts/dev-task.sh test` | pre-commit (tập `quick`) + CI (đầy đủ) | exit 0 |
-| Vitest 5.0.4 / Jest 30.5.2 / pytest 9.1.1 / `go test` (Go 1.27) / JUnit 6.1.3 | `vitest run` · `pytest -q` · `go test ./... -shuffle=on -race` · `mvn test` | CI | 0 fail |
+| Vitest 5.1.1 / Jest 30.5.2 / pytest 9.1.1 / `go test` (Go 1.27) / JUnit 6.1.3 | `vitest run` · `pytest -q` · `go test ./... -shuffle=on -race` · `mvn test` | CI | 0 fail |
 | Lint test | ESLint `eslint-plugin-vitest`/`jest` rule `no-focused-tests`, `no-disabled-tests`; `pytest --strict-markers` | CI | 0 vi phạm |
 | Shuffle/isolation | `pytest -p randomly` · `vitest --sequence.shuffle` · `go test -shuffle=on` | CI nightly | xanh |
 | Thời gian job | GitHub Actions `timeout-minutes: 15` cho job PR | CI | không timeout |
@@ -125,7 +125,7 @@ Hiệu năng, bảo mật, độ tin cậy **không phải tầng của tháp**:
 
 ## Nguồn
 
-- Phiên bản công cụ (registry, xác minh 2026-10-13): `vitest` 5.0.4, `jest` 30.5.2 (npm); `pytest` 9.1.1 (PyPI, 2026-06-19); Go 1.27 (<https://endoflife.date/api/go.json>, 2026-08-19); JUnit 6.1.3 (<https://github.com/junit-team/junit-framework/releases>, 07/08, năm không hiện).
+- Phiên bản công cụ (registry, xác minh 2026-10-13; `vitest` 2026-11-24): `vitest` 5.1.1, `jest` 30.5.2 (npm); `pytest` 9.1.1 (PyPI, 2026-06-19); Go 1.27 (<https://endoflife.date/api/go.json>, 2026-08-19); JUnit 6.1.3 (<https://github.com/junit-team/junit-framework/releases>, 07/08, năm không hiện).
 - Playwright test configuration (`forbidOnly`, `retries`, `workers`, `trace`): <https://playwright.dev/docs/test-configuration> — xác minh 2026-10-13
 - Catalog `www-donghanhcungban-org/stored` mục 07 (claim matrix, negative control, record/replay), 23 §2.5 (gate aggregator, CI advisory), 23 §3.3 (`runtime.yaml`, `ci_guard.py`) — đọc 2026-10-13; `research/2026-10-13-stored-catalog-extraction.md` §2.4, §2.7.
 - Khung cũ X-stored `quality-supplements.md` Nhóm 2 mục 4 (E2E luồng chính, dữ liệu test tất định), commit `1b80fe4`.

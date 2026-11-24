@@ -4,7 +4,7 @@ kind: profile
 slug: desktop-app
 prefix: PRF-DESK
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Ứng dụng desktop (Electron/Tauri/native)
@@ -42,7 +42,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 |---|---|---|---|
 | Khung | Tauri 2 (Rust lõi + WebView hệ thống) | `tauri` crate 2.12.3; `@tauri-apps/cli` 2.12.2; Rust 1.99.0 | Electron 44.7.0 (EOL 2027-03-02; dòng 42 EOL 2026-10-20; chỉ 3 dòng mới nhất được vá) khi cần Chromium đồng nhất, module Node native hoặc đội Node thuần |
 | Native thuần | Swift/SwiftUI (macOS), WinUI 3/.NET (Windows), GTK/Qt (Linux) | Swift 6.4.1; .NET/WinUI chưa xác minh phiên bản | Khi chỉ 1 OS và cần tích hợp sâu nhất |
-| UI | React 19.3.0 / Svelte 5.57.2 + Vite 8.3.4 + TypeScript 7.0.2 | — | Theo kỹ năng đội; tokens xem [`../06-design-ux/design-system-and-tokens.md`](../06-design-ux/design-system-and-tokens.md) |
+| UI | React 19.3.1 / Svelte 5.57.2 + Vite 8.3.8 + TypeScript 7.0.2 | — | Theo kỹ năng đội; tokens xem [`../06-design-ux/design-system-and-tokens.md`](../06-design-ux/design-system-and-tokens.md) |
 | Đóng gói Electron | electron-builder | 26.15.3 (`electron-updater` 6.8.9) | Electron Forge `@electron-forge/cli` 8.0.1 (chính chủ) |
 | Đóng gói Tauri | `tauri bundle` (msi/nsis, dmg/app, AppImage/deb/rpm) | theo CLI 2.12.2 | — |
 | Ký Windows | Authenticode qua Azure Artifact Signing (tên mới của Trusted Signing; HSM FIPS 140-3 L3) hoặc EV cert trên token | — | `signtool` + cert OV/EV tự quản (chưa xác minh giá/điều kiện) |
@@ -52,7 +52,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 | Unit test | Vitest (UI) + `cargo test` (lõi) | 5.0.4 | Jest 30.5.2 |
 | E2E | Playwright (Electron qua `_electron`), WebDriver (`tauri-driver`) cho Tauri | Playwright 1.64.0; `tauri-driver` chưa xác minh phiên bản | — |
 | Lint | Biome 2.5.15 + `cargo clippy`/`cargo deny` 0.20.2 | — | oxlint 1.87.0 |
-| Node CI | 24 LTS | 24.21.0 | — |
+| Node CI | 24 LTS | 24.22.3 | — |
 
 ## Checklist
 

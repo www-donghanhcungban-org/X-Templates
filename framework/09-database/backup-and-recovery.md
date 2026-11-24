@@ -3,7 +3,7 @@ title: Sao lưu, khôi phục, PITR, diễn tập, RPO/RTO
 kind: module
 prefix: DB-BACKUP
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, mobile-app, desktop-app, embedded-iot]
-updated: 2026-11-02
+updated: 2026-11-24
 ---
 
 # Sao lưu, khôi phục, PITR, diễn tập, RPO/RTO
@@ -92,7 +92,7 @@ Mục tiêu tham chiếu (đội tự chốt và ghi vào `docs/ops/RPO-RTO.md`)
 
 ## Nguồn
 
-- PostgreSQL 18 docs: §25 Backup and Restore <https://www.postgresql.org/docs/current/backup.html>; §25.3 Continuous Archiving and PITR (archive_command không ghi đè, pg_wal đầy → PANIC, kiểm dữ liệu sau recovery, config ngoài WAL) <https://www.postgresql.org/docs/current/continuous-archiving.html>; pg_dump (không phải lựa chọn cho backup production thường xuyên; `-Fc`, `-Fd -j`) <https://www.postgresql.org/docs/current/app-pgdump.html>; pg_upgrade <https://www.postgresql.org/docs/current/pgupgrade.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: §25 Backup and Restore <https://www.postgresql.org/docs/18/backup.html>; §25.3 Continuous Archiving and PITR (archive_command không ghi đè, pg_wal đầy → PANIC, kiểm dữ liệu sau recovery, config ngoài WAL) <https://www.postgresql.org/docs/18/continuous-archiving.html>; pg_dump (không phải lựa chọn cho backup production thường xuyên; `-Fc`, `-Fd -j`) <https://www.postgresql.org/docs/18/app-pgdump.html>; pg_upgrade <https://www.postgresql.org/docs/18/pgupgrade.html> — xác minh 2026-10-13.
 - NIST SP 800-34 Rev.1 (Contingency Planning Guide, 2010) — định nghĩa RPO/RTO: <https://csrc.nist.gov/glossary/term/recovery_point_objective>, <https://csrc.nist.gov/glossary/term/recovery_time_objective> — xác minh 2026-10-13.
 - pgBackRest 2.59.3 MIT: <https://pgbackrest.org/>, <https://formulae.brew.sh/api/formula/pgbackrest.json>; WAL-G 3.0.9 Apache-2.0: <https://formulae.brew.sh/api/formula/wal-g.json> — xác minh 2026-10-13.
 - MySQL 8.4 §9.5 Point-in-Time Recovery: <https://dev.mysql.com/doc/refman/8.4/en/point-in-time-recovery.html> — xác minh 2026-10-13.

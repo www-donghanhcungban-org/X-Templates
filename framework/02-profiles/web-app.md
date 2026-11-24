@@ -4,7 +4,7 @@ kind: profile
 slug: web-app
 prefix: PRF-WEB
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-10-30
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Ứng dụng web
@@ -41,11 +41,11 @@ Phiên bản lấy từ registry/endoflife.date ngày **2026-10-13** — **xác 
 
 | Thành phần | Mặc định | Phiên bản (xác minh 2026-10-13) | Thay thế + điều kiện |
 |---|---|---|---|
-| Runtime | Node.js Active LTS | 24.21.0 (LTS từ 2025-10-28, Maintenance từ 2026-10-20, EOL 2028-04-30); Node 26.11.1 thành LTS **2026-10-28** — dự án bắt đầu sau ngày đó dùng 26 | Bun/Deno khi đội đã dùng và framework hỗ trợ chính thức (chưa xác minh phiên bản) |
+| Runtime | Node.js Active LTS | 24.22.3 (LTS từ 2025-10-28, Maintenance từ 2026-10-20, EOL 2028-04-30); Node 26.11.1 thành LTS **2026-10-28** — dự án bắt đầu sau ngày đó dùng 26 | Bun/Deno khi đội đã dùng và framework hỗ trợ chính thức (chưa xác minh phiên bản) |
 | Ngôn ngữ | TypeScript `strict` | 7.0.2 (TS 7 GA 2026-07-08, bản native) | Giữ 6.x nếu tooling chưa hỗ trợ 7 — kiểm `tsc` chạy được trong CI trước khi nâng |
-| Framework full-stack | Next.js App Router | 16.4.0 (dòng 15 EOL 2026-10-21) | Nuxt 4.6.1 (Vue 3.5.43) khi đội Vue; SvelteKit 3.0.1 (Svelte 5.57.2) khi cần bundle nhỏ; React Router 8.4.0 + Vite 8.3.4 khi không cần SSR tích hợp |
-| UI lib | React | 19.3.0 | Vue/Svelte theo framework đã chọn |
-| CSS | Tailwind CSS + design tokens | 4.3.3 | CSS Modules/vanilla khi đội không muốn utility-first; tokens xem [`../06-design-ux/design-system-and-tokens.md`](../06-design-ux/design-system-and-tokens.md) |
+| Framework full-stack | Next.js App Router | 16.4.6 (dòng 15 EOL 2026-10-21) | Nuxt 4.6.1 (Vue 3.5.43) khi đội Vue; SvelteKit 3.0.1 (Svelte 5.57.2) khi cần bundle nhỏ; React Router 8.4.0 + Vite 8.3.8 khi không cần SSR tích hợp |
+| UI lib | React | 19.3.1 | Vue/Svelte theo framework đã chọn |
+| CSS | Tailwind CSS + design tokens | 4.3.5 | CSS Modules/vanilla khi đội không muốn utility-first; tokens xem [`../06-design-ux/design-system-and-tokens.md`](../06-design-ux/design-system-and-tokens.md) |
 | Validate runtime | Zod | 4.6.7 | Valibot khi cần bundle nhỏ (chưa xác minh phiên bản) |
 | Data fetching/state | TanStack Query | 5.104.2 | Server Components + cache framework khi đủ |
 | CSDL | PostgreSQL (xem [`../09-database/README.md`](../09-database/README.md)) | — | SQLite (Turso/litestream) cho quy mô S |

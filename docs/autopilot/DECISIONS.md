@@ -869,7 +869,21 @@
 - Lý do (tiêu chí chất lượng cuối): Tự động nhiều nhất mà không mất hàng rào: bậc A đã tự động toàn bộ vòng PR của khung; bậc B thêm một người rà độc lập với chi phí đặt trần; bậc C thêm theo dõi PR chỉ khi B cho thấy giá trị. Hiệu quả theo tuyên bố của Anthropic là số nội bộ không đối chứng nên chưa đủ căn cứ bật mọi thứ. Tài liệu chính thức cho thấy hook của dự án không áp dụng cho git và gh của lệnh ship, và approving review của Claude được tính là approval, nên phương án hai tạo đường merge ngoài kiểm soát của pr next. Bật dịch vụ trả phí là việc của người.
 - Đường lùi: Đổi ADR-0100 sang bậc khác và cập nhật mẫu cấu hình ở framework
 
-### D-566 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
+### D-566 · 2026-11-24T08:40:59+00:00 · Cập nhật dữ kiện lỗi thời của khung theo nghiên cứu nguồn sống thế nào?
+
+- Phương án: (1) Chỉ ghi số đã tra lại từ nguồn gốc, phần chưa xác minh để nhãn chưa xác minh, không đổi mức ID trừ khi có nguồn gốc · (2) Áp mọi đề xuất của báo cáo nghiên cứu kể cả mốc pháp lý từ nguồn thứ cấp
+- Chọn: Chỉ ghi số đã tra lại từ nguồn gốc, phần chưa xác minh để nhãn chưa xác minh, không đổi mức ID trừ khi có nguồn gốc
+- Lý do (tiêu chí chất lượng cuối): Luật P2 của khung: phiên bản và luật phải xác minh từ nguồn sống kèm ngày, không được thì ghi chưa xác minh. Các báo cáo đều tự nhận có phần dựa vào bản tóm tắt của mô hình nhỏ hoặc nguồn thứ cấp; khi tôi tra lại thì bắt được hai lẫn lộn (scorecard-action so với Scorecard CLI, hồ sơ api-service chưa theo Python 3.15.2). Mốc pháp lý EU AI Act sau Omnibus chỉ có bình luận pháp lý thứ cấp vì EUR-Lex không đọc được, nên không đưa vào khung và không hạ mức CMP-AI-012.
+- Đường lùi: git revert commit của PR; mọi số cũ nằm trong lịch sử
+
+### D-567 · 2026-11-24T08:58:10+00:00 · Đưa các ý KHUNG của catalog stored vào khung bằng ID mới ở mức nào?
+
+- Phương án: (1) Chỉ SHOULD hoặc MAY: SHOULD khi bổ sung trực tiếp cho một ID có sẵn và viện dẫn ID đó, MAY khi nguồn chỉ là đề xuất của catalog stored; không có MUST · (2) Đặt mức theo đề xuất của báo cáo rà soát, kể cả MUST cho một số ý
+- Chọn: Chỉ SHOULD hoặc MAY: SHOULD khi bổ sung trực tiếp cho một ID có sẵn và viện dẫn ID đó, MAY khi nguồn chỉ là đề xuất của catalog stored; không có MUST
+- Lý do (tiêu chí chất lượng cuối): Đa số ý chỉ có nguồn là đề xuất của catalog stored chưa đối chiếu nguồn gốc, nên không thể bắt buộc dự án đích. Mức theo quan hệ với ID có sẵn giúp SHOULD vẫn có căn cứ nội bộ, và mọi ID viện dẫn đã được máy kiểm là có thật. WF-CI-029 chỉ có nguồn stored và không bổ sung ID nào nên hạ xuống MAY. Riêng AI-PROTO-020 có nguồn chính thức (changelog MCP 2026-07-28) nhưng chỉ viết điều changelog nói.
+- Đường lùi: git revert commit của PR; ID chưa được ID nào khác viện dẫn ngược
+
+### D-568 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
 
 - Phương án: (1) Giữ ADR-0098: phiên chính lập PLAN/SPEC ở Fable, Haiku chỉ cho tra cứu chỉ đọc · (2) Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
 - Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật

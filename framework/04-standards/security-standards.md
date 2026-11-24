@@ -3,7 +3,7 @@ title: Tiêu chuẩn bảo mật (OWASP ASVS/MASVS/Top 10, NIST SSDF, CIS, ISO 2
 kind: standard
 prefix: STD-SEC
 applies_to: [all]
-updated: 2026-10-14
+updated: 2026-11-24
 ---
 
 # Tiêu chuẩn bảo mật (OWASP ASVS/MASVS/Top 10, NIST SSDF, CIS, ISO 27001)
@@ -39,7 +39,7 @@ Mặc định khuyến nghị: **ASVS 5.0.0 L2** cho mọi dự án M trở lên
 | OWASP Top 10 | **2025** (A01–A10:2025) | 2025 (trang không ghi ngày cụ thể) | <https://top10.owasp.org/2025> | Nhận thức + threat model web | Bảng A01..A10 → biện pháp trong `THREAT-MODEL.md`; scanner SARIF gắn CWE |
 | OWASP API Security Top 10 | **2023** | 2023 (không có bản mới hơn) | <https://api-security.owasp.org/> | API công khai/đối tác | Test authz theo API1 (BOLA) và API5 (BFLA) chạy trong CI |
 | OWASP LLM Top 10 | **2026** (mã đổi so với 2025) | 2026-08-04 (README repo GitHub chính chủ; genai.owasp.org trả 403) | <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> | Có LLM | Xem [`ai-standards.md`](ai-standards.md); bảng đổi mã ở [`../12-security/ai-security.md`](../12-security/ai-security.md) |
-| OWASP Agentic Top 10 (ASI01–10) | 2026 (bản đầu) | 2025-12-09 (theo `research/2026-10-13-ai-agent-research.md` §5.1; trang gốc 403 hôm nay) | <https://genai.owasp.org/> | Agent có tool | Xem [`ai-standards.md`](ai-standards.md) |
+| OWASP Agentic Top 10 (ASI01–10) | 2026 (bản đầu) | 2025-12-09 (theo `research/2026-10-13-ai-agent-research.md` §5.1; trang chính thức đọc được 2026-11-24; tên ASI05–ASI10 vẫn từ nguồn thứ cấp, cần PDF gốc (chưa xác minh)) | <https://genai.owasp.org/> | Agent có tool | Xem [`ai-standards.md`](ai-standards.md) |
 | OWASP MCP Top 10 | MCP01–10:**2025**, dự án ở **Phase 3 (beta)** | chưa final | <https://owasp.org/www-project-mcp-top-10/> | Có MCP server/client | Xem [`ai-standards.md`](ai-standards.md); không ghim làm chuẩn final |
 | NIST SP 800-218 SSDF | **1.1** | 2022-02-03 | <https://csrc.nist.gov/pubs/sp/800/218/final> | Quy trình phát triển (M+) | Bảng ánh xạ PO/PS/PW/RV → job CI có thật |
 | NIST SP 800-218A | bản final | 2024-07-26 | <https://csrc.nist.gov/pubs/sp/800/218/a/final> | Dùng/huấn luyện GenAI, dual-use model | Thêm hàng vào bảng SSDF |

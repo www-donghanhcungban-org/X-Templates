@@ -4,7 +4,7 @@ kind: profile
 slug: cli-tool
 prefix: PRF-CLI
 modules: [04-standards/*, 05-architecture/*, 08-backend/reliability-and-errors, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/observability, 15-operations/maintenance-and-lifecycle, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-10-18
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Công cụ dòng lệnh
@@ -41,7 +41,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**. Chọ
 | Thành phần | Mặc định | Phiên bản (xác minh 2026-10-13) | Thay thế + điều kiện |
 |---|---|---|---|
 | Ngôn ngữ (binary tĩnh) | Go | 1.27.2 (1.26.9 vẫn hỗ trợ) | Rust 1.99.0 khi cần hiệu năng/an toàn bộ nhớ tối đa |
-| Ngôn ngữ (hệ Node) | TypeScript 7.0.2 trên Node 24 LTS (24.21.0) | — | Bun single-file executable (chưa xác minh phiên bản) |
+| Ngôn ngữ (hệ Node) | TypeScript 7.0.2 trên Node 24 LTS (24.22.3) | — | Bun single-file executable (chưa xác minh phiên bản) |
 | Ngôn ngữ (Python) | Python 3.14.8 (3.15.0 vừa ra 2026-10-09 — né `x.0`) | — | — |
 | Parser argv | Go: `cobra` (chưa xác minh phiên bản) · Rust: `clap` 4.6.7 · TS: `commander` 15.0.0 · Python: `typer` 0.27.3 / `click` 8.5.0 | — | `@oclif/core` 5.1.7 khi CLI nhiều plugin; stdlib `flag`/`argparse` khi 1–2 lệnh |
 | Đóng gói/phát hành | Go: GoReleaser v2.18.3 (checksums SHA-256 mặc định) · Rust: `cargo-dist` 0.32.0 · TS: `tsdown` 0.23.1 (hoặc `tsup` 8.5.1) + npm · Python: `uv` 0.13.0 + `hatch` 1.18.1 | — | Nix/Homebrew formula sinh từ release |

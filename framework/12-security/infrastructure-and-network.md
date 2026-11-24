@@ -87,13 +87,13 @@ updated: 2026-11-24
 
 | Việc | Công cụ (license) | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|---|
-| IaC misconfig (IAM wildcard, cổng mở, public DB, IMDSv1) | checkov 3.3.28 (Apache-2.0) | `checkov -d infra --framework terraform,kubernetes,dockerfile` | CI PR | HIGH/CRITICAL = đỏ |
+| IaC misconfig (IAM wildcard, cổng mở, public DB, IMDSv1) | checkov 3.4.8 (Apache-2.0) | `checkov -d infra --framework terraform,kubernetes,dockerfile` | CI PR | HIGH/CRITICAL = đỏ |
 | Dockerfile/compose | hadolint (GPL-3.0) + conftest | `hadolint Dockerfile`; policy cấm `privileged`, `docker.sock` | pre-commit + CI | vi phạm = đỏ |
 | K8s manifest | kube-score / Pod Security Admission `restricted` | `kube-score score manifests/*.yaml`; namespace label enforce | CI + cluster | critical = đỏ; PSA từ chối pod |
 | Mật mã hậu lượng tử | `openssl s_client -connect host:443 -groups X25519MLKEM768` (OpenSSL ≥ 3.5) | Sau deploy, khi đổi stack TLS | bắt tay thành công hoặc lý do ghi trong kiểm kê (`SEC-INFRA-025`) |
 | TLS | testssl.sh (GPL-2.0) hoặc sslyze (AGPL-3.0) | `testssl.sh --severity HIGH https://host` | CI đêm + sau deploy | TLS 1.0/1.1 hoặc HIGH = đỏ |
 | CIS host/K8s/Docker | kube-bench, docker-bench-security (Apache-2.0) | theo lịch tuần | job lịch | Level 1 fail = ticket |
-| Image | OSV-Scanner v2.7.0 / Trivy (ghim SHA + checksum) | `osv-scanner scan image <ref>` | CI build | critical = đỏ |
+| Image | OSV-Scanner v2.7.1 (2026-11-09) / Trivy (ghim SHA + checksum) | `osv-scanner scan image <ref>` | CI build | critical = đỏ |
 | Egress/metadata/sandbox | test tích hợp `tests/sandbox/` | gọi domain ngoài allowlist, `169.254.169.254`, đọc ngoài workspace | CI job riêng | bất kỳ ca thành công = đỏ |
 | Loopback bridge | test khởi động + `ss -ltnp` | kiểm địa chỉ bind, `Host`/`Origin` lạ → 403 | job test | bind `0.0.0.0` không cờ = đỏ |
 | Cert expiry | exporter/cron | alert `cert_expiry_days < 14` | observability | cảnh báo |

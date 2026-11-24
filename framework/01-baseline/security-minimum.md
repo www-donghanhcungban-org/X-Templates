@@ -3,7 +3,7 @@ title: Bảo mật tối thiểu cho mọi phần mềm
 kind: baseline
 prefix: BASE-SEC
 applies_to: [all]
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Bảo mật tối thiểu cho mọi phần mềm
@@ -73,10 +73,10 @@ updated: 2026-11-23
 | Việc kiểm | Công cụ (license) | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|---|
 | Bí mật | gitleaks v8.30.1 (MIT) · trufflehog (AGPL-3.0, chạy như công cụ) · detect-secrets (Apache-2.0) | `gitleaks git --log-opts=--all` | pre-commit (staged) + CI (toàn lịch sử, cron) | 0 |
-| Lỗ hổng phụ thuộc | OSV-Scanner v2.7.0 (Apache-2.0) · pip-audit 2.10.1 (Apache-2.0) · `npm audit` · `cargo audit` · `govulncheck` | `osv-scanner scan source -r .` | CI mỗi PR + cron tuần | 0 high/critical chưa duyệt |
+| Lỗ hổng phụ thuộc | OSV-Scanner v2.7.1 (2026-11-09) (Apache-2.0) · pip-audit 2.10.1 (Apache-2.0) · `npm audit` · `cargo audit` · `govulncheck` | `osv-scanner scan source -r .` | CI mỗi PR + cron tuần | 0 high/critical chưa duyệt |
 | SAST | CodeQL (free cho public) · Semgrep OSS (LGPL-2.1; rules Semgrep không OSI) · bandit/gosec/clippy | `semgrep ci` / workflow CodeQL | CI | 0 ≥ medium sau baseline |
 | Cấu hình nguy hiểm | script repo (`check:dangerous-defaults`) | grep `0.0.0.0`, `verify=False`, `DEBUG=True`, `ports: "5432:5432"` | CI | 0 |
-| Workflow CI | actionlint v1.7.12 · pinact v5.0.0 · Scorecard v5.6.0 (Apache-2.0) | `scorecard --repo=<url>` | CI/cron | Token-Permissions, Pinned-Dependencies ≥ 8/10 |
+| Workflow CI | actionlint v1.7.12 · pinact v5.0.2 (2026-10-25) · Scorecard v5.7.0 (2026-11-19) (Apache-2.0) | `scorecard --repo=<url>` | CI/cron | Token-Permissions, Pinned-Dependencies ≥ 8/10 |
 | Container | Trivy (Apache-2.0; ghim SHA + checksum vì từng bị backdoor — catalog 12 §3) hoặc Grype | `trivy image --severity HIGH,CRITICAL --exit-code 1` | CI build image | 0 |
 | security.txt | curl | `curl -f https://<host>/.well-known/security.txt` | smoke test sau deploy | 200 |
 
@@ -91,7 +91,7 @@ updated: 2026-11-23
 - GitHub Actions security hardening: <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions> — xác minh 2026-10-13
 - GitHub private vulnerability reporting: <https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/configuring-private-vulnerability-reporting-for-a-repository> — xác minh 2026-10-13
 - OpenSSF Best Practices Badge criteria (`vulnerability_report_process`, `_response` 14 ngày): <https://www.bestpractices.dev/en/criteria/0> — xác minh 2026-10-13
-- OpenSSF Scorecard (Apache-2.0; v5.6.0): <https://github.com/ossf/scorecard> — xác minh 2026-10-13
-- OSV-Scanner v2.7.0: <https://github.com/google/osv-scanner/releases/latest> — xác minh 2026-10-13; pip-audit 2.10.1: <https://pypi.org/pypi/pip-audit/json> — xác minh 2026-10-13
+- OpenSSF Scorecard (Apache-2.0; v5.7.0, 2026-11-19): <https://github.com/ossf/scorecard> — xác minh 2026-11-24
+- OSV-Scanner v2.7.1 (2026-11-09): <https://github.com/google/osv-scanner/releases/latest> — xác minh 2026-11-24; pip-audit 2.10.1: <https://pypi.org/pypi/pip-audit/json> — xác minh 2026-10-13
 - OWASP Top 10 for LLM Applications **2026** (công bố 04/08/2026; LLM01 Prompt Injection): <https://github.com/GenAI-Security-Project/GenAI-LLM-Top10> — xác minh 2026-10-14; ấn bản, bảng mã và đính chính 2025 → 2026 ở [`../12-security/ai-security.md`](../12-security/ai-security.md)
 - Catalog `www-donghanhcungban-org/stored` 11 §1c, 12 §3b/§3d/§3i/§4, 23 §8.1 (mặc định nguy hiểm, bridge loopback, ma trận vệ sinh), đọc 2026-10-13.

@@ -3,7 +3,7 @@ title: Quản lý bí mật: lưu, xoay, quét, phạm vi
 kind: module
 prefix: SEC-SECRET
 applies_to: [all]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Quản lý bí mật: lưu, xoay, quét, phạm vi
@@ -58,6 +58,7 @@ updated: 2026-11-04
 - [ ] `SEC-SECRET-020` **MAY** Mã hoá file bí mật trong git bằng SOPS + age/KMS cho GitOps đội nhỏ; khoá giải mã vẫn ở KMS. → Kiểm: file `*.enc.yaml` giải mã được trong CI qua OIDC; không có bản rõ trong repo. · Nguồn: SOPS docs (MPL-2.0)
 - [ ] `SEC-SECRET-021` **MAY** Canary token (khoá giả có cảnh báo khi bị dùng) đặt trong repo/`.env.example`/image để phát hiện kẻ quét. → Kiểm: canary đã kích hoạt thử 1 lần. · Nguồn: kinh nghiệm vận hành (không có chuẩn)
 - [ ] `SEC-SECRET-022` **SHOULD** Secret trong cấu hình tích hợp do người dùng/tenant nhập (webhook, SMTP, ngân hàng, kênh thông báo) là **write-only**: API chỉ trả placeholder đã che (`has_secret: true`/`••••`), không bao giờ trả giá trị; khi request đổi host/URL/đích mà vẫn giữ placeholder thì server bỏ secret cũ và trả 422 buộc nhập lại, để người sửa được cấu hình không chuyển secret đã lưu sang đích do mình kiểm soát. → Kiểm: test PATCH đổi URL webhook (hoặc host SMTP) giữ nguyên placeholder → 422 và secret cũ không còn được dùng cho đích mới; GET không chứa giá trị secret. · Nguồn: `www-donghanhcungban-org/stored` 12 §3k (CHANGELOG v0.3.15 của ARTEX: vá lỗi che credential bị bypass — đổi địa chỉ giữ nguyên credential làm rò khoá; đọc 2026-10-16)
+- [ ] `SEC-SECRET-023` **SHOULD** Sổ danh tính phi người (token, service account, khoá CI, GitHub App, khoá API): mỗi mục có chủ, quyền, ngày tạo, nơi dùng, dùng chung hay riêng; quá hạn xoay vòng (theo `SEC-SECRET-008`/`SEC-SECRET-009`) thì đỏ; danh tính không còn dùng bị thu hồi. Mở rộng sổ của `SEC-SECRET-006` sang mọi danh tính phi người. → Kiểm: tệp sổ có đủ cột và job đối chiếu với danh sách thật (CI/IdP) báo mục thiếu hoặc quá hạn. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.8 "Kiểm kê danh tính phi người"), chưa đối chiếu nguồn gốc
 
 ## Bẫy thường gặp
 
@@ -80,7 +81,7 @@ updated: 2026-11-04
 | Chặn commit có bí mật | gitleaks v8.30.1 (MIT) | `gitleaks protect --staged --redact` | pre-commit | finding > 0 = chặn |
 | Quét toàn bộ lịch sử | gitleaks | `gitleaks detect --source . --log-opts="--all" --redact --exit-code 1` (checkout `fetch-depth: 0`) | CI mỗi PR + lịch tuần | finding > 0 = đỏ |
 | Khoá còn sống? | TruffleHog v3.99.2 (AGPL-3.0) | `trufflehog git file://. --only-verified --fail` | CI lịch tuần | verified > 0 = sự cố |
-| Bí mật trong IaC/K8s manifest | checkov 3.3.28 (Apache-2.0) | `checkov -d infra --check CKV_SECRET_*` | CI | finding > 0 = đỏ |
+| Bí mật trong IaC/K8s manifest | checkov 3.4.8 (Apache-2.0) | `checkov -d infra --check CKV_SECRET_*` | CI | finding > 0 = đỏ |
 | Bí mật trong image | gitleaks trên filesystem đã `docker save`/`dive` | `gitleaks detect --no-git -s rootfs/` | CI build image | finding > 0 = đỏ |
 | Khởi động fail-closed | test tích hợp | chạy app thiếu từng biến bắt buộc | job test | exit 0 khi thiếu = đỏ |
 | Redact log | unit test logger | log object chứa `password`, `token`, `authorization` | job test | giá trị thô xuất hiện = đỏ |
@@ -96,7 +97,7 @@ updated: 2026-11-04
 - GitHub Docs — Security hardening for GitHub Actions (OIDC, `pull_request_target`, GITHUB_TOKEN tối thiểu): <https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions> — xác minh 2026-10-13.
 - gitleaks v8.30.1 (MIT): <https://github.com/gitleaks/gitleaks/releases/latest> — tag + license xác minh 2026-10-13 (trang không hiện năm phát hành).
 - TruffleHog v3.99.2 (AGPL-3.0): <https://github.com/trufflesecurity/trufflehog/releases/latest> — tag + license xác minh 2026-10-13.
-- checkov 3.3.28 (Apache-2.0): <https://pypi.org/pypi/checkov/json> — xác minh 2026-10-13.
+- checkov 3.4.8 (Apache-2.0): <https://pypi.org/pypi/checkov/json> — xác minh 2026-11-24.
 - NIST SP 800-218 SSDF v1.1 PS.1 (bảo vệ mã nguồn và bí mật): <https://csrc.nist.gov/pubs/sp/800/218/final> — xác minh 2026-10-13.
 - (chưa xác minh) HashiCorp Vault BSL 1.1 / OpenBao MPL-2.0, SOPS MPL-2.0, NIST SP 800-57, ISO/IEC 27001:2022 A.5.17 — chưa fetch lại ngày 2026-10-13; xác minh trước khi dẫn.
 - Catalog `www-donghanhcungban-org/stored` 12 §3 (quản lý secret, CI có AI), 23 §8.1 (ai-gateway fail-open), đọc 2026-10-13.

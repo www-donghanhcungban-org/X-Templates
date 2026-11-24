@@ -3,7 +3,7 @@ title: Cổng chất lượng tối thiểu (lint · format · type · test · C
 kind: baseline
 prefix: BASE-GATE
 applies_to: [all]
-updated: 2026-11-05
+updated: 2026-11-24
 ---
 
 # Cổng chất lượng tối thiểu (lint · format · type · test · CI)
@@ -78,7 +78,7 @@ updated: 2026-11-05
 | Format + lint JS/TS | Biome 2.5.x (MIT/Apache-2.0) | `biome ci .` | CI; `biome check --write` ở hook | 0 cảnh báo |
 | Format + lint Python | ruff 0.17.0 (MIT) | `ruff format --check . && ruff check .` | hook + CI | 0 |
 | Type Python / TS | pyright 1.1.414 (MIT) · TypeScript 7.0.2 (Apache-2.0) | `pyright` · `tsc --noEmit -p tsconfig.json` | CI | 0 lỗi |
-| Lint workflow CI | actionlint v1.7.12 (MIT) · pinact v5.0.0 (MIT) | `actionlint` · `pinact run --check` | CI | 0 |
+| Lint workflow CI | actionlint v1.7.12 (MIT) · pinact v5.0.2 (2026-10-25) (MIT) | `actionlint` · `pinact run --check` | CI | 0 |
 | Shell script | ShellCheck v0.11.0 (GPL-3.0) | `shellcheck -S warning scripts/*.sh` | hook + CI | 0 |
 | Bảo vệ nhánh khớp job thật | job `protection-guard` (trong `ci.yml`) | đọc `.github/rulesets/main.json`, so `required_status_checks` với tên job trong `.github/workflows/*.yml` | CI | lệch = đỏ; ruleset chưa hiệu lực trên nhánh mặc định = cảnh báo (đổi `::warning` thành `exit 1` để ép) |
 | Fitness function workflow | `xt.py ci-check` | `xt.py ci-check` | CI (trong `lint`) | 0 lỗi |
@@ -96,5 +96,5 @@ Cảnh báo license/telemetry: Renovate là AGPL-3.0 (dùng dạng dịch vụ t
 - DORA four keys (lead time, change fail rate…): <https://dora.dev/guides/dora-metrics-four-keys/> — xác minh 2026-10-13
 - Google Testing Blog, "Flaky Tests at Google and How We Mitigate Them" (2016-05-27): <https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html> — chỉ đọc được tiêu đề/ngày ngày 2026-10-13; số liệu trong bài **(chưa xác minh)**
 - The Twelve-Factor App II, V: <https://12factor.net/> — xác minh 2026-10-13
-- Phiên bản công cụ (xác minh 2026-10-13 qua registry/release page): pre-commit 4.7.0 (xác minh PyPI 2026-10-12, kiểm lại 2026-10-14), ruff 0.17.0, pyright 1.1.414, lefthook 2.2.1, husky 9.1.7, lint-staged 17.6.0, typescript 7.0.2, actionlint v1.7.12, pinact v5.0.0, ShellCheck v0.11.0; Biome 2.5.15 theo [`../../research/2026-10-13-stored-catalog-extraction.md`](../../research/2026-10-13-stored-catalog-extraction.md) (catalog 13 §4c).
+- Phiên bản công cụ (xác minh 2026-10-13 qua registry/release page; pinact xác minh lại 2026-11-24): pre-commit 4.7.0 (xác minh PyPI 2026-10-12, kiểm lại 2026-10-14), ruff 0.17.0, pyright 1.1.414, lefthook 2.2.1, husky 9.1.7, lint-staged 17.6.0, typescript 7.0.2, actionlint v1.7.12, pinact v5.0.2 (2026-10-25), ShellCheck v0.11.0; Biome 2.5.15 theo [`../../research/2026-10-13-stored-catalog-extraction.md`](../../research/2026-10-13-stored-catalog-extraction.md) (catalog 13 §4c).
 - Khung cũ X-stored `01-process-and-standards.md` ("ba tầng phòng thủ", 7 nguyên tắc), commit `1b80fe4`; catalog `www-donghanhcungban-org/stored` 13 §4b–4c, 23 §2.5/§3.3/§4.3, đọc 2026-10-13.

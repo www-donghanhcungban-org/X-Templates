@@ -3,7 +3,7 @@ title: Tìm kiếm toàn văn, vector, hybrid, phân trang kết quả
 kind: module
 prefix: DB-SEARCH
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
-updated: 2026-10-16
+updated: 2026-11-24
 ---
 
 # Tìm kiếm toàn văn, vector, hybrid, phân trang kết quả
@@ -97,7 +97,7 @@ updated: 2026-10-16
 
 ## Nguồn
 
-- PostgreSQL 18 docs: §12 Full Text Search <https://www.postgresql.org/docs/current/textsearch-intro.html>; unaccent (filtering dictionary) <https://www.postgresql.org/docs/current/unaccent.html>; pg_trgm (GIN/GiST, LIKE/ILIKE) <https://www.postgresql.org/docs/current/pgtrgm.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: §12 Full Text Search <https://www.postgresql.org/docs/18/textsearch-intro.html>; unaccent (filtering dictionary) <https://www.postgresql.org/docs/18/unaccent.html>; pg_trgm (GIN/GiST, LIKE/ILIKE) <https://www.postgresql.org/docs/18/pgtrgm.html> — xác minh 2026-10-13.
 - Tái hiện 2026-10-16 trên PostgreSQL 17.x (extension `unaccent` 1.1 khai `LANGUAGE C STABLE`): index `lower(unaccent(col))` và cột generated `unaccent(...)` bị từ chối; hàm bọc IMMUTABLE và cấu hình text search `vi` có `unaccent` chạy được (phát hiện khi rà `www-donghanhcungban-org/stored` cho khung).
 - pgvector 0.8.7 README (HNSW `m=16`/`ef_construction=64`/`ef_search=40`; IVFFlat lists/probes; `vector` ≤ 2 000, `halfvec` ≤ 4 000 chiều; iterative scan 0.8.0; hybrid + RRF/cross-encoder; Postgres 13+): <https://github.com/pgvector/pgvector/blob/master/README.md>; brew 0.8.7 PostgreSQL License — xác minh 2026-10-13.
 - Meilisearch 1.55.0 MIT (brew; LICENSE repo: MIT và BUSL-1.1 cho một số phần — đọc trước khi tái phân phối): <https://formulae.brew.sh/api/formula/meilisearch.json>, <https://raw.githubusercontent.com/meilisearch/meilisearch/main/LICENSE>; ngôn ngữ (không có pipeline tiếng Việt chuyên biệt): <https://www.meilisearch.com/docs/learn/resources/language> — xác minh 2026-10-13.

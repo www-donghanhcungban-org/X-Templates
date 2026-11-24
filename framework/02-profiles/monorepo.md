@@ -4,7 +4,7 @@ kind: profile
 slug: monorepo
 prefix: PRF-MONO
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-11-14
+updated: 2026-11-24
 ---
 
 # Hồ sơ: Monorepo nhiều thành phần (web + mobile + API)
@@ -49,7 +49,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**. Bản
 | Test | Vitest 5.0.4 workspace (`projects`) + Playwright 1.64.0 theo app | — | — |
 | Dead code | knip 6.41.0 (workspace mode) | — | — |
 | CI | GitHub Actions + affected (`turbo run --filter=...[origin/main]` / `nx affected --base=origin/main`) + `nrwl/nx-set-shas` | — | GitLab CI tương đương |
-| Node | 24 LTS, một `.nvmrc` + `packageManager` ở gốc | 24.21.0 | — |
+| Node | 24 LTS, một `.nvmrc` + `packageManager` ở gốc | 24.22.3 | — |
 | Đa ngôn ngữ | Mỗi ngôn ngữ một workspace gốc (`go.work`, Cargo workspace, `uv` workspace) + task runner gốc gọi xuyên ngôn ngữ | Go 1.27.2; Rust 1.99.0; `uv` 0.13.0 | Bazel/Pants khi > hàng trăm package (chưa xác minh phiên bản) |
 
 ## Checklist

@@ -3,7 +3,7 @@ title: File, upload, lưu trữ đối tượng, xử lý ảnh/video, quét
 kind: module
 prefix: BE-FILE
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # File, upload, lưu trữ đối tượng, xử lý ảnh/video, quét
@@ -62,6 +62,7 @@ updated: 2026-11-04
 - [ ] `BE-FILE-019` **MAY** CDR (Content Disarm & Reconstruction) cho PDF/Office trong ngành bị quản lý; chuyển đổi sang PDF/ảnh để xem trước. → Kiểm: pipeline CDR tồn tại; file gốc chỉ tải khi đã quét.
 - [ ] `BE-FILE-020` **MAY** Ký nội dung (checksum trong metadata, Content-MD5/SHA-256 khi PUT) để phát hiện hỏng trên đường truyền. → Kiểm: PUT có checksum header; storage từ chối khi lệch.
 - [ ] `BE-FILE-021` **SHOULD** Dự án có OCR/trích xuất tài liệu giữ ledger từng trang/block: hash tài liệu, trang, parser/model/config revision, outcome `success`/`fallback`/`discarded`/`unmeasured`, locator/bbox nếu có; báo đủ mẫu số trang vào/ra/bỏ; citation trỏ bằng chứng gốc hoặc `null` + lý do (không bịa bbox). → Kiểm: fixture có 1 trang fallback và 1 trang bị loại vẫn hiện trong báo cáo outcome, không tính là OCR thành công; đổi tài liệu/parser/model → cache/evidence cũ mất hiệu lực. · Nguồn: (chưa xác minh — theo stored 26 §3–4); liên quan `AI-DATA-002`, `AI-EVAL-006`
+- [ ] `BE-FILE-022` **MAY** Hệ thống phải lưu trữ tài liệu dài hạn thì kiểm PDF/A của tệp sinh ra bằng bộ kiểm chuẩn (ví dụ veraPDF; công cụ ngoài); trượt thì thoát khác 0. → Kiểm: job chạy bộ kiểm trên mẫu tệp sinh ra. · Nguồn: đề xuất của catalog stored (PLAYBOOK §6.5), chưa đối chiếu nguồn gốc
 
 ## Bẫy thường gặp
 

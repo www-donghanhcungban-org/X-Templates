@@ -3,7 +3,7 @@ title: Mô hình dữ liệu, chuẩn hoá, khoá, kiểu dữ liệu, soft-dele
 kind: module
 prefix: DB-MODEL
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, mobile-app, desktop-app, embedded-iot]
-updated: 2026-10-16
+updated: 2026-11-24
 ---
 
 # Mô hình dữ liệu, chuẩn hoá, khoá, kiểu dữ liệu, soft-delete, audit
@@ -33,7 +33,7 @@ updated: 2026-10-16
 
 | Câu hỏi | Mặc định | Thay thế + điều kiện |
 |---|---|---|
-| CSDL chính | **PostgreSQL 18.6** (major 18 hiện hành; 14 hết hỗ trợ 2026-11-12) | **MySQL 8.4 LTS** (8.4.11; endoflife.date đánh dấu 9.7 cũng LTS — xác minh trang MySQL trước khi chọn 9.x) khi đội/hạ tầng đã chuẩn MySQL · **SQLite 3.54.0** khi dữ liệu cùng máy với ứng dụng, một writer, < ~1 TB (embedded, desktop, mobile, công cụ nội bộ) · **MongoDB 8.3/9.0** chỉ khi tài liệu thật sự không có schema cố định; giấy phép **SSPL** (không OSI) — tránh khi cung cấp dịch vụ quản lý |
+| CSDL chính | **PostgreSQL 18.7** (bản vá ổn định của 18, 2026-11-09, hỗ trợ tới 2030-11-14; 19.0 ra 2026-11-19 — chưa làm mặc định, chờ 19.1–19.2; 14 đã hết hỗ trợ 2026-11-12) | **MySQL 8.4 LTS** (8.4.11; endoflife.date đánh dấu 9.7 cũng LTS — xác minh trang MySQL trước khi chọn 9.x) khi đội/hạ tầng đã chuẩn MySQL · **SQLite 3.54.0** khi dữ liệu cùng máy với ứng dụng, một writer, < ~1 TB (embedded, desktop, mobile, công cụ nội bộ) · **MongoDB 8.3/9.0** chỉ khi tài liệu thật sự không có schema cố định; giấy phép **SSPL** (không OSI) — tránh khi cung cấp dịch vụ quản lý |
 | Khoá chính | **`bigint GENERATED ALWAYS AS IDENTITY`** khi id không lộ ra ngoài và không cần sinh ở client | **UUIDv7** (`uuidv7()` có sẵn PostgreSQL 18) khi id sinh ở client/offline, gộp từ nhiều nguồn, hoặc lộ ra URL công khai · **không** UUIDv4 làm PK bảng lớn (index locality kém) · không UUID dạng `text` (lưu 128-bit) |
 | Thời gian | `timestamptz` (lưu UTC), `date` cho ngày thuần | `timestamp` (không tz) **chỉ** cho "giờ tường" cố ý (lịch hẹn địa phương) kèm cột `tz` IANA |
 | Tiền | **số nguyên đơn vị nhỏ nhất** (`bigint` VND/cent) + cột `currency` ISO 4217 — quy tắc ở [`XC-UNITS-005`](../18-cross-cutting/units-time-and-money.md) | `numeric(p,s)` scale cố định **chỉ khi** cần độ chính xác dưới đơn vị nhỏ nhất (tỷ giá, đơn giá theo gram/kWh) và có ADR; **không** `float/double`, **không** `money` |
@@ -92,9 +92,9 @@ updated: 2026-10-16
 
 ## Nguồn
 
-- PostgreSQL 18 docs: §8.5 Date/Time (timestamptz lưu UTC) <https://www.postgresql.org/docs/current/datatype-datetime.html>; §8.1 Numeric <https://www.postgresql.org/docs/current/datatype-numeric.html>; §8.2 Money <https://www.postgresql.org/docs/current/datatype-money.html>; `uuidv7()` <https://www.postgresql.org/docs/current/functions-uuid.html>; Identity columns <https://www.postgresql.org/docs/current/ddl-identity-columns.html>; CREATE TABLE (referential actions) <https://www.postgresql.org/docs/current/sql-createtable.html>; Partitioning <https://www.postgresql.org/docs/current/ddl-partitioning.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: §8.5 Date/Time (timestamptz lưu UTC) <https://www.postgresql.org/docs/18/datatype-datetime.html>; §8.1 Numeric <https://www.postgresql.org/docs/18/datatype-numeric.html>; §8.2 Money <https://www.postgresql.org/docs/18/datatype-money.html>; `uuidv7()` <https://www.postgresql.org/docs/18/functions-uuid.html>; Identity columns <https://www.postgresql.org/docs/18/ddl-identity-columns.html>; CREATE TABLE (referential actions) <https://www.postgresql.org/docs/18/sql-createtable.html>; Partitioning <https://www.postgresql.org/docs/18/ddl-partitioning.html> — xác minh 2026-10-13.
 - RFC 9562 UUIDs (obsoletes RFC 4122; §5.7 UUIDv7; §6.11 sortable; §6.13 lưu 128-bit): <https://www.rfc-editor.org/rfc/rfc9562> — xác minh 2026-10-13.
-- Phiên bản (endoflife.date, xác minh 2026-10-13): PostgreSQL 18.6 (14 EOL 2026-11-12) <https://endoflife.date/api/postgresql.json>; MySQL 8.4.11 LTS, 9.7.2 (lts: true) <https://endoflife.date/api/mysql.json>; SQLite 3.54.0 <https://endoflife.date/api/sqlite.json>; MongoDB 9.0.2 / 8.3.11 <https://endoflife.date/api/mongodb.json>.
+- Phiên bản (endoflife.date, xác minh 2026-10-13; riêng PostgreSQL xác minh 2026-11-24): PostgreSQL 18.7 (14 đã EOL 2026-11-12; 15 tới 2027-11-11; 18 tới 2030-11-14; 19 tới 2031-11-19) <https://endoflife.date/api/postgresql.json>; MySQL 8.4.11 LTS, 9.7.2 (lts: true) <https://endoflife.date/api/mysql.json>; SQLite 3.54.0 <https://endoflife.date/api/sqlite.json>; MongoDB 9.0.2 / 8.3.11 <https://endoflife.date/api/mongodb.json>.
 - Giấy phép: MongoDB Community = SSPL (từ 2018-10-16) <https://www.mongodb.com/legal/licensing/community-edition>; OSI: SSPL không phải open source (2021-01-19) <https://opensource.org/blog/the-sspl-is-not-an-open-source-license>; Redis/Valkey xem [`../05-architecture/resilience-and-scalability.md`](../05-architecture/resilience-and-scalability.md) — xác minh 2026-10-13.
 - SQLite — When to use: <https://www.sqlite.org/whentouse.html>; WAL: <https://www.sqlite.org/wal.html> — xác minh 2026-10-13.
 - OWASP ASVS 5.0 V14 Data Protection (14.1.1 phân loại): <https://github.com/OWASP/ASVS/blob/master/5.0/en/0x23-V14-Data-Protection.md> — xác minh 2026-10-13.

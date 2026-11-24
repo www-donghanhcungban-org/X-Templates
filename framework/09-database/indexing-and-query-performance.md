@@ -3,7 +3,7 @@ title: Index, truy vấn, N+1, EXPLAIN, pool kết nối
 kind: module
 prefix: DB-PERF
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, mobile-app, desktop-app, embedded-iot]
-updated: 2026-10-30
+updated: 2026-11-24
 ---
 
 # Index, truy vấn, N+1, EXPLAIN, pool kết nối
@@ -98,7 +98,7 @@ updated: 2026-10-30
 
 ## Nguồn
 
-- PostgreSQL 18 docs: Using EXPLAIN (ANALYZE, BUFFERS, BEGIN/ROLLBACK) <https://www.postgresql.org/docs/current/using-explain.html>; CREATE INDEX (CONCURRENTLY, partial, INCLUDE) <https://www.postgresql.org/docs/current/sql-createindex.html>; pg_stat_statements <https://www.postgresql.org/docs/current/pgstatstatements.html>; auto_explain <https://www.postgresql.org/docs/current/auto-explain.html>; runtime-config-client (`statement_timeout`, `lock_timeout`, `idle_in_transaction_session_timeout`) <https://www.postgresql.org/docs/current/runtime-config-client.html>; Routine Vacuuming (wraparound 40M/3M) <https://www.postgresql.org/docs/current/routine-vacuuming.html>; Populating a Database <https://www.postgresql.org/docs/current/populate.html>; Partitioning <https://www.postgresql.org/docs/current/ddl-partitioning.html> — xác minh 2026-10-13.
+- PostgreSQL 18 docs: Using EXPLAIN (ANALYZE, BUFFERS, BEGIN/ROLLBACK) <https://www.postgresql.org/docs/18/using-explain.html>; CREATE INDEX (CONCURRENTLY, partial, INCLUDE) <https://www.postgresql.org/docs/18/sql-createindex.html>; pg_stat_statements <https://www.postgresql.org/docs/18/pgstatstatements.html>; auto_explain <https://www.postgresql.org/docs/18/auto-explain.html>; runtime-config-client (`statement_timeout`, `lock_timeout`, `idle_in_transaction_session_timeout`) <https://www.postgresql.org/docs/18/runtime-config-client.html>; Routine Vacuuming (wraparound 40M/3M) <https://www.postgresql.org/docs/18/routine-vacuuming.html>; Populating a Database <https://www.postgresql.org/docs/18/populate.html>; Partitioning <https://www.postgresql.org/docs/18/ddl-partitioning.html> — xác minh 2026-10-13.
 - PgBouncer 1.26.0 (ISC) config — pool modes, `max_prepared_statements`, `RECONNECT`: <https://www.pgbouncer.org/config.html>, <https://formulae.brew.sh/api/formula/pgbouncer.json> — xác minh 2026-10-13.
 - MySQL 8.4 InnoDB isolation (REPEATABLE READ, gap lock): <https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html> — xác minh 2026-10-13.
 - SQLite WAL: <https://www.sqlite.org/wal.html>; When to use: <https://www.sqlite.org/whentouse.html> — xác minh 2026-10-13.

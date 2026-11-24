@@ -3,7 +3,7 @@ title: Integration & contract test: DB thật, API contract, Pact, testcontainer
 kind: module
 prefix: QA-INT
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Integration & contract test: DB thật, API contract, Pact, testcontainers
@@ -24,7 +24,7 @@ updated: 2026-11-04
 
 | Nhu cầu | Mặc định | Thay thế + điều kiện | Không dùng |
 |---|---|---|---|
-| DB/queue/cache thật trong test | testcontainers (Node 12.2.0, Python 4.15.0, Go/Java có module riêng) | CI `services:` khi không có Docker-in-Docker; DB nhúng (embedded-postgres) khi sandbox agent cấm Docker | SQLite/in-memory thay Postgres |
+| DB/queue/cache thật trong test | testcontainers (Node 12.2.2, Python 4.15.0, Go/Java có module riêng) | CI `services:` khi không có Docker-in-Docker; DB nhúng (embedded-postgres) khi sandbox agent cấm Docker | SQLite/in-memory thay Postgres |
 | Hợp đồng HTTP nội bộ nhiều đội (consumer-driven) | Pact (`@pact-foundation/pact` 17.1.4, `pact-python` 3.4.1) + Pact Broker/PactFlow (**Broker OSS MIT; PactFlow thương mại**) | OpenAPI + provider test theo spec khi 1 đội sở hữu cả hai đầu | Pact cho API công khai nhiều consumer vô danh |
 | API công khai theo spec | Provider test từ OpenAPI (Schemathesis 4.31.0, Dredd) + oasdiff chặn breaking | Pact bi-directional khi có PactFlow | — |
 | Sự kiện/async | Schema registry (Avro/JSON Schema/Protobuf) + test tương thích schema | Pact message khi consumer-driven | Sự kiện không schema |
@@ -71,7 +71,7 @@ updated: 2026-11-04
 
 | Công cụ | Lệnh | Đặt ở | Ngưỡng |
 |---|---|---|---|
-| testcontainers (Node 12.2.0 MIT, Python 4.15.0 Apache-2.0) | trong test; `TESTCONTAINERS_RYUK_DISABLED=false` | CI (runner có Docker) | 0 fail |
+| testcontainers (Node 12.2.2 MIT, Python 4.15.0 Apache-2.0) | trong test; `TESTCONTAINERS_RYUK_DISABLED=false` | CI (runner có Docker) | 0 fail |
 | Schemathesis 4.31.0 (MIT) | `schemathesis run openapi.yaml --url http://localhost:8080 --checks all --report junit` | CI PR (nhanh) + nightly (sâu) | 0 failure; 0 5xx |
 | oasdiff (Apache-2.0; phiên bản **chưa xác minh**) | `oasdiff breaking base.yaml head.yaml --fail-on ERR` | CI PR | 0 breaking |
 | Pact 17.1.4 / pact-python 3.4.1 (MIT) + Pact Broker | `pact-broker can-i-deploy --pacticipant <svc> --version $SHA --to-environment prod` | CI trước deploy | exit 0 |
@@ -82,7 +82,7 @@ updated: 2026-11-04
 
 ## Nguồn
 
-- Phiên bản công cụ (registry, xác minh 2026-10-13): npm `testcontainers` 12.2.0, `@pact-foundation/pact` 17.1.4; PyPI `testcontainers` 4.15.0 (2026-07-24), `pact-python` 3.4.1 (2026-09-17), `schemathesis` 4.31.0 (2026-10-12).
+- Phiên bản công cụ (registry, xác minh 2026-10-13; npm `testcontainers` 2026-11-24): npm `testcontainers` 12.2.2, `@pact-foundation/pact` 17.1.4; PyPI `testcontainers` 4.15.0 (2026-07-24), `pact-python` 3.4.1 (2026-09-17), `schemathesis` 4.31.0 (2026-10-12).
 - Pact specification (v1–v4; v4 là RFC #71): <https://docs.pact.io/implementation_guides/pact_specification> — xác minh 2026-10-13 (trang cập nhật 2022)
 - RFC 9457 Problem Details: <https://www.rfc-editor.org/info/rfc9457/> — xác minh 2026-10-13
 - OWASP API Security Top 10 2023: <https://api-security.owasp.org/> — xác minh 2026-10-13

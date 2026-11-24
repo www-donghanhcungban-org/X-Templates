@@ -60,17 +60,17 @@ class ModelTiersTest(unittest.TestCase):
         self.assertEqual(
             TIERS["main_session"],
             {
-                "plan_spec_decision": "top-1",  # D-566: lập PLAN/SPEC ở Opus; Fable chỉ khi chủ dự án bật
+                "plan_spec_decision": "top-1",  # D-568: lập PLAN/SPEC ở Opus; Fable chỉ khi chủ dự án bật
                 "write_code": "top-1",
                 "write_code_max_effort": "xhigh",
                 "top_opt_in": TIERS["main_session"]["top_opt_in"],
             },
         )
-        self.assertIn("D-566", TIERS["main_session"]["top_opt_in"])
+        self.assertIn("D-568", TIERS["main_session"]["top_opt_in"])
         self.assertLess(xt.EFFORTS.index("xhigh"), xt.EFFORTS.index("max"))  # reviewer `max` cao hơn người viết ≤ xhigh
 
     def test_mechanical_executor_is_bottom_with_a_capped_budget(self):
-        # D-566: việc cơ học có Gate ở bậc nhẹ nhất; đỏ một lần chuyển `executor`, turn thấp để prompt dưới 100K.
+        # D-568: việc cơ học có Gate ở bậc nhẹ nhất; đỏ một lần chuyển `executor`, turn thấp để prompt dưới 100K.
         self.assertEqual(TIERS["roles"]["executor-mech"], "bottom")
         meta = frontmatter(AGENTS["executor-mech"])
         self.assertLessEqual(int(meta["maxTurns"]), 40)

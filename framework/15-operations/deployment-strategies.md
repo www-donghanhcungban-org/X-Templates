@@ -3,7 +3,7 @@ title: Triển khai: canary, blue/green, feature flag, rollback, migration onlin
 kind: module
 prefix: OPS-DEPLOY
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain, static-site, mobile-app, desktop-app, embedded-iot]
-updated: 2026-11-02
+updated: 2026-11-24
 ---
 
 # Triển khai: canary, blue/green, feature flag, rollback, migration online
@@ -60,6 +60,7 @@ updated: 2026-11-02
 - [ ] `OPS-DEPLOY-020` **MAY** Dùng Argo Rollouts/Flagger (Apache-2.0) cho canary tự động trên K8s với phân tích từ Prometheus. → Kiểm: `AnalysisTemplate` với metric SLI. · Nguồn: Argo Rollouts/Flagger docs (chưa xác minh phiên bản)
 - [ ] `OPS-DEPLOY-021` **MAY** Shadow/dark traffic cho thay đổi backend lớn (sao chép request sang bản mới, bỏ kết quả) trước canary. → Kiểm: cấu hình mirror; so sánh kết quả. · Nguồn: SRE Workbook
 - [ ] `OPS-DEPLOY-022` **MUST@L** Thay đổi cấu hình/dữ liệu động đẩy ra production lúc chạy (flag %, rule WAF/chặn, file đặc trưng/model, danh sách chặn, remote config) đi cùng đường an toàn như deploy code: validate schema + giới hạn kích thước/số mục trước khi phát, rollout từng đợt có health check và lùi một bước, bên nhận bản lỗi/vượt giới hạn thì giữ bản tốt cuối (last-known-good) thay vì panic/5xx; kênh 'đẩy toàn hệ thống trong vài giây' chỉ dùng cho kill switch đã diễn tập. → Kiểm: pipeline phát cấu hình có bước validate (schema, kích thước, số mục) và ≥ 2 đợt rollout có health gate; test nạp file cấu hình hỏng/gấp đôi kích thước → dịch vụ vẫn phục vụ bằng bản cũ và phát alert; log thay đổi cấu hình có phiên bản + lệnh lùi. · Nguồn: Cloudflare post-mortem 2025-11-18 và 2025-12-05
+- [ ] `OPS-DEPLOY-023` **MAY** Vòng khép kín cờ tính năng – thí nghiệm – chỉ số: mỗi cờ gắn một chỉ số/sự kiện (`PM-METRIC-001`); cờ không có chỉ số hoặc đã chết bị liệt kê trong báo cáo định kỳ; đối chiếu sổ cờ (`OPS-DEPLOY-012`) với bảng chỉ số. → Kiểm: script đối chiếu hai nguồn và liệt kê cờ mồ côi. · Nguồn: đề xuất của catalog stored (PLAYBOOK §7.6), chưa đối chiếu nguồn gốc; `OPS-DEPLOY-012`, `PM-METRIC-011`
 
 ## Bẫy thường gặp
 

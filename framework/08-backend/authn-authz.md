@@ -4,7 +4,7 @@ kind: module
 prefix: BE-AUTH
 applies_to: [web-app, api-service, ai-agent, agentic-system, data-ml, monorepo, blockchain]
 essential: [BE-AUTH-003@auth, BE-AUTH-006@jwt, BE-AUTH-008@oauth, BE-AUTH-015@reset]
-updated: 2026-11-04
+updated: 2026-11-24
 ---
 
 # Xác thực, phiên, token, phân quyền (RBAC/ABAC), đa yếu tố
@@ -52,8 +52,8 @@ updated: 2026-11-04
 - [ ] `BE-AUTH-004` **MUST** Session ID ≥ 128 bit từ CSPRNG; cookie phiên có `__Host-` + `Secure` + `HttpOnly` + `SameSite` (Lax/Strict); phiên lưu và vô hiệu ở server khi logout; tạo lại ID sau đăng nhập/đổi đặc quyền. → Kiểm: test logout rồi dùng lại cookie → 401; ID trước/sau đăng nhập khác nhau; `Set-Cookie` có đủ thuộc tính. · Nguồn: OWASP Session Management Cheat Sheet, ASVS 5.0 V7
 - [ ] `BE-AUTH-005` **MUST@L** Phiên có hết hạn idle và hết hạn tuyệt đối thực thi ở server (giá trị theo rủi ro: 15–30 phút idle cho app thường, 2–5 phút cho giá trị cao; tuyệt đối theo ngày làm việc); đổi mật khẩu/đặt lại MFA làm hết hạn mọi phiên khác. → Kiểm: test chỉnh đồng hồ/giả lập vượt idle → 401; đổi mật khẩu → phiên thứ hai 401. · Nguồn: OWASP Session Management Cheat Sheet
 - [ ] `BE-AUTH-006` **MUST@L** JWT (nếu dùng): thuật toán cố định phía server (không đọc `alg` từ token, từ chối `none`), xác minh `iss`, `aud`, `exp`, `nbf`; khoá theo `kid` từ JWKS allowlist; access token ngắn hạn; thu hồi sớm qua denylist `jti` hoặc phiên server. → Kiểm: test token `alg: none` → 401; token `aud` khác → 401; token hết hạn → 401. · Nguồn: RFC 8725 (BCP 225), ASVS 5.0 V9
-- [ ] `BE-AUTH-007` **MUST@L** Refresh token của public client (SPA/mobile) xoay vòng mỗi lần dùng, phát hiện tái sử dụng → thu hồi cả họ token; refresh token không lưu `localStorage`. → Kiểm: test dùng lại refresh token cũ → 401 và token mới bị thu hồi. · Nguồn: RFC 9700 §2.2.2, OAuth 2.1 draft-16
-- [ ] `BE-AUTH-008` **MUST@L** OAuth/OIDC: chỉ Authorization Code + PKCE (S256) cho mọi client; không implicit, không resource owner password; redirect URI so khớp chuỗi chính xác; kiểm `state`/`nonce`; access token audience-restricted. → Kiểm: cấu hình IdP/client không có grant `implicit`/`password`; test redirect URI khác một ký tự → bị từ chối. · Nguồn: RFC 9700 (BCP 240) §2.1, §2.3–2.4; draft-ietf-oauth-v2-1-16
+- [ ] `BE-AUTH-007` **MUST@L** Refresh token của public client (SPA/mobile) xoay vòng mỗi lần dùng, phát hiện tái sử dụng → thu hồi cả họ token; refresh token không lưu `localStorage`. → Kiểm: test dùng lại refresh token cũ → 401 và token mới bị thu hồi. · Nguồn: RFC 9700 §2.2.2, OAuth 2.1 draft-17
+- [ ] `BE-AUTH-008` **MUST@L** OAuth/OIDC: chỉ Authorization Code + PKCE (S256) cho mọi client; không implicit, không resource owner password; redirect URI so khớp chuỗi chính xác; kiểm `state`/`nonce`; access token audience-restricted. → Kiểm: cấu hình IdP/client không có grant `implicit`/`password`; test redirect URI khác một ký tự → bị từ chối. · Nguồn: RFC 9700 (BCP 240) §2.1, §2.3–2.4; draft-ietf-oauth-v2-1-17
 - [ ] `BE-AUTH-009` **MUST** Mọi endpoint/handler không công khai (gồm Server Action, RPC, GraphQL resolver, WebSocket handshake, job trigger) kiểm xác thực và phân quyền ở server; `user_id` lấy từ phiên/token, không từ body/query. → Kiểm: test gọi với `user_id` khác trong body → vẫn thao tác trên user của token; scan route không guard = allowlist. · Nguồn: ASVS 5.0 V8, OWASP Authorization Cheat Sheet
 - [ ] `BE-AUTH-010` **MUST** Kiểm quyền theo object cho mọi truy cập có ID (IDOR): truy vấn luôn kèm điều kiện sở hữu/tenant (`WHERE id = ? AND tenant_id = ?` hoặc RLS/policy engine); trả 404 hoặc 403 nhất quán. → Kiểm: test người dùng A đọc/sửa/xoá bản ghi của B qua ID → 403/404; test chạy cho mọi tài nguyên có ID, trên dữ liệu đại diện khác tài khoản/tenant; xác thực (kể cả SSO/IdP) không thay kiểm quyền theo object của ứng dụng (phần tenant/IdP là suy luận của khung). · Nguồn: OWASP Authorization Cheat Sheet <https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html> (tra 2026-11-04), ASVS 5.0 V8 (chưa xác minh trực tiếp)
 - [ ] `BE-AUTH-011` **MUST@L** Quyết định phân quyền tập trung một nơi (policy module/engine), có unit test "deny by default" và test theo ma trận vai × hành động; không rải `if role ==` trong handler. → Kiểm: test policy với vai không khai báo → deny; grep `role ==`/`isAdmin` ngoài policy module = 0. · Nguồn: OWASP Authorization Cheat Sheet
@@ -110,7 +110,7 @@ updated: 2026-11-04
 - OWASP Multifactor Authentication Cheat Sheet: <https://cheatsheetseries.owasp.org/cheatsheets/Multifactor_Authentication_Cheat_Sheet.html> — xác minh 2026-10-13
 - RFC 8725 JSON Web Token Best Current Practices (BCP 225; §3.1 kiểm thuật toán, `none`; §3.9 `aud`): <https://www.rfc-editor.org/rfc/rfc8725> — xác minh 2026-10-20
 - RFC 9700 Best Current Practice for OAuth 2.0 Security (BCP 240): <https://www.rfc-editor.org/rfc/rfc9700> — xác minh 2026-10-13
-- OAuth 2.1 draft-ietf-oauth-v2-1-16 (03/09/2026, **vẫn là Internet-Draft**, chưa RFC): <https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/> — xác minh 2026-10-13
+- OAuth 2.1 draft-ietf-oauth-v2-1-17 (31/10/2026, **vẫn là Internet-Draft**, chưa RFC): <https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/> — đọc 2026-11-24
 - W3C Web Authentication Level 3 — Recommendation 25/08/2026: <https://www.w3.org/TR/webauthn-3/> — xác minh 2026-10-13
 - RFC 6238 TOTP (bước 30 giây, không chấp nhận OTP dùng lại): <https://www.rfc-editor.org/rfc/rfc6238> — xác minh 2026-10-13
 - OWASP ASVS 5.0.0 chương V6 Authentication, V7 Session Management, V8 Authorization, V9 Self-contained Tokens, V10 OAuth and OIDC: <https://github.com/OWASP/ASVS/tree/master/5.0/en> — xác minh 2026-10-13

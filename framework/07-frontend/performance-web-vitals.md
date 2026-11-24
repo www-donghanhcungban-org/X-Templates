@@ -3,7 +3,7 @@ title: Hiệu năng: Core Web Vitals, bundle, ảnh, font, ngân sách
 kind: module
 prefix: FE-PERF
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-10-30
+updated: 2026-11-24
 ---
 
 # Hiệu năng: Core Web Vitals, bundle, ảnh, font, ngân sách
@@ -82,7 +82,7 @@ updated: 2026-10-30
 | Đường thay (nếu lhci hỏng) | `lighthouse <url> --preset=perf --output=json --output-path=lh.json` + `node scripts/assert-lighthouse.mjs lh.json` | CI | cùng ngưỡng |
 | `web-vitals` 6.2.3 (Apache-2.0) | `onLCP/onINP/onCLS` → `navigator.sendBeacon('/vitals')` | production + staging | p75 theo ngưỡng; cảnh báo 7 ngày |
 | `size-limit` 14.2.0 (MIT) | `size-limit` (cấu hình theo entry + route) | CI | ≤ ngân sách trong `.size-limit.json` |
-| Bundle analyzer: `@next/bundle-analyzer` 16.4.0 / `rollup-plugin-visualizer` 7.1.1 / `webpack-bundle-analyzer` 5.4.0 (MIT) | `ANALYZE=true build` | theo yêu cầu, bắt buộc khi thêm dependency > 20 kB | không duplicate, chunk đầu đúng |
+| Bundle analyzer: `@next/bundle-analyzer` 16.4.6 / `rollup-plugin-visualizer` 7.1.1 / `webpack-bundle-analyzer` 5.4.0 (MIT) | `ANALYZE=true build` | theo yêu cầu, bắt buộc khi thêm dependency > 20 kB | không duplicate, chunk đầu đúng |
 | `sharp` 0.35.5 (Apache-2.0) / component ảnh framework | pipeline build sinh AVIF/WebP + kích thước | build | 100% ảnh nội dung có biến thể |
 | knip 6.41.0 (ISC) | `knip` | CI | 0 dependency/export thừa |
 | curl | `curl -sI <asset>` header `immutable`; `curl -w '%{time_starttransfer}'` | smoke sau deploy | đúng header; TTFB ≤ ngưỡng |

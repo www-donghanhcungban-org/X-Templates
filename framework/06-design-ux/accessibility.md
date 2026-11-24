@@ -3,7 +3,7 @@ title: Tiếp cận (a11y) theo WCAG 2.2 AA và nền tảng mobile
 kind: module
 prefix: UX-A11Y
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-23
+updated: 2026-11-24
 ---
 
 # Tiếp cận (a11y) theo WCAG 2.2 AA và nền tảng mobile
@@ -61,7 +61,7 @@ updated: 2026-11-23
 - [ ] `UX-A11Y-023` **SHOULD** Chuyển động tôn trọng `prefers-reduced-motion` (chi tiết ở [`motion-and-visual-quality.md`](motion-and-visual-quality.md)). → Kiểm: `emulateMedia({ reducedMotion: 'reduce' })` → không animation dịch chuyển lớn.
 - [ ] `UX-A11Y-024` **SHOULD** Không dùng `tabindex > 0`; thứ tự DOM = thứ tự đọc = thứ tự nhìn. → Kiểm: lint `no-positive-tabindex`; axe `tabindex`.
 - [ ] `UX-A11Y-025` **SHOULD** Lỗi form liên kết với ô nhập (`aria-describedby`, `aria-invalid`), focus về ô lỗi đầu tiên (chi tiết ở [`../07-frontend/forms-and-validation.md`](../07-frontend/forms-and-validation.md)). → Kiểm: E2E submit form lỗi → `document.activeElement` là ô lỗi đầu.
-- [ ] `UX-A11Y-026` **MAY** Hỗ trợ `prefers-contrast: more` và chế độ "forced colors" (Windows High Contrast) không mất viền/icon. → Kiểm: `emulateMedia({ forcedColors: 'active' })` chụp ảnh so sánh.
+- [ ] `UX-A11Y-026` **SHOULD** Hỗ trợ `prefers-contrast: more` và chế độ "forced colors" (Windows High Contrast) không mất viền/icon. → Kiểm: `emulateMedia({ forcedColors: 'active' })` chụp ảnh so sánh. · Nguồn: `prefers-contrast` Baseline widely available (WebStatus, 2024-11-30; đọc 2026-11-24)
 - [ ] `UX-A11Y-027` **MAY** Phụ đề/transcript cho media; mô tả âm thanh cho video quan trọng. → Kiểm: mọi `<video>` có `<track kind="captions">`. · Nguồn: WCAG 2.2 SC 1.2.2
 - [ ] `UX-A11Y-028` **SHOULD** Điều khiển đạt tương phản ≥ 3:1 (biên/icon) và chữ ≥ 4.5:1 ở các trạng thái **hover, focus-visible, active, selected**, ở **cả hai theme** (bổ sung cho `UX-A11Y-002` vốn kiểm trạng thái mặc định); trạng thái disabled được WCAG miễn. → Kiểm: Playwright `hover()`/`focus()` từng story/component rồi tính tỷ lệ từ computed style (màu chữ/viền so nền hiệu dụng) cho mỗi trạng thái × theme; dưới ngưỡng → đỏ. Mẫu chạy được cho chữ ở mặc định/hover/focus: [`../templates/ui-gates/verify-render.mjs`](../templates/ui-gates/README.md) (exit 0/1/2; nền ảnh/gradient in `UNMEASURED`). · Nguồn: WCAG 2.2 SC 1.4.3, 1.4.11; `www-donghanhcungban-org/stored` 06 §7d.2 (XIAS: README ghi "52/52" nhưng một ô harness đạt 2,92:1 < 3:1, chạy lại 49/52; đọc 2026-10-16)
 - [ ] `UX-A11Y-029` **MAY** Thử căng bố cục ở **280 CSS px** ngoài ngưỡng chuẩn 320 px (`UX-A11Y-013`): không tràn ngang. 280 px là phép thử căng của bộ cổng XIAS, **không phải chuẩn WCAG** và chưa xác minh được là bề rộng cover screen của máy gập nào. → Kiểm: `node verify-render.mjs <url> --widths 320,280` (mẫu ở [`../templates/ui-gates/`](../templates/ui-gates/README.md)) hoặc Playwright viewport 280×800 → `scrollWidth <= 280`. · Nguồn: WCAG 2.2 SC 1.4.10 (320 px); `www-donghanhcungban-org/stored` 06 §7d.2 (`verify_overflow` ở 280 px), đọc 2026-10-18
