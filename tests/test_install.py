@@ -48,6 +48,7 @@ class InstallTest(unittest.TestCase):
             "xt_distribution.py",
             "xt_scale.py",
             "xt_field.py",
+            "xt_toolcfg.py",
         )
         self.assertTrue(all((root / "scripts" / name).is_file() for name in helpers))
         project_file = self.target / "product.py"

@@ -37,6 +37,7 @@ ARTIFACT_SCRIPTS = (
     "xt_distribution.py",
     "xt_scale.py",
     "xt_field.py",
+    "xt_toolcfg.py",
 )
 PACKAGES = ("xt_app",)
 SHEBANG = b"#!/usr/bin/env python3\n"

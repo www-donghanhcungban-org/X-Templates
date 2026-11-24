@@ -833,3 +833,10 @@
 - Chọn: Bảng bậc theo nhà cung cấp làm nguồn duy nhất (model-tiers.json), agent explore bằng Haiku, phiên chính viết code ở Opus, đồng bộ Codex và hướng dẫn các harness khác (ADR-0098)
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu triển khai hướng tốt nhất và đồng bộ mọi harness (áp dụng cả dự án đích); một nguồn bảng bậc giữ nhất quán giữa agent Claude, agent Codex và adapter khác; phiên chính viết bằng Opus giải xung đột D-558 với LOOP-ORCH-005; Haiku chỉ cho tra cứu chỉ đọc, kèm cách đo; không nới cổng
 - Đường lùi: Bỏ explore.md và model-tiers.json; D-558/D-559 vẫn đúng ở mức lệnh giao reviewer
+
+### D-561 · 2026-11-24T05:30:48+00:00 · Giữ agent explore ở Haiku sau thí nghiệm 10 câu (ADR-0098)?
+
+- Phương án: (1) Giữ Haiku cho tra cứu chỉ đọc · (2) Đổi explore lên Sonnet
+- Chọn: Giữ Haiku cho tra cứu chỉ đọc
+- Lý do (tiêu chí chất lượng cuối): Haiku đúng 10/10 câu tra cứu (định nghĩa, hằng, cờ, giá trị khoá) so với grep của phiên chính; 27,5K token, 19 giây, 13 lệnh. Mẫu nhỏ nên chỉ xác nhận ngưỡng dừng (sai > 1/10) chưa bị vi phạm; phiên chính đối chiếu cả 10 câu bằng grep vì đây là thí nghiệm, chưa phải tỷ lệ đọc lại vận hành. Đo lại khi có --cost.
+- Đường lùi: Đổi model: haiku thành sonnet ở .claude/agents/explore.md và bảng vai ở model-tiers.json, sinh lại gương Codex
