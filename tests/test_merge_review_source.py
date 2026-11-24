@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 import guard
 import xt
+from xt_merge_intent import RepoTarget
 from test_merge import GREEN, commit_base_xt, pr, run_main
 
 HEAD = "c" * 40
@@ -84,14 +85,14 @@ class MergeCheckReviewStepTest(unittest.TestCase):
         rc, out = self.check(std(xtReviews=[mark(True)]))
         self.assertEqual(rc, 0)
         self.assertTrue(out.startswith("MERGE · PR #7 · làn chuẩn"), out)
-        self.assertIn(f"→ gh pr merge 7 --squash --match-head-commit {HEAD}", out)
+        self.assertNotIn("gh pr merge", out)
 
     def test_merge_check_build_phase_still_merges_without_review(self):
         commit_base_xt(self.base, "merge_autonomy: L3\ndelivery_phase: build\n")
         rc, out = self.check(std())
         self.assertEqual(rc, 0)
         self.assertIn("pha build: bỏ qua review, ghi nợ (ADR-0031)", out)
-        self.assertIn(f"→ gh pr merge 7 --squash --match-head-commit {HEAD}", out)
+        self.assertNotIn("gh pr merge", out)
         rc, out = self.check(std(xtReviews=[mark(False)]))  # lỗi chặn vẫn chặn ở pha build
         self.assertEqual(rc, 1)
         self.assertNotIn("match-head-commit", out)
@@ -181,9 +182,9 @@ class MergeCheckReviewStepTest(unittest.TestCase):
         self.assertEqual(d["review"], "deferred")
         rest = {**std(), "author": "a", "authorAssociation": "OWNER"}
         with unittest.mock.patch.object(xt, "_pr_rest", return_value=rest):
-            out = xt._steward_one("7", "repos/o/r", self.base, False, [])
+            out = xt._steward_one("7", RepoTarget("github.com", "o/r"), self.base, False)
         self.assertEqual(out["action"], "republish-review")
-        self.assertEqual(xt._steward_command(out, "repos/o/r"), [])
+        self.assertEqual(xt._steward_command(out, RepoTarget("github.com", "o/r")), [])
 
     def test_merge_check_local_standard_seen_keeps_strict(self):
         """AUD-XFEAT-016: PR từng vào làn chuẩn (sổ cục bộ `standard_seen`, chưa có nhãn) rồi thu về làn nhanh — `merge-check`
@@ -223,6 +224,9 @@ class GuardReviewMissingTest(unittest.TestCase):
         f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={HEAD} -f merge_method=squash",
     )
     AUTO_MERGES = ("gh pr merge 7 --auto --squash", f"gh pr merge 7 --auto --squash --match-head-commit {HEAD}")
+
+    def setUp(self):
+        self.enterContext(unittest.mock.patch.dict(os.environ, {"GH_REPO": "github.com/o/r", "GH_HOST": "github.com"}))
 
     def test_auto_merge_denied_whatever_the_review(self):
         """ADR-0036 §3: `--auto` → deny mã `AUTO_MERGE_ENABLE` cả khi review thiếu/chặn lẫn khi review sạch, pha build;
@@ -391,7 +395,7 @@ class GuardReviewMissingTest(unittest.TestCase):
             for cmd in self.MERGES:
                 with self.subTest(name, cmd=cmd):
                     self.assertEqual(self.final(d, cmd)["decision"], "allow")
-            self.assertEqual(self.mcp(d)["decision"], "allow")
+            self.assertEqual((self.mcp(d)["decision"], self.mcp(d)["code"]), ("deny", "UNVERIFIED"))
 
 
 class ReviewSourceTest(unittest.TestCase):
@@ -523,7 +527,7 @@ class ReviewSourceChainTest(unittest.TestCase):
             out = self.nxt(p)
             actions.append(out["action"])
         self.assertEqual(actions, ["republish-review"] * 3)
-        self.assertIn(f"xt.py pr reviewed --pr 7 --head {HEAD} --clean", out["do"])
+        self.assertEqual(out["do"], "")  # ảnh chụp chỉ báo cần đăng lại
         self.assertNotIn("merge", actions)
         # merge-check cùng nguồn: chưa có dấu đã đăng → chưa merge
         rc, out, _ = run_main("merge-check", "--json", "--pr-json", "-", stdin=json.dumps(p))
@@ -541,9 +545,11 @@ class ReviewSourceChainTest(unittest.TestCase):
         run_main("pr", "reviewed", "--pr", "7", "--head", HEAD, "--clean", *MODELS)
         rest = {**std(), "author": "a", "authorAssociation": "OWNER"}
         with unittest.mock.patch.object(xt, "_pr_rest", return_value=rest):
-            out = xt._steward_one("7", "repos/o/r", self.base, False, [])
+            out = xt._steward_one("7", RepoTarget("github.com", "o/r"), self.base, False)
         self.assertEqual(out["action"], "republish-review")
-        self.assertEqual(xt._steward_command(out, "repos/o/r"), [])  # steward chỉ báo, không bật/merge
+        self.assertEqual(
+            xt._steward_command(out, RepoTarget("github.com", "o/r")), []
+        )  # steward chỉ báo, không bật/merge
 
 
 if __name__ == "__main__":

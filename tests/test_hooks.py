@@ -4273,7 +4273,11 @@ class MergeGuardBase(unittest.TestCase):
 
     def env(self) -> dict:
         """PATH có `gh` giả; `run_hook` tự đặt CLAUDE_PROJECT_DIR."""
-        return {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"}
+        return {
+            "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+            "GH_REPO": "github.com/o/r",
+            "GH_HOST": "github.com",
+        }
 
     def d(self, cmd: str, via_hook: bool = False) -> tuple[str | None, str]:
         if via_hook:
@@ -4353,6 +4357,27 @@ class MergeGuardPinnedMergeTest(MergeGuardBase):
         self.assertEqual(dec, "allow")
         self.assertIn("merge-check", why)
         self.assertEqual(self.d(f"gh pr merge 7 --squash --match-head-commit={MERGE_HEAD}")[0], "allow")
+
+    def test_numeric_pr_and_verified_worktree_for_environment_routing(self):
+        sub = self.proj / "scripts"
+        nested = sub / "nested"
+        nested.mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(nested)], check=True)
+        pinned = f"--squash --match-head-commit {MERGE_HEAD}"
+        merge = f"gh pr merge 7 {pinned}"
+        with (
+            mock.patch.dict(os.environ, {**self.env(), "CLAUDE_PROJECT_DIR": str(self.proj)}),
+            mock.patch.object(self.guard, "merge_check", self.merge_check_inproc),
+        ):
+            for cwd, code in ((self.proj, "RULE_ALLOW"), (sub, "RULE_ALLOW"), (nested, "UNVERIFIED")):
+                with self.subTest(cwd=cwd):
+                    out = self.guard.bash_decision(merge, str(self.proj), str(cwd))
+                    self.assertEqual(self.guard.decide(out).code, code, out)
+            for selector in ("", "topic", "8"):
+                with self.subTest(selector=selector):
+                    out = self.guard.bash_decision(f"gh pr merge {selector} {pinned}", str(self.proj), str(sub))
+                    self.assertEqual(self.guard.decide(out).code, "UNVERIFIED", out)
+        self.assertFalse(self.guard._merge_checkout_same(str(self.proj), str(sub / "missing")))
 
     def test_unpinned_admin_repo_or_compound_still_ask(self):
         for cmd in (
@@ -4518,12 +4543,11 @@ class MergeGuardPinnedMergeTest(MergeGuardBase):
         commit_title = f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} -f commit_title=x"
         self.assertEqual(self.d(commit_title)[0], "deny")  # đè PR_TITLE (AUD-HAR-128)
 
-    def test_mcp_merge_pinned_allows(self):
-        """ADR-0014: tool MCP `merge_pull_request` ghim `expectedHeadSha`, đúng repo đã kiểm → allow; bật auto-merge → chặn
-        (ADR-0036)."""
+    def test_mcp_merge_pinned_unknown_endpoint_asks(self):
+        """D-588: pin đủ vẫn thiếu host đã xác minh; bật auto-merge giữ chặn cứng."""
         good = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": MERGE_HEAD, "merge_method": "squash"}
         dec = self.mcp_d
-        self.assertEqual(dec("mcp__github__merge_pull_request", good, via_hook=True), "allow")
+        self.assertEqual(dec("mcp__github__merge_pull_request", good, via_hook=True), "ask")
         for name, inp in {
             "repo khác": {**good, "owner": "evil"},
             "không ghim": {k: v for k, v in good.items() if k != "expectedHeadSha"},
@@ -4664,12 +4688,13 @@ class MergeGuardTest(MergeGuardBase):
         from test_merge import commit_base_xt
 
         auto = "merge_autonomy: L3\nmerge_hard_exceptions: auto\n"
-        env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}", "XT_GUARD_POLICY": ""}
+        env = {**self.env(), "XT_GUARD_POLICY": ""}
         sha40 = (
             "c" * 40
         )  # dấu review chỉ nhận head 40 hex; PR ngoại lệ cứng vào làn chuẩn nên cần review ở head (ADR-0028)
         mcp = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": sha40}
         payload = {"tool_name": "mcp__github__merge_pull_request", "tool_input": mcp}
+        pinned = f"gh pr merge 7 --squash --match-head-commit {sha40}"
         auth = {**FAST_PR, "labels": [{"name": "risk:auth"}], "headRefOid": sha40}
         key = {
             **FAST_PR,
@@ -4685,12 +4710,13 @@ class MergeGuardTest(MergeGuardBase):
                 shutil.rmtree(self.proj / ".git", ignore_errors=True)
                 commit_base_xt(self.proj, committed, working)
                 self.fake_gh(pr, reviewed=sha40)
-                code, out, _ = run_hook("pre-mcp-guard.sh", payload, self.proj, env)
+                code, out, _ = run_hook("pre-bash-guard.sh", {"tool_input": {"command": pinned}}, self.proj, env)
                 self.assertEqual((code, decision(out)), (0, want), out)
-        pinned = f"gh pr merge 7 --squash --match-head-commit {sha40}"
-        code, out, _ = run_hook("pre-bash-guard.sh", {"tool_input": {"command": pinned}}, self.proj, env)
-        self.assertEqual((code, decision(out)), (0, "deny"), out)  # PR đổi khoá, qua Bash
-        self.assertIn("HARD_EXCEPTION", out)
+                if want == "deny":
+                    self.assertIn("HARD_EXCEPTION", out)
+                code, out, _ = run_hook("pre-mcp-guard.sh", payload, self.proj, env)
+                self.assertEqual((code, decision(out)), (0, "deny"), out)
+                self.assertIn("UNVERIFIED" if want == "allow" else "HARD_EXCEPTION", out)
 
 
 class MergeGuardHardUnpinnedTest(MergeGuardBase):
@@ -4828,6 +4854,9 @@ class MergeGuardFailClosedTest(MergeGuardBase):
         self.assertIn("merge-check: human", why)
         self.fake_gh(None)
         dec, why = self.d(f"gh pr merge --match-head-commit {MERGE_HEAD}")
+        self.assertEqual(dec, "ask")
+        self.assertIn("PR không rõ", why)
+        dec, why = self.d(f"gh pr merge 7 --match-head-commit {MERGE_HEAD}")
         self.assertEqual(dec, "ask")
         self.assertIn("merge-check không chạy được", why)
 

@@ -23,6 +23,7 @@ HEAD = "a" * 40
 OTHER_HEAD = "b" * 40
 VERDICTS = ("wait", "fix", "update", "human", "closed")
 ENTRIES = ("cli", "rest", "mcp", "core")
+BOUND_ENTRIES = ("cli", "rest", "core")
 POLICIES = ("default", "strict")
 CLI = f"gh pr merge 7 --squash --match-head-commit {HEAD}"
 REST = f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={HEAD} -f merge_method=squash"
@@ -54,7 +55,17 @@ def merge_result(verdict: str = "merge", **changes: object) -> dict:
 class MergeVerdictCodesTest(unittest.TestCase):
     def setUp(self):
         self.root = self.enterContext(tempfile.TemporaryDirectory(prefix="xt-merge-verdict-"))
-        self.enterContext(mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": self.root, "XT_GUARD_PHASE": "harden"}))
+        self.enterContext(
+            mock.patch.dict(
+                os.environ,
+                {
+                    "CLAUDE_PROJECT_DIR": self.root,
+                    "XT_GUARD_PHASE": "harden",
+                    "GH_REPO": "github.com/o/r",
+                    "GH_HOST": "github.com",
+                },
+            )
+        )
 
     def raw(self, entry: str, result: dict, command: str | None = None, tool_input: dict | None = None) -> dict:
         with mock.patch.object(guard, "merge_check", return_value=result):
@@ -94,7 +105,7 @@ class MergeVerdictCodesTest(unittest.TestCase):
                         self.check(entry, merge_result(verdict), policy, "MERGE_INELIGIBLE")
 
     def test_valid_pinned_merge_still_allowed(self):
-        for entry in ENTRIES:
+        for entry in BOUND_ENTRIES:
             for policy in POLICIES:
                 with self.subTest(entry=entry, policy=policy), mock.patch.dict(os.environ, {"XT_GUARD_POLICY": policy}):
                     raw = self.raw(entry, merge_result())
@@ -102,8 +113,21 @@ class MergeVerdictCodesTest(unittest.TestCase):
                     self.assertEqual(final["decision"], "allow", final)
                     self.assertEqual(guard.decide(raw).code, "RULE_ALLOW", raw)
 
+    def test_pinned_mcp_merge_still_requires_a_verified_host(self):
+        for policy in POLICIES:
+            for head in (HEAD, OTHER_HEAD):
+                with self.subTest(policy=policy, head=head):
+                    self.check("mcp", merge_result(head=head), policy, "UNVERIFIED")
+            self.check(
+                "mcp",
+                merge_result(head=OTHER_HEAD),
+                policy,
+                "UNVERIFIED",
+                tool_input={**MCP, "merge_method": "unsupported"},
+            )
+
     def test_head_changed_since_pin_is_not_replaced_with_latest_head(self):
-        for entry in ENTRIES:
+        for entry in BOUND_ENTRIES:
             for policy in POLICIES:
                 for head in (OTHER_HEAD, ""):
                     with self.subTest(entry=entry, policy=policy, head=head):
@@ -161,7 +185,6 @@ class MergeVerdictCodesTest(unittest.TestCase):
             ("rest", {"command": REST + " -H Accept:application/json"}),
             ("rest", {"command": REST + f" -f sha={OTHER_HEAD}"}),
             ("rest", {"command": REST.replace(HEAD, OTHER_HEAD) + f" -f sha={HEAD}"}),
-            ("mcp", {"tool_input": {**MCP, "merge_method": "unsupported"}}),
         )
         for entry, kwargs in entries:
             for policy in POLICIES:
@@ -190,11 +213,15 @@ class MergeVerdictCodesTest(unittest.TestCase):
     def test_new_codes_are_carried_from_source_not_reason_text(self):
         codes = {"MERGE_INELIGIBLE", "MERGE_HEAD_MISMATCH"}
         self.assertFalse(codes & {code for _, code in guard.REASON_CODES})
-        for entry in ENTRIES:
-            for result, code in (
-                (merge_result("wait", reasons=["CI pending"]), "MERGE_INELIGIBLE"),
-                (merge_result(head=OTHER_HEAD, reasons=["Nội dung giải thích đã đổi"]), "MERGE_HEAD_MISMATCH"),
-            ):
+        for result, code, entries in (
+            (merge_result("wait", reasons=["CI pending"]), "MERGE_INELIGIBLE", ENTRIES),
+            (
+                merge_result(head=OTHER_HEAD, reasons=["Nội dung giải thích đã đổi"]),
+                "MERGE_HEAD_MISMATCH",
+                BOUND_ENTRIES,
+            ),
+        ):
+            for entry in entries:
                 with (
                     self.subTest(entry=entry, code=code),
                     mock.patch.object(guard, "REASON_CODES", ()),
@@ -272,8 +299,9 @@ class MergeVerdictCodesTest(unittest.TestCase):
                 safe = self.raw("core", merge_result(), command="printf done")
                 self.assertEqual(guard.apply_policy(safe)["decision"], "", safe)
                 self.assertEqual(guard.decide(safe).code, "NONE", safe)
-                allowed = self.raw(entry, merge_result())
-                self.assertEqual((allowed["decision"], guard.decide(allowed).code), ("allow", "RULE_ALLOW"))
+                following = self.raw(entry, merge_result())
+                expected = ("ask", "UNVERIFIED") if entry == "mcp" else ("allow", "RULE_ALLOW")
+                self.assertEqual((following["decision"], guard.decide(following).code), expected)
 
     def test_unknown_verdict_is_ineligible_when_pr_is_verified(self):
         for verdict in ("future-state", ""):

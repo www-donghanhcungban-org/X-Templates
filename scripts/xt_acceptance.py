@@ -407,7 +407,7 @@ def review_paths(core: ModuleType, base: Path, ref: str, changed: list[str]) -> 
         keys = [_inputs(core, base)[0], core._committed_xt_keys(base, ref).get("acceptance_paths", "").split()]
         paths.update(p for items in keys for p in items)
         disk = project_file(base, LEDGER)
-        committed = core._git(base, "show", f"{ref}:./{LEDGER}")
+        committed = core._git(base, "show", f"{ref}:./{LEDGER}", env=core._go_git_env())
         sources = ([disk.read_text(encoding="utf-8")] if disk.exists() else []) + (
             [committed.stdout] if committed.returncode == 0 else []
         )

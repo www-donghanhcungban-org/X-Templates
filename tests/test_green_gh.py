@@ -48,6 +48,7 @@ class _Case(unittest.TestCase):
         # repo đang checkout; quyết định không phụ thuộc mạng hay trạng thái PR thật.
         patcher = mock.patch.object(guard, "merge_check", return_value=MERGE_OK)
         self.merge_check = patcher.start()
+        self.enterContext(mock.patch.dict(os.environ, {"GH_REPO": "github.com/o/r", "GH_HOST": "github.com"}))
         self.addCleanup(patcher.stop)
 
     def assert_code(self, cmds: tuple, code: str, cwd: str = str(ROOT)) -> None:

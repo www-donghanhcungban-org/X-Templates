@@ -14,8 +14,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import xt
 import xt_adapter
-from xt_merge_intent import MergeIntent, bind, current, verified
+from xt_merge_intent import MergeIntent, RepoTarget, bind, current, verified
 from test_merge_verdict_codes import HEAD, POLICIES, VERDICTS, merge_result
+from test_xt_cli import TmpRepoCase
 
 CORPUS = ROOT / "tests" / "fixtures" / "autonomy"
 
@@ -32,34 +33,41 @@ def entry(row: dict) -> str:
     return "rest" if inp["command"].startswith("gh api ") else "cli"
 
 
-class MergeVerdictCorpusTest(unittest.TestCase):
-    def test_matrix_has_every_verdict_entry_and_policy_with_allow_controls(self):
+class MergeVerdictCorpusTest(TmpRepoCase):
+    def test_matrix_has_every_verdict_entry_and_policy_with_bound_controls(self):
         rows = merge_cases()
         self.assertTrue(rows)
         required = {
             (verdict, path, policy) for verdict in VERDICTS for path in ("cli", "rest", "mcp") for policy in POLICIES
         }
         actual = set()
-        controls, mismatches = set(), set()
+        controls, mismatches, unverified = set(), set(), set()
         for row in rows:
             self.assertIn("AUD-HAR-454", row["refs"])
             self.assertEqual(row["group"], "guard")
             inp, expected = row["input"], row["expect"]
             path_policy = (entry(row), inp["policy"])
-            if expected["allowed"]:
-                self.assertEqual((row["origin"], expected["code"]), ("control", "RULE_ALLOW"))
+            if expected["code"] == "OTHER_ASK":
+                self.assertEqual(row["origin"], "control")
+                self.assertEqual(expected["allowed"], inp["policy"] == "default")
                 self.assertEqual(inp["merge_check"]["head"], HEAD)
                 controls.add(path_policy)
             elif expected["code"] == "MERGE_HEAD_MISMATCH":
                 self.assertEqual(inp["merge_check"]["verdict"], "merge")
                 self.assertNotEqual(inp["merge_check"]["head"], HEAD)
                 mismatches.add(path_policy)
+            elif expected["code"] == "UNVERIFIED":
+                self.assertEqual(entry(row), "mcp")
+                self.assertFalse(expected["allowed"])
+                self.assertEqual(inp["tool_input"]["expectedHeadSha"], HEAD)
+                unverified.add((inp["policy"], inp["merge_check"]["head"] == HEAD))
             else:
                 self.assertEqual(expected["code"], "MERGE_INELIGIBLE")
                 actual.add((inp["merge_check"]["verdict"], *path_policy))
         self.assertEqual(actual, required)
-        self.assertEqual(controls, {(path, policy) for path in ("cli", "rest", "mcp") for policy in POLICIES})
+        self.assertEqual(controls, {(path, policy) for path in ("cli", "rest") for policy in POLICIES})
         self.assertEqual(mismatches, controls)
+        self.assertEqual(unverified, {(policy, same_head) for policy in POLICIES for same_head in (False, True)})
 
     def test_every_new_case_runs_through_real_bench(self):
         with tempfile.TemporaryDirectory(prefix="xt-merge-corpus-") as tmp:
@@ -72,8 +80,13 @@ class MergeVerdictCorpusTest(unittest.TestCase):
 
     def test_oracle_detects_lost_code_as_false_green(self):
         """Bỏ kênh mã riêng trong bộ nhớ tái hiện OTHER_ASK cũ; corpus phải báo false-green."""
-        cases = [row for row in merge_cases() if not row["expect"]["allowed"] and row["input"]["policy"] == "default"]
-        self.assertEqual(len(cases), 18)
+        cases = [
+            row
+            for row in merge_cases()
+            if row["input"]["policy"] == "default"
+            and row["expect"]["code"] in ("MERGE_INELIGIBLE", "MERGE_HEAD_MISMATCH")
+        ]
+        self.assertEqual(len(cases), 17)
         with tempfile.TemporaryDirectory(prefix="xt-merge-oracle-") as tmp:
             env = xt.BenchEnv(Path(tmp))
             guard = env.module("guard")
@@ -103,10 +116,12 @@ class MergeVerdictCorpusTest(unittest.TestCase):
                     self.assertEqual(result["status"], "pass", result)
 
     def test_incomplete_live_identity_cannot_authorize_a_pinned_merge(self):
-        cli = f"gh pr merge 7 --squash --match-head-commit {HEAD}"
+        cli = f"gh pr merge 7 --repo github.com/o/r --squash --match-head-commit {HEAD}"
         valid = merge_result()
         with tempfile.TemporaryDirectory() as tmp:
             env = xt.BenchEnv(Path(tmp))
+            got = xt._bench_guard({"command": cli, "merge_check": valid}, env)
+            self.assertEqual((got["code"], got["allowed"]), ("OTHER_ASK", True))
             for key, bad in (("host", ""), ("host", ".invalid"), ("repo", "?/repo"), ("pr", True), ("head", "short")):
                 for data in ({k: v for k, v in valid.items() if k != key}, {**valid, key: bad}):
                     for policy in POLICIES:
@@ -176,29 +191,33 @@ class MergeVerdictCorpusTest(unittest.TestCase):
         }
         intent = verified(pull, "repos/org/repo", "7", host, ValueError)
         self.assertIsNotNone(intent)
-        out = bind({"live_intent": intent._asdict(), "repo": "org/repo"}, {"action": "merge", "pr": 7, "head": HEAD})
-        cmd = xt._steward_command(out, "repos/org/repo")[0]
+        target = RepoTarget(host, "org/repo")
+        out = bind(
+            {"live_host": host, "live_intent": intent._asdict(), "repo": "org/repo"},
+            {"action": "merge", "pr": 7, "head": HEAD},
+        )
+        cmd = xt._steward_command(out, target)[0]
         self.assertIn(f"--hostname {host} repos/org/repo/pulls/7/merge", out["do"])
         self.assertEqual(cmd[cmd.index("--hostname") + 1 :][:2], [host, "repos/org/repo/pulls/7/merge"])
         self.assertIn(f"sha={HEAD}", cmd)
-        with_message = xt._steward_command(out, "repos/org/repo", "Tiêu đề", "Nội dung")[0]
+        with_message = xt._steward_command(out, target, "Tiêu đề", "Nội dung")[0]
         self.assertEqual(with_message[-4:], ["-f", "commit_title=Tiêu đề", "-f", "commit_message=Nội dung"])
         fetch = mock.Mock(return_value=[pull])
-        self.assertEqual(current(out, "repos/org/repo", fetch), "")
+        self.assertEqual(current(out, target, fetch), "")
         fetch.assert_called_once_with("repos/org/repo/pulls/7", host=host)
-        self.assertFalse(xt._steward_command(out, "repos/other/target"))
+        self.assertFalse(xt._steward_command(out, RepoTarget(host, "other/target")))
         for bad in ({"host": "other.example"}, {"repo": "other/target"}, {"pr": 8}, {"expected_head": "b" * 40}):
             with self.subTest(bad=bad):
                 changed = {**out, "merge_intent": {**out["merge_intent"], **bad}}
-                self.assertTrue(current(changed, "repos/org/repo", fetch))
+                self.assertTrue(current(changed, target, fetch))
         fetch.return_value = []
-        self.assertTrue(current(out, "repos/org/repo", fetch))
+        self.assertTrue(current(out, target, fetch))
         fetch.return_value = [False]
-        self.assertTrue(current(out, "repos/org/repo", fetch))
-        self.assertEqual(bind({"live_intent": None}, out)["action"], "wait")
+        self.assertTrue(current(out, target, fetch))
+        self.assertEqual(bind({"live_host": host, "live_intent": None, "repo": "org/repo"}, out)["action"], "wait")
         for fields in ({"host": None}, {"repo": ".."}, {"pr": True}, {"expected_head": 1}):
             self.assertIsNone(
-                MergeIntent.from_action({**out, "merge_intent": {**out["merge_intent"], **fields}}, "repos/org/repo")
+                MergeIntent.from_action({**out, "merge_intent": {**out["merge_intent"], **fields}}, target)
             )
         for fields in (
             {"number": False},
@@ -208,46 +227,42 @@ class MergeVerdictCorpusTest(unittest.TestCase):
             self.assertIsNone(MergeIntent.from_pull({**pull, **fields}))
 
     def test_live_read_binds_host_and_rejects_a_different_destination(self):
-        selected = []
-
-        def record(repo, number, local, raw, intent):
-            selected.append((repo, number, xt.PR_READ_HOST.get()))
-            return {}
-
-        with (
-            mock.patch.object(xt, "_gh_one", return_value={}),
-            mock.patch.object(xt, "_pr_rest_details", side_effect=record),
-        ):
-            xt._pr_rest("https://Git.Example/O/R/pull/7")
-            xt._pr_rest("o/r#7")
-            with mock.patch.dict(os.environ, {"GH_REPO": "git.example/a/b", "GH_HOST": "other.example"}):
-                xt._pr_rest("7")
-                xt._pr_rest("o/r#7")
-                xt._pr_rest("https://github.com/a/b/pull/7")
-            with mock.patch.dict(os.environ, {"GH_REPO": "bad/repo/target/shape"}):
-                with self.assertRaisesRegex(xt.PrInputError, "GH_REPO"):
-                    xt._pr_rest("7")
-            with mock.patch.dict(os.environ, {"GH_HOST": "https://git.example"}):
-                with self.assertRaisesRegex(xt.PrInputError, "GH_HOST"):
-                    xt._pr_rest("o/r#7")
-            with self.assertRaises(xt.PrInputError):
-                xt._pr_rest("https://user@git.example/o/r/pull/7")
-        self.assertEqual(
-            selected,
-            [
-                ("repos/O/R", "7", "git.example"),
-                ("repos/o/r", "7", ""),
-                ("repos/a/b", "7", "git.example"),
-                ("repos/o/r", "7", "other.example"),
-                ("repos/a/b", "7", "github.com"),
-            ],
+        checkout = self.init_repo()
+        self.git("remote", "add", "origin", "https://git.example/o/r.git")
+        self.enterContext(
+            mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(checkout), "GH_REPO": "", "GH_HOST": ""})
         )
+        selected = []
         pull = {
             "number": 7,
             "html_url": "https://git.example/o/r/pull/7",
             "base": {"repo": {"full_name": "o/r"}},
             "head": {"sha": HEAD},
         }
+
+        def record(repo, number, local, raw, intent):
+            selected.append((repo, number, xt.PR_READ_HOST.get()))
+            return {}
+
+        with (
+            mock.patch.object(xt, "_gh_api", return_value=[pull]) as fetch,
+            mock.patch.object(xt, "_pr_rest_details", side_effect=record),
+        ):
+            xt._pr_rest("https://Git.Example/O/R/pull/7")
+            xt._pr_rest("o/r#7")
+            with mock.patch.dict(os.environ, {"GH_REPO": "git.example/o/r", "GH_HOST": "git.example"}):
+                xt._pr_rest("7")
+            for selector in ("a/b#7", "https://github.com/o/r/pull/7", "https://user@git.example/o/r/pull/7"):
+                with self.subTest(selector=selector), self.assertRaises(xt.PrInputError):
+                    xt._pr_rest(selector)
+            with mock.patch.dict(os.environ, {"GH_REPO": "bad/repo/target/shape"}):
+                with self.assertRaisesRegex(xt.PrInputError, "GH_REPO"):
+                    xt._pr_rest("7")
+            with mock.patch.dict(os.environ, {"GH_HOST": "https://git.example"}):
+                with self.assertRaisesRegex(xt.PrInputError, "GH_HOST"):
+                    xt._pr_rest("o/r#7")
+            self.assertEqual(fetch.call_args_list, [mock.call("repos/o/r/pulls/7")] * 3)
+        self.assertEqual(selected, [("repos/o/r", "7", "git.example")] * 3)
         for repo, number, host in (
             ("repos/a/b", "7", "git.example"),
             ("repos/o/r", "8", "git.example"),
@@ -257,12 +272,13 @@ class MergeVerdictCorpusTest(unittest.TestCase):
                 verified(pull, repo, number, host, xt.PrInputError)
 
     def test_pr_next_and_steward_do_not_emit_merge_for_ineligible_verdict(self):
+        target = RepoTarget("github.com", "o/r")
         for verdict in VERDICTS:
             with self.subTest(verdict=verdict):
                 decision = {**merge_result(verdict), "pr": 7, "lane": "nhanh", "review_optional": True}
                 action = xt.pr_next(decision, False, {})
                 self.assertNotEqual(action["action"], "merge", action)
-                commands = xt._steward_command(action, "repos/o/r")
+                commands = xt._steward_command(action, target)
                 self.assertFalse(any("--match-head-commit" in command for command in commands), commands)
                 self.assertFalse(
                     any(any("/merge" in argument for argument in command) for command in commands), commands
@@ -270,9 +286,9 @@ class MergeVerdictCorpusTest(unittest.TestCase):
         decision = {**merge_result(), "pr": 7, "lane": "nhanh", "review_optional": True}
         action = xt.pr_next(decision, False, {})
         self.assertEqual(action["action"], "merge", action)
-        self.assertEqual(xt._steward_command(action, "repos/o/r"), [])
+        self.assertEqual(xt._steward_command(action, target), [])
         action["merge_intent"] = {"host": "github.com", "repo": "o/r", "pr": 7, "expected_head": HEAD}
-        commands = xt._steward_command(action, "repos/o/r")
+        commands = xt._steward_command(action, target)
         self.assertEqual(
             commands,
             [

@@ -54,7 +54,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - Adapter `deploy` lọc họ biến `GIT_*` khỏi môi trường kế thừa và chỉ cho khai tường minh `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH` (T-5007, D-578). `deploy_env_pass:` rỗng chỉ truyền nhóm biến hệ thống cho adapter. **Dự án đích:** khai khóa này cho `run` và `rollback` ở mọi môi trường ngoài `dev`, liệt kê tên biến cần hoặc để rỗng. Các giá trị `null`, `Null`, `NULL`, `~` báo lỗi cấu hình.
 
-- `pr next` sinh `merge_intent` từ PR live với host, repo, số PR và SHA đầy đủ. Steward đọc lại đúng đích trước khi gửi merge ghim SHA. Guard chặn đích lệch qua `GH_REPO`/`GH_HOST` và merge thiếu pin (AUD-HAR-492, D-579, [ADR-0102](docs/adr/0102-merge-intent.md), T-5008). `pr next --pr-json` vẫn cho xem quyết định và bỏ lệnh ghi.
+- `pr next` sinh `merge_intent` từ PR live với host, repo, số PR và SHA đầy đủ. Steward đọc lại đúng đích trước khi gửi merge ghim SHA. Khung xác minh host/repo của origin trước lần đọc đầu và dùng cùng đích cho policy, watch, nhãn, CI, release và dấu review. Guard cần số PR, đích và pin tường minh; endpoint MCP chưa xác minh trả `UNVERIFIED`. Snapshot vẫn cho xem quyết định và bỏ lệnh ghi (AUD-HAR-492, AUD-HAR-515–521, D-579, D-588, [ADR-0102](docs/adr/0102-merge-intent.md), T-5008).
 
 - `static-check` (AUD-HAR-514): `motion` báo MOT002 khi có `view-transition-name` mà thiếu `prefers-reduced-motion: reduce`. `ac-trace`, `trace` (JSON Lines) và `credits` chỉ tách dòng ở LF, giữ nguyên U+2028 và form feed trong dòng.
 
