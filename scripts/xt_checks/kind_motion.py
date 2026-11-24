@@ -1,0 +1,79 @@
+"""Loại `motion` (UX-VISUAL-001..003, UX-A11Y-015, UX-STATE-020, FE-TEST-014): chuyển động CSS phải tôn trọng
+`prefers-reduced-motion`, không chớp quá 3 lần/giây và dừng được. Quét bằng regex (heuristic: bỏ chú thích `/* */`, không
+phân tích @import, biến `var()`, hay khai báo trải nhiều tệp). Báo: `MOT001` `transition: all`; `MOT002` tệp có chuyển động
+nhưng không có khối `@media (prefers-reduced-motion: reduce)` (một phát hiện ở dòng chuyển động đầu tiên); `MOT003` hoạt ảnh
+`infinite` có thời lượng < 0,34 giây (đọc `animation-duration` trong cùng khối quy tắc, không có thì thời lượng đầu tiên của
+shorthand `animation:`; đơn vị s, ms); `MOT004` hoạt ảnh `infinite` mà tệp không có `animation-play-state`. Bỏ một mã cho
+một dòng bằng `/* xt-allow: MOT00N */`; `--opt ignore=MOT002,…` bỏ mã toàn cục."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from . import Finding, read_text
+
+HELP = (
+    "chuyển động CSS: transition all, thiếu prefers-reduced-motion, hoạt ảnh lặp vô hạn chớp nhanh hoặc không dừng được"
+)
+SUFFIXES = (".css", ".scss")
+MIN_SECONDS = 0.34
+COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+ALLOW = re.compile(r"xt-allow:\s*([A-Z0-9, ]+)")
+TRANSITION_ALL = re.compile(r"\btransition(?:-property)?\s*:[^;}]*\ball\b")
+MOTION = re.compile(r"@keyframes\b|\b(?:animation|transition)[\w-]*\s*:")
+REDUCED = re.compile(r"@media[^{]*prefers-reduced-motion\s*:\s*reduce")
+INFINITE = re.compile(r"\banimation(?:-iteration-count)?\s*:[^;}]*\binfinite\b")
+DURATION = re.compile(r"animation-duration\s*:\s*(\d*\.?\d+)(ms|s)\b")
+TIME = re.compile(r"(?<![\w.-])(\d*\.?\d+)(ms|s)\b")
+
+
+def _seconds(match: re.Match[str]) -> float:
+    value = float(match.group(1))
+    return value / 1000 if match.group(2) == "ms" else value
+
+
+def _duration(clean: str, hit: re.Match[str]) -> float | None:
+    start = clean.rfind("{", 0, hit.start()) + 1
+    end = clean.find("}", hit.end())
+    block = clean[start : end if end >= 0 else len(clean)]
+    found = DURATION.search(block) or TIME.search(hit.group())
+    return _seconds(found) if found else None
+
+
+def _check_text(path: str, text: str, ignore: set[str]) -> list[Finding]:
+    allow: dict[int, set[str]] = {}
+    for number, raw in enumerate(text.splitlines(), 1):
+        marker = ALLOW.search(raw)
+        if marker:
+            allow[number] = {c.strip() for c in marker.group(1).split(",")}
+    clean = COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), text)
+    seen: dict[tuple[int, str], Finding] = {}
+
+    def add(offset: int, code: str, message: str) -> None:
+        line = clean.count("\n", 0, offset) + 1
+        if code not in ignore and code not in allow.get(line, set()):
+            seen.setdefault((line, code), Finding(path, line, code, message))
+
+    for hit in TRANSITION_ALL.finditer(clean):
+        add(hit.start(), "MOT001", "`transition: all` — nêu rõ thuộc tính cần chuyển")
+    first = MOTION.search(clean)
+    if first and not REDUCED.search(clean):
+        add(first.start(), "MOT002", "có chuyển động nhưng thiếu @media (prefers-reduced-motion: reduce)")
+    for hit in INFINITE.finditer(clean):
+        seconds = _duration(clean, hit)
+        if seconds is not None and seconds < MIN_SECONDS:
+            add(hit.start(), "MOT003", "hoạt ảnh lặp vô hạn dưới 0,34 giây — nguy cơ chớp quá 3 lần/giây")
+        if "animation-play-state" not in clean:
+            add(hit.start(), "MOT004", "hoạt ảnh lặp vô hạn không có animation-play-state — không dừng được")
+    return list(seen.values())
+
+
+def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
+    ignore = {code for code in opts.get("ignore", "").split(",") if code}
+    found: list[Finding] = []
+    for path in files:
+        text = read_text(path)
+        if text is not None:
+            found.extend(_check_text(str(path), text, ignore))
+    return found

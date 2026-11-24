@@ -58,6 +58,9 @@ Lệnh:
   license-check [--requirements F]... [--allow F]
                                 License gói đã cài của file requirements ghim (mặc định requirements-dev.txt) đối chiếu
                                 allowlist license-allow.json; vi phạm/ngoại lệ quá hạn → exit 1 (BASE-DEP-005).
+  static-check KIND [PATH…] [--opt K=V]… [--json]
+                                Kiểm tĩnh theo loại (gói xt_checks, ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn; 0 sạch,
+                                1 có phát hiện, 2 dùng sai.
   progress-check [FILE]         PROGRESS.md: ≤ 8 KB, đúng 4 mục, SHA ở Bàn giao phiên là tổ tiên HEAD và có trên nhánh chính.
   prompt-assets-scan [PATH…] [--exempt F] [--patterns F] [--json]
                                 Tài sản prompt: injection, ký tự ẩn, lệnh nguy hiểm, bí mật, bỏ hàng rào, gói/URL không ghim,
@@ -11851,6 +11854,34 @@ def cmd_prompt_assets_scan(args: argparse.Namespace) -> int:
     return 1 if found or errors else 0
 
 
+def cmd_static_check(args: argparse.Namespace) -> int:
+    """`xt.py static-check <loại> [ĐƯỜNG…] [--opt k=v] [--json]` (ADR-0099): `xt_checks` import lười như `xt_app`."""
+    if str(SCRIPT_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPT_DIR))
+    try:
+        import xt_checks  # gói tuỳ chọn: khung tối giản/bản cũ không có
+    except ImportError:
+        print("✗ static-check: khung này không có gói xt_checks — cài lại khung (ADR-0099)", file=sys.stderr)
+        return 2
+    try:
+        found = xt_checks.run(args.kind, args.paths or ["."], xt_checks.parse_opts(args.opt))
+    except xt_checks.CheckError as exc:
+        print(f"✗ static-check {args.kind}: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(
+            json.dumps(
+                {"schema": 1, "kind": args.kind, "findings": [f.as_dict() for f in found]}, ensure_ascii=False, indent=2
+            )
+        )
+    else:
+        for f in found:
+            print(f"✗ {f.path}:{f.line}: [{f.code}] {f.message}")
+        if not found:
+            print(f"✓ static-check {args.kind}: không phát hiện.")
+    return 1 if found else 0
+
+
 def cmd_ci_check(args: argparse.Namespace) -> int:
     d = Path(args.dir or ".github/workflows")
     if not d.is_dir():
@@ -23412,6 +23443,14 @@ def build_parser() -> argparse.ArgumentParser:
     ppa.add_argument("--today", default="", help="ngày ISO thay hôm nay (test hạn miễn trừ)")
     ppa.add_argument("--json", action="store_true")
     ppa.set_defaults(fn=cmd_prompt_assets_scan)
+    psc = sub.add_parser("static-check", help="kiểm tĩnh theo loại trên tệp của dự án (ADR-0099): nfc, …")
+    psc.add_argument(
+        "kind", help="loại kiểm (bảng ở docs/adr/0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn"
+    )
+    psc.add_argument("paths", nargs="*", help="tệp hoặc thư mục (mặc định thư mục hiện tại)")
+    psc.add_argument("--opt", action="append", default=[], metavar="KHOÁ=GIÁ-TRỊ", help="tuỳ chọn của loại, lặp được")
+    psc.add_argument("--json", action="store_true")
+    psc.set_defaults(fn=cmd_static_check)
     pci = sub.add_parser("ci-check")
     pci.add_argument("dir", nargs="?", help="thư mục workflow (mặc định .github/workflows, không có thì bỏ qua)")
     pci.set_defaults(fn=cmd_ci_check)

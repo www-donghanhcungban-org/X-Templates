@@ -888,7 +888,7 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         shutil.copy2(SRC / "scripts" / f, xt_dir / "scripts" / f)
     (xt_dir / "scripts" / "dev-task.sh").chmod(0o755)
     # App cục bộ `xt.py app` (ADR-0038): gói máy chủ + giao diện tĩnh cạnh xt.py, luôn thay như xt.py.
-    for d in ("xt_app", "app"):
+    for d in ("xt_app", "app", "xt_checks"):  # xt_checks: bộ kiểm tĩnh `xt.py static-check` (ADR-0099)
         if (SRC / "scripts" / d).is_dir():  # khung tối giản (test, bản cũ) không có app: bỏ qua, `doctor` báo ⚠
             copy_tree_replace(SRC / "scripts" / d, xt_dir / "scripts" / d)
     version = framework_label(label)

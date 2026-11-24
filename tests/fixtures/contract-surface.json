@@ -1,6 +1,6 @@
 {
  "note": "Bề mặt hợp đồng công khai của khung ở 3.36.0 (ADR-0097): mục (1) lệnh con mà hook/CI/skill/mẫu gọi (cấp một và cấp hai), mục (2) khoá xt.yaml của mẫu (đang bật và dạng chú thích), mục (3) số schema máy đọc. Thêm vào được; xoá hay đổi tên là phá hợp đồng — phải tăng `contract` và ghi CHANGELOG.",
- "contract": 2,
+ "contract": 3,
  "commands": [
   "acceptance",
   "admin-plan",
@@ -31,6 +31,7 @@
   "release-sign",
   "release-verify",
   "stage",
+  "static-check",
   "test-select",
   "test-shard-plan",
   "test-weights",

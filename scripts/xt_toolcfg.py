@@ -18,7 +18,7 @@ from pathlib import Path
 DEFAULT_ROOT = ".xtemplates"
 DEFAULT_CONFIG = "xt.yaml"
 DEFAULT_ENV_PREFIX = "XT_"
-SUPPORTED_CONTRACT = 2  # khớp `contract` ở tests/fixtures/contract-surface.json
+SUPPORTED_CONTRACT = 3  # khớp `contract` ở tests/fixtures/contract-surface.json
 FILE_NAME = "tool.json"
 MAX_BYTES = 1 << 20
 KEYS = ("config", "env_prefix", "contract", "min_contract")

@@ -39,7 +39,7 @@ ARTIFACT_SCRIPTS = (
     "xt_field.py",
     "xt_toolcfg.py",
 )
-PACKAGES = ("xt_app",)
+PACKAGES = ("xt_app", "xt_checks")
 SHEBANG = b"#!/usr/bin/env python3\n"
 MAIN = b"import sys\nimport xt\n\nsys.exit(xt.main())\n"
 FIXED_TIME = (1980, 1, 1, 0, 0, 0)

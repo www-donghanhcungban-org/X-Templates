@@ -1,0 +1,17 @@
+# PLAN X-Templates 2026-11-24 — lệnh static-check và gói xt_checks (ADR-0099), đợt 1
+
+> Duyệt: D-564 (phiên chính tự duyệt; chủ dự án yêu cầu "rà soát làm toàn bộ tất cả các mảng trừ mảng kiểm định chai LPG") · Căn cứ: bốn báo cáo rà PLAYBOOK §5–§7 của catalog stored (đọc 2026-11-24 ở commit `597c05f`); mỗi ý "CÓ" được tin chỉ khi có `tệp:dòng`, các ý "CÔNG CỤ" kiểm lại bằng grep trước khi làm
+
+## Tóm tắt
+- Khung đã có ID cho khoảng hai phần ba ý; chỗ hở chính là máy kiểm cho yêu cầu đã có. Gom thành MỘT lệnh `static-check` + gói `xt_checks` (mỗi loại một module) để hợp đồng đổi một lần.
+- Đợt 1 (PR này): khung + chín loại `nfc`, `credits`, `tokens`, `motion`, `trace`, `ac-trace`, `sbom`, `vex`, `pii-vn`. Bảy loại do executor viết song song theo giao diện chung; phiên chính tự chạy lại test, mypy, ruff và coverage (585 dòng, 220 nhánh, 100 %) thay vì tin báo cáo.
+- Đợt sau (PR riêng): loại `dedup-leak`, `rag-gate`, `srm`, `i18n`, `atlas`, `llms-txt`, `cron-dst`, `subs`, `skill-budget`; lô ID yêu cầu mới (`UX-AI-021/022`, `SEC-AI-030/031`, `SEC-SECRET-023`, `BE-JOB-021`, `OPS-DEPLOY-023`, `AI-EVAL-029`…); nâng skill `ui-verify` (gói bằng chứng, Pass/Fail/NT/NA) và `adr`.
+- Không làm: ý cần model, trình duyệt, ffmpeg hay công cụ ngoài (eval A/B, fuzz, quét SBOM bằng công cụ ngoài, VMAF/loudness, OCR); mảng kiểm định công nghiệp/chai LPG theo yêu cầu.
+
+## Ngân sách
+- Số vòng: mặc định `--single-session` · Chi phí ngoài phiên: 0 · Timeout Gate: 1200 giây · Hạn: 4 giờ.
+
+## Task
+- [x] `T-4501` khung `static-check`: gói `xt_checks` (bộ duyệt tệp, `Finding`, đăng ký tường minh), lệnh `xt.py static-check`, loại mẫu `nfc`, vào `.pyz` và `install.py`, hợp đồng `contract` 3 — Gate: `python3 -m unittest tests.test_static_check tests.test_contract_surface tests.test_pack tests.test_toolcfg` (files: scripts/xt_checks/__init__.py, scripts/xt_checks/kind_nfc.py, scripts/xt.py, scripts/install.py, scripts/xt_pack.py, scripts/xt_toolcfg.py, xt.yaml, tests/test_static_check.py, tests/fixtures/contract-surface.json, docs/adr/0099-static-check-kinds.md)
+- [x] `T-4502` loại giao diện và nội dung: `credits`, `tokens`, `motion` (sau: T-4501; files: scripts/xt_checks/kind_credits.py, scripts/xt_checks/kind_tokens.py, scripts/xt_checks/kind_motion.py, tests/test_check_credits.py, tests/test_check_tokens.py, tests/test_check_motion.py) — Gate: `python3 -m unittest tests.test_check_credits tests.test_check_tokens tests.test_check_motion`
+- [x] `T-4503` loại truy vết, chuỗi cung ứng và dữ liệu cá nhân: `trace`, `ac-trace`, `sbom`, `vex`, `pii-vn` (sau: T-4501; files: scripts/xt_checks/kind_trace.py, scripts/xt_checks/kind_ac_trace.py, scripts/xt_checks/kind_sbom.py, scripts/xt_checks/kind_vex.py, scripts/xt_checks/kind_pii_vn.py, tests/test_check_trace.py, tests/test_check_ac_trace.py, tests/test_check_sbom.py, tests/test_check_vex.py, tests/test_check_pii_vn.py) — Gate: `python3 -m unittest tests.test_check_trace tests.test_check_ac_trace tests.test_check_sbom tests.test_check_vex tests.test_check_pii_vn`

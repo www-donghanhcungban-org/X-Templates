@@ -854,3 +854,10 @@
 - Chọn: contract mặc định bằng hợp đồng artefact hỗ trợ và phải không thấp hơn min_contract; env rơi về tiền tố XT khi tiền tố riêng chưa đặt; gốc không trùng thư mục công cụ khác
 - Lý do (tiêu chí chất lượng cuối): Cách đầu an toàn hơn: tool.json mâu thuẫn bị từ chối thay vì âm thầm nhận; đổi tên công cụ không làm biến chính sách cũ bị bỏ qua mà không báo (hàng rào im lặng tắt); --tool-name git hay claude không đặt được công cụ vào thư mục của công cụ khác. Đánh đổi: danh sách thư mục dành riêng phải bảo trì. Thiếu tool.json mà gốc khác mặc định thì config và tiền tố vẫn mặc định, nên launcher ở P3 phải ghi tool.json cùng lúc.
 - Đường lùi: Bỏ RESERVED_ROOTS, ràng buộc contract và nhánh rơi về XT ở xt_toolcfg.py
+
+### D-564 · 2026-11-24T06:29:15+00:00 · Đưa ~19 máy kiểm từ các ý skill của stored vào khung bằng cách nào?
+
+- Phương án: (1) Một lệnh static-check theo loại và gói xt_checks, mỗi loại một module · (2) Mỗi máy kiểm một lệnh xt.py riêng
+- Chọn: Một lệnh static-check theo loại và gói xt_checks, mỗi loại một module
+- Lý do (tiêu chí chất lượng cuối): Cách đầu đổi hợp đồng ADR-0097 một lần, không làm xt.py phình thêm, mỗi loại có module và test riêng nên viết song song được và gỡ được từng loại; đầu ra và mã thoát thống nhất cho hook và CI. Đánh đổi: thêm một lớp điều phối nhỏ và một gói vào artefact. Chọn loại theo bốn tiêu chí: có MUST hay SHOULD đã đòi mà chưa có máy kiểm, stdlib tất định, ít báo nhầm, nhỏ hơn 150 dòng.
+- Đường lùi: Xoá gói xt_checks, lệnh static-check và các dòng đăng ký ở install.py, xt_pack.py, xt.yaml
