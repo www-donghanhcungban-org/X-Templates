@@ -57,7 +57,7 @@ def _col(header: list[str], words: tuple[str, ...], default: int) -> int:
 
 def _rows(text: str) -> list[RuleRow]:
     """Dòng dữ liệu của các bảng: (số dòng, ô, cột nguồn, cột license); tiêu đề và dòng kẻ bị bỏ."""
-    table = [(n, _cells(s)) for n, s in enumerate(text.splitlines(), 1) if s.lstrip().startswith("|")]
+    table = [(n, _cells(s)) for n, s in enumerate(text.split("\n"), 1) if s.lstrip().startswith("|")]
     out: list[RuleRow] = []
     src, lic = 1, 2
     for i, (number, cells) in enumerate(table):

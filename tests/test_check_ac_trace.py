@@ -44,6 +44,13 @@ class AcTraceTest(unittest.TestCase):
         self.put("tests/a.go", "// AC-1 AC-1 AC-7\nxAC-5 AC-5x AC-5-6\n")
         self.assertEqual(self.run_check([spec]), [("a.go", 1, "ACT002"), ("s.md", 2, "ACT001")])
 
+    def test_only_lf_starts_a_new_line(self) -> None:
+        for char in ("\u2028", "\f"):
+            with self.subTest(char=char):
+                spec = self.put("s.md", f"note{char}AC-7\nAC-1\n")
+                self.put("tests/t.py", f"# note{char}AC-9\n")
+                self.assertEqual(self.run_check([spec]), [("t.py", 1, "ACT002"), ("s.md", 2, "ACT001")])
+
     def test_duplicate_definition(self) -> None:
         one = self.put("a.md", "AC-1 một\n")
         two = self.put("b.md", "intro\n- AC-1 hai\n")

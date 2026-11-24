@@ -60,6 +60,17 @@ class TraceTest(unittest.TestCase):
         lines = json.dumps(doc(span(S1))) + "\n\n" + json.dumps(doc(span(S2, S1))) + "\n"
         self.assertEqual(self.codes(lines, name="t.jsonl"), [])
 
+    def test_jsonl_preserves_unicode_in_string_values(self):
+        first = json.dumps(doc(span(S1, name="a\u2028b")), ensure_ascii=False)
+        found = self.run_check(first + "\n" + json.dumps(doc(span(S2, S3))), name="t.jsonl")
+        self.assertEqual([(f.code, f.line) for f in found], [("TRC001", 2)])
+
+    def test_jsonl_only_lf_separates_documents(self):
+        first = json.dumps(doc(span(S1)))
+        for char in ("\u2028", "\f"):
+            with self.subTest(char=char):
+                self.assertEqual(self.codes(first + char + first, name="t.jsonl"), ["TRC000"])
+
     def test_invalid_inputs_are_trc000(self):
         bad = [
             b"\xff\xfe",

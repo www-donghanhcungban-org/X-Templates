@@ -924,3 +924,38 @@
 - Chọn: Giữ kế hoạch năm đợt, sửa phụ thuộc và Gate để kiểm kết quả thật, merge PR tài liệu rồi triển khai từng task ở PR riêng
 - Lý do (tiêu chí chất lượng cuối): Kế thừa quyết định trên nhánh ngày 2026-11-24T11:29:42+00:00 (D-571 chưa merge); cấp số mới để giữ nguyên D-571/D-572 đã có trên main. Báo cáo đã tái hiện lỗi SBOM/VEX và thiếu nguồn sổ lát; Gate chỉ validate hoặc tìm chữ không chứng minh chức năng. Tách test diễn tập chín nguồn khỏi sự kiện thực của pilot, gắn đúng quyền admin với T-5020 và khóa đủ phụ thuộc trước phát hành.
 - Đường lùi: git revert PR tài liệu; các phát hiện và hạn chấp nhận trong sổ audit giữ nguyên
+
+### D-574 · 2026-11-24T13:18:43+00:00 · Duyệt PLAN-harden-2026-11-24 thực thi kế hoạch nâng trần và xử lý NO-GO đầu vào
+
+- Phương án: (1) Thực thi đủ các lát tự động, cùng ID cho cùng việc; Gate hồi quy và CI, audit theo lô ở cổng ký; defer quyền hoặc dữ liệu bên ngoài thiếu · (2) Chỉ đóng nợ sổ đầu vào và để nguyên các lỗi nâng trần đã tái hiện
+- Chọn: Thực thi đủ các lát tự động, cùng ID cho cùng việc; Gate hồi quy và CI, audit theo lô ở cổng ký; defer quyền hoặc dữ liệu bên ngoài thiếu
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu complete sau khi kế hoạch đã merge. NO-GO hiện có audit và review_debt; sáu input SBOM/VEX sai kiểu đang báo sạch, strict pack thiếu package vẫn đạt. Giữ API cũ, thêm checked trong cùng lượt đọc; cấu trúc sai dùng SBM000/VEX000; viết ADR mới. Không được coi kế hoạch hoặc bằng chứng tổng hợp là triển khai xong.
+- Đường lùi: Revert từng PR nhỏ bằng commit mới nếu hồi quy; giữ sổ, không sửa lịch sử hay nới cổng.
+
+### D-575 · 2026-11-24T13:27:44+00:00 · Giữ ID ổn định khi chuyển PLAN-ceiling sang PLAN-harden mà không trùng task máy đọc
+
+- Phương án: (1) Chuyển toàn bộ danh sách task máy đọc sang PLAN-harden, PLAN-ceiling giữ chiến lược và liên kết; giữ nguyên ID và Gate · (2) Cấp ID mới cho cùng công việc trong PLAN-harden và giữ các task cũ chưa xong
+- Chọn: Chuyển toàn bộ danh sách task máy đọc sang PLAN-harden, PLAN-ceiling giữ chiến lược và liên kết; giữ nguyên ID và Gate
+- Lý do (tiêu chí chất lượng cuối): Gate test_task_ids_unique_across_plans tái hiện đỏ khi hai PLAN cùng khai T-5001 đến T-5020. Một chủ đề một nhà: chuyển nơi quản lý task, không sửa test hay tăng ngoại lệ KNOWN. Lịch sử đầy đủ còn ở PR #786.
+- Đường lùi: Chuyển danh sách task trở lại một PLAN duy nhất; không tạo hai chủ sở hữu cho cùng ID.
+
+### D-576 · 2026-11-24T13:28:08+00:00 · T-5004 dùng parser thực thi chung và mô-đun hiện có để phát hiện thay đổi tài liệu thực thi
+
+- Phương án: (1) So cấu trúc ID–lệnh bằng parser thật ở hai cây Git, đặt điều phối đọc cây trong xt_release_ops đã được phân phối/kiểm kiểu; giữ facade và ranh giới lỗi hiện hành · (2) Tiếp tục regex dòng diff trong xt.py, thêm từng ca ngoại lệ
+- Chọn: So cấu trúc ID–lệnh bằng parser thật ở hai cây Git, đặt điều phối đọc cây trong xt_release_ops đã được phân phối/kiểm kiểu; giữ facade và ranh giới lỗi hiện hành
+- Lý do (tiêu chí chất lượng cuối): AUD-HAR-478 có hoán Gate, NFD, grant viết hoa, backlog và file nhị phân cùng false positive. Vá regex tiếp sẽ lệch parser; mô-đun release hiện có quản lý bằng chứng đọc, giảm logic trùng trong xt.py và giữ trần dòng tại 08a9ad2. Cần regression cho cả chín mặt của phát hiện trước khi đóng sổ.
+- Đường lùi: Revert riêng PR parser bằng commit mới; giữ ca hồi quy và trạng thái sổ trung thực nếu hồi quy.
+
+### D-577 · 2026-11-24T13:32:20+00:00 · T-5012 dùng axe đã ghim trong repo cho cổng UI của starter
+
+- Phương án: (1) Runner CI luôn chạy ma trận trình duyệt với đường dẫn axe đã ghim, thiếu axe hoặc trình duyệt thì đỏ; thêm chế độ rõ ràng cho pack_preview và giữ biên nhận hiện có · (2) Thêm gói axe vào mọi dự án đích dù chính sách hiện tại chỉ vendor trong repo khung
+- Chọn: Runner CI luôn chạy ma trận trình duyệt với đường dẫn axe đã ghim, thiếu axe hoặc trình duyệt thì đỏ; thêm chế độ rõ ràng cho pack_preview và giữ biên nhận hiện có
+- Lý do (tiêu chí chất lượng cuối): tests_e2e/vendor/axe đã có nguồn và digest theo D-133. Dùng cùng runner trên starter được scaffold thật cho ca tốt/xấu, không thêm phụ thuộc hay đổi chính sách phân phối. Lỗi môi trường trình duyệt phải được báo là chưa đo, không thành xanh.
+- Đường lùi: Revert riêng cổng UI của lát này, giữ biên nhận deploy và bài kiểm hiện có.
+
+### D-578 · 2026-11-24T13:32:21+00:00 · T-5007 phân biệt allowlist vắng/rỗng và chặn điều khiển Git trong adapter
+
+- Phương án: (1) Khóa vắng là kế thừa đã lọc, khóa rỗng là không kế thừa tùy ý; production đòi khai khóa; cấm họ GIT_* mặc định và trong allowlist trừ hai biến CA khai tường minh; null/Null/NULL/~ là cấu hình lỗi · (2) Giữ cách hiểu khóa rỗng như khóa vắng và chỉ chặn vài biến Git đã biết
+- Chọn: Khóa vắng là kế thừa đã lọc, khóa rỗng là không kế thừa tùy ý; production đòi khai khóa; cấm họ GIT_* mặc định và trong allowlist trừ hai biến CA khai tường minh; null/Null/NULL/~ là cấu hình lỗi
+- Lý do (tiêu chí chất lượng cuối): Giữ đường dev hiện có nhưng production không âm thầm kế thừa môi trường. Hai ngoại lệ GIT_SSL_CAINFO/GIT_SSL_CAPATH theo GO_GIT_KEEP_ENV đã có; không cho Git config/SSH/exec/repo overrides. Bộ đọc phẳng không phân biệt chữ null có quote nên dành các cách viết này cho lỗi rõ ràng. Logic vào xt_deploy hiện có, facade xt giữ tương thích và lỗi config; không tăng trần dòng.
+- Đường lùi: Revert PR adapter bằng commit mới; không tự thay allowlist production hay đọc giá trị bí mật.

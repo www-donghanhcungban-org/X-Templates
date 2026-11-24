@@ -44,7 +44,7 @@ def _parse(text: str) -> list[tuple[int, object]]:
         return [(1, json.loads(text))]
     except json.JSONDecodeError:
         pass
-    docs = [(number, json.loads(line)) for number, line in enumerate(text.splitlines(), 1) if line.strip()]
+    docs = [(number, json.loads(line)) for number, line in enumerate(text.split("\n"), 1) if line.strip()]
     if not docs:
         raise ValueError("tệp rỗng")
     return docs
