@@ -147,6 +147,39 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assertEqual(self.gh.calls[0][:3], ("GET", HOST, f"repos/{SLUG}/pulls/{PR}"))
         self.assert_target_routes()
 
+    def test_origin_protocols_accept_and_normalize_checkout_target(self):
+        for url in ("https://Git.Example/O/R.git/", "ssh://git@Git.Example/O/R.git", "git@Git.Example:O/R.git"):
+            with self.subTest(url=url):
+                self.git("remote", "set-url", "origin", url)
+                self.gh.calls.clear()
+                self.assert_pinned_next(run_main("pr", "next", "--pr", PR, "--json"))
+                self.assert_target_routes()
+
+    def test_invalid_origin_syntax_is_rejected_before_reads(self):
+        urls = (
+            "https://git@git.example/o/r",
+            "ssh://git.example/o/r",
+            "ssh://alice@git.example/o/r",
+            "alice@git.example:o/r",
+            "ssh://git:example@git.example/o/r",
+            "https://git.example:443/o/r",
+            "ssh://git@git.example:22/o/r",
+            "https://git.example/o/r?ref=main",
+            "https://git.example/o/r#main",
+            "https://-git.example/o/r",
+            "https://git..example/o/r",
+            "https://git.example/o/..",
+            "https://git.example/o/.git",
+            "https://git.example/o/r/extra",
+        )
+        for url in urls:
+            with self.subTest(url=url):
+                self.git("remote", "set-url", "origin", url)
+                rc, out, err = run_main("pr", "next", "--pr", PR, "--json")
+                self.assertEqual(rc, 2, out + err)
+                self.assertIn("không xác minh được host/repo của origin", err)
+                self.assertEqual(self.gh.calls, [])
+
     def test_checkout_policy_does_not_authorize_a_foreign_selector(self):
         for url in (pr_url("another.example"), pr_url(HOST, "o/other")):
             with self.subTest(url=url):
@@ -195,6 +228,16 @@ class MergeTargetBindingTest(TmpRepoCase):
         data = json.loads(out)
         self.assertEqual((data["verdict"], data["eligible"], data["next"]), ("wait", False, ""))
         self.assert_target_routes()
+
+    def test_steward_apply_fails_without_a_complete_live_pin(self):
+        self.gh.head = "short"
+        rc, out, err = run_main("pr", "steward", "--pr", PR, "--apply", "--json")
+        self.assertEqual(rc, 1, out + err)
+        (data,) = json.loads(out)
+        self.assertEqual((data["action"], data["applied"], data["do"]), ("error", False, ""))
+        self.assertEqual(data["why"], "chưa xác minh đủ đích và head của PR")
+        self.assert_target_routes()
+        self.assertTrue(all(method == "GET" for method, _, _, _ in self.gh.calls), self.gh.calls)
 
     def test_steward_label_merge_ci_and_release_stay_on_bound_host(self):
         policy = self.CONFIG.replace("optional", "required") + "merge_risk_paths: VERSION\n"

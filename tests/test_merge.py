@@ -1437,6 +1437,16 @@ class MergeCheckCliTest(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIn("không có PR mở cho nhánh feature", err)
 
+    def test_pr_target_branch_requires_one_open_pr(self):
+        cases = (
+            ([], "không có PR mở cho nhánh hiện tại"),
+            ([{"number": 7}, {"number": 8}], "nhiều PR mở cho nhánh hiện tại — chọn số bằng --pr"),
+        )
+        for pulls, message in cases:
+            with self.subTest(pulls=pulls), FakeGh(open_prs=pulls).patch():
+                with self.assertRaisesRegex(xt.PrInputError, message):
+                    xt._pr_target(None)
+
     def test_branch_lookup_requires_one_open_pr(self):
         pulls = [
             {"number": 7, "head": {"ref": "feat/x"}, "base": {"ref": "main"}},

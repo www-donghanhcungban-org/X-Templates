@@ -52,6 +52,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ### Fixed
 
+- CI của PR #797: parser origin tách rõ scheme, userinfo và host, giữ SSH bắt buộc `git@` và HTTPS không userinfo để bộ quét `BASE-CFG-001` không nhận nhầm username thành host. Bổ sung test nhánh không có/nhiều PR và steward thiếu pin live; giữ nguyên bộ quét, tập URL hợp lệ và ngưỡng coverage 100 % (D-589, T-5008).
+
 - Adapter `deploy` lọc họ biến `GIT_*` khỏi môi trường kế thừa và chỉ cho khai tường minh `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH` (T-5007, D-578). `deploy_env_pass:` rỗng chỉ truyền nhóm biến hệ thống cho adapter. **Dự án đích:** khai khóa này cho `run` và `rollback` ở mọi môi trường ngoài `dev`, liệt kê tên biến cần hoặc để rỗng. Các giá trị `null`, `Null`, `NULL`, `~` báo lỗi cấu hình.
 
 - `pr next` sinh `merge_intent` từ PR live với host, repo, số PR và SHA đầy đủ. Steward đọc lại đúng đích trước khi gửi merge ghim SHA. Khung xác minh host/repo của origin trước lần đọc đầu và dùng cùng đích cho policy, watch, nhãn, CI, release và dấu review. Guard cần số PR, đích và pin tường minh; endpoint MCP chưa xác minh trả `UNVERIFIED`. Snapshot vẫn cho xem quyết định và bỏ lệnh ghi (AUD-HAR-492, AUD-HAR-515–521, D-579, D-588, [ADR-0102](docs/adr/0102-merge-intent.md), T-5008).

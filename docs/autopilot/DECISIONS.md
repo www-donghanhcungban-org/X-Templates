@@ -1015,3 +1015,10 @@
 - Chọn: Xác minh origin của checkout trước lần đọc đầu; chỉ dùng policy của checkout cùng host/repo; giữ bộ host/repo/PR/head tường minh xuyên suốt, đích hoặc endpoint chưa xác minh thì dừng
 - Lý do (tiêu chí chất lượng cuối): Review độc lập tại c319bf8 đã tái hiện 7 lỗi đỏ: lần đọc đầu chọn sai host, policy từ checkout khác, thao tác đi kèm mất đích, watch mất selector, PR suy từ nhánh khác PR gh chọn, MCP không chứng minh host, cache quyền trộn host. Phương án 1 giữ nguồn policy và đích thống nhất, ít trạng thái hơn và có ca hồi quy rõ. Unattended merge cần số PR tường minh; MCP không có metadata endpoint tin cậy trả UNVERIFIED và dùng lệnh REST ghim đích đã xác minh. So sánh gốc worktree khi đứng trong thư mục con, tách chuẩn hóa URL người dùng khỏi API html_url chuẩn; snapshot chỉ xem trước. Mọi sửa lỗi đỏ nằm trong một commit theo ADR-0062; không sửa ngưỡng, bỏ test hay tự đăng dấu review.
 - Đường lùi: Revert nguyên lát T-5008 nếu hợp đồng chưa đủ, giữ đường merge đã được policy kiểm và không nới nhánh chưa xác minh; không tự động chuyển sang tải policy từ repo khác.
+
+### D-589 · 2026-11-24T22:52:53+00:00 · PR #797: sửa CI BASE-CFG-001 và ba nhánh thiếu coverage thế nào để giữ nguyên hợp đồng merge?
+
+- Phương án: (1) Tách scheme, userinfo và host của origin; kiểm SSH bắt buộc git@ và HTTPS không userinfo, giữ bộ quét hiện tại; thêm test cho nhánh lỗi hiện có · (2) Thêm ngoại lệ ssh://git vào bộ quét hoặc bỏ helper chưa phủ để làm coverage xanh
+- Chọn: Tách scheme, userinfo và host của origin; kiểm SSH bắt buộc git@ và HTTPS không userinfo, giữ bộ quét hiện tại; thêm test cho nhánh lỗi hiện có
+- Lý do (tiêu chí chất lượng cuối): Run 45466895506, checks job 138704077943 nhận nhầm userinfo thành host; coverage job 138713852620 thiếu xt.py:7636,7638,18564. Phương án 1 biểu diễn rõ giao thức mà vẫn nhận và từ chối cùng tập origin, giữ nguyên gate và ngưỡng 100%, kiểm steward không ghi khi thiếu danh tính live.
+- Đường lùi: Revert riêng commit sửa CI nếu ma trận URL hoặc cổng hồi quy không đạt; giữ nguyên điều kiện CI xanh trước merge.

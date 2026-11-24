@@ -19,7 +19,8 @@ PR_USER_URL = re.compile(rf"{PR_URL_BASE}(?:/(?:files|commits|checks)(?:/[a-f0-9
 NAMED_PR = re.compile(rf"(?P<repo>{SLUG})#(?P<pr>[1-9][0-9]*)", re.ASCII)
 ENV_REPO = re.compile(rf"(?:(?P<host>{HOST})/)?(?P<repo>{SLUG})", re.ASCII)
 ORIGIN_URL = re.compile(
-    rf"(?:(?:https://|ssh://git@)(?P<host>{HOST})/|git@(?P<ssh>{HOST}):)(?P<repo>{SLUG})/?", re.ASCII
+    rf"(?:(?P<scheme>https|ssh)://(?P<userinfo>git@)?(?P<host>{HOST})/|git@(?P<scp_host>{HOST}):)(?P<repo>{SLUG})/?",
+    re.ASCII,
 )
 
 
@@ -42,9 +43,10 @@ class RepoTarget(NamedTuple):
         values = raw.split("\0")
         match = ORIGIN_URL.fullmatch(values[0]) if len(values) == 2 and values[1] == "" else None
         repo = match["repo"].removesuffix(".git") if match else ""
-        if not match or not re.fullmatch(SLUG, repo):
+        # Dạng URL dùng `git@` đúng khi scheme là SSH; dạng SCP đã ghim `git@` riêng.
+        if not match or (match["scheme"] == "ssh") != bool(match["userinfo"]) or not re.fullmatch(SLUG, repo):
             raise error("không xác minh được host/repo của origin trong checkout đang cung cấp chính sách PR")
-        target = cls((match["host"] or match["ssh"]).lower(), repo.lower())
+        target = cls((match["host"] or match["scp_host"]).lower(), repo.lower())
         if host := os.environ.get("GH_HOST", ""):
             target.require(host, target.repo, "GH_HOST", error)
         if value := os.environ.get("GH_REPO", ""):
