@@ -6,6 +6,39 @@ X-Templates is an open-source software development framework combining a library
 
 The framework's detailed requirement library and most supporting documentation are currently in Vietnamese. See the [Vietnamese section](#tiếng-việt) for the complete command reference, operational details, and design decisions.
 
+## From an idea to a maintainable application
+
+An AI assistant can turn a prompt into code in minutes. A working screen, however, is only part of an application: someone still has to decide what the product should do, connect the pieces, check failure cases, protect data, review changes, and prepare for release and ongoing operation. Developers face the same work, whether they write the code themselves or ask an agent to help.
+
+X-Templates brings those decisions and checks into a reusable workflow. It combines a requirement library, project blueprints, templates, command-line tools, and an optional agent harness. You can start with a new application or bring the framework into an existing repository. The aim is to reduce repeated setup, help people and agents keep the same project context, and make the next useful action visible.
+
+### For vibe coders and idea owners
+
+If you describe what you want in everyday language and use AI to help build it, X-Templates gives that conversation a working structure:
+
+1. **Describe the outcome.** Start with a product idea and its intended users. The `/factory` workflow in Claude Code or `$factory` in Codex can help turn that idea into a plan and a first development version. The `web-api-ts` starter is one available path; it does not mean every application type has a ready-made starter.
+2. **Make the scope visible.** Project documents, a plan, and a scale-appropriate blueprint give the agent a place to record what to build and what to check. You can review the proposed scope, try the development version, and give feedback rather than relying on a long chat alone.
+3. **Keep work moving between sessions.** Tasks, progress, decisions, and recorded evidence live in the repository. The agent can consult them to continue work, although its decisions and results still require appropriate review.
+4. **Know what needs your attention.** The workflow can collect items for a human when it reaches matters such as real money, real user data, paid services or credentials, subject to the configured policies. A local dashboard helps you inspect status; it does not execute most operational commands.
+
+For example, a team-notes MVP can begin with a short description. The factory workflow can use the starter, capture the idea, create an S-scale blueprint and work through planned tasks. Before treating it as ready for real users, its owner still needs to supply project-specific settings, check the experience and evidence, and address the applicable release requirements.
+
+### For developers and technical teams
+
+X-Templates helps reduce repeated coordination and setup while keeping technical choices in the team's hands:
+
+- **Start with a relevant checklist.** Compose a blueprint from the baseline, software profile, industry and scale, then add modules where needed. Stable requirement IDs help preserve status when the blueprint is recomposed; priorities distinguish MUST, SHOULD and MAY.
+- **Give agents bounded context.** Plans, task dependencies, file scopes and `xt.py context` help focus a task on the information it needs. An agent can work within the repository's documented workflow instead of rebuilding the project's context from every prompt.
+- **Make progress reviewable.** The loop records task evidence and the PR workflow organizes changes into reviewable slices. Existing project configuration, branch rules, CI and human review still govern what can be merged.
+- **Check readiness with real project commands.** `doctor` diagnoses the installation, `blueprint-status` reports requirement status, and `release-check` assesses release evidence. Checks are only as useful as the commands and evidence configured for that project; a checked box is not a substitute for a meaningful test.
+- **Carry knowledge into maintenance.** Specifications, architectural decisions, runbooks, progress records and release documents give the next developer or agent a place to find the reasoning and operational context.
+
+### Where the time savings come from
+
+The framework can save time by reusing a starter and standard documents, narrowing the checklist to the project's chosen scope, reducing repeated explanation to agents, and surfacing missing work earlier. It also adds planning, configuration, review and checking work. The net effect depends on project complexity, team experience, agent/tool access, and the quality of the configured checks; no universal speedup is claimed.
+
+The framework is a guide and set of tools, not proof of security, legal compliance or production readiness. Requirements and sources may need updating, and sensitive decisions and real-world deployment need appropriate human oversight. See [practical boundaries](#practical-boundaries) and the detailed [Vietnamese guide](#tiếng-việt).
+
 ## Why use X-Templates
 
 - **Requirements with stable IDs:** baseline practices, software profiles, industry packs, and standards. Each requirement records its priority, how to check it, and its sources. Review source dates and verify items marked as unverified before applying them.
@@ -116,6 +149,39 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and the [framework conventions](framework
 > Mã mở [MIT](LICENSE), miễn phí. Thấy hữu ích? [Ủng hộ tác giả](#ủng-hộ-và-liên-hệ) ☕
 
 Bản đã gắn tag: xem [danh sách tag](https://github.com/www-donghanhcungban-org/X-Templates/tags) hoặc chạy `git describe --tags --abbrev=0` (số bản không ghi ở đây để khỏi lệch mỗi lần cắt bản; `xt.py validate` kiểm). [CHANGELOG](CHANGELOG.md) ghi thay đổi trên `main` theo từng bản. [PROGRESS](PROGRESS.md) ghi việc đang làm và mốc bàn giao.
+
+## Từ ý tưởng đến ứng dụng có thể tiếp tục phát triển
+
+Trợ lý AI có thể biến một lời mô tả thành mã trong vài phút. Nhưng một màn hình chạy được mới chỉ là một phần của ứng dụng: vẫn cần xác định sản phẩm phải làm gì, kết nối các thành phần, kiểm tra tình huống lỗi, bảo vệ dữ liệu, rà soát thay đổi và chuẩn bị phát hành, vận hành. Đây cũng là công việc của lập trình viên, dù tự viết mã hay nhờ agent hỗ trợ.
+
+X-Templates đưa các quyết định và bước kiểm đó vào một quy trình có thể dùng lại. Khung kết hợp thư viện yêu cầu, blueprint theo dự án, tài liệu mẫu, công cụ dòng lệnh và harness agent tùy chọn. Bạn có thể bắt đầu dự án mới hoặc đưa khung vào repo đang có. Mục tiêu là giảm phần thiết lập lặp lại, giúp người và agent dùng chung bối cảnh dự án và thấy rõ bước tiếp theo cần làm.
+
+### Dành cho người làm vibe coding và chủ ý tưởng
+
+Nếu bạn mô tả điều mình muốn bằng ngôn ngữ thông thường và dùng AI để hỗ trợ xây dựng, X-Templates giúp cuộc trao đổi đó có cấu trúc làm việc:
+
+1. **Mô tả kết quả mong muốn.** Bắt đầu bằng ý tưởng sản phẩm và người sẽ dùng. Quy trình `/factory` trong Claude Code hoặc `$factory` trong Codex có thể hỗ trợ chuyển ý tưởng thành kế hoạch và bản phát triển đầu tiên. Gói `web-api-ts` là một cách bắt đầu có sẵn; không có nghĩa mọi loại ứng dụng đều đã có starter tương ứng.
+2. **Nhìn rõ phạm vi.** Tài liệu dự án, kế hoạch và blueprint theo quy mô cho agent nơi ghi việc cần làm và cách kiểm. Bạn có thể xem phạm vi đề xuất, thử bản phát triển và phản hồi, thay vì chỉ dựa vào một cuộc trò chuyện dài.
+3. **Tiếp tục công việc giữa các phiên.** Task, tiến độ, quyết định và bằng chứng được ghi trong repo. Agent có thể đọc lại để tiếp tục, nhưng quyết định và kết quả của agent vẫn cần được rà soát phù hợp.
+4. **Biết việc nào cần mình.** Theo chính sách cấu hình, quy trình có thể gom việc cần người khi gặp tiền thật, dữ liệu người dùng thật, dịch vụ trả phí hoặc thông tin xác thực. Dashboard cục bộ giúp xem trạng thái; phần lớn lệnh vận hành vẫn cần chạy ở terminal.
+
+Ví dụ, một MVP ghi chú cho nhóm có thể bắt đầu bằng vài câu mô tả. Quy trình factory có thể dùng starter, ghi ý tưởng, tạo blueprint quy mô S và thực hiện các task trong kế hoạch. Trước khi coi sản phẩm đã sẵn sàng cho người dùng thật, chủ dự án vẫn cần cung cấp cấu hình riêng, thử trải nghiệm, xem bằng chứng và xử lý các yêu cầu phát hành áp dụng.
+
+### Dành cho lập trình viên và nhóm kỹ thuật
+
+X-Templates giúp giảm việc thiết lập và phối hợp lặp lại, trong khi nhóm vẫn chủ động các quyết định kỹ thuật:
+
+- **Bắt đầu từ checklist phù hợp.** Ghép blueprint từ baseline, loại phần mềm, ngành và quy mô; bổ sung module khi cần. ID ổn định giúp giữ trạng thái khi ghép lại; mức MUST, SHOULD và MAY thể hiện ưu tiên.
+- **Cấp bối cảnh có giới hạn cho agent.** Kế hoạch, phụ thuộc task, phạm vi file và `xt.py context` giúp tập trung vào thông tin cần cho từng việc. Agent có thể làm theo quy trình được ghi trong repo thay vì phải dựng lại bối cảnh từ mỗi prompt.
+- **Làm cho tiến độ có thể rà soát.** Vòng lặp ghi bằng chứng task và quy trình PR chia thay đổi thành các lát có thể review. Cấu hình dự án, luật nhánh, CI và review của con người vẫn quyết định điều kiện merge.
+- **Kiểm tra mức sẵn sàng bằng lệnh thật của dự án.** `doctor` chẩn đoán bản cài, `blueprint-status` báo trạng thái yêu cầu, còn `release-check` đánh giá bằng chứng phát hành. Giá trị của bước kiểm phụ thuộc vào lệnh và bằng chứng được cấu hình; một ô đã đánh dấu không thay thế được kiểm thử có ý nghĩa.
+- **Giữ kiến thức cho giai đoạn bảo trì.** Đặc tả, quyết định kiến trúc, runbook, sổ tiến độ và tài liệu phát hành giúp người hoặc agent tiếp theo tìm lại lý do và bối cảnh vận hành.
+
+### Nhanh hơn nhờ đâu?
+
+Khung có thể tiết kiệm thời gian nhờ dùng lại starter và tài liệu mẫu, thu hẹp checklist theo phạm vi đã chọn, giảm giải thích lặp lại cho agent và phát hiện việc còn thiếu sớm hơn. Đổi lại, dự án vẫn cần thời gian lập kế hoạch, cấu hình, review và kiểm thử. Kết quả phụ thuộc độ phức tạp, kinh nghiệm nhóm, quyền truy cập agent/công cụ và chất lượng các bước kiểm; khung không cam kết một tỷ lệ tăng tốc chung.
+
+Đây là bộ hướng dẫn và công cụ, không phải bằng chứng mặc định rằng ứng dụng an toàn, tuân thủ pháp luật hay sẵn sàng production. Yêu cầu và nguồn có thể cần cập nhật; các quyết định nhạy cảm và triển khai thực tế cần được con người giám sát phù hợp. Xem [giới hạn sử dụng](#practical-boundaries) và hướng dẫn chi tiết bên dưới.
 
 ## Vì sao dùng X-Templates
 
