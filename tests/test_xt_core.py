@@ -514,6 +514,12 @@ class JsonAndAtomicTest(TmpMixin, unittest.TestCase):
             (d / "deep.json").write_text(body, encoding="utf-8")
             self.assertIsNone(xt._read_json_obj(d / "deep.json"))
 
+    def test_read_json_obj_recursion_error_is_none(self):
+        d = self.tmpdir()  # giả lập: tuỳ bản dựng, JSON lồng sâu ra RecursionError hoặc JSONDecodeError
+        (d / "x.json").write_text("{}", encoding="utf-8")
+        with unittest.mock.patch.object(xt.json, "loads", side_effect=RecursionError("sâu")):
+            self.assertIsNone(xt._read_json_obj(d / "x.json"))
+
     def test_read_json_obj_unreadable_is_none(self):
         d = self.tmpdir()
         (d / "dir.json").mkdir()  # tồn tại nhưng đọc ra OSError

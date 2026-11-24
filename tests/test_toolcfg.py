@@ -142,9 +142,15 @@ class LoadTest(unittest.TestCase):
     def test_deeply_nested_json_is_a_clear_error_not_a_crash(self):
         for body in ("[" * 100000, '{"a":' * 100000):
             with self.subTest(head=body[:6]):
-                self.write(body)
-                with self.assertRaisesRegex(tc.ToolCfgError, "RecursionError"):
+                self.write(body)  # tuỳ bản dựng: RecursionError hoặc JSONDecodeError — đều phải thành ToolCfgError
+                with self.assertRaisesRegex(tc.ToolCfgError, "JSON hợp lệ"):
                     tc.load(self.base)
+
+    def test_recursion_error_from_the_parser_becomes_a_clear_error(self):
+        self.write("{}")  # giả lập để ca này không phụ thuộc kích thước ngăn xếp của bản Python
+        with unittest.mock.patch.object(tc.json, "loads", side_effect=RecursionError("sâu")):
+            with self.assertRaisesRegex(tc.ToolCfgError, "RecursionError"):
+                tc.load(self.base)
 
     def test_oversize_file_is_refused(self):
         self.write(" " * (tc.MAX_BYTES + 1))
