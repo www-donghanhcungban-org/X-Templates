@@ -1427,7 +1427,11 @@ def _read_json_obj(p: Path) -> Optional[Dict[str, Any]]:
         return None
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):  # ValueError gồm JSONDecodeError và file không phải UTF-8 (review #321)
+    except (
+        OSError,
+        ValueError,
+        RecursionError,
+    ):  # ValueError gồm JSONDecodeError, không phải UTF-8 (review #321); JSON lồng sâu
         return None
     return data if isinstance(data, dict) else None
 
@@ -3452,6 +3456,86 @@ def _slice_task_green(base: Path, st: Dict[str, Any], ev: Dict[str, Any]) -> Non
             str(ev["task"]),
             {"head": ev["head"], "cmd_sha256": ev["cmd_sha256"]},
         )
+
+
+COST_KEYS = ("id", "usd", "in", "out", "price_in", "price_out", "source", "as_of")
+COST_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,64}")
+COST_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+COST_HELP = (
+    "chi phí của lát vào sổ lát (SPEC-slice-ledger): `id=<duy nhất>,usd=<số>` hoặc "
+    "`id=<duy nhất>,in=<token>,out=<token>,price_in=<USD/MTok>,price_out=<USD/MTok>,source=<nguồn giá>,as_of=<YYYY-MM-DD>`"
+)
+COST_PRICE_KEYS = {"price_in": "usd_per_mtok_in", "price_out": "usd_per_mtok_out", "source": "source", "as_of": "as_of"}
+
+
+def _cost_pairs(spec: str) -> Dict[str, str]:
+    pairs: Dict[str, str] = {}
+    for part in spec.split(","):
+        key, sep, val = part.partition("=")
+        key, val = key.strip(), val.strip()
+        if not sep or key not in COST_KEYS or key in pairs or not val:
+            raise ValueError(f"khoá không hợp lệ hay lặp: {part.strip()!r} (khoá: {', '.join(COST_KEYS)})")
+        pairs[key] = val
+    return pairs
+
+
+def _cost_amount(pairs: Dict[str, str], key: str) -> float:
+    try:
+        n = float(pairs[key])
+    except ValueError:
+        n = math.nan
+    if not math.isfinite(n) or n < 0:
+        raise ValueError(f"`{key}` phải là số hữu hạn ≥ 0 ({pairs[key]!r})")
+    return int(n) if n.is_integer() else n
+
+
+def _cost_price(pairs: Dict[str, str]) -> Dict[str, Any]:
+    price: Dict[str, Any] = {}
+    for key, name in COST_PRICE_KEYS.items():
+        if key in pairs:
+            price[name] = _cost_amount(pairs, key) if key.startswith("price_") else pairs[key]
+    if "as_of" in pairs and not COST_DATE_RE.fullmatch(pairs["as_of"]):
+        raise ValueError(f"`as_of` phải dạng YYYY-MM-DD ({pairs['as_of']!r})")
+    return price
+
+
+def parse_cost(spec: str) -> Tuple[str, Dict[str, Any]]:
+    """`--cost` (SPEC-slice-ledger §2.3) → (cost_id, data). `id=<định danh duy nhất>,usd=<số>` hoặc
+    `id=…,in=<token vào>,out=<token ra>[,price_in=<USD/MTok>,price_out=<USD/MTok>,source=<nguồn giá>,as_of=<ngày>]`.
+    Thiếu một phần giá vẫn ghi (số đo báo `unpriced`, không đoán giá). Sai → ValueError."""
+    pairs = _cost_pairs(spec)
+    cost_id = pairs.get("id", "")
+    if not COST_ID_RE.fullmatch(cost_id):
+        raise ValueError("cần id=<định danh duy nhất, chữ-số . _ ->")
+    if "usd" in pairs:
+        if len(pairs) > 2:
+            raise ValueError("`usd` không đi cùng token hay giá")
+        return cost_id, {"usd": _cost_amount(pairs, "usd")}
+    if "in" not in pairs or "out" not in pairs:
+        raise ValueError("cần usd=… hoặc cả in=… và out=…")
+    data: Dict[str, Any] = {"tokens": {"in": _cost_amount(pairs, "in"), "out": _cost_amount(pairs, "out")}}
+    price = _cost_price(pairs)
+    if price:
+        data["price"] = price
+    return cost_id, data
+
+
+def _cost_arg(args: argparse.Namespace) -> Tuple[Optional[Tuple[str, Dict[str, Any]]], int]:
+    """(chi phí đã phân tích | None, mã thoát): `--cost` sai → (None, 2) kèm lý do, trước khi chạy gì."""
+    spec = getattr(args, "cost", None)
+    if not spec:
+        return None, 0
+    try:
+        return parse_cost(spec), 0
+    except ValueError as exc:
+        print(f"✗ --cost: {exc}", file=sys.stderr)
+        return None, 2
+
+
+def write_cost(base: Path, slice_id: Optional[str], source: str, cost: Tuple[str, Dict[str, Any]]) -> None:
+    """Sự kiện `cost` vào sổ lát; không có lát hay lỗi ghi → cảnh báo stderr (số đo không chặn luồng, nhưng không im lặng)."""
+    if not slice_id or not slice_append(base, slice_id, "cost", source, cost[0], cost[1]):
+        print(f"⚠ không ghi được chi phí {cost[0]} vào sổ lát (không có lát của task, hoặc lỗi ghi)", file=sys.stderr)
 
 
 def current_slice(base: Path) -> Optional[str]:
@@ -9502,7 +9586,15 @@ def _loop_record(args: argparse.Namespace, base: Path) -> int:
     if not cmd:
         print("✗ Thiếu lệnh kiểm sau '--'", file=sys.stderr)
         return 2
-    return loop_record(args.task, cmd, base, args.executor, tick=not args.no_tick)
+    cost, bad = _cost_arg(args)
+    if bad:
+        return bad
+    rc = loop_record(args.task, cmd, base, args.executor, tick=not args.no_tick)
+    if cost and rc == 0:  # chỉ lần chạy xanh: chi phí của lát ghi một lần cùng bằng chứng của nó
+        plan = (read_state(base) or {}).get("plan")
+        sid = slice_of(base / plan, args.task) if isinstance(plan, str) and plan else None
+        write_cost(base, sid, "loop record", cost)
+    return rc
 
 
 def _loop_block(args: argparse.Namespace, base: Path) -> int:
@@ -18234,6 +18326,9 @@ def _pr_reviewed(args: argparse.Namespace, base: Path) -> int:
     key = _pr_reviewed_key(args, base)
     if key is None:
         return 2
+    cost, bad = _cost_arg(args)
+    if bad:
+        return bad
     entry: Dict[str, Any] = {"head": args.head, "clean": args.clean, "at": now_iso()}
     if args.inconclusive:
         entry["inconclusive"] = True
@@ -18261,6 +18356,8 @@ def _pr_reviewed(args: argparse.Namespace, base: Path) -> int:
     if not seen and sid:
         data = {"why": args.why, "confirmed": args.confirmed, "rejected": args.rejected, "clean": args.clean}
         slice_append(base, sid, "review", "pr reviewed", key, data)
+    if cost:  # chi phí lượt rà: ref là cost_id nên chạy lại không đếm trùng
+        write_cost(base, sid, "pr reviewed", cost)
     cur = seen[0] if seen else entry
     word = "chưa kết luận (cần review khác)" if args.inconclusive else "sạch" if args.clean else "còn lỗi chặn"
     print(f"✓ PR #{key}: review {word} ở {args.head[:7]}" + (" (đã ghi trước đó — không ghi thêm)" if seen else ""))
@@ -22957,6 +23054,7 @@ def build_parser() -> argparse.ArgumentParser:
     prv.add_argument("--confirmed", type=int, default=0, help="số phát hiện được xác nhận (sổ lát)")
     prv.add_argument("--rejected", type=int, default=0, help="số phát hiện bị bác (sổ lát)")
     prv.add_argument("--slice", help="lát của PR trong sổ lát (mặc định: lát của task có bằng chứng mới nhất)")
+    prv.add_argument("--cost", help=COST_HELP)
     prv.add_argument(
         "--no-publish",
         action="store_true",
@@ -23206,6 +23304,7 @@ def build_parser() -> argparse.ArgumentParser:
     lr.add_argument(
         "--no-tick", action="store_true", help="exit 0 khớp Gate vẫn không tự tick [x] dòng task trong PLAN (T-1719)"
     )
+    lr.add_argument("--cost", help=COST_HELP)
     lr.add_argument("cmd", nargs=argparse.REMAINDER)
     lb = lsub.add_parser("block")
     lb.add_argument("--reason", required=True)

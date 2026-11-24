@@ -840,3 +840,17 @@
 - Chọn: Giữ Haiku cho tra cứu chỉ đọc
 - Lý do (tiêu chí chất lượng cuối): Haiku đúng 10/10 câu tra cứu (định nghĩa, hằng, cờ, giá trị khoá) so với grep của phiên chính; 27,5K token, 19 giây, 13 lệnh. Mẫu nhỏ nên chỉ xác nhận ngưỡng dừng (sai > 1/10) chưa bị vi phạm; phiên chính đối chiếu cả 10 câu bằng grep vì đây là thí nghiệm, chưa phải tỷ lệ đọc lại vận hành. Đo lại khi có --cost.
 - Đường lùi: Đổi model: haiku thành sonnet ở .claude/agents/explore.md và bảng vai ở model-tiers.json, sinh lại gương Codex
+
+### D-562 · 2026-11-24T06:01:28+00:00 · Chọn gợi ý skill nào từ stored để áp dụng vào khung đợt này?
+
+- Phương án: (1) Dò drift cờ lệnh trong tài liệu, ghi chi phí vào sổ lát và trả nợ rà #774 · (2) Làm thêm eval A/B skill và quét SBOM/VEX
+- Chọn: Dò drift cờ lệnh trong tài liệu, ghi chi phí vào sổ lát và trả nợ rà #774
+- Lý do (tiêu chí chất lượng cuối): Cả hai ý được chọn có cổng kiểm máy tất định, chưa có ở khung (đã grep: không có test đối chiếu cờ, và xt_flow đọc sự kiện cost nhưng không lệnh nào ghi), làm được bằng stdlib trong một lát và đo được ngay (376 cờ, 0 lệch hiện tại làm đường cơ sở). Eval A/B cần chạy model thật, SBOM/VEX cần công cụ ngoài: chưa có số đo cần nên để lại. Mục bàn giao XT-H của stored đều đã vào khung nên không còn gì chưa xử lý ở danh mục đó.
+- Đường lùi: Xoá tests/test_doc_command_drift.py; bỏ cờ --cost (xt_flow vẫn trả null no_source như trước)
+
+### D-563 · 2026-11-24T06:01:40+00:00 · Quan hệ contract, min_contract, tiền tố biến và gốc công cụ trong tool.json (G8 và G9 của rà #774)?
+
+- Phương án: (1) contract mặc định bằng hợp đồng artefact hỗ trợ và phải không thấp hơn min_contract; env rơi về tiền tố XT khi tiền tố riêng chưa đặt; gốc không trùng thư mục công cụ khác · (2) Giữ như bản P2a: contract tuỳ ý, env chỉ đọc tiền tố riêng, gốc tuỳ ý theo regex
+- Chọn: contract mặc định bằng hợp đồng artefact hỗ trợ và phải không thấp hơn min_contract; env rơi về tiền tố XT khi tiền tố riêng chưa đặt; gốc không trùng thư mục công cụ khác
+- Lý do (tiêu chí chất lượng cuối): Cách đầu an toàn hơn: tool.json mâu thuẫn bị từ chối thay vì âm thầm nhận; đổi tên công cụ không làm biến chính sách cũ bị bỏ qua mà không báo (hàng rào im lặng tắt); --tool-name git hay claude không đặt được công cụ vào thư mục của công cụ khác. Đánh đổi: danh sách thư mục dành riêng phải bảo trì. Thiếu tool.json mà gốc khác mặc định thì config và tiền tố vẫn mặc định, nên launcher ở P3 phải ghi tool.json cùng lúc.
+- Đường lùi: Bỏ RESERVED_ROOTS, ràng buộc contract và nhánh rơi về XT ở xt_toolcfg.py

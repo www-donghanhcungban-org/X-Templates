@@ -46,6 +46,12 @@ ghi từ lệnh đã có — không thêm bước tay cho agent:
 | `incident` | `incident check` | tệp post-mortem | `severity` (`sev1`…`sev4`), `introduced_by` (số PR hoặc `null`) |
 | `cost` | `loop record --cost`, `pr reviewed --cost` | `cost_id` duy nhất | `usd` hoặc `tokens` + `price` |
 
+Cú pháp `--cost` (một chuỗi, khoá cách nhau dấu phẩy): `id=<cost_id>,usd=<số>` hoặc
+`id=<cost_id>,in=<token vào>,out=<token ra>[,price_in=<USD/MTok>,price_out=<USD/MTok>,source=<nguồn giá>,as_of=<YYYY-MM-DD>]`.
+Đối số sai (khoá lạ/lặp, số âm hay không hữu hạn, `usd` đi cùng token, ngày sai dạng) → mã thoát 2 trước khi chạy gì; thiếu
+một phần giá vẫn ghi (số đo báo `unpriced`, không đoán giá). `loop record` chỉ ghi khi Gate xanh, vào lát của task; `pr reviewed`
+ghi vào lát của `--slice` (mặc định lát của task có bằng chứng mới nhất). Không có lát hay lỗi ghi → cảnh báo stderr, không chặn.
+
 ### 2.4 Số đo (`xt_flow.report()` đọc từ sổ)
 Mỗi số là giá trị **hoặc** `null` kèm mã lý do máy đọc trong `coverage.<số>`: `no_source` (chưa có lệnh nào ghi kind cần),
 `no_events` (có nguồn, lát chưa có sự kiện), `window_open` (cửa sổ quan sát chưa đóng), `unpriced` (có token, thiếu giá).

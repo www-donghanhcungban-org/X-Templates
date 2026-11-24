@@ -506,6 +506,14 @@ class JsonAndAtomicTest(TmpMixin, unittest.TestCase):
         (d / "ok.json").write_text('{"a": "ký tự có dấu"}', encoding="utf-8")
         self.assertEqual(xt._read_json_obj(d / "ok.json"), {"a": "ký tự có dấu"})
 
+    def test_read_json_obj_deeply_nested_is_none_not_a_crash(self):
+        d = (
+            self.tmpdir()
+        )  # AUD-HAR-498: tệp commit lồng sâu làm sập mọi lệnh đọc nó (RecursionError không phải ValueError)
+        for body in ("[" * 100000, '{"a":' * 100000):
+            (d / "deep.json").write_text(body, encoding="utf-8")
+            self.assertIsNone(xt._read_json_obj(d / "deep.json"))
+
     def test_read_json_obj_unreadable_is_none(self):
         d = self.tmpdir()
         (d / "dir.json").mkdir()  # tồn tại nhưng đọc ra OSError
