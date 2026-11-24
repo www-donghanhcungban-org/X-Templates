@@ -3,19 +3,23 @@
 
 from __future__ import annotations
 
+import io
 import os
 import sys
 import tempfile
+import types
 import unittest
 import unittest.mock
+from contextlib import redirect_stdout
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
+import xt
 import xt_checks
 from cpu_budget import assert_not_quadratic
-from xt_checks import kind_motion, kind_pii_vn, kind_tokens
+from xt_checks import kind_credits, kind_motion, kind_pii_vn, kind_tokens
 
 
 class TmpTest(unittest.TestCase):
@@ -51,17 +55,6 @@ class SafeReadTest(TmpTest):
         small = self.put("s.md", "abcd")
         with unittest.mock.patch.object(xt_checks, "MAX_BYTES", 2):
             self.assertIsNone(xt_checks.read_text(small))
-
-    def test_file_that_grew_after_fstat_is_refused(self):
-        grown = self.put("g.md", "ab")
-        real_fstat = os.fstat
-
-        def fake(fd: int) -> os.stat_result:
-            return real_fstat(fd)  # kích thước lúc fstat = 2
-
-        with unittest.mock.patch.object(xt_checks, "MAX_BYTES", 2), unittest.mock.patch.object(os, "fstat", fake):
-            grown.write_text("abc", encoding="utf-8")  # lớn thêm sau khi trần đặt ở 2: đọc MAX+1 byte thấy ngay
-            self.assertIsNone(xt_checks.read_text(grown))
 
     def test_walk_skips_fifo_and_links_without_opening_them(self):
         good = self.put("tree/a.md", "x")
@@ -152,6 +145,106 @@ class LinearTimeTest(TmpTest):
         self.assertEqual(kind_motion._blank_comments("a/*b\nc"), "a   \n ")  # như CSS; số dòng giữ nguyên
         self.assertEqual(kind_motion._blank_comments("a/*b*/c/*d*/e"), "a     c     e")
         self.assertEqual(kind_motion._blank_comments("không có"), "không có")
+
+
+class SecondRoundTest(TmpTest):
+    """Rà #776 lượt hai: `motion` bậc hai ở tên thuộc tính lặp và số dòng/`animation-play-state` quét lại cho mỗi lần khớp,
+    sniff bỏ im lặng tệp đúng định dạng, lỗi đọc sau khi mở, đua `lstat`, email dính liền, CSV ô khổng lồ, tên quá dài."""
+
+    def run_css(self, text: str) -> None:
+        kind_motion.check([self.put("x.css", text)], {})
+
+    def test_motion_repeated_property_names_are_linear(self):
+        # N lớn hơn các ca khác: bản lỗi chỉ đỏ từ cỡ này (8000 vẫn xanh nếu bậc hai)
+        for name, build in (
+            ("animation-", lambda n: "animation-" * (n // 10)),
+            ("-animation", lambda n: "-animation" * (n // 10)),
+            ("transition-", lambda n: "transition-" * (n // 11)),
+        ):
+            with self.subTest(shape=name):
+                assert_not_quadratic(self, lambda n, b=build: self.run_css(b(n)), 40000)
+
+    def test_motion_many_findings_do_not_rescan_the_whole_file(self):
+        for name, build in (
+            ("infinite", lambda n: "a{animation:1s infinite}" * (n // 24)),
+            ("all", lambda n: "a{transition:all}" * (n // 17)),
+        ):
+            with self.subTest(shape=name):
+                assert_not_quadratic(self, lambda n, b=build: self.run_css(b(n)), 100000)
+
+    def test_motion_still_sees_vendor_prefixed_and_numbers_lines(self):
+        path = self.put("v.css", "a{}\nb{ -webkit-animation: spin 1s linear }\n")
+        self.assertEqual([(f.line, f.code) for f in kind_motion.check([path], {})], [(2, "MOT002")])
+        late = self.put("l.css", "\n" * 5 + "a{transition:all 1s}" + "\n" + "@media (prefers-reduced-motion: reduce){}")
+        self.assertEqual([(f.line, f.code) for f in kind_motion.check([late], {})], [(6, "MOT001")])
+
+    def test_sniff_keeps_formats_that_check_cannot_read(self):
+        big = '{"bomFormat": "CycloneDX", "x": "' + "a" * 300 + '"}'
+        self.put("big.json", big)
+        (self.base / "utf16.json").write_bytes('{"bomFormat": "CycloneDX"}'.encode("utf-16"))
+        self.put("other.json", '{"unrelated": true}')
+        with unittest.mock.patch.object(xt_checks, "MAX_BYTES", 100):
+            found = xt_checks.run("sbom", [str(self.base)], {})
+        self.assertEqual(
+            sorted((Path(f.path).name, f.code) for f in found), [("big.json", "SBM000"), ("utf16.json", "SBM000")]
+        )
+        self.assertEqual(xt_checks.read_head(self.base / "absent"), "")
+
+    def test_read_errors_after_open_are_not_a_crash_and_leak_nothing(self):
+        path = self.put("r.md", "xin chào")
+        before = len(os.listdir("/proc/self/fd")) if os.path.isdir("/proc/self/fd") else None
+        with unittest.mock.patch.object(os, "fdopen", side_effect=OSError("EIO")):
+            self.assertIsNone(xt_checks.read_text(path))
+        if before is not None:
+            self.assertEqual(len(os.listdir("/proc/self/fd")), before)
+
+    def test_file_that_grew_after_fstat_is_refused(self):
+        grown = self.put("g.md", "abc")
+        real = os.fstat(os.open(grown, os.O_RDONLY))
+        fake = types.SimpleNamespace(st_mode=real.st_mode, st_size=2)  # fstat nói 2 byte, trên đĩa đã 3
+        with (
+            unittest.mock.patch.object(xt_checks, "MAX_BYTES", 2),
+            unittest.mock.patch.object(os, "fstat", return_value=fake),
+        ):
+            self.assertIsNone(xt_checks.read_text(grown))
+
+    def test_walk_survives_a_file_vanishing_between_listing_and_lstat(self):
+        keep = self.put("tree/a.md", "x")
+        self.put("tree/b.md", "x")
+        real = os.lstat
+
+        def flaky(path, *args, **kwargs):
+            if str(path).endswith("b.md"):
+                raise FileNotFoundError(path)
+            return real(path, *args, **kwargs)
+
+        with unittest.mock.patch.object(os, "lstat", flaky):
+            self.assertEqual(xt_checks.collect([str(self.base / "tree")], (".md",)), [keep])
+
+    def test_pii_email_glued_after_another_token_and_line_numbers(self):
+        path = self.put("e.log", "dev@example.com_an@gmail.com\n")
+        self.assertEqual([f.code for f in kind_pii_vn.check([path], {})], ["PII003"])
+        path = self.put("n.log", "a" + chr(12) + "b\nemail: an@gmail.com\n")
+        self.assertEqual([(f.line, f.code) for f in kind_pii_vn.check([path], {})], [(2, "PII003"), (2, "PII004")])
+
+    def test_pii_csv_with_a_huge_cell_does_not_crash(self):
+        path = self.put("big.csv", "cccd,ghi_chu\n" + "x" * 200000 + ",y\n")
+        self.assertIsInstance(kind_pii_vn.check([path], {}), list)
+
+    def test_credits_row_with_an_overlong_name_does_not_crash(self):
+        logo = self.put("assets/logo.png", "png")
+        credits = self.put(
+            "assets/CREDITS.md", "| tệp | nguồn | license |\n|---|---|---|\n| " + "a" * 300 + ".png | me | MIT |\n"
+        )
+        found = kind_credits.check([logo], {"credits": str(credits)})
+        self.assertIn("CRD004", [f.code for f in found])
+
+    def test_script_dir_is_added_to_sys_path_when_missing(self):
+        self.put("a.md", "xin chào\n")
+        without = [p for p in sys.path if p != str(xt.SCRIPT_DIR)]
+        out = io.StringIO()
+        with unittest.mock.patch.object(sys, "path", without), redirect_stdout(out):
+            self.assertEqual(xt.main(["static-check", "nfc", str(self.base)]), 0)
 
 
 if __name__ == "__main__":

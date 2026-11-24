@@ -89,9 +89,10 @@ def _is_missing(key: str, credits: Path, files: list[Path]) -> bool:
     bases = (credits.parent, credits.parent.parent, Path("."))
     try:
         spots = [(base / key).resolve() for base in bases]
+        present = any(s.exists() for s in spots)  # `exists` cũng ném OSError với tên quá dài trên CPython 3.13
     except (OSError, ValueError):  # tên không hợp lệ (NUL, quá dài): không thể tồn tại → coi là không còn
         return True
-    return not any(s.exists() for s in spots) and any(s.is_relative_to(root) for s in spots)
+    return not present and any(s.is_relative_to(root) for s in spots)
 
 
 def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:

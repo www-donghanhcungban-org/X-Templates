@@ -32,6 +32,8 @@ Khung đòi nhiều quy tắc kiểm được bằng máy mà dự án đích ph
 
 Tệp không đọc được hoặc không phải UTF-8: `nfc`, `credits`, `trace`, `sbom`, `vex`, `pii-vn` báo (`…000`; `pii-vn` bắt buộc vì cổng quyền riêng tư không được lọt dữ liệu ở tệp log lớn); `tokens`, `motion`, `ac-trace` bỏ qua im lặng — loại nào cần thì thêm mã `…000` khi có ca thực tế.
 
+**Giới hạn đã biết của `motion`:** `/*` nằm trong chuỗi (`content: "/*"`), trong `//` của SCSS hay trong glob sass bị coi là bắt đầu bình luận và làm trắng phần còn lại của tệp (có thể bỏ sót `MOT001`); chấp nhận vì CSS/SCSS không có bộ phân tích trong stdlib, dùng `/* xt-allow: … */` hoặc `--opt ignore=` khi gặp.
+
 **An toàn khi đọc:** mọi loại đọc qua `read_text` — không theo liên kết tượng trưng, chỉ nhận tệp thường (FIFO/thiết bị bị bỏ), trần 2 MiB; regex dùng neo lookbehind và lượng từ chiếm hữu hoặc đoạn quét có trần để thời gian tuyến tính theo độ dài dòng (test `assert_not_quadratic`, rà #776 🔴).
 
 ## Hệ quả

@@ -20,8 +20,9 @@ _B = r"(?<![\w-])"
 _E = r"(?![\w-])"
 CCCD = re.compile(_B + r"(?:00[1-9]|0[1-8]\d|09[0-6])[0-3]\d{8}" + _E)
 PHONE = re.compile(_B + r"(?:\+?84|0)[35789]\d{8}" + _E)
-# Neo lookbehind + lượng từ chiếm hữu: chỉ thử ở đầu mỗi chuỗi ký tự, nên dòng dài base64/hex vẫn tuyến tính (rà #776)
-EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]++@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
+# Phần trước `@` chặn ở 64 ký tự (giới hạn RFC 5321): mỗi vị trí chỉ quét tối đa 64 nên dòng dài base64/hex vẫn tuyến tính mà
+# không cần neo lookbehind (neo làm mất email dính liền sau ký tự khác — rà #776 lượt hai).
+EMAIL = re.compile(r"[\w.+-]{1,64}+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
 PAIR = re.compile(r"""(?<![\w-])["']?([\w-]++)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;}]+)""")
 ALLOW = re.compile(r"xt-allow:([\sA-Z0-9,]*)")
 DOC_DOMAINS = ("example.com", "example.org", "example.net", "test", "invalid", "localhost")
@@ -63,7 +64,10 @@ def _hits(line: str, allowed: tuple[str, ...]) -> list[tuple[str, str]]:
 
 def _columns(line: str, delim: str, cols: list[int] | None) -> tuple[list[int], list[tuple[str, str]]]:
     """Dòng đầu tệp bảng là tiêu đề: nhớ cột nhạy cảm; các dòng sau kiểm giá trị ở cột đó."""
-    cells = next(csv.reader([line], delimiter=delim), [])
+    try:
+        cells = next(csv.reader([line], delimiter=delim), [])
+    except csv.Error:  # ô lớn hơn giới hạn của `csv` (131072): tách thô theo dấu phân cách thay vì văng traceback
+        cells = line.split(delim)
     if cols is None:
         return [i for i, c in enumerate(cells) if _norm(c) in SENSITIVE], []
     return cols, [
@@ -92,7 +96,8 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
             continue
         delim = "\t" if path.suffix.lower() == ".tsv" else ","
         cols: list[int] | None = None
-        for number, line in enumerate(text.splitlines(), 1):
+        for number, line in enumerate(text.split("\n"), 1):  # đếm dòng theo `\n` như editor và `grep -n`
+            line = line.removesuffix("\r")
             hits = _hits(line, allowed)
             if path.suffix.lower() in (".csv", ".tsv") and line.strip():
                 cols, extra = _columns(line, delim, cols)

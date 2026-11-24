@@ -8,6 +8,7 @@ một dòng bằng `/* xt-allow: MOT00N */`; `--opt ignore=MOT002,…` bỏ mã 
 
 from __future__ import annotations
 
+import bisect
 import re
 from pathlib import Path
 
@@ -22,7 +23,9 @@ MIN_SECONDS = 0.34
 LOOKAHEAD = 2000  # khối khai báo dài hơn mức này không xét: giữ thời gian quét tuyến tính theo cỡ tệp (rà #776)
 ALLOW = re.compile(r"xt-allow:\s*([A-Z0-9, ]+)")
 TRANSITION_ALL = re.compile(r"\btransition(?:-property)?\s*:[^;}]{0,300}\ball\b")
-MOTION = re.compile(r"@keyframes\b|\b(?:animation|transition)[\w-]*+\s*:")
+# Neo lookbehind (cho phép tiền tố nhà cung cấp `-webkit-`): chỉ thử ở đầu mỗi tên thuộc tính; `\b` khớp sau mỗi dấu `-` nên
+# `animation-animation-…` từng bậc hai (rà #776 lượt hai).
+MOTION = re.compile(r"@keyframes\b|(?<![\w-])(?:-[a-z]+-)?(?:animation|transition)[\w-]*+\s*:")
 REDUCED = re.compile(r"@media[^{]{0,300}prefers-reduced-motion\s*:\s*reduce")
 INFINITE = re.compile(r"\banimation(?:-iteration-count)?\s*:[^;}]{0,300}\binfinite\b")
 DURATION = re.compile(r"animation-duration\s*:\s*(\d++(?:\.\d++)?|\.\d++)(ms|s)\b")
@@ -68,9 +71,11 @@ def _check_text(path: str, text: str, ignore: set[str]) -> list[Finding]:
             allow[number] = {c.strip() for c in marker.group(1).split(",")}
     clean = _blank_comments(text)
     seen: dict[tuple[int, str], Finding] = {}
+    newlines = [m.start() for m in re.finditer("\n", clean)]  # một lần: đếm lại từ đầu tệp cho mỗi phát hiện là bậc hai
+    pausable = "animation-play-state" in clean
 
     def add(offset: int, code: str, message: str) -> None:
-        line = clean.count("\n", 0, offset) + 1
+        line = bisect.bisect_right(newlines, offset - 1) + 1  # số `\n` đứng trước offset
         if code not in ignore and code not in allow.get(line, set()):
             seen.setdefault((line, code), Finding(path, line, code, message))
 
@@ -83,7 +88,7 @@ def _check_text(path: str, text: str, ignore: set[str]) -> list[Finding]:
         seconds = _duration(clean, hit)
         if seconds is not None and seconds < MIN_SECONDS:
             add(hit.start(), "MOT003", "hoạt ảnh lặp vô hạn dưới 0,34 giây — nguy cơ chớp quá 3 lần/giây")
-        if "animation-play-state" not in clean:
+        if not pausable:
             add(hit.start(), "MOT004", "hoạt ảnh lặp vô hạn không có animation-play-state — không dừng được")
     return list(seen.values())
 

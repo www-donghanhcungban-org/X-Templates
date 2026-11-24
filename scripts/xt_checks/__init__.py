@@ -44,20 +44,40 @@ def read_text(path: Path) -> str | None:
     """Nội dung UTF-8 của tệp THƯỜNG; liên kết tượng trưng, FIFO/thiết bị, không đọc được, không phải UTF-8 hay quá
     `MAX_BYTES` → None (loại tự báo). Mở `O_NOFOLLOW|O_NONBLOCK` rồi `fstat`: tệp đặc biệt không làm treo hay ăn bộ nhớ
     (rà #776 🟠: `CREDITS.md` là liên kết tới thiết bị, FIFO tên `.md`)."""
+    data = _read_prefix(path, MAX_BYTES + 1)
     try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return None
-    info = os.fstat(fd)
-    if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_BYTES:
-        os.close(fd)
-        return None
-    with os.fdopen(fd, "rb") as handle:
-        data = handle.read(MAX_BYTES + 1)
-    try:
-        return data.decode("utf-8") if len(data) <= MAX_BYTES else None
+        return data.decode("utf-8") if data is not None and len(data) <= MAX_BYTES else None
     except UnicodeDecodeError:
         return None
+
+
+def _read_prefix(path: Path, limit: int) -> bytes | None:
+    """Tối đa `limit` byte đầu của tệp THƯỜNG (không theo liên kết, không mở FIFO/thiết bị); mọi lỗi mở hay đọc → None."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            return handle.read(limit)
+    except OSError:  # vd EIO khi đọc `/proc/self/mem`: tệp không đọc được, không phải lỗi dùng sai
+        return None
+    finally:
+        os.close(fd)
+
+
+def read_head(path: Path, limit: int = 65536) -> str:
+    """Tiền tố tệp để nhận diện sơ bộ (`SNIFF`): giải mã UTF-8 (hay UTF-16 nếu có BOM) bỏ qua byte lỗi; không đọc được → "".
+    Không phụ thuộc trần `MAX_BYTES` nên tệp lớn đúng định dạng vẫn tới `check` và được báo `…000`."""
+    data = _read_prefix(path, limit)
+    if data is None:
+        return ""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return data.decode("utf-16", errors="replace")
+    return data.decode("utf-8", errors="replace")
 
 
 def _walk(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
@@ -66,8 +86,14 @@ def _walk(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not Path(here, d).is_symlink())
         for name in sorted(names):
             path = Path(here, name)
-            if (not suffixes or path.suffix.lower() in suffixes) and stat.S_ISREG(os.lstat(path).st_mode):
-                found.append(path)  # lstat: liên kết và FIFO/thiết bị bị bỏ, không mở chúng
+            if suffixes and path.suffix.lower() not in suffixes:
+                continue
+            try:
+                regular = stat.S_ISREG(os.lstat(path).st_mode)  # lstat: liên kết và FIFO/thiết bị bị bỏ, không mở chúng
+            except OSError:  # tệp biến mất giữa lúc liệt kê và lúc kiểm (đua với tiến trình khác)
+                continue
+            if regular:
+                found.append(path)
     return found
 
 
@@ -84,7 +110,7 @@ def collect(paths: list[str], suffixes: tuple[str, ...], sniff: Callable[[str], 
             out.append(path)
         elif path.is_dir():
             found = _walk(path, suffixes)
-            out.extend(p for p in found if sniff is None or sniff(read_text(p) or ""))
+            out.extend(p for p in found if sniff is None or sniff(read_head(p)))
         else:
             raise CheckError(f"không thấy: {raw}")
     return out
