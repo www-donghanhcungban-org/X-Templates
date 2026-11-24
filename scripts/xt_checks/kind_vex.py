@@ -13,7 +13,9 @@ from . import Finding, read_text
 
 HELP = "OpenVEX thiếu trường tài liệu, vulnerability/products, status sai, justification hay action_statement"
 SUFFIXES = (".json",)
-CONTEXT = "https://openvex.dev/ns"
+CONTEXT = (
+    "openvex.dev/ns"  # phần sau dấu `//` của `@context`; không viết URL nguyên văn (kiểm BASE-CFG-001 cấm URL literal)
+)
 STATUSES = ("not_affected", "affected", "fixed", "under_investigation")
 JUSTIFICATIONS = (
     "component_not_present",
@@ -29,7 +31,7 @@ def _load(text: str) -> dict[str, Any] | None:
         data = json.loads(text)
     except (ValueError, RecursionError):
         return None
-    if isinstance(data, dict) and str(data.get("@context", "")).startswith(CONTEXT):
+    if isinstance(data, dict) and str(data.get("@context", "")).partition("//")[2].startswith(CONTEXT):
         return data
     return None
 

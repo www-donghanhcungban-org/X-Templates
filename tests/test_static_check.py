@@ -20,6 +20,7 @@ from xt_checks import kind_nfc
 
 NFC = unicodedata.normalize("NFC", "Tiếng Việt có dấu")
 NFD = unicodedata.normalize("NFD", NFC)
+REPL, BOM, ZWSP = chr(0xFFFD), chr(0xFEFF), chr(0x200B)  # bằng mã: nguồn không chứa ký tự ẩn thật
 
 
 def run_cli(*argv: str) -> tuple[int, str, str]:
@@ -113,17 +114,17 @@ class NfcKindTest(TmpTest):
         self.assertEqual(self.check("ok\n" + NFD + "\nok\n"), [(2, "NFC001")])
 
     def test_replacement_char_and_hidden_chars(self):
-        self.assertEqual(self.check("Vi�t\n"), [(1, "NFC002")])
-        self.assertEqual(self.check("﻿xin chào\n"), [(1, "NFC003")])
-        self.assertEqual(self.check("a​b\n"), [(1, "NFC003")])
+        self.assertEqual(self.check("Vi" + REPL + "t\n"), [(1, "NFC002")])
+        self.assertEqual(self.check(BOM + "xin chào\n"), [(1, "NFC003")])
+        self.assertEqual(self.check("a" + ZWSP + "b\n"), [(1, "NFC003")])
 
     def test_invalid_utf8_is_reported_as_unreadable(self):
         self.assertEqual(self.check(b"\xa4\xb1\xff"), [(0, "NFC000")])
 
     def test_ignore_option_silences_codes(self):
-        self.assertEqual(self.check("﻿a\n" + NFD + "\n", ignore="NFC003,NFC001"), [])
+        self.assertEqual(self.check(BOM + "a\n" + NFD + "\n", ignore="NFC003,NFC001"), [])
         self.assertEqual(self.check(b"\xff", ignore="NFC000"), [])
-        self.assertEqual(self.check("a�b\n", ignore="NFC002"), [])
+        self.assertEqual(self.check("a" + REPL + "b\n", ignore="NFC002"), [])
 
 
 class CliTest(TmpTest):

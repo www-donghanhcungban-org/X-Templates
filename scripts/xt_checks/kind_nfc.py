@@ -28,14 +28,15 @@ SUFFIXES = (
     ".xliff",
     ".properties",
 )
-HIDDEN = frozenset("​‌‍⁠﻿")
+HIDDEN = frozenset(chr(code) for code in (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF))  # ký tự ẩn: viết bằng mã, không bằng chữ
+REPLACEMENT = chr(0xFFFD)
 
 
 def _line_findings(path: str, number: int, line: str, ignore: set[str]) -> list[Finding]:
     found: list[Finding] = []
     if "NFC001" not in ignore and not unicodedata.is_normalized("NFC", line):
         found.append(Finding(path, number, "NFC001", "chuỗi không ở dạng NFC (dấu tổ hợp) — chuẩn hoá về NFC"))
-    if "NFC002" not in ignore and "�" in line:
+    if "NFC002" not in ignore and REPLACEMENT in line:
         found.append(Finding(path, number, "NFC002", "có ký tự thay thế U+FFFD — chữ đã mất khi đổi mã hoá"))
     if "NFC003" not in ignore and any(ch in HIDDEN for ch in line):
         found.append(Finding(path, number, "NFC003", "có ký tự ẩn (BOM hoặc ký tự không độ rộng)"))
