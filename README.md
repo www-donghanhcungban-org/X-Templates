@@ -1,8 +1,91 @@
+# X-Templates — software development reference framework
+
+**English** | [Tiếng Việt](#tiếng-việt)
+
+X-Templates is an open-source software development framework combining a library of requirements, project-specific blueprints, quality checks, and an AI-agent workflow. It helps teams move from an idea or an existing repository through development, review, release, and operations, with evidence and human decision points where required.
+
+The framework's detailed requirement library and most supporting documentation are currently in Vietnamese. See the [Vietnamese section](#tiếng-việt) for the complete command reference, operational details, and design decisions.
+
+## What it provides
+
+- **Requirements with stable IDs:** baseline practices, software profiles, industry packs, and standards. Each requirement records its priority, how to check it, and its sources. Review source dates and verify items marked as unverified before applying them.
+- **Blueprints tailored to a project:** combine software type, industry, and scale (S/M/L); preserve completion status by ID when recomposing. Additional modules can be selected for a project's needs.
+- **Quality and release evidence:** validate the framework, inspect blueprint status, run configured checks, and use `release-check` to assess readiness. Checks depend on the project's actual configuration and evidence.
+- **AI-assisted delivery:** the factory and autopilot workflows cover planning, task execution, evidence, review, and staged delivery. Guardrails and stop points depend on configuration and the supported harness; human judgment remains necessary where required.
+- **Starter and installation tools:** create a new project with the `web-api-ts` pack or install the framework into an existing repository. Codex support is available through the installer; the Vietnamese guide documents limitations and other agent adapters.
+- **Local dashboard:** browse requirements and blueprints, see progress, plans, automation state, and pull requests. It listens on localhost; most actions are shown as commands to run in a terminal.
+
+## Framework map
+
+| Area | Contents |
+| --- | --- |
+| [Method](framework/00-method/README.md) and [baseline](framework/01-baseline/README.md) | Principles, lifecycle, evidence and practices common to software projects |
+| [Software profiles](framework/02-profiles/README.md) and [industries](framework/03-industries/README.md) | Requirements selected by software type and business domain |
+| [Standards](framework/04-standards/README.md) | Security, accessibility, APIs, data, process and AI references |
+| [Architecture](framework/05-architecture/README.md) through [database](framework/09-database/README.md) | Architecture, design and UI/UX, frontend, backend and data |
+| [Workflow](framework/10-workflow/README.md) and [autonomous loop](framework/11-autonomous-loop/README.md) | Git, CI/CD, delivery, agent orchestration and evidence |
+| [Security](framework/12-security/README.md) and [AI engineering](framework/13-ai-engineering/README.md) | Application and AI security, LLM applications, agents, evaluation and observability |
+| [Testing](framework/14-testing-quality/README.md) through [cross-cutting concerns](framework/18-cross-cutting/README.md) | Quality, operations, privacy, product, internationalization and other shared concerns |
+| [Templates](framework/templates/README.md) | Project, plan, specification, ADR, runbook, release and other reusable templates |
+
+Browse the full [framework index](framework/README.md). The [changelog](CHANGELOG.md), [progress log](PROGRESS.md), and [tags](https://github.com/www-donghanhcungban-org/X-Templates/tags) describe changes and releases.
+
+## Get started
+
+The installer and CLI require **CPython 3.13 or newer** and a POSIX environment. Linux is covered by CI; macOS is not currently covered. On Windows, use WSL2 or a DevContainer/Docker environment. See the [Vietnamese section](#tiếng-việt) for filesystem and runtime details.
+
+Create a new project in a new or empty directory:
+
+```bash
+git clone https://github.com/www-donghanhcungban-org/X-Templates /tmp/x-templates
+python3 /tmp/x-templates/scripts/install.py /path/to/project --new --name team-notes --pack web-api-ts --idea "Team notes"
+cd /path/to/project
+python3 .xtemplates/scripts/xt.py stage status
+python3 .xtemplates/scripts/xt.py blueprint-status BLUEPRINT.md
+```
+
+The installer creates a Git repository, starter, S-scale blueprint and stage ledger. To run the development application, install the pack's dependencies and provide Docker Compose. Add `--harness codex` when creating a project for Codex. For an existing repository, see the [installation guidance](#dùng-cho-một-dự-án), including policy presets and stage adoption.
+
+In Claude Code, `/factory "Team notes: build an MVP"` starts the factory workflow; in Codex, use `$factory`. The [factory guide](.claude/skills/factory/SKILL.md) and [web-api-ts pack](framework/templates/packs/web-api-ts/README.md) explain the workflow and starter.
+
+To inspect the local dashboard:
+
+```bash
+python3 scripts/xt.py app                 # framework repository
+python3 .xtemplates/scripts/xt.py app     # installed project
+```
+
+The app prints a localhost URL with a per-run token. The PR view requires an authenticated `gh` installation. The dashboard does not run gates, merge, push, or defer tasks; its blueprint write action is the documented exception to its otherwise read-oriented interface.
+
+## Practical boundaries
+
+X-Templates provides guidance and tools, not a guarantee that a project is secure, compliant, or production-ready. Requirements must be adapted to the project's risk and verified against current sources. Industry and legal material is input to review; consult qualified professionals where appropriate. The automation workflow can stop for real-money actions, real user data, paid services, credentials, or other situations defined by policy.
+
+## Support the author and contact
+
+If X-Templates is useful to you, voluntary contributions help maintain the framework and its documentation:
+
+- **PayPal:** [@donghanhcungban](https://paypal.me/donhanhcungban).
+- **Vietnam bank transfer:** Techcombank account `890977819110`, or scan the [VietQR code](docs/assets/donate-vietqr-techcombank.png).
+- **Contact and implementation support:** [Zalo / phone +84 977 819 110](https://zalo.me/0977819110) · admin@donghanhcungban.org. Support is available online or in Ho Chi Minh City, with terms agreed separately.
+
+Contributions are voluntary and do not include special benefits. Report bugs and feature requests via [issues](https://github.com/www-donghanhcungban-org/X-Templates/issues), and report security vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+## Contributing and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [framework conventions](framework/00-method/conventions.md). X-Templates is licensed under the [MIT License](LICENSE), subject to the third-party components and trademarks described in [NOTICE](NOTICE).
+
+---
+
+<a id="tiếng-việt"></a>
+
 # X-Templates — khung tham chiếu phát triển phần mềm
+
+[English](#x-templates--software-development-reference-framework) | **Tiếng Việt**
 
 > Thư viện **yêu cầu có ID** cho mọi loại phần mềm và ngành nghề, kèm công cụ ghép thành checklist dự án, kiểm "xong" bằng máy,
 > và harness để AI agent **tự làm đến khi hoàn thành** mà vẫn dừng đúng chỗ cần người.
-> Nội dung tiếng Việt; phiên bản, chuẩn và luật có nguồn và ngày kiểm tra theo từng mục. Mục ghi **chưa xác minh** cần đối chiếu trước khi áp dụng.
+> Tài liệu chi tiết chủ yếu bằng tiếng Việt; phiên bản, chuẩn và luật có nguồn và ngày kiểm tra theo từng mục. Mục ghi **chưa xác minh** cần đối chiếu trước khi áp dụng.
 >
 > Mã mở [MIT](LICENSE), miễn phí. Thấy hữu ích? [Ủng hộ tác giả](#ủng-hộ-và-liên-hệ) ☕
 
@@ -345,6 +428,7 @@ hộ để tác giả duy trì và cập nhật nội dung (chuẩn, luật, phi
 
 <img src="docs/assets/donate-vietqr-techcombank.png" alt="Mã VietQR ủng hộ: Techcombank, số tài khoản 890977819110" width="260">
 
+- **PayPal:** [@donghanhcungban](https://paypal.me/donhanhcungban).
 - Quét mã VietQR bằng ứng dụng ngân hàng bất kỳ, hoặc chuyển khoản **Techcombank — số tài khoản `890977819110`**.
 - Liên hệ, góp ý, hợp tác: điện thoại / Zalo **[+84 977 819 110](https://zalo.me/0977819110)** ·
   email **admin@donghanhcungban.org**. Lỗi và đề xuất tính năng xin mở [issue](https://github.com/www-donghanhcungban-org/X-Templates/issues).
