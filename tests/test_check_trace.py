@@ -165,10 +165,12 @@ class TraceTest(unittest.TestCase):
         )
         self.assertEqual(self.codes(text, {"required": ""}), [])
 
-    def test_attributes_malformed_tolerated(self):
-        for attrs in ("x", [1, {"key": 3}]):
-            with self.subTest(attrs=attrs):
-                self.assertEqual(self.codes(json.dumps(doc(span(S1, attributes=attrs)))), [])
+    def test_attributes_report_shape_and_keep_valid_siblings(self):
+        attrs = [1, {"key": 3}, {"key": "gen_ai.operation.name"}, {"key": None, "value": None}]
+        text = json.dumps(doc(span(S1))) + "\n" + json.dumps(doc(span(S2, attributes=attrs)))
+        found = self.run_check(text)
+        self.assertEqual([(f.code, f.line) for f in found], [("TRC000", 2), ("TRC000", 2), ("TRC002", 2)])
+        self.assertIn("attributes[1].key", found[1].message)
 
     def test_jsonl_line_numbers(self):
         text = json.dumps(doc(span(S1))) + "\n\n" + json.dumps(doc(span(S2, S3))) + "\n"

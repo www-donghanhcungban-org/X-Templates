@@ -33,7 +33,9 @@ SNIFF = sniff
 
 
 def _items(parent: dict[str, Any], key: str) -> list[dict[str, Any]]:
-    value = parent.get(key, [])
+    value = parent.get(key)
+    if value is None:  # ProtoJSON: null trên trường lặp tương đương chưa khai.
+        return []
     if not isinstance(value, list) or not all(isinstance(v, dict) for v in value):
         raise ValueError(f"cấu trúc OTLP sai ({key} phải là danh sách đối tượng)")
     return value
@@ -72,23 +74,42 @@ def _bad_hex(value: str, pattern: re.Pattern[str]) -> bool:
     return not pattern.fullmatch(value) or not value.strip("0")
 
 
-def _keys(span: dict[str, Any]) -> set[str]:
+def _keys(path: str, line: int, span: dict[str, Any], found: list[Finding]) -> set[str]:
     attrs = span.get("attributes")
+    keys: set[str] = set()
+    if attrs is None:
+        return keys
     if not isinstance(attrs, list):
-        return set()
-    return {a["key"] for a in attrs if isinstance(a, dict) and isinstance(a.get("key"), str)}
+        found.append(Finding(path, line, "TRC000", "attributes: cần mảng"))
+        return keys
+    for index, attr in enumerate(attrs):
+        field = f"attributes[{index}]"
+        if not isinstance(attr, dict):
+            found.append(Finding(path, line, "TRC000", f"{field}: cần object"))
+            continue
+        key, value = attr.get("key"), attr.get("value")
+        if isinstance(key, str):
+            keys.add(key)
+        elif key is not None:
+            found.append(Finding(path, line, "TRC000", f"{field}.key: cần chuỗi"))
+        if value is not None and not isinstance(value, dict):
+            found.append(Finding(path, line, "TRC000", f"{field}.value: cần object"))
+    return keys
 
 
 def _attr_findings(path: str, line: int, span: dict[str, Any], groups: list[list[str]]) -> list[Finding]:
-    keys = _keys(span)
+    found: list[Finding] = []
+    keys = _keys(path, line, span, found)
     if not any(k.startswith("gen_ai.") for k in keys):
-        return []
+        return found
     missing = ["|".join(g) for g in groups if not keys.intersection(g)]
-    if not missing:
-        return []
-    return [
-        Finding(path, line, "TRC002", f"span {_text(span, 'name')!r} thiếu thuộc tính bắt buộc: {', '.join(missing)}")
-    ]
+    if missing:
+        found.append(
+            Finding(
+                path, line, "TRC002", f"span {_text(span, 'name')!r} thiếu thuộc tính bắt buộc: {', '.join(missing)}"
+            )
+        )
+    return found
 
 
 def _span_findings(path: str, span: Span, ids: set[tuple[str, str]], traces_of: dict[str, set[str]]) -> list[Finding]:

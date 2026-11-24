@@ -987,3 +987,17 @@
 - Chọn: Schema 1 với entries gồm repo/commit/event; gộp theo repo và JSON sự kiện chuẩn, giữ toàn bộ nguồn ở origins khi trùng
 - Lý do (tiêu chí chất lượng cuối): Các worktree có thể chứa bản sao cùng sự kiện; đếm lại làm sai số đo. Repo là owner/name, commit là SHA đầy đủ của checkout khi xuất, event giữ schema 1 native. origins bảo toàn nhiều nguồn sau gộp, repo/commit đại diện phải nằm trong origins. Host mặc định github.com cho registry hiện tại; host tường minh phải được kiểm. Validator đối chiếu native merge_sha, head, digest và receipt với pilot thật.
 - Đường lùi: Revert exporter và validator tương ứng cùng phiên bản hợp đồng, giữ sổ nguồn nguyên vẹn.
+
+### D-583 · 2026-11-24T14:07:40+00:00 · Tách phụ thuộc triển khai của hướng dẫn thiết kế và hai cổng trình duyệt độc lập
+
+- Phương án: (1) T-5013 và T-5014 theo T-5005; hai runner UI có Gate thật riêng, workflow tích hợp tuần tự, mẫu thiết kế được làm ngay · (2) Giữ mọi tài liệu và bộ kiểm thiết kế chờ runner starter dù không dùng mã hoặc kết quả của runner đó
+- Chọn: T-5013 và T-5014 theo T-5005; hai runner UI có Gate thật riêng, workflow tích hợp tuần tự, mẫu thiết kế được làm ngay
+- Lý do (tiêu chí chất lượng cuối): T-5012 kiểm starter còn T-5013 kiểm verify-render trên fixture riêng; T-5014 là brief/phương án/thử tác vụ và không cần browser chạy để soạn. Chúng chỉ cùng sửa workflow nên tích hợp theo lượt. Chromium cục bộ bị môi trường chặn, nhưng điều đó không chặn phần tài liệu độc lập. Giữ nguyên cả hai Gate trình duyệt, không tick từ unit test hay đổi yêu cầu dữ liệu thật của pilot.
+- Đường lùi: Khôi phục phụ thuộc nếu kiểm tra cho thấy có giao ước thực thi bắt buộc; không bỏ hoặc làm yếu Gate.
+
+### D-584 · 2026-11-24T14:13:19+00:00 · T-5015 giao ước draft và pilot của static-check design-evidence
+
+- Phương án: (1) Schema 1: brief, ít nhất hai phương án và lựa chọn, trial có not_tested rõ hoặc dữ liệu từng người ẩn danh; pilot yêu cầu đo được và tổng đếm khớp, checked báo phạm vi đã kiểm · (2) Chỉ tìm đủ tên mục trong Markdown, cho phép pilot qua với trạng thái chưa thử
+- Chọn: Schema 1: brief, ít nhất hai phương án và lựa chọn, trial có not_tested rõ hoặc dữ liệu từng người ẩn danh; pilot yêu cầu đo được và tổng đếm khớp, checked báo phạm vi đã kiểm
+- Lý do (tiêu chí chất lượng cuối): T-5014 đã có mẫu và D-581/D-582 đã có envelope ceiling phụ trợ. Bộ kiểm phải kiểm cấu trúc/kiểu, ID duy nhất, số hữu hạn không âm, tổng số người/hoàn thành và dữ liệu thời gian/lỗi/trợ giúp; không suy dữ liệu thiếu thành 0. Draft cho not_tested kèm lý do và bước kế, pilot từ chối trạng thái đó. Đây là kiểm hồ sơ, không chứng minh người thật đã tham gia; T-5017 vẫn đòi nguồn và kết quả thật.
+- Đường lùi: Revert kind và SPEC mới, giữ API static-check hiện có và tài liệu gốc.
