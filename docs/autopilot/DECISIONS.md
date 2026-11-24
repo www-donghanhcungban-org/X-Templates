@@ -889,3 +889,10 @@
 - Chọn: nâng hai skill hiện có
 - Lý do (tiêu chí chất lượng cuối): XC-DOCAI-025 đòi mỗi skill mới có câu mẫu và description không trùng; ý stored phần lớn đã có; description giữ nguyên nên định tuyến không đổi
 - Đường lùi: git revert commit nâng skill
+
+### D-569 · 2026-11-24T09:52:43+00:00 · Áp dụng đối chiếu XT-H-163 và đợt 2 static-check trong một PR
+
+- Phương án: (1) một PR hai việc nhỏ cùng đợt · (2) tách hai PR
+- Chọn: một PR hai việc nhỏ cùng đợt
+- Lý do (tiêu chí chất lượng cuối): cả hai chỉ thêm tài liệu và module độc lập, không chung tệp nóng; tách thêm một vòng CI mà không giảm rủi ro
+- Đường lùi: git revert commit của PR
