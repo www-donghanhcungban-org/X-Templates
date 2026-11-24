@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `review_debt` so cặp ID–lệnh và grant bằng chính parser thực thi ở hai cây Git, kể cả PLAN ngoài thư mục mặc định và backlog blueprint; văn xuôi, bằng chứng tĩnh và ví dụ grant trong fence không tạo nợ (AUD-HAR-478, D-576, T-5004).
+
 - Phép thử hồi quy `llms-txt` đếm số byte đường dẫn qua hệ tệp để phát hiện cách duyệt tiền tố bậc hai đã lọt phép đo CPU trên CI #791 (T-5027). Hai phép đo CPU đầu-cuối vẫn kiểm mã thực.
 
 - Ma trận cấu trúc kiểm đủ 13 loại `static-check`; OTLP chấp nhận trường repeated `null` như không khai, báo `TRC000` cho attributes/phần tử/value sai cấu trúc và vẫn kiểm các thuộc tính GenAI hợp lệ (T-5002).

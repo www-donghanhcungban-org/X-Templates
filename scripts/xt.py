@@ -14449,27 +14449,20 @@ def _release_phase(base: Path) -> Dict[str, str]:
     return _release_row("phase", "PASS", f"`{PHASE_KEY}: {keys.get(PHASE_KEY) or 'harden'}` (vắng = harden)")
 
 
-# Tài liệu có lệnh chạy được (AUD-HAR-460, D-535): `release-check`, CI, duyệt tag và Gate của vòng lặp chạy chúng, nên đổi
-# LỆNH tính như mã; sửa mô tả thuần không sinh nợ. Mục blueprint là một dòng chứa cả mô tả lẫn `— Kiểm:`, nên so PHẦN LỆNH
-# (từ dấu `Kiểm:`/`Gate:`/`grant:` tới hết dòng) giữa bản cũ và mới, không so dòng.
-_CMD_PART = r"(?:Kiểm:|Gate:|grant:).*$"
-EXEC_DOC_LINES: Tuple[Tuple["re.Pattern[str]", "re.Pattern[str]"], ...] = (
-    (re.compile(r"(^|/)BLUEPRINT\.md$"), re.compile(_CMD_PART)),
-    (re.compile(r"(^|/)docs/(archive/)?autopilot/PLAN[^/]*\.md$"), re.compile(_CMD_PART)),
-)  # mẫu `framework/templates/*.md` không ở đây: `is_doc_path` đã coi là mã nên mọi sửa đều sinh nợ (chặt hơn)
+def _changed_exec_docs(root: Path, sha: str, docs: Set[str]) -> Set[str]:
+    """Nợ lệnh từ hai cây Git. Bản cài thiếu bộ đọc hoặc cây không đọc được thì giữ tài liệu đổi để rà."""
+    if not docs:
+        return set()
+    if not all(sibling_exists(f) for f in ("xt_release_ops.py", "xt_ops_setup.py", "xt_distribution.py")):
+        return docs
+    _sibling_imports()
+    import xt_release_ops
+
+    return xt_release_ops.changed_exec_docs(sys.modules[__name__], root, sha, docs)
 
 
 def _exec_doc_edited(root: Path, sha: str, path: str) -> bool:
-    """Phần lệnh của tài liệu chạy được có khác giữa `sha` và HEAD (thêm, xoá, đổi; dời chỗ không tính)? Tài liệu khác → False."""
-    part_re = next((lr for pr, lr in EXEC_DOC_LINES if pr.search(path)), None)
-    if not part_re:
-        return False
-    diff = _git(root, "--literal-pathspecs", "diff", "-U0", "--no-renames", f"{sha}..HEAD", "--", path).stdout
-    parts: Dict[str, List[str]] = {"-": [], "+": []}
-    for ln in diff.splitlines():
-        if ln[:1] in parts and not ln.startswith(("+++", "---")):
-            parts[ln[0]] += [m.group(0).strip() for m in part_re.finditer(ln[1:])]
-    return sorted(parts["-"]) != sorted(parts["+"])
+    return bool(_changed_exec_docs(root, sha, {path}))
 
 
 def review_debt(root: Path, status: Path) -> Tuple[List[str], List[str]]:
@@ -14493,8 +14486,9 @@ def _review_debt_since(root: Path, status: Path) -> Tuple[Dict[str, str], List[s
     changed: Dict[str, List[str]] = {}
     for sha in set(scanned.values()):
         # -z: tên chứa `"`/`\\`/ký tự điều khiển không bị trích dẫn kiểu C (trích dẫn → lệch nhóm, bỏ sót nợ — review #317)
-        names = _git(root, "diff", "-z", "--no-renames", "--name-only", f"{sha}..HEAD").stdout.split("\0")
-        changed[sha] = [f for f in names if f and (not is_doc_path(f) or _exec_doc_edited(root, sha, f))]
+        names = _z_names(_git(root, *NAMES_Z, f"{sha}..HEAD").stdout)
+        docs = {f for f in names if is_doc_path(f)}
+        changed[sha] = sorted((names - docs) | _changed_exec_docs(root, sha, docs))
     ahead = {s: int(_git(root, "rev-list", "--count", f"{s}..HEAD").stdout.strip() or 0) for s in changed}
     since: Dict[str, str] = {}
     for no, sha in scanned.items():

@@ -7,7 +7,9 @@ import datetime as dt
 import http.client
 import json
 import math
+import posixpath
 import re
+from functools import cache
 from pathlib import Path
 from typing import Any, Callable, Iterator, Protocol, cast
 from urllib.parse import urlsplit
@@ -23,6 +25,9 @@ class Core(ops_setup.Core, Protocol):
     RELEASE_AGENT_NAME: str
     RELEASE_SIGN_BLUEPRINT: str
     RELEASE_SIGN_STATUS: str
+    _parse_plan_lines: Callable[[list[str]], list[Doc]]
+    _scan_checks: Callable[[str, str], tuple[list[Doc], list[str]]]
+    blueprint_backlog: Callable[[Path, str], Path | None]
     _approval_problem: Callable[[Path, str, str, Doc], str]
     _deploy_sha256: Callable[[Any], bool]
     _deploy_utc: Callable[[Any], dt.datetime | None]
@@ -36,6 +41,75 @@ class Core(ops_setup.Core, Protocol):
     _xt_keys: Callable[[Path], dict[str, str]]
     promotion_pending: Callable[[object], bool]
     release_check: Callable[..., Doc]
+
+
+def _exec_doc_reader(core: Core, root: Path, rev: str) -> tuple[set[str], Callable[[str], str]]:
+    def git(*args: str) -> str:
+        result = core._git(root, *args)
+        if result.returncode:
+            raise OSError(result.stderr)
+        return result.stdout
+
+    tree = git("ls-tree", "-r", "-z", "--full-tree", rev)
+    entries = {path: meta.split() for meta, _, path in (row.partition("\t") for row in tree.split("\0") if row)}
+
+    indirect = {path for path, (mode, _, _) in entries.items() if mode not in {"100644", "100755"}}
+
+    @cache
+    def read(path: str) -> str:
+        target = Path(path)
+        if any(p.as_posix() in indirect for p in (target, *target.parents)):
+            raise OSError(f"không đọc được tệp thường: {path}")
+        return git("cat-file", "blob", entries[path][2]) if path in entries else ""
+
+    return set(entries), read
+
+
+def _exec_doc_snapshot(core: Core, root: Path, rev: str, changed: set[str]) -> dict[str, Doc]:
+    """Compare committed blobs, including Markdown Git classifies as binary. Never read the working tree."""
+
+    entries, read = _exec_doc_reader(core, root, rev)
+    # A binding may change even when the referenced files do not. Look up its committed target on each side.
+    result: dict[str, Doc] = {}
+    blueprints = {path for path in entries if posixpath.basename(path) == "BLUEPRINT.md"}
+    checks_from = blueprints.copy()
+    for path in blueprints:
+        target = core.blueprint_backlog(Path(path), read(path))
+        if target:
+            backlog = posixpath.normpath(target.as_posix())
+            read(backlog)  # An unchanged symlink could point at an edited document outside this set.
+            checks_from.add(backlog)
+            if path in changed:
+                result[path] = {"backlog": backlog}
+    for path in changed & entries:
+        surface = result.setdefault(path, {})
+        if path in checks_from:
+            checks, _ = core._scan_checks(read(path), path)
+            if checks:
+                surface["checks"] = _id_commands(checks, "cmd")
+        if Path(path).match("PLAN*.md"):
+            surface.update(_plan_commands(core, read(path)))
+    return result
+
+
+def _plan_commands(core: Core, text: str) -> Doc:
+    gates = _id_commands(core._parse_plan_lines(text.splitlines()), "gate")
+    return {k: v for k, v in (("gates", gates), ("grants", core.parse_grants(text))) if v}
+
+
+def _id_commands(rows: list[Doc], key: str) -> list[tuple[str, str | None]]:
+    """Keep duplicate IDs in source order, including a missing Gate that could shadow a later one."""
+    active = {row["id"] for row in rows if row[key] is not None}
+    return sorted(((row["id"], row[key]) for row in rows if row["id"] in active), key=lambda pair: pair[0])
+
+
+def changed_exec_docs(core: Core, root: Path, sha: str, docs: set[str]) -> set[str]:
+    try:
+        before = _exec_doc_snapshot(core, root, sha, docs)
+        after = _exec_doc_snapshot(core, root, "HEAD", docs)
+    except OSError:
+        return docs
+    return {path for path in docs if before.get(path, {}) != after.get(path, {})}
 
 
 def report(doc: Doc, as_json: bool) -> None:
