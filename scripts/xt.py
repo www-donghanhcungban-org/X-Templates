@@ -138,6 +138,7 @@ import traceback
 import types
 import unicodedata
 import urllib.parse
+import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
 from graphlib import TopologicalSorter
@@ -162,6 +163,34 @@ from typing import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_FRAMEWORK = (SCRIPT_DIR.parent / "framework").resolve()
+
+
+@functools.lru_cache(maxsize=8)
+def _zip_names(path: str) -> FrozenSet[str]:
+    try:
+        with zipfile.ZipFile(path) as z:
+            return frozenset(z.namelist())
+    except (OSError, zipfile.BadZipFile):
+        return frozenset()
+
+
+def in_artifact() -> bool:
+    """Chạy từ artefact `.pyz` (ADR-0097): khi đó `SCRIPT_DIR` là chính tệp zip, mã anh em nằm trong zip."""
+    return SCRIPT_DIR.is_file()
+
+
+def artifact_member(name: str) -> Optional[bytes]:
+    """Nội dung mục `name` của artefact `.pyz`; None nếu không chạy từ zip, thiếu mục hoặc zip hỏng."""
+    if not in_artifact() or name not in _zip_names(str(SCRIPT_DIR)):
+        return None
+    with zipfile.ZipFile(SCRIPT_DIR) as z:
+        return z.read(name)
+
+
+def sibling_exists(name: str) -> bool:
+    """Module/tệp anh em của xt.py: tệp cạnh nó trên đĩa, hoặc mục trong artefact `.pyz`."""
+    return (SCRIPT_DIR / name).is_file() or (in_artifact() and name in _zip_names(str(SCRIPT_DIR)))
+
 
 KINDS = {"method", "index", "module", "baseline", "profile", "industry", "standard", "template", "research", "progress"}
 LEVELS = ("MUST", "SHOULD", "MAY")
@@ -2451,7 +2480,8 @@ def _exec_source(path: Path, mod: Any) -> None:
     của nguồn, nên pyc độc đặt sẵn cạnh hook chạy thay guard (AUD-SEC-074, T-1716). Lỗi đọc/biên dịch/chạy ném ra
     ngoài; định nghĩa trước điểm lỗi đã nằm trong `mod` (module dở). Import lồng trong lúc chạy không đẻ `__pycache__`."""
     mod.__file__ = str(path)
-    code = compile(path.read_bytes(), str(path), "exec", dont_inherit=True)
+    member = artifact_member(path.name) if path.parent == SCRIPT_DIR else None  # module anh em trong artefact `.pyz`
+    code = compile(path.read_bytes() if member is None else member, str(path), "exec", dont_inherit=True)
     keep = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     try:
@@ -3264,7 +3294,7 @@ def _acceptance_source(path: Path) -> Any:
 
 def acceptance_module() -> Any:
     path = SCRIPT_DIR / "xt_acceptance.py"
-    return _acceptance_source(path) if path.is_file() else None
+    return _acceptance_source(path) if sibling_exists("xt_acceptance.py") else None
 
 
 def loop_record(
@@ -5097,6 +5127,12 @@ APP_DIRS = ("xt_app", "app")  # gói máy chủ + giao diện tĩnh của `xt.py
 
 def _doctor_scripts() -> List[Finding]:
     out = []
+    if (
+        in_artifact()
+    ):  # artefact `.pyz`: dev-task.sh và app tĩnh không nằm cạnh (ADR-0097, pha P5 sẽ chuyển lệnh vào artefact)
+        return [
+            Finding("scripts", "warn", "chạy từ artefact .pyz — chưa kiểm dev-task.sh và app cạnh xt.py (ADR-0097)")
+        ]
     if not (SCRIPT_DIR / "dev-task.sh").is_file():
         out.append(
             Finding("scripts", "error", f"thiếu {SCRIPT_DIR / 'dev-task.sh'} — cổng commit không chạy; {INSTALL_HINT}")
@@ -5983,7 +6019,7 @@ def _doctor_github_text(base: Path) -> List[Finding]:
     """WF-DOC-021 (SHOULD, chỉ cảnh báo): ở dự án đích, README gốc và `.github/**` mô tả dự án — nhắc X-Templates ngoài
     ghi chú nguồn "Áp dụng từ phiên bản vX.Y.Z của dự án X-Templates" thì báo tệp:dòng. Repo khung (không có
     `.xtemplates/VERSION`) không áp; README vắng không báo."""
-    if not (base / ".xtemplates" / "VERSION").is_file() or not (SCRIPT_DIR / "xt_distribution.py").is_file():
+    if not (base / ".xtemplates" / "VERSION").is_file() or not sibling_exists("xt_distribution.py"):
         return []
     _sibling_imports()
     import xt_distribution
@@ -8532,7 +8568,7 @@ def _batch_verdict(base: Path, st: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _field_facts(base: Path, plan: str) -> Dict[str, Any]:
-    if not (SCRIPT_DIR / "xt_field.py").is_file():
+    if not sibling_exists("xt_field.py"):
         return {}
     _sibling_imports()
     import xt_field
@@ -22423,6 +22459,9 @@ def _task_id(value: str) -> str:
 
 def framework_version() -> str:
     """Phiên bản khung: file VERSION cạnh thư mục scripts/ (repo khung hoặc .xtemplates/ của dự án)."""
+    member = artifact_member("VERSION")  # artefact `.pyz`: `xt_pack.py` đóng gói VERSION của khung
+    if member is not None:
+        return member.decode("utf-8").strip()
     try:
         return (SCRIPT_DIR.parent / "VERSION").read_text(encoding="utf-8").strip()
     except OSError:
@@ -22674,9 +22713,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="thư mục framework/ (mặc định: cạnh scripts/)",
     )
     sub = p.add_subparsers(dest="cmd", required=True)
-    if all((SCRIPT_DIR / f).is_file() for f in ("xt_ops_setup.py", "xt_release_ops.py", "xt_flow.py")):
+    if all(sibling_exists(f) for f in ("xt_ops_setup.py", "xt_release_ops.py", "xt_flow.py")):
         _add_release_ops(sub)
-    if (SCRIPT_DIR / "xt_acceptance.py").is_file():
+    if sibling_exists("xt_acceptance.py"):
         acceptance = sub.add_parser("acceptance", help="khoá, kiểm và sửa bộ nghiệm thu độc lập")
         actions = acceptance.add_subparsers(dest="action", required=True)
         check = actions.add_parser("check")
@@ -22691,7 +22730,7 @@ def build_parser() -> argparse.ArgumentParser:
         acceptance.set_defaults(
             fn=lambda args: _acceptance_source(SCRIPT_DIR / "xt_acceptance.py").command(sys.modules[__name__], args)
         )
-    if (SCRIPT_DIR / "xt_distribution.py").is_file():
+    if sibling_exists("xt_distribution.py"):
         verify = sub.add_parser(
             "release-verify", help="kiểm archive, lịch sử tag và attestation của workflow phát hành"
         )
@@ -23235,7 +23274,7 @@ def build_parser() -> argparse.ArgumentParser:
     pdr.set_defaults(fn=cmd_doctor)
     pp = sub.add_parser("perf", help="đo và so hiệu năng có thống kê, chặn gian lận số đo (LOOP-OPT-*)")
     ppsub = pp.add_subparsers(dest="perf_cmd", required=True)
-    if (SCRIPT_DIR / "xt_field.py").is_file():
+    if sibling_exists("xt_field.py"):
         fc = ppsub.add_parser("field-check", help="kiểm số field và ngân sách")
         fc.add_argument("--file", default="-", help="file FIELD hoặc - để đọc stdin")
         fc.add_argument("--json", action="store_true")

@@ -12,18 +12,18 @@
 ## Phương án
 
 1. **A. Giữ nguyên, vá nhỏ** (bộ phân giải tên, launcher, render `<XT>`). Chi phí thấp nhưng đích vẫn giữ mã khung.
-2. **B. Một artefact `.pyz` ghim digest, launcher mang tên đích, hợp đồng có schema** (chọn). Đích không giữ mã khung; digest và attestation kiểm được mỗi lần chạy.
+2. **B. Một artefact `.pyz` ghim digest, launcher mang tên đích, hợp đồng có schema** (chọn). Đích không giữ mã khung; digest kiểm được khi cài, khi nâng và qua `doctor`, attestation ở `release-verify` (không phải mỗi lượt hook; kiểm digest trên đường hook là mục xét ở P5).
 3. **C. Gói PyPI + `uvx`**: đòi `uv` và mạng ở mọi máy, CI và phiên cloud; guard fail-closed chặn mọi lệnh khi tải lỗi; cần tài khoản registry của chủ dự án.
 4. **D. Plugin host**: marketplace do repo khai không được thêm trong phiên cloud (tài liệu Claude Code, đọc 2026-11-24), nên guard vắng đúng nơi autopilot chạy; tên skill đổi thành `<plugin>:…`.
-5. **E. Reusable workflow ghim SHA**: một pha của B (P5), không thay được B.
+5. **E. Reusable workflow ghim SHA**: một pha của B (P6), không thay được B.
 
-Số đo P0 (2026-11-24, 30 lượt 3.15.2 và 20 lượt 3.13.18, `guard.py` 1,38 MB, nạp rồi biên dịch từ nguồn như `py_run`): tệp rời 463 ms (3.15) và 361 ms (3.13); zip `ZIP_STORED` 459 ms và 370 ms; zip `ZIP_DEFLATED` 482 ms và 373 ms. Chi phí chủ yếu là biên dịch (khoảng 0,40 s/hook, AUD-SEC-074) nên zip stored không đổi độ trễ đáng kể (≤ 2,5 %).
+Số đo P0 (2026-11-24; script và kết quả thô ở [`research/evidence/2026-11-24-zip-load-bench.py`](../../research/evidence/2026-11-24-zip-load-bench.py) và `…-bench.txt`; 30 lượt 3.15.2 và 20 lượt 3.13.18, `guard.py` 1,38 MB, nạp rồi biên dịch từ nguồn như `py_run`): trung vị tệp rời 428 ms (3.15) và 325 ms (3.13); zip `ZIP_STORED` 431 ms và 318 ms; zip `ZIP_DEFLATED` 445 ms và 336 ms (một lượt đo trước đó trên cùng máy cho 463/459/482 ms và 361/370/373 ms: số tuyệt đối dao động theo tải máy, chênh lệch tương đối giữ nguyên). Chi phí chủ yếu là biên dịch (khoảng 0,40 s/hook, AUD-SEC-074) nên zip stored không đổi độ trễ đáng kể (trong ±3 %, deflate +4 %).
 
 ## Quyết định
 
 **Chọn B kèm các bổ sung B1–B7, mặc định giữ tên `xt`/`.xtemplates`/`xt.yaml`/`XT_`**, nên dự án đã cài không đổi gì cho tới khi tự chọn.
 
-- **Artefact:** `<tên>.pyz` dựng tất định (`ZIP_STORED`, thứ tự tên, `mtime` cố định, quyền cố định) chứa `xt.py`, `xt_*.py`, guard và hook; phát hành cùng archive và biên nhận trong Release bất biến, có attestation (T-4017/T-4018 đã có phần tải đúng bytes).
+- **Artefact:** `<tên>.pyz` dựng tất định (`ZIP_STORED`, thứ tự tên, `mtime` cố định, quyền cố định) chứa (P1) `xt.py`, các module `xt_*.py`, `xt_app` và `VERSION`; guard, hook và `dev-task.sh` vào ở P5; phát hành cùng archive và biên nhận trong Release bất biến, có attestation (T-4017/T-4018 đã có phần tải đúng bytes).
 - **Hợp đồng công khai** (số `contract: N` trong `tool.json`, SemVer riêng): (1) CLI mà hook/CI/skill gọi và mã thoát; (2) bộ khoá `xt.yaml`; (3) định dạng có `schema` (manifest/lock, STAGE, `release-check --json`, sổ lát, DEPLOYS, biên nhận promotion); (4) giao thức hook (stdin JSON → quyết định); (5) ID yêu cầu và dấu `xt-review vN`. Mọi thứ khác là riêng của khung.
 - **B1 tên suy từ launcher:** launcher của đích mang `version` + `sha256`; `tool.json` chỉ giữ `config`, `env_prefix`, `contract`.
 - **B2 launcher đóng băng:** nâng bản chỉ đổi dòng ghim; có test.
@@ -39,20 +39,21 @@ Số đo P0 (2026-11-24, 30 lượt 3.15.2 và 20 lượt 3.13.18, `guard.py` 1,
 | Pha | Nội dung | Đảo ngược |
 |---|---|---|
 | P0 | ADR này, số đo độ trễ, test đóng băng bề mặt hợp đồng | xoá test |
-| P1 | `xt_pack.py` dựng `.pyz` tất định, test tái lập và sửa-một-byte | xoá module |
+| P1 | `xt_pack.py` dựng `.pyz` tất định, test tái lập và sửa-một-byte; `xt.py` nhận ra module anh em trong zip (`sibling_exists`) để zip có đủ lệnh con của hợp đồng | xoá module |
 | P2 | `tool.json` và bộ phân giải (gốc, thư mục, tên tệp cấu hình, tiền tố biến) thay chỗ cứng; mặc định y nguyên | giữ mặc định |
 | P3 | `install.py --tool-name`, launcher, render `<XT>` (layout cây) | `--tool-name` bỏ trống |
 | P4 | `release-tag.yml` dựng và attest `.pyz`; `release-verify` kiểm thêm | bỏ bước |
-| P5 | `install.py --layout artifact`, lệnh `hook <event>`, canary một đích | `--layout tree` |
+| P5 | `install.py --layout artifact`; guard, hook, `dev-task.sh` và git hook thành lệnh con của artefact (`hook <event>`, `gate-*`); kiểm digest khi khởi động phiên; canary một đích | `--layout tree` |
 | P6 | Reusable workflow ghim SHA; bản MAJOR kế đặt artefact làm mặc định, layout cây giữ thêm một MAJOR | `--layout tree` |
 
 ## Tiêu chí nghiệm thu (đo được)
 
-- Layout artefact: đếm tệp `*.py` và `*.sh` của khung trong đích = 0 (chỉ còn launcher).
-- Cài với `--tool-name acme`: grep `xtemplates|xt\.py|xt\.yaml` trong đích chỉ còn một dòng ghi chú nguồn.
+- Layout artefact: đếm tệp `*.py` và `*.sh` của khung trong đích, trừ launcher và thư mục `framework/` (dữ liệu chỉ đọc), bằng 0.
+- Cài với `--tool-name acme`: grep `xtemplates|xt\.py|xt\.yaml` trong đích, trừ thư mục `framework/`, chỉ còn một dòng ghi chú nguồn.
+- Zip chứa đủ lệnh con của hợp đồng (`tests/fixtures/contract-surface.json`); lệnh con duy nhất vắng là `derived` (chỉ repo khung).
 - `release-check --json`, `doctor`, `ci-check`, `pr next` cho cùng JSON và mã thoát với tên mặc định và tên `acme` trên cùng fixture.
 - Sửa một byte artefact: hook chặn và `doctor` báo lỗi.
-- Nâng bản: diff PR ở đích ≤ 3 tệp (artefact, lock, tài liệu yêu cầu).
+- Nâng bản: diff PR ở đích chỉ gồm artefact, dòng ghim ở launcher, tệp render có dấu phiên bản (skill, agent) và tài liệu yêu cầu; launcher không đổi ngoài dòng ghim.
 - Bản dựng `.pyz` hai lần cho cùng `sha256`.
 
 ## Hệ quả
