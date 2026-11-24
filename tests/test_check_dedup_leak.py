@@ -259,6 +259,16 @@ class CsvTest(Base):
         self.assertEqual([(f.code, f.line) for f in found], [("DDL000", 3)])
         self.assertIn("CSV sai định dạng", found[0].message)
 
+    def test_utf8_bom_is_stripped(self) -> None:
+        bom = chr(0xFEFF)
+        found = self.run_csv(bom + "text,id\nsame,1\n", bom + "text,id\nSAME,2\n", field="text")
+        self.assertEqual(self.codes(found), ["DDL001", "DDL001"])  # cột đầu không dính BOM
+        found = self.run_check(bom + jsonl({"t": "a"}), bom + jsonl({"t": "a"}), field="t")
+        self.assertEqual(self.codes(found), ["DDL001", "DDL001"])  # dòng JSONL đầu vẫn là JSON hợp lệ
+        fewshot = self.put("p.txt", bom + "a\n")
+        found = self.run_check(jsonl("t"), jsonl("a"), fewshot=str(fewshot))
+        self.assertEqual([(f.code, f.line) for f in found], [("DDL003", 1), ("DDL003", 0)])
+
     def test_oversized_field_is_ddl000_not_exception(self) -> None:
         found = self.run_csv("h\n" + "x" * 200000 + "\n", "h\nx\n")
         self.assertEqual(self.codes(found), ["DDL000"])

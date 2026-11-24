@@ -59,7 +59,7 @@ Lệnh:
                                 License gói đã cài của file requirements ghim (mặc định requirements-dev.txt) đối chiếu
                                 allowlist license-allow.json; vi phạm/ngoại lệ quá hạn → exit 1 (BASE-DEP-005).
   static-check KIND [PATH…] [--opt K=V]… [--json]
-                                Kiểm tĩnh theo loại (gói xt_checks, ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak; 0 sạch,
+                                Kiểm tĩnh theo loại (gói xt_checks, ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt; 0 sạch,
                                 1 có phát hiện, 2 dùng sai.
   progress-check [FILE]         PROGRESS.md: ≤ 8 KB, đúng 4 mục, SHA ở Bàn giao phiên là tổ tiên HEAD và có trên nhánh chính.
   prompt-assets-scan [PATH…] [--exempt F] [--patterns F] [--json]
@@ -11874,6 +11874,13 @@ def cmd_static_check(args: argparse.Namespace) -> int:
     except xt_checks.CheckError as exc:
         print(f"✗ static-check {args.kind}: {exc}", file=sys.stderr)
         return 2
+    except (ValueError, ArithmeticError, RecursionError, KeyError, TypeError) as exc:
+        # Lỗi của loại với nội dung tệp lạ: mã 2 (hỏng), không phải 1 ("có phát hiện") và không traceback (rà #785).
+        print(
+            f"✗ static-check {args.kind}: lỗi nội bộ của loại ({type(exc).__name__}) — báo lỗi cho khung",
+            file=sys.stderr,
+        )
+        return 2
     if args.json:
         print(
             json.dumps(
@@ -23452,7 +23459,7 @@ def build_parser() -> argparse.ArgumentParser:
     psc = sub.add_parser("static-check", help="kiểm tĩnh theo loại trên tệp của dự án (ADR-0099): nfc, …")
     psc.add_argument(
         "kind",
-        help="loại kiểm (bảng ở docs/adr/0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak",
+        help="loại kiểm (bảng ở docs/adr/0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt",
     )
     psc.add_argument("paths", nargs="*", help="tệp hoặc thư mục (mặc định thư mục hiện tại)")
     psc.add_argument("--opt", action="append", default=[], metavar="KHOÁ=GIÁ-TRỊ", help="tuỳ chọn của loại, lặp được")

@@ -6,6 +6,7 @@ import io
 import json
 import sys
 import tempfile
+import types
 import unicodedata
 import unittest
 import unittest.mock
@@ -79,6 +80,31 @@ class RegistryTest(TmpTest):
         self.assertEqual(xt_checks.collect([str(named)], (".md",)), [named])
         self.assertEqual(xt_checks.collect([str(self.base)], (".md",)), [keep])
         self.assertEqual(len(xt_checks.collect([str(self.base / "docs")], ())), 2)  # không khai đuôi = mọi tệp
+
+    def test_collect_names_filter_only_applies_to_directory_scan(self):
+        keep = self.put("site/llms.txt", "x")
+        self.put("site/notes.txt", "x")
+        named = self.put("other.txt", "x")
+        names = frozenset({"llms.txt"})
+        self.assertEqual(xt_checks.collect([str(self.base / "site")], (".txt",), None, names), [keep])
+        self.assertEqual(xt_checks.collect([str(named)], (".txt",), None, names), [named])
+        self.assertEqual(len(xt_checks.collect([str(self.base / "site")], (".txt",), None, None)), 2)
+
+    def test_sniff_for_binds_options_when_sniff_takes_two_arguments(self):
+        plain = types.ModuleType("plain")
+        self.assertIsNone(xt_checks.sniff_for(plain, {}))
+        plain.SNIFF = lambda text: text == "x"
+        one = xt_checks.sniff_for(plain, {"field": "y"})
+        self.assertTrue(one is not None and one("x") and not one("y"))
+        aware = types.ModuleType("aware")
+        aware.SNIFF = lambda text, opts: opts.get("field", "f") in text
+        bound = xt_checks.sniff_for(aware, {"field": "arm"})
+        self.assertTrue(bound is not None and bound("uid,arm") and not bound("uid,f"))
+
+    def test_run_passes_names_and_bound_sniff(self):
+        self.put("t/llms.txt", "# A\n> t\n## B\n- [x](/x)\n")
+        self.put("t/notes.txt", "rác")
+        self.assertEqual(xt_checks.run("llms-txt", [str(self.base / "t")], {}), [])
 
     def test_collect_refuses_missing_and_links(self):
         real = self.put("real.md", "x")
@@ -157,6 +183,20 @@ class CliTest(TmpTest):
                 rc, _, err = run_cli(*argv)
                 self.assertEqual(rc, 2)
                 self.assertIn("static-check", err)
+
+    def test_unexpected_kind_error_exits_two_not_as_findings(self):
+        """Lỗi ngoài dự kiến của một loại không được thoát mã 1 (trùng "có phát hiện") hay ném traceback."""
+        for exc in (
+            ValueError("x"),
+            RecursionError("x"),
+            ZeroDivisionError("x"),
+            UnicodeEncodeError("u", "x", 0, 1, "y"),
+        ):
+            with self.subTest(exc=type(exc).__name__), unittest.mock.patch.object(xt_checks, "run", side_effect=exc):
+                rc, out, err = run_cli("nfc", str(self.base))
+            self.assertEqual((rc, out), (2, ""))
+            self.assertIn("lỗi nội bộ", err)
+            self.assertIn(type(exc).__name__, err)
 
     def test_default_path_is_the_current_directory(self):
         self.put("a.md", NFC + "\n")

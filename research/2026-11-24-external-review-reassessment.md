@@ -1,6 +1,6 @@
 # Đối chiếu báo cáo đánh giá ngoài ngày 24/11/2026 (UI/UX và bằng chứng)
 
-Báo cáo "Đánh giá sâu X-Templates và năng lực thiết kế UI/UX" chấm repo ở `f670c50` (#782). Bản này kiểm lại từng nhận định ở `b82e369` (hai commit sau, #783 và #784 không chạm các điểm bị nêu) ngày 2026-11-24, rồi nêu chỗ đồng ý, chỗ chỉnh mức ưu tiên và chỗ báo cáo chưa nói tới. Kế hoạch đi kèm: [PLAN-ceiling-2026-11-24](../docs/autopilot/PLAN-ceiling-2026-11-24.md) (D-571).
+Báo cáo "Đánh giá sâu X-Templates và năng lực thiết kế UI/UX" chấm repo ở `f670c50` (#782). Bản này kiểm lại từng nhận định ở `b82e369` (hai commit sau, #783 và #784 không chạm các điểm bị nêu) ngày 2026-11-24, rồi nêu chỗ đồng ý, chỗ chỉnh mức ưu tiên và chỗ báo cáo chưa nói tới. Kế hoạch đi kèm: [PLAN-ceiling-2026-11-24](../docs/autopilot/PLAN-ceiling-2026-11-24.md) (D-573; cấp lại số khi tiếp quản PR #786 vì D-571 đã được dùng trên `main`). Các đối chiếu ban đầu giữ mốc `b82e369`; phần bổ sung cuối ghi rõ mốc rà sau.
 
 ## Kết luận
 
@@ -23,6 +23,12 @@ Báo cáo đúng ở phần lớn dữ kiện và đúng ở nhận định trun
 | `verify-render` chỉ chạy axe ở 1280 px, `UNMEASURED` không đỏ | Chưa đọc lại mã `framework/templates/ui-gates/verify-render.mjs` trong phiên này | Tạm nhận theo báo cáo; kiểm lại khi làm task tương ứng |
 | Dự án đích còn ở 3.34.0 | Khớp PROGRESS | Đúng. Cần `XT_STEWARD_TOKEN` |
 | Release-check cục bộ NO-GO vì AUD-HAR-514, 61 tệp nợ | AUD-HAR-514 là 🟢 đang mở trong sổ. Số 61 do báo cáo tự nêu là chưa đối soát được dấu review | Không phải khoảng hở: NO-GO trên `main` giữa hai bản là trạng thái bình thường, đóng ở lượt `/complete` kế |
+
+### Bổ sung khi tiếp quản PR #786 tại `7a1cf1d`
+
+- Đã đọc `framework/templates/ui-gates/verify-render.mjs` và README: axe chạy ở 1280 px; viewport hẹp mới kiểm tràn ngang. **`--strict` đã tồn tại và làm `UNMEASURED` thoát mã 1**; mặc định không strict thoát 0 khi không có vi phạm khác. Đây là đối chiếu mã, chưa chạy trình duyệt. `T-5013` vì thế dùng lại strict, bổ sung axe hẹp, báo cáo và test thực thi; không coi strict là tính năng còn thiếu.
+- [SPEC-slice-ledger](../docs/specs/SPEC-slice-ledger.md) phân biệt nguồn chưa nối, không có sự kiện và cửa sổ quan sát chưa đóng. Diễn tập tích hợp phải phủ đủ chín đường ghi; pilot không cần tạo incident khi thực tế không có. Gate pilot phải đối chiếu bằng chứng và receipt, không chỉ tìm cụm chữ trong báo cáo.
+- Kế hoạch đã sửa điều kiện chờ admin của `T-5020`, phụ thuộc của lần phát hành và Gate cho UI, diễn tập tag, pilot, nâng dự án đích. Các sửa này hoàn thiện kế hoạch; chưa đóng phát hiện kỹ thuật hoặc tick task triển khai.
 
 ## Hai nguyên nhân gốc chung
 

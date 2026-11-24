@@ -904,9 +904,23 @@
 - Lý do (tiêu chí chất lượng cuối): 020 mô tả PR chồng cần đẩy nhiều nhánh; trường hợp một nhánh được phép là khác; một chủ đề một nhà, ID ổn định; SHOULD vì nhiều dự án đẩy được nhiều nhánh
 - Đường lùi: git revert commit của PR
 
-### D-571 · 2026-11-24T11:29:42+00:00 · Báo cáo đánh giá ngoài 2026-11-24 (UI/UX + bằng chứng): xử lý thế nào để nâng trần dự án
+### D-571 · 2026-11-24T11:31:41+00:00 · Sửa phát hiện rà Opus trước khi mở PR srm/llms-txt
 
-- Phương án: (1) Một PLAN năm đợt theo thứ tự bằng chứng đúng → ranh giới thực thi → số đo thật → quy trình UI/UX có pilot → lan truyền và nợ lõi · (2) Chỉ ghi các phát hiện vào sổ audit, sửa dần theo hạn chấp nhận hiện có · (3) Làm pilot UI/UX trước, sửa khoảng hở bằng chứng sau
-- Chọn: Một PLAN năm đợt theo thứ tự bằng chứng đúng → ranh giới thực thi → số đo thật → quy trình UI/UX có pilot → lan truyền và nợ lõi
-- Lý do (tiêu chí chất lượng cuối): Đã tái hiện phát hiện ở b82e369 (SBOM/VEX sai kiểu exit 0, sổ lát 3/9 nguồn ghi, pack strict không đòi gói); pilot đo trên bộ kiểm báo sạch sai hoặc sổ thiếu sự kiện thì số đo không tin được, nên đúng và an toàn đi trước; đợt UI/UX nối cổng có sẵn vào sản phẩm thay vì thêm luật
-- Đường lùi: Bỏ PLAN-ceiling-2026-11-24.md bằng git revert; các mục audit giữ hạn cũ
+- Phương án: (1) sửa 🔴 và 🟠 rẻ ngay trước PR · (2) mở PR rồi ghi nợ 🟠
+- Chọn: sửa 🔴 và 🟠 rẻ ngay trước PR
+- Lý do (tiêu chí chất lượng cuối): 🔴 bắt buộc sửa (ADR-0062); 🟠 đều rẻ, cùng tệp, và một cái (biên test đột biến) đã làm CI đỏ lần trước; tránh thêm PR nợ
+- Đường lùi: git revert commit của PR
+
+### D-572 · 2026-11-24T11:50:40+00:00 · Thoát mã nào khi một loại static-check gặp lỗi ngoài dự kiến
+
+- Phương án: (1) mã 2 kèm tên lỗi · (2) để traceback mã 1
+- Chọn: mã 2 kèm tên lỗi
+- Lý do (tiêu chí chất lượng cuối): mã 1 nghĩa là có phát hiện; CI tách được hỏng công cụ khỏi phát hiện thật; không nuốt lỗi vì vẫn in tên lỗi
+- Đường lùi: git revert commit của PR
+
+### D-573 · 2026-11-24T12:36:58+00:00 · Hoàn thiện PLAN nâng trần và tiếp quản PR #786 sau khi main đã dùng D-571/D-572
+
+- Phương án: (1) Giữ kế hoạch năm đợt, sửa phụ thuộc và Gate để kiểm kết quả thật, merge PR tài liệu rồi triển khai từng task ở PR riêng · (2) Merge nguyên kế hoạch, chỉ sửa xung đột văn bản và để Gate yếu cho các phiên sau
+- Chọn: Giữ kế hoạch năm đợt, sửa phụ thuộc và Gate để kiểm kết quả thật, merge PR tài liệu rồi triển khai từng task ở PR riêng
+- Lý do (tiêu chí chất lượng cuối): Kế thừa quyết định trên nhánh ngày 2026-11-24T11:29:42+00:00 (D-571 chưa merge); cấp số mới để giữ nguyên D-571/D-572 đã có trên main. Báo cáo đã tái hiện lỗi SBOM/VEX và thiếu nguồn sổ lát; Gate chỉ validate hoặc tìm chữ không chứng minh chức năng. Tách test diễn tập chín nguồn khỏi sự kiện thực của pilot, gắn đúng quyền admin với T-5020 và khóa đủ phụ thuộc trước phát hành.
+- Đường lùi: git revert PR tài liệu; các phát hiện và hạn chấp nhận trong sổ audit giữ nguyên
