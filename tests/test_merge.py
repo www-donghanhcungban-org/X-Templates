@@ -134,13 +134,19 @@ class FakeGh:
     def paths(self) -> list[str]:
         return [_unpage(c[-1])[0] for c in self.calls]
 
+    def route(self, command: list[str]) -> tuple[str, bool]:
+        path, later = _unpage(command[-1])
+        if "--hostname" in command and path.startswith("repos/o/r/") and path not in self.raw:
+            path = path.replace("repos/o/r/", self.REPO + "/", 1)
+        return path, later
+
     def respond(self, cmd: list[str], **kw: Any) -> subprocess.CompletedProcess:
         if cmd[0] == "git":  # xt.yaml ở nhánh đích: mặc định không có repo → human/L1; `real_git` = repo tạm của test
             if self.real_git:
                 return REAL_RUN(cmd, **kw)
             return subprocess.CompletedProcess(cmd, 128, "", "not a git repository")
         self.calls.append(cmd)
-        path, later = _unpage(cmd[-1])
+        path, later = self.route(cmd)
         if later:  # phân trang tự làm (FB-001): trang ≥ 2 rỗng
             return subprocess.CompletedProcess(cmd, 0, "[]", "")
         files = [
@@ -1329,7 +1335,7 @@ class MergeCheckCliTest(unittest.TestCase):
         with gh.patch():
             self.assertEqual(
                 xt._pr_rest("7"),
-                pr(reviewDecision="", baseRefName="main", requiredChecks=[{"context": "test"}]),
+                pr(reviewDecision="", baseRefName="main", requiredChecks=[{"context": "test"}], live_intent=None),
             )  # như fixture `gh pr view`
         cases = {
             "merged": ({"merged": True, "state": "closed"}, "state", "MERGED"),
@@ -1400,6 +1406,21 @@ class MergeCheckCliTest(unittest.TestCase):
             rc, _, err = run_main("merge-check")
         self.assertEqual(rc, 2)
         self.assertIn("không có PR mở cho nhánh hiện tại", err)
+
+    def test_branch_lookup_requires_one_open_pr(self):
+        pulls = [
+            {"number": 7, "head": {"ref": "feat/x"}, "base": {"ref": "main"}},
+            {"number": 8, "head": {"ref": "feat/x"}, "base": {"ref": "release"}},
+        ]
+        for args in (("merge-check",), ("pr", "next", "--pr", "feat/x", "--json")):
+            gh = FakeGh(open_prs=pulls)
+            with self.subTest(args=args), gh.patch():
+                rc, out, err = run_main(*args)
+                self.assertEqual((rc, out), (2, ""))
+                self.assertIn("nhiều PR mở", err)
+                self.assertIn("--pr", err)
+                self.assertEqual(len(gh.calls), 1)
+                self.assertIn("/pulls?head=", gh.calls[0][-1])
 
     def test_rest_bad_data_is_exit_2(self):
         with FakeGh(pull={"head": None}).patch():
@@ -2135,7 +2156,8 @@ class PrNextCliTest(unittest.TestCase):
         run_main("pr", "reviewed", "--pr", "7", "--head", self.head, "--clean", *MODELS)
         rc, out, _ = self.nxt(self.big)
         self.assertIn("MERGE · PR #7", out)
-        self.assertIn(f"→ gh pr merge 7 --squash --match-head-commit {self.head} · REST: gh api -X PUT", out)
+        self.assertIn("ảnh chụp, chạy lại pr next với dữ liệu live", out)
+        self.assertNotIn("→", out)
         self.assertNotIn("--auto", out)
         self.assertNotIn("không được thì", out)
         self.assertEqual(len(xt.read_reviews(self.base)["7"]["reviews"]), 2)
@@ -3208,7 +3230,7 @@ class PrNextCliTest(unittest.TestCase):
         self.assertEqual(json.loads(self.nxt(small, "--json")[1])["action"], "review")
         rc, out, _ = self.nxt(pr(number=8))  # PR khác, làn nhanh, chưa từng chuẩn
         self.assertIn("MERGE · PR #8", out)
-        self.assertIn("→ gh pr merge 8 --squash --match-head-commit abc1234def", out)  # CI đã xanh
+        self.assertIn("ảnh chụp", out)  # CI đã xanh, snapshot chỉ báo quyết định
         url = "https://github.com/o/r/pull/8/"  # URL → cùng khoá số PR với `pr next`
         rc, out, _ = run_main("pr", "reviewed", "--pr", url, "--head", self.head, "--clean", *MODELS)
         self.assertEqual(out, f"✓ PR #8: review sạch ở {self.head[:7]}\n")
@@ -3365,10 +3387,48 @@ class StrictBaseCheckTest(unittest.TestCase):
         self.assertIn(f"expected_head_sha={self.Gh.SHA}", result["do"])
         self.assertEqual(gh.paths().count(path), 1)
 
+    def test_live_next_binds_evidence_and_snapshot_is_only_preview(self):
+        gh, _ = self.fake(
+            html_url="https://git.example/O/R/pull/7",
+            base={"ref": "main", "repo": {"full_name": "o/r"}},
+        )
+        result = self.next_step(gh)
+        intent = {"host": "git.example", "repo": "o/r", "pr": 7, "expected_head": self.Gh.SHA}
+        self.assertEqual(result["merge_intent"], intent)
+        self.assertEqual(
+            shlex.split(result["do"]),
+            [
+                "gh",
+                "api",
+                "-X",
+                "PUT",
+                "--hostname",
+                "git.example",
+                "repos/o/r/pulls/7/merge",
+                "-f",
+                "merge_method=squash",
+                "-f",
+                f"sha={self.Gh.SHA}",
+            ],
+        )
+        self.assertTrue(all(c[2:4] == ["--hostname", "git.example"] for c in gh.calls[1:]))
+        self.assertTrue(all(p.startswith("repos/o/r/") for p in gh.paths()[1:]))
+
+        snapshot = pr(repo="o/r", headRefOid=self.Gh.SHA, live_intent=intent)
+        preview_reads, _ = self.fake()
+        with preview_reads.patch():
+            rc, out, err = run_main("pr", "next", "--pr-json", "-", "--json", stdin=json.dumps(snapshot))
+        preview = json.loads(out)
+        self.assertEqual((rc, err, preview["action"], preview["do"]), (0, "", "merge", ""))
+        self.assertNotIn("merge_intent", preview)
+        self.assertEqual(preview_reads.calls, [])
+
     def test_no_compare_before_other_gates_or_on_loose_branch(self):
         for action in ("wait", "fix", "update", "retarget", "merge", "review"):
             with self.subTest(action=action):
                 gh, path = self.fake(strict=action != "merge")
+                gh.pull["html_url"] = "https://github.com/o/r/pull/7"
+                gh.pull["base"]["repo"] = {"full_name": "o/r"}
                 if action in ("wait", "fix"):
                     check = {"name": "test", "status": "queued"}
                     gh.runs = [check if action == "wait" else {**check, "status": "completed", "conclusion": "failure"}]
@@ -3514,9 +3574,16 @@ class BaseMergeCarryTest(unittest.TestCase):
         d = xt.merge_decision(pr(title="fix(x): a"), autonomy=2)
         self.assertEqual(d["next"], "gh pr merge 7 --squash --match-head-commit abc1234def")
         self.assertNotIn("commit_title", d["next_rest"])
-        cmd = xt._steward_command({"pr": 7, "head": "h", "action": "merge"}, "repos/o/r", "fix(x): a (#7)")
+        head = "f" * 40
+        action = {
+            "pr": 7,
+            "head": head,
+            "action": "merge",
+            "merge_intent": {"host": "github.com", "repo": "o/r", "pr": 7, "expected_head": head},
+        }
+        cmd = xt._steward_command(action, "repos/o/r", "fix(x): a (#7)")
         self.assertEqual(cmd[0][-2:], ["-f", "commit_title=fix(x): a (#7)"])
-        self.assertNotIn("-f", xt._steward_command({"pr": 7, "head": "h", "action": "merge"}, "repos/o/r")[0][9:])
+        self.assertFalse(any(a.startswith("commit_title=") for a in xt._steward_command(action, "repos/o/r")[0]))
 
     def test_steward_updates_branch(self):
         cmds = xt._steward_command({"pr": 7, "head": "h", "action": "update"}, "repos/o/r")
@@ -3577,6 +3644,8 @@ class BaseMergeCarryTest(unittest.TestCase):
 class StewardGh(FakeGh):
     """FakeGh + lệnh ghi (POST/PUT, `gh pr merge`): ghi lại, trả mã theo `fail` (tiền tố lệnh → stderr lỗi)."""
 
+    SHA = FakeGh.SHA * 4
+
     def __init__(self, fail: dict | None = None, **kw: Any):
         kw["pull"] = {
             "author_association": "OWNER",
@@ -3584,6 +3653,8 @@ class StewardGh(FakeGh):
             **(kw.get("pull") or {}),
         }
         super().__init__(**{"real_git": True, **kw})  # xt.yaml ở nhánh đích (L3) đọc từ repo tạm của test
+        self.pull.setdefault("html_url", "https://github.com/o/r/pull/7")
+        self.pull["base"].setdefault("repo", {"full_name": "o/r"})
         self.fail = fail or {}
         self.writes: list[list[str]] = []
 
@@ -3675,8 +3746,8 @@ class PrStewardTest(unittest.TestCase):
 
     def test_pr_rest_reads_marks_and_pr_next_uses_them(self):
         big = [{"path": "src/a.py", "additions": 400, "deletions": 0}]
-        pull = {"head": {"sha": FakeGh.SHA}}
-        with FakeGh(pull=pull, comments=[mark("a" * 40, "clean", "2026-10-19T01:00:00Z")]).patch():
+        pull = {"head": {"sha": StewardGh.SHA}}
+        with StewardGh(pull=pull, comments=[mark("a" * 40, "clean", "2026-10-19T01:00:00Z")]).patch():
             self.assertEqual(xt._pr_rest("7")["xtReviews"][0]["head"], "a" * 40)
         with unittest.mock.patch.object(xt, "_gh_items", side_effect=xt.PrInputError("403")):
             self.assertEqual(xt._published_marks("repos/o/r", "7"), [])  # thiếu quyền đọc comment: chặt hơn, không lỗi
@@ -3741,11 +3812,13 @@ class PrStewardTest(unittest.TestCase):
                     "api",
                     "-X",
                     "PUT",
-                    "repos/{owner}/{repo}/pulls/7/merge",
+                    "--hostname",
+                    "github.com",
+                    "repos/o/r/pulls/7/merge",
                     "-f",
                     "merge_method=squash",
                     "-f",
-                    f"sha={FakeGh.SHA}",
+                    f"sha={StewardGh.SHA}",
                     "-f",
                     "commit_title=fix(x): it's ok (#7)",
                 ]
@@ -3776,11 +3849,13 @@ class PrStewardTest(unittest.TestCase):
                             "api",
                             "-X",
                             "PUT",
-                            "repos/{owner}/{repo}/pulls/7/merge",
+                            "--hostname",
+                            "github.com",
+                            "repos/o/r/pulls/7/merge",
                             "-f",
                             "merge_method=squash",
                             "-f",
-                            f"sha={FakeGh.SHA}",
+                            f"sha={StewardGh.SHA}",
                         ]
                     ],
                 ),
@@ -3832,7 +3907,15 @@ class PrStewardTest(unittest.TestCase):
         }
         for name, (over, want) in cases.items():
             with self.subTest(name):
-                cmds = xt._steward_command({"pr": 7, "head": self.H, **over}, "repos/o/r")
+                cmds = xt._steward_command(
+                    {
+                        "pr": 7,
+                        "head": self.H,
+                        "merge_intent": {"host": "github.com", "repo": "o/r", "pr": 7, "expected_head": self.H},
+                        **over,
+                    },
+                    "repos/o/r",
+                )
                 self.assertEqual(len(cmds) if isinstance(want, int) else cmds, want)
         self.assertEqual(xt._steward_run([]), "không có lệnh")
         listing = {
@@ -3842,7 +3925,7 @@ class PrStewardTest(unittest.TestCase):
         one = {"pr": 7, "head": self.H, "action": "wait", "why": "chờ", "applied": False}
         with StewardGh(raw=listing).patch(), unittest.mock.patch.object(xt, "_steward_one", return_value=one) as m:
             self.assertEqual(run_main("pr", "steward", "--repo", "o/r")[1], "#7 wait — chờ\n")
-        self.assertEqual(m.call_args[0][:2], ("https://github.com/o/r/pull/7", "repos/o/r"))
+        self.assertEqual(m.call_args[0][:2], ("o/r#7", "repos/o/r"))
 
 
 class PrStewardTrustTest(unittest.TestCase):
@@ -3864,7 +3947,7 @@ class PrStewardTrustTest(unittest.TestCase):
 
     def test_untrusted_prs_are_left_to_humans(self):
         fork = {
-            "head": {"sha": FakeGh.SHA, "repo": {"full_name": "la/r"}},
+            "head": {"sha": StewardGh.SHA, "repo": {"full_name": "la/r"}},
             "base": {"repo": {"full_name": "o/r", "default_branch": "main"}, "ref": "main"},
         }
         cases = {
@@ -3907,10 +3990,15 @@ class PrStewardTrustTest(unittest.TestCase):
         auto = {"merge_method": "squash"}
         gh = StewardGh(raw=listing, pull={"auto_merge": auto})
         listing["repos/o/r/pulls/7"] = json.dumps(gh.pull)  # đọc lại PR trước khi làm (AUTO-05)
-        one = {"pr": 7, "head": FakeGh.SHA, "action": "disable-auto-merge", "why": "x"}
+        one = {"pr": 7, "head": StewardGh.SHA, "action": "disable-auto-merge", "why": "x"}
         self.assertEqual(xt._steward_command(one, "repos/o/r")[0][:3], ["gh", "pr", "merge"])
         running = [{"__typename": "CheckRun", "name": "test", "status": "IN_PROGRESS", "conclusion": ""}]
-        rest = {**pr(statusCheckRollup=running), "author": "chu", "authorAssociation": "OWNER", "baseRefName": "main"}
+        rest = {
+            **pr(statusCheckRollup=running, headRefOid=StewardGh.SHA),
+            "author": "chu",
+            "authorAssociation": "OWNER",
+            "baseRefName": "main",
+        }
         with unittest.mock.patch.object(xt, "_pr_rest", return_value={**rest, "autoMergeRequest": auto}), gh.patch():
             rc, out, _ = run_main("pr", "steward", "--apply", "--repo", "o/r")
         # `gh pr merge` duy nhất còn lại (tắt auto-merge người bật) ghim đúng repo đã đánh giá (review #141)
@@ -3962,13 +4050,15 @@ class StewardEventsTest(unittest.TestCase):
         return {
             "action": "completed",
             "check_suite": {
-                "head_sha": FakeGh.SHA,
+                "head_sha": StewardGh.SHA,
                 "pull_requests": [{"number": 7, **({"head": {"sha": h}} if h else {})} for h in heads],
             },
         }
 
     def test_steward_events_payload_parsing(self):
-        self.assertEqual(xt.steward_event_prs(self.check_suite("")), {"7": FakeGh.SHA})  # thiếu head PR: head sự kiện
+        self.assertEqual(
+            xt.steward_event_prs(self.check_suite("")), {"7": StewardGh.SHA}
+        )  # thiếu head PR: head sự kiện
         run = {
             "workflow_run": {
                 "head_sha": "b" * 40,
@@ -3994,7 +4084,7 @@ class StewardEventsTest(unittest.TestCase):
     def test_steward_events_only_event_prs_are_reconciled(self):
         gh = StewardGh(open_prs=[{"number": 7}, {"number": 8}])
         with gh.patch():
-            rc, out, _ = run_main("pr", "steward", "--apply", "--event", self.event(self.check_suite(FakeGh.SHA)))
+            rc, out, _ = run_main("pr", "steward", "--apply", "--event", self.event(self.check_suite(StewardGh.SHA)))
         self.assertEqual(rc, 0)
         self.assertEqual(out, f"#7 merge ✓ — {out.split(' — ', 1)[1]}")
         self.assertFalse(any("pulls?state=open" in p for p in gh.paths()))  # không quét mọi PR
@@ -4006,16 +4096,18 @@ class StewardEventsTest(unittest.TestCase):
                     "api",
                     "-X",
                     "PUT",
-                    "repos/{owner}/{repo}/pulls/7/merge",
+                    "--hostname",
+                    "github.com",
+                    "repos/o/r/pulls/7/merge",
                     "-f",
                     "merge_method=squash",
                     "-f",
-                    f"sha={FakeGh.SHA}",
+                    f"sha={StewardGh.SHA}",
                 ]
             ],
         )
         # sự kiện không gắn PR (push lên nhánh đích, PR từ fork) hoặc payload không phải object → quét mọi PR mở như lịch
-        for payload in ({"check_suite": {"head_sha": FakeGh.SHA, "pull_requests": []}}, ["không phải object"]):
+        for payload in ({"check_suite": {"head_sha": StewardGh.SHA, "pull_requests": []}}, ["không phải object"]):
             gh = StewardGh()
             with self.subTest(payload=payload), gh.patch():
                 rc, out, _ = run_main("pr", "steward", "--event", self.event(payload))
@@ -4046,12 +4138,12 @@ class StewardEventsTest(unittest.TestCase):
         got = json.loads(out)[0]
         self.assertEqual((rc, got["action"], got["applied"]), (0, "merge", True))
         self.assertIn("sự kiện cho head cũ 0000000 — đã xét head hiện tại abc1234", got["note"])
-        self.assertEqual(got["key"], f"{{owner}}/{{repo}}#7@{FakeGh.SHA}:merge")
-        self.assertEqual(gh.writes[0][-1], f"sha={FakeGh.SHA}")
+        self.assertEqual(got["key"], f"github.com/o/r#7@{StewardGh.SHA[:12]}:merge")
+        self.assertEqual(gh.writes[0][-1], f"sha={StewardGh.SHA}")
         self.assertNotIn(self.OLD, json.dumps(gh.writes))
 
     def test_steward_events_duplicate_or_restart_does_not_repeat(self):
-        ev = self.event(self.check_suite(FakeGh.SHA))
+        ev = self.event(self.check_suite(StewardGh.SHA))
         on = {"auto_merge": {"merge_method": "squash"}}
         running = [{"name": "test", "status": "in_progress", "conclusion": None}]
         # CI chưa xong: chờ ở mọi lượt (sự kiện lặp / re-run sau restart), không ghi gì
@@ -4075,13 +4167,13 @@ class StewardEventsTest(unittest.TestCase):
         with gh.patch():
             rc, out, _ = run_main("pr", "steward", "--apply", "--event", ev)
         self.assertEqual((rc, gh.writes), (0, []))
-        self.assertIn(f"bỏ qua {{owner}}/{{repo}}#7@{FakeGh.SHA}:disable-auto-merge — auto-merge đã tắt", out)
+        self.assertIn(f"bỏ qua {{owner}}/{{repo}}#7@{StewardGh.SHA[:12]}:disable-auto-merge — auto-merge đã tắt", out)
         # lượt song song đã merge giữa lúc xét và lúc làm: không merge lần hai
         gh = SeqGh([{}, {"merged": True, "state": "closed"}])
         with gh.patch():
             rc, out, _ = run_main("pr", "steward", "--apply", "--event", ev)
         self.assertEqual((rc, gh.writes), (0, []))
-        self.assertIn(f"bỏ qua {{owner}}/{{repo}}#7@{FakeGh.SHA}:merge — PR đã đóng/merge", out)
+        self.assertIn(f"bỏ qua github.com/o/r#7@{StewardGh.SHA[:12]}:merge — PR đã đóng/merge", out)
         # restart sau khi PR đã merge: steward thấy done, không ghi gì
         gh = StewardGh(pull={"merged": True, "state": "closed"})
         with gh.patch():
@@ -4091,10 +4183,10 @@ class StewardEventsTest(unittest.TestCase):
     def test_steward_events_state_changed_before_action(self):
         on = {"auto_merge": {"merge_method": "squash"}}
         cases = {
-            "head đổi": ([{}, {"head": {"sha": "f" * 40}}], "head đổi abc1234 → fffffff"),
+            "head đổi": ([{}, {"head": {"sha": "f" * 40}}], "head đổi hoặc đích PR không còn khớp"),
             "đã merge": ([{}, {"merged": True, "state": "closed"}], "PR đã đóng/merge"),
             "đã đóng": ([{}, {"state": "closed"}], "PR đã đóng/merge"),
-            "head vắng": ([{}, {"head": None}], "→ ?"),
+            "head vắng": ([{}, {"head": None}], "head đổi hoặc đích PR không còn khớp"),
         }
         for name, (states, why) in cases.items():
             gh = SeqGh(states)
@@ -4103,7 +4195,7 @@ class StewardEventsTest(unittest.TestCase):
             self.assertEqual((rc, gh.writes), (0, []))
             self.assertIn(why, out)
         # tắt auto-merge mà lượt khác đã tắt → bỏ qua; còn bật → tắt
-        hold = {"pr": 7, "head": FakeGh.SHA, "action": "disable-auto-merge", "why": "giữ"}
+        hold = {"pr": 7, "head": StewardGh.SHA, "action": "disable-auto-merge", "why": "giữ"}
         for states, writes in (([{}], 0), ([on], 1)):
             gh = SeqGh(states)
             with gh.patch(), unittest.mock.patch.object(xt, "pr_next", return_value=dict(hold)):
@@ -4122,6 +4214,21 @@ class StewardEventsTest(unittest.TestCase):
             rc, out, _ = run_main("pr", "steward", "--apply")
         self.assertEqual((rc, gh.writes), (1, []))
         self.assertIn("không đọc lại được PR trước khi làm", out)
+
+    def test_steward_cancels_update_when_pr_changes(self):
+        before = {"mergeable_state": "behind"}
+        self.enterContext(unittest.mock.patch.dict(os.environ, {"XT_STEWARD_UPDATE": "on"}))
+        for changed, why in (
+            ({"merged": True, "state": "closed"}, "PR đã đóng/merge"),
+            ({"head": {"sha": "f" * 40}}, "head đổi"),
+            ({"head": None}, "→ ?"),
+        ):
+            gh = SeqGh([before, changed])
+            with self.subTest(changed=changed), gh.patch():
+                rc, out, _ = run_main("pr", "steward", "--apply")
+                self.assertEqual((rc, gh.writes), (0, []))
+                self.assertIn("bỏ qua", out)
+                self.assertIn(why, out)
 
     def test_steward_events_workflow_triggers(self):
         text = (ROOT / ".github/workflows/pr-steward.yml").read_text(encoding="utf-8")
@@ -4142,7 +4249,7 @@ class StewardEventsTest(unittest.TestCase):
 class StewardFollowupTest(unittest.TestCase):
     """Mục 🟢 sau #140/#141: MEMBER của org có quyền ghi; lỗi gắn nhãn hiện ra summary."""
 
-    PERM = "repos/{owner}/{repo}/collaborators/chu/permission"
+    PERM = "repos/o/r/collaborators/chu/permission"
 
     def setUp(self):
         self.base = Path(self.enterContext(tempfile.TemporaryDirectory()))
@@ -4333,7 +4440,7 @@ class StewardFollowupTest(unittest.TestCase):
         self.assertIn("⚠ không gắn được nhãn xt-standard-lane: HTTP 403", out)
         self.assertIn("không gắn được nhãn", summary.read_text(encoding="utf-8"))
         # review đã sạch nhưng nhãn lỗi: lượt này không merge (lượt sau gắn lại nhãn rồi mới merge)
-        ready = {"pr": 7, "head": FakeGh.SHA, "action": "merge", "why": "sạch"}
+        ready = {"pr": 7, "head": StewardGh.SHA, "action": "merge", "why": "sạch"}
         gh = StewardGh(raw=raw, fail={"gh api -X POST": "HTTP 403"})
         with gh.patch(), unittest.mock.patch.object(xt, "pr_next", return_value=ready):
             rc, out, _ = run_main("pr", "steward", "--apply")

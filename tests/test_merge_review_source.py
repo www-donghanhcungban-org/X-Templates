@@ -32,8 +32,17 @@ STANDARD = [
 MODELS = ("--reviewer-model", "claude-fable-5-1", "--author-model", "claude-opus-5-5")  # bậc cao hơn (D-161)
 
 
+LIVE_INTENT = {"host": "github.com", "repo": "o/r", "pr": 7, "expected_head": HEAD}
+
+
 def std(**over: Any) -> dict:
-    return pr(headRefOid=HEAD, files=STANDARD, repo="o/r", **over)
+    return pr(
+        headRefOid=HEAD,
+        files=STANDARD,
+        repo="o/r",
+        live_intent=LIVE_INTENT,
+        **over,
+    )
 
 
 def mark(clean: bool, head: str = HEAD, at: str = "2026-10-20T10:00:00Z") -> dict:
@@ -179,7 +188,12 @@ class MergeCheckReviewStepTest(unittest.TestCase):
     def test_merge_check_local_standard_seen_keeps_strict(self):
         """AUD-XFEAT-016: PR từng vào làn chuẩn (sổ cục bộ `standard_seen`, chưa có nhãn) rồi thu về làn nhanh — `merge-check`
         vẫn đòi review ở head như `pr next`, không trả `merge`."""
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         self.assertEqual(self.check_json(fast)[0], 0)
         self.seed([], standard_seen=True)
         rc, d = self.check_json(fast)
@@ -278,7 +292,12 @@ class GuardReviewMissingTest(unittest.TestCase):
     def test_default_policy_not_ready_is_blocked_without_claiming_missing_review(self):
         """ADR-0096: làn nhanh, build và dưới L3 vẫn chờ CI/sửa lỗi; mã không được báo nhầm thiếu review."""
         running = [{**GREEN[0], "status": "IN_PROGRESS", "conclusion": ""}]
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         cases = {
             "làn nhanh wait": xt.merge_check_result({**fast, "statusCheckRollup": running}, 3, [], False),
             "làn nhanh fix": xt.merge_check_result({**fast, "mergeable": "CONFLICTING"}, 3, [], False),
@@ -330,7 +349,12 @@ class GuardReviewMissingTest(unittest.TestCase):
 
     def test_default_policy_review_missing_unpinned_controls(self):
         """Review sạch/build/làn nhanh đã đủ điều kiện giữ hành vi cũ; làn chuẩn L2 cần người, ADR-0096 chặn."""
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         cases = {
             "sạch": xt.merge_check_result(std(xtReviews=[mark(True)]), 3, [], False),
             "pha build": xt.merge_check_result(std(), 3, [], False, "build"),
@@ -338,11 +362,12 @@ class GuardReviewMissingTest(unittest.TestCase):
             "L2": xt.merge_check_result(std(), 2, [], False),
         }
         for name, d in cases.items():
-            expected = ("deny", "MERGE_INELIGIBLE") if name == "L2" else ("", "OTHER_ASK")
+            expected = ("deny", "MERGE_INELIGIBLE") if name == "L2" else ("deny", "UNVERIFIED")
             for cmd in self.UNPINNED:
                 with self.subTest(name, cmd=cmd):
                     res = self.final(d, cmd)
-                    self.assertEqual((res["decision"], res.get("code")), expected, res)
+                    want = ("", "OTHER_ASK") if HEAD in cmd and name != "L2" else expected
+                    self.assertEqual((res["decision"], res.get("code")), want, res)
             with self.subTest(name, cmd="mcp"):
                 result = self.mcp_unpinned(d)
                 self.assertEqual((result["decision"], result.get("code")), expected, result)

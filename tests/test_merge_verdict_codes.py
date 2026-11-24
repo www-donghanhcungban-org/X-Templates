@@ -38,6 +38,8 @@ MCP = {
 def merge_result(verdict: str = "merge", **changes: object) -> dict:
     return {
         "verdict": verdict,
+        "host": "github.com",
+        "pr": 7,
         "hard": [],
         "head": HEAD,
         "repo": "o/r",
@@ -105,7 +107,9 @@ class MergeVerdictCodesTest(unittest.TestCase):
             for policy in POLICIES:
                 for head in (OTHER_HEAD, ""):
                     with self.subTest(entry=entry, policy=policy, head=head):
-                        self.check(entry, merge_result(head=head), policy, "MERGE_HEAD_MISMATCH")
+                        self.check(
+                            entry, merge_result(head=head), policy, "MERGE_HEAD_MISMATCH" if head else "UNVERIFIED"
+                        )
 
     def test_existing_review_hard_and_unverified_blocks_keep_their_codes(self):
         cases = (
@@ -133,8 +137,8 @@ class MergeVerdictCodesTest(unittest.TestCase):
                     with self.subTest(verdict=verdict, entry=entry, policy=policy, kwargs=kwargs):
                         self.check(entry, merge_result(verdict), policy, "MERGE_INELIGIBLE", **kwargs)
 
-    def test_eligible_unpinned_merge_keeps_existing_policy_in_this_slice(self):
-        """D-547 chỉ đổi verdict chưa merge và lệch pin; thiếu pin có verdict merge giữ phạm vi cũ."""
+    def test_eligible_unpinned_merge_requires_a_pin(self):
+        """ADR-0102: thiếu pin vẫn chặn ở head đủ điều kiện."""
         entries = (
             ("cli", {"command": "gh pr merge 7 --squash"}),
             ("rest", {"command": "gh api -X PUT repos/o/r/pulls/7/merge"}),
@@ -143,8 +147,8 @@ class MergeVerdictCodesTest(unittest.TestCase):
         for entry, kwargs in entries:
             with self.subTest(entry=entry):
                 raw = self.raw(entry, merge_result(), **kwargs)
-                self.assertEqual((raw["decision"], guard.decide(raw).code), ("ask", "OTHER_ASK"), raw)
-                self.assertEqual(guard.apply_policy(raw)["decision"], "")
+                self.assertEqual((raw["decision"], guard.decide(raw).code), ("ask", "UNVERIFIED"), raw)
+                self.assertEqual(guard.apply_policy(raw)["decision"], "deny")
 
     def test_extra_flags_and_duplicate_pins_cannot_hide_head_mismatch(self):
         """Dạng không auto-allow vẫn kiểm tất cả pin, không chỉ giá trị cuối của cờ/field trùng."""
@@ -177,8 +181,11 @@ class MergeVerdictCodesTest(unittest.TestCase):
         for command in commands:
             with self.subTest(command=command):
                 raw = self.raw("cli", merge_result(), command=command)
-                self.assertEqual((raw["decision"], guard.decide(raw).code), ("ask", "OTHER_ASK"), raw)
-                self.assertEqual(guard.apply_policy(raw)["decision"], "", raw)
+                missing = command.endswith(" --match-head-commit")
+                self.assertEqual(
+                    (raw["decision"], guard.decide(raw).code), ("ask", "UNVERIFIED" if missing else "OTHER_ASK"), raw
+                )
+                self.assertEqual(guard.apply_policy(raw)["decision"], "deny" if missing else "", raw)
 
     def test_new_codes_are_carried_from_source_not_reason_text(self):
         codes = {"MERGE_INELIGIBLE", "MERGE_HEAD_MISMATCH"}
@@ -230,7 +237,7 @@ class MergeVerdictCodesTest(unittest.TestCase):
         """Lỗi cú pháp độc lập vẫn deny ở strict, dù merge đã có một mã chặn mặc định."""
         for result in (merge_result("wait"), merge_result(head=OTHER_HEAD)):
             with mock.patch.object(guard, "merge_check", return_value=result):
-                _, reason = guard._merge_verdict(["7"], HEAD, self.root)
+                _, reason = guard.gh_pr_merge_rule(["7", "--match-head-commit", HEAD], self.root)
             with (
                 self.subTest(result=result),
                 mock.patch.object(guard, "_argv_shell_why", return_value="cú pháp chưa xác minh"),

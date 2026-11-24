@@ -874,6 +874,7 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         "xt_acceptance.py",
         "xt_ops_setup.py",
         "xt_release_ops.py",
+        "xt_merge_intent.py",
         "xt_deploy.py",
         "xt_distribution.py",
         "xt_scale.py",

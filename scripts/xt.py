@@ -112,6 +112,7 @@ import ast
 import base64
 import concurrent.futures
 import contextlib
+import contextvars
 import copy
 import datetime as _dt
 import errno
@@ -7174,6 +7175,7 @@ def merge_decision(
     }[verdict]
     return {
         "pr": n,
+        "host": (pr.get("live_intent") or {}).get("host", ""),
         "repo": pr.get("repo", ""),  # `chủ/repo` (REST) — guard so với owner/repo của tool MCP merge
         "head": pr.get("headRefOid", ""),
         "verdict": verdict,
@@ -7554,9 +7556,13 @@ def _touches_hard_key(
     return False
 
 
+PR_READ_HOST = contextvars.ContextVar("pr_read_host", default="")
+
+
 def _gh_api_once(path: str, timeout: float = 0, host: str = "") -> List[Any]:
     """Một lần `gh api` (REST, không GraphQL — phiên Claude Code chặn GraphQL) → danh sách giá trị JSON liền nhau.
     `{owner}`/`{repo}`/`{branch}` do gh thay theo repo hiện tại; `host` → `--hostname`; `timeout` 0 = `GH_TIMEOUT`."""
+    host = host or PR_READ_HOST.get()
     cmd = ["gh", "api", *(["--hostname", host] if host else []), path]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=timeout or GH_TIMEOUT)
@@ -7624,6 +7630,8 @@ def _pr_target(pr_arg: Optional[str]) -> Tuple[str, str]:
     found = _gh_items(f"{repo}/pulls?head={{owner}}:{head}&state=open&per_page=100")
     if not found:
         raise PrInputError(f"không có PR mở cho nhánh {pr_arg or 'hiện tại'}")
+    if len(found) != 1:
+        raise PrInputError(f"nhiều PR mở cho nhánh {pr_arg or 'hiện tại'} — chọn số bằng --pr")
     return repo, str(found[0].get("number", ""))
 
 
@@ -7839,8 +7847,15 @@ def rest_rollup(runs: List[Dict[str, Any]], statuses: List[Dict[str, Any]]) -> L
 def _pr_rest(pr_arg: Optional[str], local_check: bool = True) -> Dict[str, Any]:
     """Dựng JSON dạng `gh pr view --json MERGE_FIELDS` chỉ bằng REST — `merge_decision` dùng nguyên như trước.
     `local_check=False` (app chỉ đọc, ADR-0038): không kiểm xung đột cục bộ (`git fetch` + `merge-tree` ghi ref/object)."""
-    repo, n = _pr_target(pr_arg)
-    pr = _gh_one(f"{repo}/pulls/{n}")
+    _sibling_imports()
+    from xt_merge_intent import read_pr
+
+    return read_pr(pr_arg, local_check, PR_READ_HOST, _pr_target, _gh_one, _pr_rest_details, PrInputError)
+
+
+def _pr_rest_details(
+    repo: str, n: str, local_check: bool, pr: Dict[str, Any], intent: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
     head = pr.get("head")
     if not isinstance(head, dict):
         raise PrInputError(f"JSON của PR #{n} không đọc được: thiếu `head`")
@@ -7904,6 +7919,7 @@ def _pr_rest(pr_arg: Optional[str], local_check: bool = True) -> Dict[str, Any]:
     }
     return {
         **extra,
+        "live_intent": intent,
         "number": pr.get("number", n),
         **({"title": pr["title"]} if isinstance(pr.get("title"), str) else {}),
         "state": "MERGED" if pr.get("merged") else str(pr.get("state", "")).upper(),
@@ -7964,6 +7980,7 @@ def load_pr(args: argparse.Namespace) -> Dict[str, Any]:
         raise PrInputError(f"JSON của PR không đọc được: {exc}") from exc
     if not isinstance(data, dict):
         raise PrInputError("JSON của PR không đọc được: không phải object")
+    data.pop("live_intent", None)
     data.pop("strictBaseRepo", None)  # --pr-json chỉ tính từ ảnh chụp đã cấp, không gọi API so nhánh sống.
     return data
 
@@ -13015,7 +13032,10 @@ def _check_live_base(pr: Dict[str, Any], d: Dict[str, Any]) -> Dict[str, Any]:
     if d["verdict"] != "merge" or not repo:
         return d
     base = str(pr.get("baseRefName") or "")
-    behind = _live_base_distance(repo, base, str(d["head"]))
+    from xt_merge_intent import at_host
+
+    with at_host(PR_READ_HOST, str(d.get("host") or "")):
+        behind = _live_base_distance(repo, base, str(d["head"]))
     if behind == 0:
         return d
     verdict, reason, cmd = (
@@ -13042,6 +13062,10 @@ def _eval_pr_next(
     out = pr_next(d, auto_merge, rec, cap)
     if check_base and out["action"] == "merge" and (observed := _check_live_base(pr, d)) is not d:
         return observed, pr_next(observed, auto_merge, rec, cap)
+    if out["action"] == "merge" and "live_intent" in pr:
+        from xt_merge_intent import bind
+
+        out = bind(pr, out)
     return d, out
 
 
@@ -18426,22 +18450,10 @@ def _steward_command(out: Dict[str, Any], repo: str, subject: str = "", body: st
     (`derived_commit`); không bao giờ bật auto-merge (ADR-0036)."""
     n, head, action = str(out["pr"]), str(out["head"]), out["action"]
     if action == "merge":
-        title = ["-f", f"commit_title={subject}"] if subject else []
-        title += ["-f", f"commit_message={body}"] if body else []
-        return [
-            [
-                "gh",
-                "api",
-                "-X",
-                "PUT",
-                f"{repo}/pulls/{n}/merge",
-                "-f",
-                "merge_method=squash",
-                "-f",
-                f"sha={head}",
-                *title,
-            ]
-        ]
+        from xt_merge_intent import MergeIntent
+
+        intent = MergeIntent.from_action(out, repo)
+        return [intent.command(subject, body)] if intent else []
     if action == "disable-auto-merge":
         return [["gh", "pr", "merge", n, "--disable-auto"]]
     if action == "update" and _steward_can_update():  # tụt sau nhánh đích: GitHub tạo merge commit, ghim head đang thấy
@@ -18512,7 +18524,8 @@ def _steward_one(pr_arg: str, repo: str, base: Path, apply: bool, gh_repo: List[
     d, next_step = _eval_pr_next(pr, d, rec, base, check_base=not why_not)
     out = {**next_step, "applied": False}
     if why_not and out["action"] not in ("done", "closed", "disable-auto-merge"):
-        return {**out, "action": "defer-human", "why": why_not}
+        out.pop("merge_intent", None)
+        return {**out, "action": "defer-human", "why": why_not, "do": ""}
     if apply and d["lane"] == "chuẩn" and not d.get("review_optional") and not _standard_seen(pr):
         n = str(d["pr"])
         label_err = _steward_run(
@@ -18536,7 +18549,9 @@ def _steward_one(pr_arg: str, repo: str, base: Path, apply: bool, gh_repo: List[
 
 def _steward_key(out: Dict[str, Any], repo: str) -> str:
     """Khoá idempotent của một hành động steward: (repo, PR, head, hành động) — AUTO-05."""
-    return f"{repo.removeprefix('repos/')}#{out['pr']}@{str(out['head'])[:12]}:{out['action']}"
+    intent = out.get("merge_intent")
+    target = f"{intent['host']}/{intent['repo']}" if intent else repo.removeprefix("repos/")
+    return f"{target}#{out['pr']}@{str(out['head'])[:12]}:{out['action']}"
 
 
 def _add_note(out: Dict[str, Any], text: str) -> Dict[str, Any]:
@@ -18545,19 +18560,9 @@ def _add_note(out: Dict[str, Any], text: str) -> Dict[str, Any]:
 
 
 def _steward_stale(out: Dict[str, Any], repo: str) -> str:
-    """Đọc lại PR NGAY trước khi làm (AUTO-05): "" = trạng thái GitHub vẫn cần đúng hành động này ở đúng head; khác =
-    lý do bỏ qua. Sự kiện lặp, chạy lại sau restart, hay lượt lịch/sự kiện song song đã làm xong → không lặp tác dụng
-    phụ; head đổi giữa lúc xét và lúc làm → không làm trên head chưa xét."""
-    pull = _gh_one(f"{repo}/pulls/{out['pr']}")
-    raw = pull.get("head")
-    sha = str(raw.get("sha") or "") if isinstance(raw, dict) else ""
-    if pull.get("merged") or pull.get("state") != "open":
-        return "PR đã đóng/merge"
-    if sha != out["head"]:
-        return f"head đổi {str(out['head'])[:7]} → {sha[:7] or '?'} — lượt sau xét head mới"
-    if out["action"] == "disable-auto-merge" and not pull.get("auto_merge"):  # tắt khi đã tắt
-        return "auto-merge đã tắt"
-    return ""
+    from xt_merge_intent import stale_action
+
+    return stale_action(out, repo, _gh_api, _gh_one)
 
 
 def _steward_apply(
@@ -18575,7 +18580,7 @@ def _steward_apply(
     if cmds:
         try:
             stale = _steward_stale(out, repo)
-        except PrInputError as exc:  # không đọc lại được: không làm mù (chiều chặt), lượt sau thử lại
+        except (PrInputError, ValueError) as exc:  # không đọc lại được: không làm mù, lượt sau thử lại
             return {**out, "error": f"không đọc lại được PR trước khi làm: {exc}"}
         if stale:
             return _add_note(out, f"bỏ qua {out['key']} — {stale}")
@@ -18715,7 +18720,7 @@ def cmd_pr_steward(args: argparse.Namespace) -> int:
     except PrInputError as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 2
-    target = (lambda n: f"https://github.com/{args.repo}/pull/{n}") if args.repo else (lambda n: n)
+    target = (lambda n: f"{args.repo}#{n}") if args.repo else (lambda n: n)
     results = [
         _event_note(_steward_one(target(n), repo, project_dir(), args.apply, gh_repo), heads.get(n, "")) for n in nums
     ]
@@ -19008,7 +19013,10 @@ def cmd_pr(args: argparse.Namespace) -> int:
     d, _, rec = _pr_next_state(pr, base)
     _, out = _eval_pr_next(pr, d, rec, base)
     if out["action"] == "merge" and d.get("lane") == "derived":  # chỉ steward merge làn derived (ADR-0087)
+        out.pop("merge_intent", None)
         out = {**out, "action": "wait", "why": DERIVED_STEWARD, "do": DERIVED_WAIT}
+    elif out["action"] == "merge" and args.pr_json:
+        out = {**out, "do": "", "why": f"{out['why']} — ảnh chụp, chạy lại pr next với dữ liệu live"}
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
         return 0

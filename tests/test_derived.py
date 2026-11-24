@@ -607,7 +607,7 @@ class ForkIdentityTest(unittest.TestCase):
         import guard
 
         with unittest.mock.patch.object(guard, "merge_check", return_value=d):
-            verdict, why = guard._merge_verdict(["7"], "abc1234def", str(base))
+            verdict, why = guard.gh_pr_merge_rule(["7", "--match-head-commit", "abc1234def"], str(base))
         self.assertEqual(verdict, "ask")  # không còn allow như khi merge-check trả merge
         self.assertIn(f"merge-check: human: {FORK_WHY}", why)
 
@@ -639,7 +639,12 @@ class MergeLaneTest(unittest.TestCase):
         long_name = {**DERIVED_OK, "file": f"docs/derived/{'a' * 39}--{'b' * 100}.json"}
         subject, _ = xt.derived_commit(dpr(derived=long_name))
         self.assertEqual(subject, "docs(derived): cập nhật bản ghi dự án phái sinh (#7)")
-        out = {"pr": 12, "head": "abc1234def", "action": "merge"}
+        out = {
+            "pr": 12,
+            "head": HEAD,
+            "action": "merge",
+            "merge_intent": {"host": "github.com", "repo": "o/r", "pr": 12, "expected_head": HEAD},
+        }
         cmd = xt._steward_command(out, "repos/o/r", *xt.derived_commit(hostile))[0]
         self.assertIn("commit_title=docs(derived): cập nhật alice--X-Templates (#12)", cmd)
         self.assertIn(f"commit_message={body}", cmd)
@@ -725,6 +730,11 @@ class MergeLaneTest(unittest.TestCase):
 
 class DerivedGh(FakeGh):
     SHA = HEAD
+    TARGET = f"repos/{dv.UPSTREAM.lower()}"
+
+    def route(self, command: list[str]) -> tuple[str, bool]:
+        path, later = super().route(command)
+        return path.replace(self.TARGET + "/", self.REPO + "/", 1), later
 
 
 class RestLaneTest(unittest.TestCase):
@@ -747,7 +757,13 @@ class RestLaneTest(unittest.TestCase):
         head = {"sha": HEAD, "repo": {"full_name": HEAD_REPO, "owner": {"login": "alice", "type": "User"}}}
         # Tiêu đề và thân PR do fork viết (link, @, trailer giả) — không được lên lệnh merge.
         hostile = {"title": "Xem https://evil.example @bob", "body": "Co-authored-by: x <x@y>"}
-        p = {"head": head, "base": base, "changed_files": len(listed), **hostile}
+        p = {
+            "head": head,
+            "base": base,
+            "html_url": f"https://github.com/{dv.UPSTREAM}/pull/7",
+            "changed_files": len(listed),
+            **hostile,
+        }
         user = {"user": {"login": "alice"}, "author_association": "NONE"}
         return DerivedGh(pull={**p, **user}, raw=raw, reviews=reviews, real_git=True)
 
@@ -771,12 +787,14 @@ class RestLaneTest(unittest.TestCase):
         self.assertEqual((rc, d["verdict"], d["lane"]), (1, "wait", "derived"))  # agent/guard: chỉ steward merge
         self.assertEqual(len(cmds), 1)  # steward tự merge PR fork chỉ ở làn derived, ghim head
         cmd = cmds[0]
-        self.assertEqual(cmd[:5], ["gh", "api", "-X", "PUT", f"{DerivedGh.REPO}/pulls/7/merge"])
+        self.assertEqual(
+            cmd[:7], ["gh", "api", "-X", "PUT", "--hostname", "github.com", f"{DerivedGh.TARGET}/pulls/7/merge"]
+        )
         self.assertIn(f"sha={HEAD}", cmd)
         self.assertIn("commit_title=docs(derived): cập nhật alice--X-Templates (#7)", cmd)
         self.assertIn(f"commit_message=Bản ghi {PATH} của {HEAD_REPO}, merge qua làn derived (ADR-0087).", cmd)
         self.assertFalse(any("evil" in a or "@" in a or "Co-authored" in a for a in cmd), cmd)
-        self.assertIn(f"{DerivedGh.REPO}/compare/{BASE}...{HEAD}", gh.paths())
+        self.assertIn(f"{DerivedGh.TARGET}/compare/{BASE}...{HEAD}", gh.paths())
 
     def test_changes_requested_leaves_lane_even_when_review_optional(self) -> None:
         commit_base_xt(self.base, "merge_autonomy: L3\nmerge_review: optional\n")

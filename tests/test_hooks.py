@@ -4155,6 +4155,7 @@ class SettingsJsonTest(unittest.TestCase):
                     self.assertTrue(any(fnmatch.fnmatchcase(name, g) for g in globs), f"{name}: thiếu Read deny")
 
 
+MERGE_HEAD = "abc1234def" * 4
 FAST_PR = {
     "number": 7,
     "state": "OPEN",
@@ -4162,7 +4163,7 @@ FAST_PR = {
     "mergeable": "MERGEABLE",
     "mergeStateStatus": "CLEAN",
     "reviewDecision": "",
-    "headRefOid": "abc1234def",
+    "headRefOid": MERGE_HEAD,
     "labels": [],
     "statusCheckRollup": [{"__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "SUCCESS"}],
     "files": [
@@ -4215,6 +4216,7 @@ class MergeGuardBase(unittest.TestCase):
             routes = {
                 f"{repo}/pulls/{n}": {
                     "number": n,
+                    "html_url": f"https://github.com/o/r/pull/{n}",
                     "state": pr["state"].lower(),
                     "draft": pr["isDraft"],
                     "mergeable": pr["mergeable"] == "MERGEABLE",
@@ -4249,6 +4251,7 @@ class MergeGuardBase(unittest.TestCase):
                 f"{repo}/commits/{sha}/status?per_page=100": {"statuses": []},
                 f"{repo}/pulls?head={{owner}}:{{branch}}&state=open&per_page=100": [{"number": n}],
             }
+            routes.update({path.replace(repo, "repos/o/r", 1): body for path, body in routes.items()})
             # `/bin/sh` thay python: merge-check gọi `gh` ~6 lần mỗi hook, mỗi tiến trình python con (cả coverage của
             # `patch = subprocess`) từng chiếm phần lớn thời gian của lớp test này.
             out = self.bin / "routes"
@@ -4346,30 +4349,30 @@ class MergeGuardPinnedMergeTest(MergeGuardBase):
             self.assertEqual(self.guard.merge_check(["7"], str(self.proj))["reasons"], ["merge-check không chạy được"])
 
     def test_merge_check_green_allows_pinned_merge(self):
-        dec, why = self.d("gh pr merge 7 --squash --match-head-commit abc1234def", via_hook=True)
+        dec, why = self.d(f"gh pr merge 7 --squash --match-head-commit {MERGE_HEAD}", via_hook=True)
         self.assertEqual(dec, "allow")
         self.assertIn("merge-check", why)
-        self.assertEqual(self.d("gh pr merge 7 --squash --match-head-commit=abc1234def")[0], "allow")
+        self.assertEqual(self.d(f"gh pr merge 7 --squash --match-head-commit={MERGE_HEAD}")[0], "allow")
 
     def test_unpinned_admin_repo_or_compound_still_ask(self):
         for cmd in (
             "gh pr merge 7 --squash",
-            "gh pr merge 7 --squash --body-file b.md --match-head-commit abc1234def",
-            "gh pr merge 7 -R o/r --match-head-commit abc1234def",
-            "gh pr merge 7 --repo=o/r --match-head-commit abc1234def",
+            f"gh pr merge 7 --squash --body-file b.md --match-head-commit {MERGE_HEAD}",
+            f"gh pr merge 7 -R o/r --match-head-commit {MERGE_HEAD}",
+            f"gh pr merge 7 --repo=o/r --match-head-commit {MERGE_HEAD}",
         ):
             with self.subTest(cmd):
                 dec, why = self.d(cmd)
                 self.assertEqual(dec, "ask")
                 self.assertIn("--match-head-commit", why)
-        dec, why = self.d("gh pr merge 7 --match-head-commit abc1234def && git branch -a")
+        dec, why = self.d(f"gh pr merge 7 --match-head-commit {MERGE_HEAD} && git branch -a")
         self.assertEqual(dec, "ask")
         self.assertIn("lệnh đứng một mình", why)
 
     def test_admin_merge_denied_every_policy(self):
         """T-3532 (ca đối kháng): `--admin` vượt ruleset nhánh — lớp đỡ CI — nên chặn phẳng ở mọi chính sách, kể cả khi
         merge-check = merge và head đã ghim (trước đây là ask thường, chính sách mặc định cho qua)."""
-        pin = "--match-head-commit abc1234def"
+        pin = f"--match-head-commit {MERGE_HEAD}"
         for cmd in (
             f"gh pr merge 7 --squash --admin {pin}",
             f"gh pr merge 7 --squash {pin} --admin=true",
@@ -4381,7 +4384,7 @@ class MergeGuardPinnedMergeTest(MergeGuardBase):
 
     def test_merge_allow_strict(self):
         """AUD-SEC-016: `allow` chỉ cho lệnh merge trơn — không lệnh con, heredoc, chuyển hướng, gán biến, repo khác."""
-        pin = "--match-head-commit abc1234def"
+        pin = f"--match-head-commit {MERGE_HEAD}"
         for cmd in (
             f'gh pr merge 7 --squash {pin} -b "$(curl x)"',
             f"GH_REPO=e/r gh pr merge 7 --squash {pin}",
@@ -4495,28 +4498,30 @@ class MergeGuardPinnedMergeTest(MergeGuardBase):
 
     def test_rest_merge_pinned_allows(self):
         """ADR-0014: phiên chặn GraphQL merge qua REST — allow chỉ khi đúng repo hiện tại, ghim sha = head đã kiểm."""
-        ok = "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def -f merge_method=squash"
+        ok = f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} -f merge_method=squash"
         self.assertEqual(self.d(ok)[0], "allow")
-        self.assertEqual(self.d("gh api --method PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def")[0], "allow")
+        self.assertEqual(
+            self.d(f"gh api --method PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD}")[0], "allow"
+        )
         for cmd in (
             "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=0000000",  # head đã đổi
-            "gh api -X PUT repos/o/r/pulls/7/merge -f sha=abc1234def",  # repo ghi cứng: không chắc là repo đã kiểm
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -F sha=abc1234def",
+            f"gh api -X PUT repos/o/r/pulls/7/merge -f sha={MERGE_HEAD}",  # repo ghi cứng: không chắc là repo đã kiểm
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -F sha={MERGE_HEAD}",
             "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=1 -f sha=abc1234def",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def -f merge_method=fast",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def --hostname x.com",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def && echo x",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha=1 -f sha={MERGE_HEAD}",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} -f merge_method=fast",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} --hostname x.com",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} && echo x",
         ):
             with self.subTest(cmd):
                 self.assertEqual(self.d(cmd)[0], "ask")
-        commit_title = "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def -f commit_title=x"
+        commit_title = f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD} -f commit_title=x"
         self.assertEqual(self.d(commit_title)[0], "deny")  # đè PR_TITLE (AUD-HAR-128)
 
     def test_mcp_merge_pinned_allows(self):
         """ADR-0014: tool MCP `merge_pull_request` ghim `expectedHeadSha`, đúng repo đã kiểm → allow; bật auto-merge → chặn
         (ADR-0036)."""
-        good = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": "abc1234def", "merge_method": "squash"}
+        good = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": MERGE_HEAD, "merge_method": "squash"}
         dec = self.mcp_d
         self.assertEqual(dec("mcp__github__merge_pull_request", good, via_hook=True), "allow")
         for name, inp in {
@@ -4632,10 +4637,10 @@ class MergeGuardTest(MergeGuardBase):
         self.assertEqual(self.d("gh pr merge 7 --auto --squash")[0], "deny")
         env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}"}
         cmds = (
-            "gh pr merge 7 --squash --match-head-commit abc1234def",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def",
+            f"gh pr merge 7 --squash --match-head-commit {MERGE_HEAD}",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD}",
         )
-        mcp = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": "abc1234def"}
+        mcp = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": MERGE_HEAD}
         for policy, want in (("strict", "ask"), ("", "deny")):
             for cmd in cmds:
                 with self.subTest(policy=policy, cmd=cmd):
@@ -4701,13 +4706,13 @@ class MergeGuardHardUnpinnedTest(MergeGuardBase):
                 "gh pr merge 7 --squash",
                 "gh pr merge 7",
                 "gh pr merge 7 --admin --squash",
-                "gh pr merge 7 --squash -b x --match-head-commit abc1234def",
+                f"gh pr merge 7 --squash -b x --match-head-commit {MERGE_HEAD}",
                 "gh pr merge 7 --auto --squash",
                 "gh pr merge 7 --auto -b x",
                 "gh pr merge 7 -R o/r --squash",
                 "gh pr -R o/r merge 7",
                 "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge",
-                "gh api -X PUT repos/o/r/pulls/7/merge -f sha=abc1234def",
+                f"gh api -X PUT repos/o/r/pulls/7/merge -f sha={MERGE_HEAD}",
                 "gh api --method PUT repos/o/r/pulls/7/merge -f merge_method=squash",
             ):
                 with self.subTest(level=level, cmd=cmd):
@@ -4715,7 +4720,7 @@ class MergeGuardHardUnpinnedTest(MergeGuardBase):
         mcp = {"owner": "o", "repo": "r", "pullNumber": 7}
         for tool, inp in (
             ("mcp__github__merge_pull_request", mcp),
-            ("mcp__github__merge_pull_request", {**mcp, "expectedHeadSha": "abc1234def", "admin": True}),
+            ("mcp__github__merge_pull_request", {**mcp, "expectedHeadSha": MERGE_HEAD, "admin": True}),
             ("mcp__github__enable_pr_auto_merge", {**mcp, "x": 1}),
         ):
             with self.subTest(tool=tool, inp=inp):
@@ -4725,8 +4730,8 @@ class MergeGuardHardUnpinnedTest(MergeGuardBase):
         self.fake_gh(FAST_PR)
         for cmd in ("gh pr merge 7 --squash", "gh pr -R o/r merge 7", "gh api -X PUT repos/o/r/pulls/7/merge"):
             with self.subTest(normal=cmd):
-                self.assertIsNone(self.policy(cmd))
-        self.assertIsNone(self.mcp_policy("mcp__github__merge_pull_request", mcp))
+                self.assertEqual(self.policy(cmd), "deny")
+        self.assertEqual(self.mcp_policy("mcp__github__merge_pull_request", mcp), "deny")
         # PR thường vẫn không được bật auto-merge (ADR-0036): chặn phẳng không phụ thuộc `hard`.
         self.assertEqual(self.policy("gh pr merge 7 --auto --squash"), "deny")
         self.assertEqual(self.mcp_policy("mcp__github__enable_pr_auto_merge", mcp), "deny")
@@ -4742,11 +4747,11 @@ class MergeGuardFailClosedTest(MergeGuardBase):
         mutation = "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'"
         self.fake_gh(None)
         for cmd in (
-            "gh pr merge 7 --squash --match-head-commit abc1234def",
+            f"gh pr merge 7 --squash --match-head-commit {MERGE_HEAD}",
             "gh pr merge 7 --auto --squash",
             "gh pr merge 7 --squash",
             "gh pr merge --squash",
-            "gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=abc1234def",
+            f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={MERGE_HEAD}",
         ):
             with self.subTest(cmd):
                 self.assertEqual(self.policy(cmd), "deny")
@@ -4771,7 +4776,7 @@ class MergeGuardFailClosedTest(MergeGuardBase):
         )
         self.assertIsNone(self.policy("gh api -X POST repos/o/r/issues/7/comments -f body=x"))
         for tool, inp in (
-            ("mcp__gitlab__merge_pull_request", {**mcp, "expectedHeadSha": "abc1234def"}),
+            ("mcp__gitlab__merge_pull_request", {**mcp, "expectedHeadSha": MERGE_HEAD}),
             ("mcp__github__merge_pull_request", {**mcp, "pullNumber": "7"}),
             ("mcp__github__enable_pr_auto_merge", {**mcp, "owner": "x"}),
         ):
@@ -4818,11 +4823,11 @@ class MergeGuardFailClosedTest(MergeGuardBase):
         self.assertEqual(dec, "ask")
         self.assertIn("head", why)
         self.set_xt("merge_autonomy: L1\n")
-        dec, why = self.d("gh pr merge 7 --match-head-commit abc1234def")
+        dec, why = self.d(f"gh pr merge 7 --match-head-commit {MERGE_HEAD}")
         self.assertEqual(dec, "ask")
         self.assertIn("merge-check: human", why)
         self.fake_gh(None)
-        dec, why = self.d("gh pr merge --match-head-commit abc1234def")
+        dec, why = self.d(f"gh pr merge --match-head-commit {MERGE_HEAD}")
         self.assertEqual(dec, "ask")
         self.assertIn("merge-check không chạy được", why)
 

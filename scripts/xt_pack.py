@@ -34,6 +34,7 @@ ARTIFACT_SCRIPTS = (
     "xt_acceptance.py",
     "xt_ops_setup.py",
     "xt_release_ops.py",
+    "xt_merge_intent.py",
     "xt_deploy.py",
     "xt_distribution.py",
     "xt_scale.py",
