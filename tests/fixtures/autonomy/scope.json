@@ -12,6 +12,13 @@
    ]
   },
   {
+   "reason": "Rà lô 3 (xanh giả của `static-check pii-vn` với BOM và `credits` thiếu cột nguồn): bộ đọc tệp dữ liệu của `static-check` nằm ngoài sáu adapter của corpus (pr, rollup, review, guard, ci_log, harness). Ca hồi quy: `python3 -m unittest tests.test_check_pii_vn tests.test_check_credits`.",
+   "ids": [
+    "AUD-HAR-544",
+    "AUD-HAR-545"
+   ]
+  },
+  {
    "reason": "Rà lô 1 (đường dẫn nghiệm thu có `[`…`]` lọt tập rủi ro của merge-check): ca cần repo Git thật có `xt.yaml` với `acceptance_paths` và PR giả có tệp đổi, ngoài schema quyết định đơn của corpus. Ca hồi quy: `python3 -m unittest tests.test_acceptance_lock.AcceptanceLockTest.test_protected_path_with_glob_characters_still_leaves_the_fast_lane`.",
    "ids": [
     "AUD-HAR-539"
