@@ -1113,3 +1113,10 @@
 - Chọn: Nới trần 24645 lên 24664 bằng ADR-0103, giữ guard là tệp một khối
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí 1: ruleset tag phía máy chủ chưa chạy thật (T-4007 cần admin) nên guard là hàng rào duy nhất cho tag phiên bản; lỗ hổng đã tái hiện bằng bộ phân tích guard. Tách module là việc lớn và guard nạp như một khối nên chưa làm trong lát này; nén dòng ở chỗ khác rủi ro làm lệch luật bảo vệ không liên quan. Trần mới bằng đúng số đo, không dư.
 - Đường lùi: Hoàn nguyên commit; trần về 24645 và AUD-HAR-541 quay lại trạng thái mở
+
+### D-607 · 2026-11-25T16:40:58+00:00 · Cách đóng nốt AUD-HAR-541/566 trong luật tag glob của guard
+
+- Phương án: (1) Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104) · (2) Coi mọi glob ở vị trí tên tag là tag phiên bản · (3) Chấp nhận lỗ hổng, chờ ruleset tag phía máy chủ
+- Chọn: Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104)
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chặn các dạng bash bung ra vX.Y.Z đã đo, không chặn oan refspec dùng chung _tag_glob; giữ đường lùi
+- Đường lùi: Hoàn nguyên commit; trần guard về 24664

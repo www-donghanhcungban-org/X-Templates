@@ -5332,6 +5332,17 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "git tag 'v[![]*'",
         "git update-ref 'refs/tags/v[![]*' HEAD",
         "git push origin 'HEAD:refs/tags/v1.2.[![]'",
+        # AUD-HAR-541/566: đoạn chỉ gồm glob mà bash bung ra `v1.2.0`; `nocaseglob`; lớp mở bằng `]`/`!`/POSIX
+        "git tag ??????",
+        "git tag '*.*'",
+        "git tag '[v]*'",
+        "git tag '[!x]?.?.?'",
+        "git tag '[v]?.?.?'",
+        "git tag 'V1.2.?'",
+        "git tag 'v1.2.[]0]'",
+        "git tag '[[:alpha:]][[:digit:]].[[:digit:]].[[:digit:]]'",
+        "git update-ref 'refs/tags/??????' HEAD",
+        "git push origin 'HEAD:refs/tags/??????'",
     )
     RELEASE_TAG_OK = (
         "gh release create nightly --notes x",
