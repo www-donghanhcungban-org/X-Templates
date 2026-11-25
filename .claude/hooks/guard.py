@@ -9080,16 +9080,35 @@ def _git_remote(args: List[str]) -> Tuple[str, str]:
 RELEASE_VERSION_TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]*)?\Z")
 RELEASE_TAG_WHY = "tag phiên bản chỉ do workflow phát hành tạo sau khi duyệt promotion"
 GLOB_UNIT_RE = re.compile(r"\[[^\]]*\]|[*?\[]")
+GLOB_LOOSE_RE = re.compile(r"[*?\[]")
+
+
+def _glob_sub(repl: str, text: str, count: int = 0) -> str:
+    """Thay đơn vị glob như bash: `[` trong lớp là chữ thường (`[a0[]`). Chỉ phần tới `]` cuối đọc lớp (mỗi `[` ở đó
+    có `]` phía sau nên tuyến tính); đuôi không còn `]` thì `[` là đơn vị riêng (AUD-HAR-543)."""
+    cut = text.rfind("]") + 1
+    head, hits = GLOB_UNIT_RE.subn(repl, text[:cut], count)
+    return head + GLOB_LOOSE_RE.sub(repl, text[cut:], max(count - hits, 0) if count else 0)
+
+
 TAG_LIKE_RE = re.compile(r"v?[0-9.]*(?:[-+][0-9A-Za-z.+-]*)?")
 
 
 def _tag_glob(word: str) -> bool:
     """AUD-SEC-996b: glob bash bung theo tệp (`touch v1.2.3`) có thể ra tag phiên bản — đoạn (tách `/`, `:`) có glob mà
-    chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ."""
+    chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ.
+    AUD-HAR-541: đoạn chỉ gồm glob (`??.?.?`, `[v][0-9].[0-9].[0-9]`) — thay đơn vị glob bằng chữ số (đơn vị đầu: `v`)."""
     segs = re.split("[/:]", word) if GLOB_UNIT_RE.search(word) else []
-    lits = [GLOB_UNIT_RE.sub("", s) for s in segs if GLOB_UNIT_RE.search(s)]
+    globs = [s for s in segs if GLOB_UNIT_RE.search(s)]
+    lits = [_glob_sub("", s) for s in globs]
+    probes = [
+        _glob_sub("0", _glob_sub(b, re.sub(r"\*+", "00", re.sub(r"\*+", a, s, count=1)), count=1))
+        for s in globs
+        for a in ("00", "v0")
+        for b in ("0", "v")
+    ]
     tagged = any(TAG_LIKE_RE.fullmatch(x) and re.search("[v0-9]", x) for x in lits)
-    return tagged or any(map(RELEASE_VERSION_TAG.fullmatch, segs))
+    return tagged or any(map(RELEASE_VERSION_TAG.fullmatch, [*segs, *probes]))
 
 
 def _release_tag_unsafe(name: str) -> bool:

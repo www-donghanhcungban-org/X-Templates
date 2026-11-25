@@ -20,7 +20,7 @@ CAPS = {  # byte; nhà của từng trần: PLAN-3.12-lean T-1701…T-1704; ADR-
 }
 LINE_CAPS = {  # T-5016: trần dòng theo số đo tại lúc đặt trần, nới trần cần ADR.
     "scripts/xt.py": 23644,
-    ".claude/hooks/guard.py": 24645,
+    ".claude/hooks/guard.py": 24664,  # ADR-0103: +19 dòng cho luật glob tag (AUD-HAR-541)
 }
 # Trần TỔNG byte theo thư mục (ADR-0043, T-2407; ADR-0050/ADR-0088: +1 MiB; ADR-0089: ×5 trần hiện tại).
 # Chỉ đếm file git theo dõi (bỏ cache/sinh ra).

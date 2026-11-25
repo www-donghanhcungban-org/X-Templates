@@ -5277,6 +5277,15 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "git update-ref refs/tags/v1.2.? HEAD",
         "git symbolic-ref refs/tags/v1.? refs/heads/x",
         "git fetch . refs/tags/foo:refs/tags/v9.9.?",
+        # AUD-HAR-541: đoạn chỉ gồm glob (không còn chữ `v` hay số) vẫn bung ra được `v1.2.3` — `touch v1.2.3`
+        "git push origin HEAD:refs/tags/??.?.?",
+        "git push origin 'HEAD:refs/tags/[!x][!x].[!x].[!x]'",
+        "git push origin 'HEAD:refs/tags/[v][0-9].[0-9].[0-9]'",
+        "git push origin 'HEAD:refs/tags/*.*.*'",
+        "git tag ??.?.?",
+        "git tag -a '???.?.?' -m x",
+        "git update-ref refs/tags/??.?.? HEAD",
+        "git fetch . refs/tags/foo:refs/tags/??.?.?",
         # AUD-SEC-998: chỉ bỏ GIÁ TRỊ của cờ ăn giá trị — cụm cờ ngắn (`-pt X`: pflag đọc `-p -t X`) không che tag
         "gh release create -pt x v1.2.3",
         "gh release create --title --title v1.2.3",
@@ -5318,6 +5327,11 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "git push origin v1.2.3 --tags",
         "git push --all origin v1.2.3",
         "git push --branches origin refs/tags/v1.2.3",
+        # rà #815 🔴: `[` trong lớp là chữ thường với bash (`[a0[]` = a, 0, `[`) — luật cũ vẫn phải bắt
+        "git tag v1.2.[a0[]",
+        "git tag 'v[![]*'",
+        "git update-ref 'refs/tags/v[![]*' HEAD",
+        "git push origin 'HEAD:refs/tags/v1.2.[![]'",
     )
     RELEASE_TAG_OK = (
         "gh release create nightly --notes x",
@@ -5368,6 +5382,11 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "gh api -X POST 'repos/o/r/git/refs?x=1' -f ref=refs/heads/feat -f sha=abc",
         "git push origin 'HEAD^{/fix?}:refs/heads/x'",
         "git tag 'rc*'",
+        # AUD-HAR-541 đối chứng: glob chỉ gồm `?`/lớp không thể bung ra `vX.Y.Z` (thiếu chữ `v` hay thiếu số thành phần)
+        "git tag '?.?.?'",
+        "git tag 'r?'",
+        "git push origin 'HEAD:refs/heads/feat-??'",
+        "git push origin 'HEAD:refs/heads/[a-c]??'",
         # AUD-SEC-999 đối chứng: giá trị cờ trong nháy (bash không tách/không bung), giá trị nguyên văn
         'gh release create nightly --notes "$NOTES"',
         'gh release create nightly --notes "fix?"',
