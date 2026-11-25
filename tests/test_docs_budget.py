@@ -18,6 +18,10 @@ CAPS = {  # byte; nhà của từng trần: PLAN-3.12-lean T-1701…T-1704; ADR-
     ".claude/skills/optimize/SKILL.md": 12288,  # ADR-0048: skill tối ưu, cùng trần
     "framework/11-autonomous-loop/README.md": 12288 * 50,
 }
+LINE_CAPS = {  # T-5016: trần dòng theo số đo tại lúc đặt trần, nới trần cần ADR.
+    "scripts/xt.py": 23644,
+    ".claude/hooks/guard.py": 24645,
+}
 # Trần TỔNG byte theo thư mục (ADR-0043, T-2407; ADR-0050/ADR-0088: +1 MiB; ADR-0089: ×5 trần hiện tại).
 # Chỉ đếm file git theo dõi (bỏ cache/sinh ra).
 DIR_CAPS = {  # nhóm → (pathspec git, trần byte); đo: `git ls-files -z -- <spec> | xargs -0 cat | wc -c`
@@ -175,6 +179,16 @@ class DocsBudgetTest(unittest.TestCase):
             with self.subTest(rel):
                 size = (ROOT / rel).stat().st_size
                 self.assertLessEqual(size, cap, f"{rel}: {size} B > {cap} B — cắt chữ, không nới trần")
+
+    def test_core_files_stay_under_line_caps(self):
+        for rel, cap in LINE_CAPS.items():
+            with self.subTest(rel):
+                lines = len((ROOT / rel).read_bytes().splitlines())
+                self.assertLessEqual(
+                    lines,
+                    cap,
+                    f"{rel} có {lines} dòng, vượt trần {cap} dòng. Tách logic sang module riêng. Nới trần cần ADR.",
+                )
 
     def test_tracked_text_files_are_clean_utf8(self):
         """Dự án đích (hotel-manager) kiểm mọi file văn bản: UTF-8, không BOM, không U+FFFD — file khung cài sang phải

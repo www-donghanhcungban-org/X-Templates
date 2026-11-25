@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Ngân sách lõi kiểm số dòng của `scripts/xt.py` (23.644) và `.claude/hooks/guard.py` (24.645) theo mốc `main` sau #797. Logic mới đặt trong module riêng; tăng trần cần ADR. Giữ nguyên ngân sách byte và các ngưỡng chất lượng (T-5016, D-595).
+
 - **Gate nối luồng:** thêm LOOP-DESIGN-030 yêu cầu SHOULD chạy lệnh thật; đính chính phạm vi T-4009 và trỏ việc nối nguồn còn thiếu sang T-5009 (T-5006).
 
 - **UX-VISUAL-009:** tách ảnh nét ở DPR cao, reflow 320 CSS px và phóng chữ 200%; hướng dẫn ui-verify không dùng deviceScaleFactor làm zoom (T-5005).

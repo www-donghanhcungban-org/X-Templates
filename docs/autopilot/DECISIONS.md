@@ -1057,3 +1057,10 @@
 - Chọn: Thêm hồi quy mất origin lúc đăng review và kiểm gửi lại đúng đích sau khi khôi phục
 - Lý do (tiêu chí chất lượng cuối): CI run 45534056621, job 138939373237 báo scripts/xt.py:18520–18521 chưa được phủ. Số PR vẫn hợp lệ ngoại tuyến nên lỗi origin tại bước đăng có thể xảy ra; cần giữ mã thoát 3, sổ chưa đăng và khả năng gửi lại đúng một lần, giữ nguyên ngưỡng coverage 100 %.
 - Đường lùi: Revert riêng commit bổ sung hồi quy nếu test sai; không bỏ handler hay thay ngưỡng cổng.
+
+### D-595 · 2026-11-25T03:32:04+00:00 · Tiếp tục harden sau #797 với ba lát độc lập theo worktree
+
+- Phương án: (1) Tách chủ sở hữu cho trần lõi, nguồn sổ lát và bằng chứng thiết kế; phiên chính tích hợp sổ sách chung và mở PR tuần tự sau Gate · (2) Thực hiện tuần tự toàn bộ mã và sổ sách trong một checkout
+- Chọn: Tách chủ sở hữu cho trần lõi, nguồn sổ lát và bằng chứng thiết kế; phiên chính tích hợp sổ sách chung và mở PR tuần tự sau Gate
+- Lý do (tiêu chí chất lượng cuối): Các hợp đồng D-580, D-582, D-583 và D-584 đã chốt. Worktree riêng tránh ghi đè; một chủ cho xt.py và xt_flow, một chủ cho thiết kế, một chủ cho ngân sách. Giữ trần lõi tại main 65e7d9a và giữ nguyên cổng; sau lát ngắn chuyển sang bộ kiểm bằng chứng T-5024 theo D-581. Chỉ mở PR kế khi PR đáy đã merge.
+- Đường lùi: Bỏ từng worktree chưa xuất bản hoặc revert PR tương ứng bằng commit mới; không sửa sổ máy hay nới Gate.

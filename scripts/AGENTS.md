@@ -4,6 +4,7 @@
 
 - **Chuẩn mã:** theo `../AGENTS.md` §7; `mypy --strict --python-version 3.13` (không cú pháp/API 3.14+, ADR-0094; nhóm `except` luôn có ngoặc); C901 ≤ 10; không `noqa`/pragma. Tệp `.py` mới thêm vào lệnh `typecheck` ở `../xt.yaml`; dự án đích cần nó thì thêm vào `optional_scripts` của `install.py`.
 - **Trần byte** (`tests/test_docs_budget.py`, ADR-0043): agent không tự nới trần; nới là quyết định ADR (ADR-0089).
+- **Trần dòng** (`../tests/test_docs_budget.py`, T-5016) áp dụng cho `xt.py` và `../.claude/hooks/guard.py`. Đặt logic mới vào module riêng. Nới trần cần ADR.
 - **Tên định danh:** tránh `secret`/`token`/`password`/`credential`/`trusted`: CodeQL báo `clear-text-*` khi giá trị mang tên nhạy cảm đi vào log hay tệp (đã gặp với `trusted_archive`, PR #706; đổi tên thay vì thêm chú thích bỏ qua). Danh sách heuristic của CodeQL (`SensitiveDataHeuristics.qll`, đọc 2026-11-21) có `secret`, `trusted`, `pass(wd|word)`, `api.?(key|tok)`; không thấy `credential` hay `token` đứng riêng — vẫn tránh cả năm tên cho chắc.
 - **Lệnh mới của `xt.py`:** thêm dòng ở bảng `../README.md` §Công cụ (`test_readme_lists_every_subcommand` kiểm), dòng ở `../CHANGELOG.md`, test có đủ nhánh (coverage 100 %).
 - **Cổng cục bộ:** `scripts/dev-task.sh gate-fast`; CI là cổng đầy đủ. Chi tiết quy trình sửa khung: `../AGENTS.md` §7.

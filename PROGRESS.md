@@ -33,6 +33,6 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- CI #797: run 45534056621 thiếu coverage `xt.py:18520–18521`; D-594 thêm hồi quy mất origin, giữ review chưa đăng và gửi lại đúng đích, không trùng sổ.
+- #797 merge `65e7d9a`: CI 45537330421 xanh 32/32 job, coverage 100 %. D-594 phủ mất origin/retry; D-595 tiếp tục trần lõi, sổ lát và bằng chứng thiết kế.
 - Mốc `main` `42f3c64` (#765; tag `v3.36.0` cùng commit). Cắt bản: cần CPython 3.15.2 (`dev-task.sh bootstrap`, `XT_PYTHON`; `uv` không tải được: dựng từ nguồn); PLAN mới có dòng Gate sinh nợ review sau mốc quét; ký bằng một lệnh đơn `python3 scripts/xt.py release-sign --note …`. "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
