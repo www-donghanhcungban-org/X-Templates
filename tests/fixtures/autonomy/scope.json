@@ -12,6 +12,12 @@
    ]
   },
   {
+   "reason": "Rà lô 1 (đường dẫn nghiệm thu có `[`…`]` lọt tập rủi ro của merge-check): ca cần repo Git thật có `xt.yaml` với `acceptance_paths` và PR giả có tệp đổi, ngoài schema quyết định đơn của corpus. Ca hồi quy: `python3 -m unittest tests.test_acceptance_lock.AcceptanceLockTest.test_protected_path_with_glob_characters_still_leaves_the_fast_lane`.",
+   "ids": [
+    "AUD-HAR-539"
+   ]
+  },
+  {
    "reason": "Nợ rà #797 đã sửa trong chính #797: ca cần Git checkout thật và GitHub CLI giả hoặc chạy `xt.py pr next` cô lập, ngoài schema quyết định đơn của corpus. Snapshot offline không sinh lệnh ghi (AUD-HAR-522), tên repo `.github` (523), gốc worktree từ thư mục `scripts` (524), URL tab `/files` và cặp `--repo` cùng `--pr` (525), URL tab `/changes` không là `html_url` chuẩn (528): `python3 -m unittest tests.test_merge_target_binding tests.test_hooks.MergeGuardPinnedMergeTest.test_numeric_pr_and_verified_worktree_for_environment_routing`",
    "ids": [
     "AUD-HAR-522",
