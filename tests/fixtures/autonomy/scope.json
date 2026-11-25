@@ -743,6 +743,12 @@
    ]
   },
   {
+   "reason": "Phép đo màu Canvas và tương phản trên DOM cần Chromium, ngoài phạm vi sáu adapter pr, rollup, review, guard, ci_log và harness. Ca `transparent hover inherits the Chromium canvas of the root color scheme` trong `tests_e2e/verify_render.test.mjs` chạy Chromium thật trên CI và yêu cầu theme sáng exit 0, theme tối exit 1 do vi phạm tương phản ở trạng thái hover.",
+   "ids": [
+    "AUD-HAR-533"
+   ]
+  },
+  {
    "reason": "Quyết định merge cho PR từ fork hoặc tác giả không quyền ghi (merge_identity_reason, #710): các ca pr.json chưa mang trường headRepo/authorAssociation như _pr_rest dựng. tests.test_derived.ForkIdentityTest kiểm L1–L3, fork đã xoá, tác giả quyền ghi, bot và làn derived qua merge_decision, merge-check, pr next và guard.",
    "ids": [
     "AUD-XFEAT-051"
