@@ -83,6 +83,40 @@ class AcceptanceLockTest(unittest.TestCase):
     def ledger(self):
         return json.loads((self.base / lock.LEDGER).read_bytes())
 
+    def merge_decision_for(self, path):
+        pr = {
+            "number": 7,
+            "title": "test: sửa ca nghiệm thu",
+            "state": "OPEN",
+            "isDraft": False,
+            "mergeable": "MERGEABLE",
+            "mergeStateStatus": "CLEAN",
+            "reviewDecision": "",
+            "headRefOid": "a" * 40,
+            "baseRefName": "main",
+            "defaultBranch": "main",
+            "statusCheckRollup": [
+                {"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}
+            ],
+            "labels": [],
+            "files": [{"path": path, "additions": 1, "deletions": 1}],
+        }
+        return xt._merge_eval(pr)[0]
+
+    def test_protected_path_with_glob_characters_still_leaves_the_fast_lane(self):
+        # AUD-HAR-539: đường dẫn literal có `[`…`]` (route kiểu `[id]`) không khớp chính nó khi bị coi là glob
+        self.write("xt.yaml", (self.base / "xt.yaml").read_text() + "merge_autonomy: L2\nmerge_review: optional\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "Cấu hình merge")
+        self.git("update-ref", "refs/remotes/origin/main", "HEAD")
+        for name in ("x.spec.ts", "[id].spec.ts", "a*b.spec.ts", "c?.spec.ts", "[[]x].spec.ts"):
+            with self.subTest(name=name):
+                decision = self.merge_decision_for(f"acceptance/{name}")
+                self.assertEqual(
+                    (decision["verdict"], decision["lane"], decision["eligible"]), ("human", "chuẩn", False)
+                )
+        self.assertEqual(self.merge_decision_for("docs/readme.txt")["verdict"], "merge")
+
     def test_cli_red_then_green_and_real_release_gate(self):
         self.assertIn("chưa có bộ", self.cli("check", code=1))
         self.assertIn("A-001", self.create())
