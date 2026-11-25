@@ -1,6 +1,6 @@
 # ADR-0098: Bảng bậc model theo nhà cung cấp và vai trò của từng agent, đồng bộ mọi harness
 
-- **Trạng thái:** Đã chấp nhận ngày 2026-11-24 (D-558, D-559, D-560); triển khai theo hai lát (R1 bảng bậc, agent `explore`, tài liệu, đồng bộ Codex; R2 máy nhận bậc của nhà cung cấp khác và khoá `xt.yaml`).
+- **Trạng thái:** Đã chấp nhận ngày 2026-11-24 (D-558, D-559, D-560); sửa đổi cùng ngày bởi D-605 (mục "Sửa đổi D-605"); triển khai theo hai lát (R1 bảng bậc, agent `explore`, tài liệu, đồng bộ Codex; R2 máy nhận bậc của nhà cung cấp khác và khoá `xt.yaml`).
 - **Làm rõ:** ADR-0029 (hai tầng executor), ADR-0044 và D-161 (reviewer năng lực cao hơn người viết), ADR-0061 (cấu hình theo loại việc), ADR-0082 (harness Codex sinh từ `.claude/`), ADR-0097 (đích tự đặt tên, hợp đồng công khai).
 - **Căn cứ:** [báo cáo vai trò model](../../research/2026-11-24-model-roles-haiku-and-top-minus-one.md) (giá, ID và điểm chuẩn đọc 2026-11-24; ước lượng chi phí chưa phải số đo).
 
@@ -35,3 +35,11 @@ Giữ `explore` ở Haiku khi thí nghiệm nhỏ đạt: 10 câu tra cứu, m�
 - Giá Haiku 5.5 tăng 5 lần khi prompt vượt 100K: `explore` giới hạn `maxTurns` và chỉ trả bảng ngắn.
 - Gemini CLI đã bị thay bằng Antigravity CLI cho một số gói từ 2026-06-18 (nguồn báo cáo, chưa tự kiểm): adapter Gemini cần kiểm lại trước khi dựa vào.
 - Xét lại khi: số đo `--cost` cho thấy tiết kiệm lớn hơn hoặc nhỏ hơn dự kiến; nhà cung cấp đổi thang bậc; Codex hay Gemini công bố thứ bậc chính thức.
+
+## Sửa đổi D-605 (2026-11-24)
+
+Chủ dự án chia việc theo độ khó: lập kế hoạch và việc phức tạp ở Opus 5.5, việc đơn giản ở Sonnet 5.5, việc cơ học ở Haiku 5.5. Thay hai điểm của mục Quyết định, phần còn lại giữ nguyên:
+
+- **Điểm 2:** phiên chính lập PLAN/SPEC/quyết định ở `top-1` (Claude: Opus 5.5), không còn ở `top`; `main_session.plan_spec_decision` = `top-1`. Fable (`top`) chỉ khi chủ dự án bật cho pha lập PLAN/SPEC, và vẫn chuyển xuống `top-1` effort ≤ xhigh trước khi viết code. Luật người rà cao hơn người viết (`LOOP-ORCH-005`) không đổi.
+- **Điểm 3:** thêm agent `executor-mech` ở `bottom` (Haiku) cho việc cơ học có sửa tệp: đổi tên/đường dẫn hàng loạt, nâng phiên bản, định dạng, thêm dòng theo mẫu có sẵn, sinh lại tệp gương. Điều kiện: phiên chính chỉ rõ tệp, mẫu và lệnh Gate; Gate đỏ một lần thì chuyển `executor` (không thử lần hai ở Haiku); `maxTurns` ≤ 40 để prompt dưới ngưỡng giá 100K. Haiku vẫn không viết logic, test mới, sửa lỗi chưa rõ nguyên nhân, rà code, bài nghiệm thu, bảo mật/license, hook/workflow/khoá chính sách hay điểm quyết định. Gate máy là trọng tài nên lý do loại Haiku ở `executor` (tỉ lệ vòng đỏ-xanh) không áp dụng cho việc lặp theo mẫu.
+- **Đo:** ghi `loop record --executor executor-mech` và `--cost`; xét lại khi tỉ lệ chuyển cấp từ `executor-mech` lên `executor` vượt 30 % trên ít nhất 10 task.

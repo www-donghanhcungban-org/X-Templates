@@ -65,9 +65,9 @@ Từ ADR-0098, bậc model của từng agent nằm ở [`model-tiers.json`](mod
 
 ## Bảng bậc model theo harness (ADR-0098, D-559)
 
-Review và rà code dùng **bậc thấp hơn đúng một nấc so với bậc cao nhất** của harness (`top-1`); model nhẹ nhất (`bottom`) chỉ cho tra cứu chỉ đọc (`explore`). Dữ liệu và ngày đọc ở `model-tiers.json`; nhà cung cấp chưa xác minh thì không dùng để xếp hạng.
+Review và rà code dùng **bậc thấp hơn đúng một nấc so với bậc cao nhất** của harness (`top-1`); model nhẹ nhất (`bottom`) chỉ cho tra cứu chỉ đọc (`explore`) và việc cơ học có Gate máy (`executor-mech`, D-605); phiên chính lập PLAN/SPEC ở `top-1`, `top` chỉ khi chủ dự án bật. Dữ liệu và ngày đọc ở `model-tiers.json`; nhà cung cấp chưa xác minh thì không dùng để xếp hạng.
 
-| Harness (adapter) | `top` | `top-1` (rà code) | `bottom` (tra cứu) | Trạng thái bậc |
+| Harness (adapter) | `top` | `top-1` (rà code) | `bottom` (tra cứu, cơ học) | Trạng thái bậc |
 |---|---|---|---|---|
 | Claude Code (`.claude/`) | `claude-fable-5-2` | `claude-opus-5-5` | `claude-haiku-5-5` | đã xác minh; agent đồng bộ qua `model:` |
 | Codex CLI (`codex-hooks.json`) | `gpt-6.2-astra` | `gpt-6.2-sol` | `gpt-6-luna` | thứ bậc suy từ docs, chưa chính thức; R2 sinh `model` khi khai bật |

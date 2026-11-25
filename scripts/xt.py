@@ -5087,9 +5087,8 @@ DOCTOR_SKILLS = (
     "handover",
 )
 DOCTOR_AGENTS = ("acceptance-author", "executor", "executor-deep", "researcher", "reviewer", "reviewer-alt")
-DOCTOR_AGENTS_OPTIONAL = (
-    "explore",
-)  # agent của khung thêm từ ADR-0098: vắng thì không báo thiếu, có thì không coi là ghim lạ
+# agent của khung thêm từ ADR-0098: vắng thì không báo thiếu, có thì không coi là ghim lạ
+DOCTOR_AGENTS_OPTIONAL = ("explore", "executor-mech")
 DOCTOR_YAML_KEYS = ("lint", "typecheck", "test", "build")  # LOOP-HARNESS-008
 HOOK_REF_RE = re.compile(r"\.claude/hooks/([\w.-]+(?:/[\w.-]+)*)")
 # File hook nạp/gọi cạnh nó (_lib.sh, guard.py, nested/x.py, ../x.py): cả đường dẫn literal, giữ `/` lặp — đường dẫn chỉ

@@ -1099,3 +1099,10 @@
 - Chọn: Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị
 - Lý do (tiêu chí chất lượng cuối): Gate UI tại 28da5fc gặp AssertionError not raised trong MutationTest của SRM; blob giống main, chạy riêng đạt nhưng số CPU hai lượt biến động lớn. Đếm thực trên dữ liệu đầu vào cho production 256/1024 và mutant 16256/261632, tách rõ tuyến tính và bậc hai ở cùng ngưỡng 6. Giữ nguyên code sản phẩm, năm kiểm CPU đầu-cuối, helper, floor và slack; tránh biến lần chạy may mắn thành bằng chứng cổng tin cậy.
 - Đường lùi: Revert riêng phép thử và giữ log đỏ cùng số đo; không nới ngưỡng hay bỏ kiểm mutant.
+
+### D-605 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
+
+- Phương án: (1) Giữ ADR-0098: phiên chính lập PLAN/SPEC ở Fable, Haiku chỉ cho tra cứu chỉ đọc · (2) Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
+- Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu (2026-11-24): kế hoạch và việc phức tạp Opus 5.5, việc đơn giản Sonnet 5.5, việc cơ học Haiku 5.5. Phiên chính ở Opus bỏ hẳn ca Fable viết code mà reviewer Opus không cao hơn (LOOP-ORCH-005 vẫn giữ: người viết Opus effort ≤ xhigh, reviewer-alt Opus max). Haiku chỉ nhận việc cơ học có lệnh Gate kiểm máy, đỏ một lần chuyển executor (Sonnet), không quyết định, không bảo mật/license, không test mới; giữ cổng, không nới. Giảm chi phí: Opus bằng nửa giá Fable.
+- Đường lùi: Đặt lại main_session.plan_spec_decision = top ở model-tiers.json, xoá executor-mech.md và gương Codex, khôi phục câu Fable → Opus → Sonnet ở LOOP-ORCH-019
