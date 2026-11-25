@@ -13056,7 +13056,7 @@ def _merge_eval(pr: Dict[str, Any], local: bool = False) -> Tuple[Dict[str, Any]
     ):  # tính pha harden như PR sửa xt.yaml (D-137): không hoãn review ở pha build, mọi bên đọc cùng pha (ADR-0095)
         phase = "harden"
         phase_notes = [*phase_notes, f"{IMMEDIATE_NOTE}: {', '.join(sorted(set(immediate))[:3])}"]
-    risk = [*risk, *protected]  # lớp tác động tức thì chỉ đòi review (không thành ngoại lệ cứng giữ người)
+    risk = [*risk, *map(glob.escape, protected)]  # đường dẫn literal (route `[id]`) không là glob; chỉ đòi review
     rec = _pr_record(read_reviews(project_dir()), str(pr.get("number", ""))) if local else None
     decision = merge_check_result(pr, autonomy, risk, hard_auto, phase, rec)
     needs_review = bool(protected or immediate)
@@ -18021,7 +18021,7 @@ def _review_models_error(args: argparse.Namespace, cfg: Optional[Dict[str, str]]
     if bad_cfg:
         return bad_cfg
     if cfg.get("author_tier") and cfg.get("reviewer_tier") and not (args.reviewer_model or args.author_model):
-        # Bậc khai báo ở nhánh đích thay tên model (harness máy không xếp hạng được, ADR-0098): đã kiểm ở cấu hình, ghi
+        # Bậc khai báo ở xt.yaml của cây làm việc thay tên model (harness máy không xếp hạng được, ADR-0098): đã kiểm, ghi
         # `tier:<bậc>` làm dấu vết thay cho tên model chưa từng được khai.
         args.reviewer_model, args.author_model = f"tier:{cfg['reviewer_tier']}", f"tier:{cfg['author_tier']}"
         args.reviewer_effort = args.reviewer_effort or cfg.get("reviewer_effort")

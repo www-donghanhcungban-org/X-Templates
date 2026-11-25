@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `merge-check` escape đường dẫn nghiệm thu literal khi ghép vào tập rủi ro (AUD-HAR-539): tên tệp có `[`…`]`, như route `[id].spec.ts`, không còn lọt khỏi làn chuẩn/review. Thêm ca hồi quy cho `[id]`, `*`, `?` và `[[]`; chú thích bậc reviewer nói đúng nguồn cấu hình (AUD-HAR-540).
+
 - `LOOP-DESIGN-029` nói rõ chờ CI hoặc merge không phải lúc nghỉ: mặc định, sau khi mở PR và bật `merge-watch` nền thì làm tiếp lát độc lập kế (ID và mức SHOULD giữ nguyên). `AGENTS.md` của khung và `framework/templates/AGENTS.md` cho dự án đích thêm một dòng nối tới luật này. Dự án đích nhận khi nâng khung; không đổi blueprint.
 
 - `verify-render` trả năm nợ rà #801 (AUD-HAR-534…538): bỏ điều khiển `:disabled` (kể cả trong `fieldset` vô hiệu) khỏi phạm vi đo; báo cáo che userinfo, query và fragment của đích (ngoại lệ vẫn khớp URL đầy đủ); phản hồi HTTP không phải 2xx thoát 2 kèm `UNMEASURED` thay vì đạt; ngoại lệ nhận `*` đã escape trong định danh; test in số đo từng phạm vi vào log CI. Bốn ca Chromium mới đỏ khi thiếu bản sửa.
