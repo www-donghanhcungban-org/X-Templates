@@ -33,6 +33,6 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- #799 merge `28da5fc`, CI 32/32 và coverage 100 %. #798 `5edefb7`, #797 `65e7d9a`. Browser cục bộ bị EPERM; bản ghim bị HTTP 403, nâng quyền bị từ chối. Hai Gate UI chuyển sang CI (D-603).
+- #800 merge `e1a77cf`, CI 32/32 và coverage 100 %. #799 `28da5fc`, #798 `5edefb7`, #797 `65e7d9a`. #801 đã chạy hai Gate Chromium trên CI, lưu 15 ảnh; đang khép lỗi Canvas sau review. Cục bộ bị EPERM/403 (D-603).
 - Mốc `main` `42f3c64` (#765; tag `v3.36.0` cùng commit). Cắt bản: cần CPython 3.15.2 (`dev-task.sh bootstrap`, `XT_PYTHON`; `uv` không tải được: dựng từ nguồn); PLAN mới có dòng Gate sinh nợ review sau mốc quét; ký bằng một lệnh đơn `python3 scripts/xt.py release-sign --note …`. "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.

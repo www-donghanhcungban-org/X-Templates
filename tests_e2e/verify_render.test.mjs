@@ -13,7 +13,7 @@ const nodeModules = fileURLToPath(new URL('./verify-render-deps/node_modules', i
 const SAMPLE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 const STATES = ['default', 'hover', 'focus'];
 
-function page({ narrowCSS = '', markup = '' } = {}) {
+function page({ css = '', narrowCSS = '', markup = '' } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -31,6 +31,7 @@ function page({ narrowCSS = '', markup = '' } = {}) {
   }
   .narrow { display: none; }
   @media (max-width: 320px) { ${narrowCSS} }
+  ${css}
 </style>
 </head>
 <body><main><h1>Book a room</h1><button id="sample">Check rooms</button>${markup}</main></body>
@@ -111,6 +112,28 @@ test('axe fails for an image visible only at the narrow viewport, even with a ma
   assert.ok(!failures.some((line) => line.includes(scoped(1280, 'light', 'default'))), result.stdout);
   assert.match(result.stdout, /EXCEPTION UNUSED .*check=axe:image-alt/);
   assert.doesNotMatch(result.stdout, /^EXEMPTED .*check=axe:image-alt/m);
+});
+
+test('transparent hover inherits the Chromium canvas of the root color scheme', async (t) => {
+  const sample = await fixture(t, page({ css: `
+    :root { color-scheme: light dark; }
+    body { background: transparent; }
+    h1 { background: #fff; color: #111; }
+    #sample:hover { background: transparent; color: #111; }
+  ` }));
+  const args = ['--strict', '--widths', '320'];
+  const light = await sample.run([...args, '--themes', 'light']);
+  status(light, 0);
+  assert.doesNotMatch(light.stdout, /^(?:UNMEASURED|✗) /m);
+  const dark = await sample.run([...args, '--themes', 'dark']);
+  status(dark, 1);
+  const failures = dark.stdout.split('\n').filter((line) => line.startsWith('✗ '));
+  assert.equal(failures.length, 2, dark.stdout);
+  for (const width of [1280, 320]) {
+    assert.ok(failures.some((line) => line.includes(scoped(width, 'dark', 'hover')) &&
+      line.includes('check=contrast element="#sample"')), dark.stdout);
+    count(dark.stdout, 'CONTRAST', width, 'dark', 'hover', 'measured=1 unmeasured=0 exempted=0');
+  }
 });
 
 test('strict fails on narrow gradient until every unmeasured rule and state is exempted', async (t) => {

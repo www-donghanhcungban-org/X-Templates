@@ -99,6 +99,7 @@ async function readExceptions(file, today) {
 // Chạy trong trang: màu chữ hiệu dụng trên nền hiệu dụng của phần tử (canvas chuyển mọi màu CSS về sRGB).
 const measure = (el) => {
   const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { unmeasured: 'không đọc được màu qua canvas' };
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
   const layers = [];
@@ -109,7 +110,23 @@ const measure = (el) => {
     if (bg[3] > 0) layers.push(bg);
     if (bg[3] === 1) break;
   }
-  let base = [255, 255, 255];
+  if (layers.at(-1)?.[3] !== 1) {
+    // Canvas của trang dùng color-scheme thực tế của root, kể cả khi root và body trong suốt.
+    const root = el.ownerDocument.documentElement;
+    const probe = el.ownerDocument.createElement('span');
+    probe.style.setProperty('all', 'initial', 'important');
+    probe.style.setProperty('color-scheme', 'inherit', 'important');
+    probe.style.setProperty('color', 'Canvas', 'important');
+    probe.style.setProperty('display', 'none', 'important');
+    root.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    if (!/^(?:rgba?|color)\(/.test(color)) return { unmeasured: 'không xác định được màu Canvas của trang' };
+    const canvas = rgba(color);
+    if (canvas[3] !== 1) return { unmeasured: 'không xác định được màu Canvas của trang' };
+    layers.push(canvas);
+  }
+  let base = layers.pop().slice(0, 3);
   for (const [r, g, b, a] of layers.reverse()) base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)];
   const s = getComputedStyle(el);
   const fg = rgba(s.color);

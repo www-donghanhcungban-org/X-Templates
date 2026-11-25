@@ -36,6 +36,8 @@ node scripts/verify-render.mjs http://localhost:3000/ http://localhost:3000/logi
 Mỗi tổ hợp viewport và theme tải trang mới trước khi chạy axe, kiểm tràn ngang và đo tương phản theo từng trạng thái.
 Dòng `CONTRAST` đếm phần tử đã đo và chưa đo cho từng trạng thái. Dòng `AXE` đếm cặp phần tử và rule trong trạng thái
 mặc định. `measured` gồm cả vi phạm đã đo, `unmeasured` gồm cả trường hợp đã có ngoại lệ và `exempted` đếm phần có ngoại lệ.
+Với nền trong suốt, phép đo ghép màu với màu hệ thống `Canvas` theo `color-scheme` thực tế ở gốc tài liệu.
+Nếu Chromium không xác định được màu `Canvas` đục, phép đo được báo `UNMEASURED`.
 
 Exit 0 khi không có vi phạm đã đo và điều kiện nghiêm ngặt đã chọn được đáp ứng. Exit 1 khi có vi phạm đã đo hoặc
 `--strict` còn `UNMEASURED` chưa miễn. Exit 2 khi cấu hình sai hoặc cổng không chạy hết, ví dụ thiếu Chromium, thiếu
