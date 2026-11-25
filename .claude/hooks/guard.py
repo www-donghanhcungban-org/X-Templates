@@ -9079,17 +9079,27 @@ def _git_remote(args: List[str]) -> Tuple[str, str]:
 # — ruleset `tags.json` phủ `refs/tags/v*`. `v1`/`v1.2` (tag major di động) chưa phủ: tên thường dùng cho release thử.
 RELEASE_VERSION_TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]*)?\Z")
 RELEASE_TAG_WHY = "tag phiên bản chỉ do workflow phát hành tạo sau khi duyệt promotion"
-GLOB_UNIT_RE = re.compile(r"\[[^\]]*\]|[*?\[]")
+GLOB_UNIT_RE = re.compile(
+    r"\[[^\][]*\]|[*?\[]"
+)  # lớp ký tự không lồng `[`: tuyến tính với nhiều `[` không đóng (AUD-HAR-543)
 TAG_LIKE_RE = re.compile(r"v?[0-9.]*(?:[-+][0-9A-Za-z.+-]*)?")
 
 
 def _tag_glob(word: str) -> bool:
     """AUD-SEC-996b: glob bash bung theo tệp (`touch v1.2.3`) có thể ra tag phiên bản — đoạn (tách `/`, `:`) có glob mà
-    chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ."""
+    chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ.
+    AUD-HAR-541: đoạn chỉ gồm glob (`??.?.?`, `[v][0-9].[0-9].[0-9]`) — thay đơn vị glob bằng chữ số (đơn vị đầu: `v`)."""
     segs = re.split("[/:]", word) if GLOB_UNIT_RE.search(word) else []
-    lits = [GLOB_UNIT_RE.sub("", s) for s in segs if GLOB_UNIT_RE.search(s)]
+    globs = [s for s in segs if GLOB_UNIT_RE.search(s)]
+    lits = [GLOB_UNIT_RE.sub("", s) for s in globs]
+    probes = [
+        GLOB_UNIT_RE.sub("0", GLOB_UNIT_RE.sub(b, re.sub(r"\*+", "00", re.sub(r"\*+", a, s, count=1)), count=1))
+        for s in globs
+        for a in ("00", "v0")
+        for b in ("0", "v")
+    ]
     tagged = any(TAG_LIKE_RE.fullmatch(x) and re.search("[v0-9]", x) for x in lits)
-    return tagged or any(map(RELEASE_VERSION_TAG.fullmatch, segs))
+    return tagged or any(map(RELEASE_VERSION_TAG.fullmatch, [*segs, *probes]))
 
 
 def _release_tag_unsafe(name: str) -> bool:
