@@ -11,9 +11,9 @@ Nguyên nhân: `_tag_glob` chỉ coi đoạn là tag khi chữ còn lại sau kh
 
 ## Quyết định
 
-Thay đơn vị glob bằng chữ số (đơn vị đầu bằng `v`, dấu `*` đầu bằng `v0`) để dựng chuỗi tag nhỏ nhất mà glob có thể bung ra rồi khớp với `RELEASE_VERSION_TAG`. Phép dò này cộng thêm vào luật cũ, nên guard mới là tập cha của guard cũ. Cùng chỗ đó đổi regex đơn vị glob thành `\[[^\][]*\]|[*?\[]` để không còn thời gian bậc hai với nhiều dấu `[` không đóng (AUD-HAR-543).
+Thay đơn vị glob bằng chữ số (đơn vị đầu bằng `v`, dấu `*` đầu bằng `v0`) để dựng chuỗi tag nhỏ nhất mà glob có thể bung ra rồi khớp với `RELEASE_VERSION_TAG`. Phép dò này cộng thêm vào luật cũ, nên guard mới là tập cha của guard cũ. Cùng chỗ đó đọc lớp ký tự `\[[^\]]*\]` (bash coi `[` trong lớp là chữ thường, như `[a0[]`) chỉ ở phần tới `]` cuối cùng, phần đuôi không còn `]` thì mỗi `[` là một đơn vị riêng (`_glob_sub`): giữ nguyên nghĩa của luật cũ và tuyến tính với nhiều dấu `[` không đóng (AUD-HAR-543).
 
-Sửa này thêm 10 dòng vào `guard.py`. Nâng `LINE_CAPS` của `.claude/hooks/guard.py` từ 24.645 lên 24.655, đúng số đo sau sửa và không dư. Trần của `scripts/xt.py` giữ nguyên.
+Sửa này thêm 19 dòng vào `guard.py`. Nâng `LINE_CAPS` của `.claude/hooks/guard.py` từ 24.645 lên 24.664, đúng số đo sau sửa và không dư. Trần của `scripts/xt.py` giữ nguyên.
 
 Phương án đã xét:
 
@@ -25,6 +25,6 @@ Phương án đã xét:
 
 ## Hệ quả
 
-- Ca hồi quy trong `tests/test_hooks.py` (`RELEASE_TAG_DENY`: tám lệnh; `RELEASE_TAG_OK`: bốn đối chứng) đỏ khi thiếu bản sửa. Bench tự hành 4.103 ca guard và các bộ `test_green_*`, `test_signoff2_scripts`, `test_audit_dot4_har` giữ xanh.
-- Đoạn glob dài hơn một dòng chỉ gồm đơn vị không thể ra `vX.Y.Z` (như `?.?.?`, `[ab]??`) vẫn đi qua luật cũ; dạng như `[ab].[cd].[ef]` bị coi là tag vì đơn vị đầu có thể là `v` theo cách đoán thận trọng.
+- Ca hồi quy trong `tests/test_hooks.py` (`RELEASE_TAG_DENY`: mười hai lệnh; `RELEASE_TAG_OK`: bốn đối chứng) — các ca chặn đỏ khi thiếu bản sửa; đối chứng giữ không chặn oan. Bench tự hành 4.103 ca guard và các bộ `test_green_*`, `test_signoff2_scripts`, `test_audit_dot4_har` giữ xanh.
+- Đoạn glob dài hơn một dòng chỉ gồm đơn vị không thể ra `vX.Y.Z` (như `?.?.?`, `[ab]??`) vẫn đi qua luật cũ; dạng như `[ab][cd].[ef].[gh]` bị coi là tag vì đơn vị đầu có thể là `v` theo cách đoán thận trọng. Chưa phủ: đoạn chỉ gồm glob mà dấu chấm do glob sinh (`??????`, `*.*`, `[[:digit:]].…`) — AUD-HAR-541 còn mở một phần; hướng sửa: coi mọi glob ở vị trí tên tag của `tag`/`update-ref` là tag phiên bản (git từ chối `?`, `[`, `*` trong tên ref).
 - Nới trần lần sau vẫn cần ADR riêng. Hướng dài hạn vẫn là tách guard theo PLAN-guard-split.

@@ -1109,7 +1109,7 @@
 
 ### D-606 · 2026-11-25T14:30:33+00:00 · Nới trần dòng .claude/hooks/guard.py thêm 10 dòng để sửa AUD-HAR-541 (luật tag bỏ sót glob chỉ gồm ? và lớp ký tự)?
 
-- Phương án: (1) Nới trần 24645 lên 24655 bằng ADR-0103, giữ guard là tệp một khối · (2) Nén hoặc gộp dòng ở chỗ khác của guard.py để giữ nguyên trần · (3) Chấp nhận rủi ro và chờ tách guard theo PLAN-guard-split
-- Chọn: Nới trần 24645 lên 24655 bằng ADR-0103, giữ guard là tệp một khối
+- Phương án: (1) Nới trần 24645 lên 24664 bằng ADR-0103, giữ guard là tệp một khối · (2) Nén hoặc gộp dòng ở chỗ khác của guard.py để giữ nguyên trần · (3) Chấp nhận rủi ro và chờ tách guard theo PLAN-guard-split
+- Chọn: Nới trần 24645 lên 24664 bằng ADR-0103, giữ guard là tệp một khối
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí 1: ruleset tag phía máy chủ chưa chạy thật (T-4007 cần admin) nên guard là hàng rào duy nhất cho tag phiên bản; lỗ hổng đã tái hiện bằng bộ phân tích guard. Tách module là việc lớn và guard nạp như một khối nên chưa làm trong lát này; nén dòng ở chỗ khác rủi ro làm lệch luật bảo vệ không liên quan. Trần mới bằng đúng số đo, không dư.
 - Đường lùi: Hoàn nguyên commit; trần về 24645 và AUD-HAR-541 quay lại trạng thái mở

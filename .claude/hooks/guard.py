@@ -9079,9 +9079,18 @@ def _git_remote(args: List[str]) -> Tuple[str, str]:
 # — ruleset `tags.json` phủ `refs/tags/v*`. `v1`/`v1.2` (tag major di động) chưa phủ: tên thường dùng cho release thử.
 RELEASE_VERSION_TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]*)?\Z")
 RELEASE_TAG_WHY = "tag phiên bản chỉ do workflow phát hành tạo sau khi duyệt promotion"
-GLOB_UNIT_RE = re.compile(
-    r"\[[^\][]*\]|[*?\[]"
-)  # lớp ký tự không lồng `[`: tuyến tính với nhiều `[` không đóng (AUD-HAR-543)
+GLOB_UNIT_RE = re.compile(r"\[[^\]]*\]|[*?\[]")
+GLOB_LOOSE_RE = re.compile(r"[*?\[]")
+
+
+def _glob_sub(repl: str, text: str, count: int = 0) -> str:
+    """Thay đơn vị glob như bash: `[` trong lớp là chữ thường (`[a0[]`). Chỉ phần tới `]` cuối đọc lớp (mỗi `[` ở đó
+    có `]` phía sau nên tuyến tính); đuôi không còn `]` thì `[` là đơn vị riêng (AUD-HAR-543)."""
+    cut = text.rfind("]") + 1
+    head, hits = GLOB_UNIT_RE.subn(repl, text[:cut], count)
+    return head + GLOB_LOOSE_RE.sub(repl, text[cut:], max(count - hits, 0) if count else 0)
+
+
 TAG_LIKE_RE = re.compile(r"v?[0-9.]*(?:[-+][0-9A-Za-z.+-]*)?")
 
 
@@ -9091,9 +9100,9 @@ def _tag_glob(word: str) -> bool:
     AUD-HAR-541: đoạn chỉ gồm glob (`??.?.?`, `[v][0-9].[0-9].[0-9]`) — thay đơn vị glob bằng chữ số (đơn vị đầu: `v`)."""
     segs = re.split("[/:]", word) if GLOB_UNIT_RE.search(word) else []
     globs = [s for s in segs if GLOB_UNIT_RE.search(s)]
-    lits = [GLOB_UNIT_RE.sub("", s) for s in globs]
+    lits = [_glob_sub("", s) for s in globs]
     probes = [
-        GLOB_UNIT_RE.sub("0", GLOB_UNIT_RE.sub(b, re.sub(r"\*+", "00", re.sub(r"\*+", a, s, count=1)), count=1))
+        _glob_sub("0", _glob_sub(b, re.sub(r"\*+", "00", re.sub(r"\*+", a, s, count=1)), count=1))
         for s in globs
         for a in ("00", "v0")
         for b in ("0", "v")

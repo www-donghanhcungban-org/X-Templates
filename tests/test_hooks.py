@@ -5327,6 +5327,11 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "git push origin v1.2.3 --tags",
         "git push --all origin v1.2.3",
         "git push --branches origin refs/tags/v1.2.3",
+        # rà #815 🔴: `[` trong lớp là chữ thường với bash (`[a0[]` = a, 0, `[`) — luật cũ vẫn phải bắt
+        "git tag v1.2.[a0[]",
+        "git tag 'v[![]*'",
+        "git update-ref 'refs/tags/v[![]*' HEAD",
+        "git push origin 'HEAD:refs/tags/v1.2.[![]'",
     )
     RELEASE_TAG_OK = (
         "gh release create nightly --notes x",
