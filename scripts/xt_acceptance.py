@@ -162,7 +162,9 @@ def raise_walk_error(exc: OSError) -> None:
 
 
 def _ledger(base: Path, core: ModuleType) -> dict[str, Any]:
-    path = project_file(base, LEDGER)
+    path = base / LEDGER
+    if path.exists() or path.is_symlink():
+        path = project_file(base, LEDGER)  # sổ có thật thì đường dẫn phải là đường thật, không qua symlink
     if not path.exists():
         if (
             any((p / ".git").exists() for p in (base, *base.parents))
