@@ -1,30 +1,100 @@
 #!/usr/bin/env node
-// Cổng render (UX-A11Y-001, 013, 028, 029): đo trên bản RENDER thật bằng Playwright + axe-core, không đọc CSS.
-//   1. axe-core theo tag WCAG (gồm `target-size` của WCAG 2.2) — 0 vi phạm.
-//   2. Tràn ngang ở từng bề rộng (mặc định 320 và 280 px) — scrollWidth <= innerWidth.
-//   3. Tương phản chữ của điều khiển ở trạng thái mặc định, hover, focus-visible (>= 4,5:1; chữ lớn >= 3:1).
-// Dùng:  node verify-render.mjs <url|file.html>... [--widths 320,280] [--limit 60] [--tags wcag2a,wcag2aa,wcag21aa,wcag22aa] [--strict]
-// Cài:   npm i -D playwright@1.64.0 @axe-core/playwright@4.13.0 && npx playwright install chromium
-// Chromium có sẵn nhưng khác bản Playwright (sandbox/CI tự dựng): đặt XT_CHROMIUM=/đường/dẫn/chromium.
-// Exit: 0 đạt · 1 có vi phạm (hoặc có UNMEASURED khi --strict) · 2 không chạy được (goto lỗi, không mở được Chromium).
-// Phép đo không thực hiện được (nền ảnh/gradient, điều khiển bị che) in "UNMEASURED" và dòng kết quả không ghi "đạt".
-// Mã tự viết cho khung X-Templates (không chép mã của dự án khác); ý tưởng cổng "đo bản render" tham khảo stored 06 §7d.
-import { chromium } from 'playwright';
-import AxeBuilder from '@axe-core/playwright';
+// Cổng render thật (UX-A11Y-001, 013, 028, 029). Cách dùng và mã thoát: README cùng thư mục.
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { parseArgs } from 'node:util';
 
-const argv = process.argv.slice(2);
-const opt = (name, def) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : def);
-const targets = argv.filter((a, i) => !a.startsWith('--') && (a === '' || !(argv[i - 1]?.startsWith('--') && argv[i - 1] !== '--strict')));
-const widths = opt('--widths', '320,280').split(',').map(Number);
-const limit = Number(opt('--limit', '60'));
-const tags = opt('--tags', 'wcag2a,wcag2aa,wcag21aa,wcag22aa').split(',');
-if (!targets.length) {
-  console.error('Thiếu đích: node verify-render.mjs <url|file.html>...');
-  process.exit(2);
-}
-const toUrl = (t) => (/^https?:|^file:/.test(t) ? t : 'file://' + resolve(t));
+const HEIGHT = 800;
+const DESKTOP = 1280;
+const THEMES = ['light', 'dark'];
+const STATES = ['default', 'hover', 'focus'];
 const INTERACTIVE = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role=button], [tabindex]:not([tabindex="-1"])';
+const EXCEPTION_FIELDS = ['target', 'width', 'theme', 'state', 'check', 'element', 'reason', 'evidence', 'expires'];
+
+const toUrl = (target) => /^https?:|^file:/i.test(target) ? new URL(target).href : pathToFileURL(resolve(target)).href;
+const isPositiveInteger = (value) => Number.isSafeInteger(value) && value > 0;
+const csv = (value) => value.split(',').map((item) => item.trim());
+
+function options(args) {
+  const { values, positionals } = parseArgs({
+    args,
+    allowPositionals: true,
+    options: {
+      widths: { type: 'string', default: '320,280' },
+      themes: { type: 'string', default: 'light' },
+      limit: { type: 'string', default: '60' },
+      tags: { type: 'string', default: 'wcag2a,wcag2aa,wcag21aa,wcag22aa' },
+      exceptions: { type: 'string' },
+      strict: { type: 'boolean' },
+    },
+  });
+  if (!positionals.length || positionals.some((target) => !target.trim())) {
+    throw new Error('Thiếu đích. Dùng node verify-render.mjs <url|file.html>...');
+  }
+  const widths = csv(values.widths).map(Number);
+  const themes = csv(values.themes);
+  const limit = Number(values.limit);
+  const tags = csv(values.tags);
+  if (widths.some((width) => !isPositiveInteger(width))) throw new Error('--widths cần số nguyên dương');
+  if (themes.some((theme) => !THEMES.includes(theme))) throw new Error('--themes chỉ nhận light,dark');
+  if (!isPositiveInteger(limit)) throw new Error('--limit cần số nguyên dương');
+  if (tags.some((tag) => !tag)) throw new Error('--tags cần tag axe không rỗng');
+  return {
+    targets: [...new Set(positionals.map(toUrl))],
+    widths: [...new Set([DESKTOP, ...widths])],
+    themes: [...new Set(themes)],
+    limit, tags,
+    exceptionsFile: values.exceptions,
+    strict: values.strict,
+  };
+}
+
+function dateStamp(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+const scopeKey = ({ target, width, theme, state, check, element }) => (
+  JSON.stringify([target, width, theme, state, check, element])
+);
+
+function validateException(item, index) {
+  const field = `exceptions[${index}]`;
+  if (!item || typeof item !== 'object' || Object.keys(item).length !== EXCEPTION_FIELDS.length ||
+      EXCEPTION_FIELDS.some((key) => !Object.hasOwn(item, key))) {
+    throw new Error(`${field} sai cấu trúc`);
+  }
+  for (const key of EXCEPTION_FIELDS.filter((key) => key !== 'width')) {
+    if (typeof item[key] !== 'string' || !item[key].trim()) throw new Error(`${field}.${key} cần chuỗi không rỗng`);
+  }
+  if (!isPositiveInteger(item.width) || !THEMES.includes(item.theme) || !STATES.includes(item.state)) {
+    throw new Error(`${field} sai width, theme hoặc state`);
+  }
+  const axe = /^axe:[a-z0-9-]+$/.test(item.check) && item.state === 'default';
+  if ((!axe && item.check !== 'contrast') || item.target.includes('*') || item.element.includes('*')) {
+    throw new Error(`${field} sai check hoặc có ký tự đại diện`);
+  }
+  if (!dateStamp(item.expires)) throw new Error(`${field}.expires cần ngày UTC YYYY-MM-DD hợp lệ`);
+  return { ...item, target: toUrl(item.target) };
+}
+
+async function readExceptions(file, today) {
+  const entries = new Map();
+  if (file === undefined) return entries;
+  const doc = JSON.parse(await readFile(file, 'utf8'));
+  if (doc?.schema !== 1 || !Array.isArray(doc.exceptions) || Object.keys(doc).length !== 2) {
+    throw new Error('Tệp --exceptions cần schema 1 và mảng exceptions');
+  }
+  for (const [index, raw] of doc.exceptions.entries()) {
+    const item = validateException(raw, index);
+    const key = scopeKey(item);
+    if (entries.has(key)) throw new Error(`Ngoại lệ trùng phạm vi ở exceptions[${index}]`);
+    entries.set(key, { ...item, expired: item.expires < today, applied: false });
+  }
+  return entries;
+}
 
 // Chạy trong trang: màu chữ hiệu dụng trên nền hiệu dụng của phần tử (canvas chuyển mọi màu CSS về sRGB).
 const measure = (el) => {
@@ -50,52 +120,197 @@ const measure = (el) => {
   return { ratio: (hi + 0.05) / (lo + 0.05), need: large ? 3 : 4.5, label: (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 40) };
 };
 
-const fails = [];
-let unmeasured = 0;
-process.on('unhandledRejection', (e) => { console.error('Lỗi khi chạy cổng:', e?.message ?? e); process.exit(2); });
-const browser = await chromium.launch({ executablePath: process.env.XT_CHROMIUM || undefined }).catch((e) => { console.error('Không mở được Chromium:', e.message); process.exit(2); });
-let fatal = '';
-try {
-  for (const target of targets) {
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } }); // axe đòi page từ newContext()
-    try {
-      const page = await context.newPage();
-      await page.goto(toUrl(target));
-      const axe = await new AxeBuilder({ page }).withTags(tags).analyze();
-      for (const v of axe.violations) fails.push(`${target}: axe ${v.id} (${v.impact}) — ${v.nodes.length} phần tử`);
-      for (const w of widths) {
-        await page.setViewportSize({ width: w, height: 800 });
-        const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-        if (over > 0) fails.push(`${target}: tràn ngang +${over}px ở ${w}px`);
+// Tạo định danh ổn định cho phạm vi ngoại lệ, ưu tiên id duy nhất rồi dùng đường CSS đầy đủ.
+const elementPath = (el) => {
+  const parts = [];
+  for (let node = el; node; node = node.parentElement) {
+    const tag = CSS.escape(node.localName);
+    if (node.id) {
+      const id = '#' + CSS.escape(node.id);
+      if (node.getRootNode().querySelectorAll(id).length === 1) {
+        parts.unshift(id);
+        break;
       }
-      await page.setViewportSize({ width: 1280, height: 800 });
-      const els = (await page.locator(INTERACTIVE).all()).slice(0, limit);
-      for (const el of els) {
-        if (!(await el.isVisible())) continue;
-        for (const state of ['mặc định', 'hover', 'focus']) {
-          if (state === 'hover') {
-            // hover không tới được (bị che bởi header dính/overlay): không đo giả bằng trạng thái mặc định
-            try { await el.hover({ timeout: 1000 }); } catch { unmeasured++; continue; }
-          }
-          if (state === 'focus') { await page.mouse.move(0, 0); await el.focus().catch(() => {}); } // bỏ hover trước khi đo focus
-          const m = await el.evaluate(measure);
-          if (m.unmeasured) { unmeasured++; break; }
-          if (m.ratio < m.need) fails.push(`${target}: "${m.label}" ${state} ${(Math.floor(m.ratio * 100) / 100).toFixed(2)}:1 < ${m.need}:1`);
-        }
-      }
-    } finally {
-      await context.close();
+    }
+    let index = 1;
+    for (let previous = node.previousElementSibling; previous; previous = previous.previousElementSibling) {
+      if (previous.localName === node.localName) index++;
+    }
+    parts.unshift(`${tag}:nth-of-type(${index})`);
+  }
+  const root = el.getRootNode();
+  return root instanceof ShadowRoot ? null : parts.join(' > ');
+};
+
+function scopeText({ target, width, theme, state, check, element }) {
+  const group = `target=${JSON.stringify(target)} viewport=${width}x${HEIGHT} theme=${theme} state=${state}`;
+  return check ? `${group} check=${check} element=${JSON.stringify(element)}` : group;
+}
+
+function tally() {
+  return { measured: 0, unmeasured: 0, exempted: 0 };
+}
+
+function printTally(label, scope, { measured, unmeasured, exempted }) {
+  console.log(`${label} ${scopeText(scope)} measured=${measured} unmeasured=${unmeasured} exempted=${exempted}`);
+}
+
+function recordUnknown(results, counts, scope, detail) {
+  counts.unmeasured++;
+  results.unmeasured++;
+  console.log(`UNMEASURED ${scopeText(scope)} — ${detail}`);
+  const exception = scope.element === null ? undefined : results.exceptions.get(scopeKey(scope));
+  if (exception && !exception.expired) {
+    counts.exempted++;
+    results.exempted++;
+    exception.applied = true;
+    console.log(`EXEMPTED ${scopeText(scope)} expires=${exception.expires} reason=${JSON.stringify(exception.reason)} evidence=${JSON.stringify(exception.evidence)}`);
+  }
+}
+
+function recordViolation(results, scope, detail) {
+  results.violations++;
+  console.log(`✗ ${scopeText(scope)} — ${detail}`);
+}
+
+const axeElement = (target) => target.length === 1 && typeof target[0] === 'string' ? target[0] : JSON.stringify(target);
+
+async function auditAxe(page, AxeBuilder, tags, scope, results) {
+  const axe = await new AxeBuilder({ page }).withTags(tags).analyze();
+  const counts = tally();
+  const defaultScope = { ...scope, state: 'default' };
+  for (const rule of axe.passes) counts.measured += rule.nodes.length;
+  for (const rule of axe.violations) {
+    for (const node of rule.nodes) {
+      counts.measured++;
+      recordViolation(results, { ...defaultScope, check: `axe:${rule.id}`, element: axeElement(node.target) }, rule.help);
     }
   }
-} catch (e) {
-  fatal = `Không chạy được cổng: ${e?.message ?? e}`; // goto lỗi (server chưa lên), Chromium chết…: exit 2, không phải "có vi phạm"
-} finally {
-  await browser.close();
+  for (const rule of axe.incomplete) {
+    for (const node of rule.nodes) {
+      recordUnknown(results, counts, { ...defaultScope, check: `axe:${rule.id}`, element: axeElement(node.target) }, rule.help);
+    }
+  }
+  printTally('AXE', defaultScope, counts);
 }
-if (fatal) { console.error(fatal); process.exit(2); }
-if (unmeasured) console.log(`UNMEASURED: ${unmeasured} phép đo không thực hiện được (nền ảnh/gradient, hoặc điều khiển bị che nên không hover được) — đo tay.`);
-for (const f of fails) console.log('✗ ' + f);
-const strict = argv.includes('--strict') && unmeasured > 0; // --strict: phép đo không thực hiện được cũng làm đỏ
-if (!fails.length) console.log(unmeasured ? `⚠ phần đo được đạt; ${unmeasured} phép đo chưa thực hiện (UNMEASURED).` : `✓ ${targets.length} trang đạt (axe, tràn ngang ${widths.join('/')}px, tương phản theo trạng thái).`);
-else console.log(`${fails.length} vi phạm.`);
-process.exit(fails.length || strict ? 1 : 0);
+
+async function inState(page, control, state) {
+  await page.mouse.move(-1, -1);
+  await page.evaluate(() => document.activeElement?.blur?.());
+  try {
+    if (state === 'hover') await control.hover({ timeout: 1000 });
+    if (state === 'focus') await control.focus();
+  } catch (error) {
+    if (page.isClosed()) throw error;
+    return false;
+  }
+  return control.evaluate((el, expected) => {
+    if (!el.isConnected) return false;
+    if (expected === 'hover') return el.matches(':hover');
+    if (expected === 'focus') return el.matches(':focus-visible') && !el.matches(':hover');
+    return !el.matches(':hover, :focus');
+  }, state);
+}
+
+async function auditContrast(page, scope, results, limit) {
+  const counts = new Map(STATES.map((state) => [state, tally()]));
+  const controls = await page.locator(INTERACTIVE).elementHandles();
+  let visible = 0;
+  for (const control of controls) {
+    if (!await control.isVisible()) continue;
+    const element = await control.evaluate(elementPath);
+    visible++;
+    for (const state of STATES) {
+      const row = counts.get(state);
+      const check = { ...scope, state, check: 'contrast', element };
+      if (visible > limit) {
+        recordUnknown(results, row, check, 'vượt --limit');
+        continue;
+      }
+      if (!await inState(page, control, state)) {
+        recordUnknown(results, row, check, 'không kích hoạt được trạng thái');
+        continue;
+      }
+      const reading = await control.evaluate(measure);
+      if (reading.unmeasured) {
+        recordUnknown(results, row, check, reading.unmeasured);
+        continue;
+      }
+      row.measured++;
+      if (reading.ratio < reading.need) {
+        const ratio = (Math.floor(reading.ratio * 100) / 100).toFixed(2);
+        recordViolation(results, check, `${JSON.stringify(reading.label)} ${ratio}:1 < ${reading.need}:1`);
+      }
+    }
+  }
+  for (const [state, row] of counts) printTally('CONTRAST', { ...scope, state }, row);
+}
+
+async function auditPage(browser, AxeBuilder, settings, scope, results) {
+  const context = await browser.newContext({
+    viewport: { width: scope.width, height: HEIGHT },
+    colorScheme: scope.theme,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(scope.target);
+    await auditAxe(page, AxeBuilder, settings.tags, scope, results);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    if (overflow > 0) {
+      recordViolation(results, { ...scope, state: 'default', check: 'reflow', element: 'html' }, `tràn ngang +${overflow}px`);
+    }
+    await auditContrast(page, scope, results, settings.limit);
+  } finally {
+    await context.close();
+  }
+}
+
+async function run(settings, results) {
+  // Nạp sau khi kiểm cấu hình để lỗi thiếu phụ thuộc luôn báo UNMEASURED.
+  const [{ chromium }, { default: AxeBuilder }] = await Promise.all([
+    import('playwright'), import('@axe-core/playwright'),
+  ]);
+  const browser = await chromium.launch({ executablePath: process.env.XT_CHROMIUM || undefined });
+  try {
+    for (const target of settings.targets) {
+      for (const theme of settings.themes) {
+        for (const width of settings.widths) await auditPage(browser, AxeBuilder, settings, { target, width, theme }, results);
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+}
+
+function conclusion(settings, results) {
+  for (const item of results.exceptions.values()) {
+    const state = item.expired ? 'EXPIRED' : !item.applied ? 'UNUSED' : '';
+    if (state) console.log(`EXCEPTION ${state} ${scopeText(item)} expires=${item.expires}`);
+  }
+  const outstanding = results.unmeasured - results.exempted;
+  console.log(`Kết quả: ${results.violations} vi phạm, ${results.unmeasured} UNMEASURED (${results.exempted} có ngoại lệ, ${outstanding} chưa miễn).`);
+  if (results.violations || (settings.strict && outstanding > 0)) return 1;
+  if (results.unmeasured === 0) console.log(`✓ ${settings.targets.length} trang đạt (axe, reflow, tương phản theo trạng thái).`);
+  return 0;
+}
+
+async function main() {
+  let settings, exceptions;
+  try {
+    settings = options(process.argv.slice(2));
+    exceptions = await readExceptions(settings.exceptionsFile, new Date().toISOString().slice(0, 10));
+  } catch (error) {
+    console.error(`Cấu hình không hợp lệ: ${error.message}`);
+    return 2;
+  }
+  const results = { exceptions, violations: 0, unmeasured: 0, exempted: 0 };
+  try {
+    await run(settings, results);
+  } catch (error) {
+    console.error(`UNMEASURED — không chạy hết cổng: ${error.message}`);
+    return 2;
+  }
+  return conclusion(settings, results);
+}
+
+process.exitCode = await main();

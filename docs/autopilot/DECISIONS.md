@@ -1065,6 +1065,34 @@
 - Lý do (tiêu chí chất lượng cuối): Các hợp đồng D-580, D-582, D-583 và D-584 đã chốt. Worktree riêng tránh ghi đè; một chủ cho xt.py và xt_flow, một chủ cho thiết kế, một chủ cho ngân sách. Giữ trần lõi tại main 65e7d9a và giữ nguyên cổng; sau lát ngắn chuyển sang bộ kiểm bằng chứng T-5024 theo D-581. Chỉ mở PR kế khi PR đáy đã merge.
 - Đường lùi: Bỏ từng worktree chưa xuất bản hoặc revert PR tương ứng bằng commit mới; không sửa sổ máy hay nới Gate.
 
+### D-598 · 2026-11-25T03:51:44+00:00 · T-5012 chạy ma trận UI trên starter thật với trạng thái API xác định
+
+- Phương án: (1) Trình duyệt thật đọc HTML CSS JS của starter vừa cài, API fixture tạo loading rỗng lỗi và thành công; giữ luồng Postgres và receipt hiện có riêng, CI chạy cùng runner · (2) Dựng lặp Docker và toàn bộ backend chỉ để cưỡng bức từng trạng thái UI
+- Chọn: Trình duyệt thật đọc HTML CSS JS của starter vừa cài, API fixture tạo loading rỗng lỗi và thành công; giữ luồng Postgres và receipt hiện có riêng, CI chạy cùng runner
+- Lý do (tiêu chí chất lượng cuối): D-577 ghim axe hiện có. Ma trận 1280/390/320 và bàn phím cần trạng thái tái lập để có ca đạt và ca sai chính xác. Chỉ API dùng fixture, trình duyệt và mã giao diện chạy thật; không thay bài kiểm backend. Chromium cục bộ lỗi quyền hệ thống được báo chưa đo, không biến thành Pass.
+- Đường lùi: Revert runner và phần workflow tương ứng; giữ luồng nghiệm thu Postgres đang có và không bỏ cổng trình duyệt.
+
+### D-599 · 2026-11-25T03:55:54+00:00 · T-5013 chỉ miễn phép đo chưa thực hiện trong phạm vi khai rõ
+
+- Phương án: (1) Ngoại lệ schema 1 ghim target viewport theme state check element, lý do bằng chứng hạn UTC; UNMEASURED vẫn hiện, strict chỉ nhận ngoại lệ hợp lệ, vi phạm đã đo luôn đỏ · (2) Miễn theo glob selector hoặc bỏ toàn bộ lỗi của một trang khi có ghi chú
+- Chọn: Ngoại lệ schema 1 ghim target viewport theme state check element, lý do bằng chứng hạn UTC; UNMEASURED vẫn hiện, strict chỉ nhận ngoại lệ hợp lệ, vi phạm đã đo luôn đỏ
+- Lý do (tiêu chí chất lượng cuối): Gate phải phân biệt lỗi đã đo với giới hạn phép đo. Selector chính xác và hạn lịch hợp lệ giữ phạm vi xem lại; trường sai hoặc selector trùng gây lỗi cấu hình. Axe chạy lại trên trang mới ở từng viewport/theme, CI kiểm bằng chính runner và fixture thực qua Chromium.
+- Đường lùi: Revert giao ước ngoại lệ và runner cùng nhau; giữ strict và không đổi vi phạm đã đo thành Pass.
+
+### D-602 · 2026-11-25T04:27:09+00:00 · Gom các task cùng hợp đồng thành lát tích hợp để giữ một PR cho mỗi tính năng
+
+- Phương án: (1) Một lát sổ gồm T-5009/T-5010/T-5011 và một lát cổng UI gồm T-5012/T-5013; giữ riêng hồ sơ thiết kế, bằng chứng ceiling và guard, chạy nguyên từng Gate · (2) Một PR cho từng task dù cùng đổi hợp đồng và cùng tệp workflow
+- Chọn: Một lát sổ gồm T-5009/T-5010/T-5011 và một lát cổng UI gồm T-5012/T-5013; giữ riêng hồ sơ thiết kế, bằng chứng ceiling và guard, chạy nguyên từng Gate
+- Lý do (tiêu chí chất lượng cuối): Các producer, chỉ số và archive cùng một hợp đồng sổ đã chốt ở D-580/D-582; hai runner UI dùng chung workflow nhưng vẫn có Gate thật độc lập. Gộp phần phụ thuộc trực tiếp giữ rollback theo tính năng, tránh trạng thái giữa chừng và giảm lượt CI trùng. Không bỏ hoặc thay Gate, không tick từ fixture khi cần nguồn thật; cập nhật tiêu đề Lát để định danh sổ tương ứng tính năng.
+- Đường lùi: Tách lại thành PR nối tiếp theo hai patch đã kiểm; giữ lịch sử và mọi cổng hiện có.
+
+### D-603 · 2026-11-25T05:02:54+00:00 · T-5012/T-5013 chạy Chromium thật trên CI khi môi trường cục bộ chặn trình duyệt
+
+- Phương án: (1) Cài bản ghim trên GitHub Actions, chạy nguyên hai Gate, lưu ảnh và báo cáo thật; giữ bằng chứng cục bộ là chưa đo và PLAN mở tới khi vòng được xác minh trong môi trường phù hợp · (2) Chờ đổi quyền máy cục bộ trước khi cấu hình và chạy hai Gate trình duyệt
+- Chọn: Cài bản ghim trên GitHub Actions, chạy nguyên hai Gate, lưu ảnh và báo cáo thật; giữ bằng chứng cục bộ là chưa đo và PLAN mở tới khi vòng được xác minh trong môi trường phù hợp
+- Lý do (tiêu chí chất lượng cuối): Playwright Python đã cài nhưng Chromium có sẵn thoát với socket EPERM; tải bản ghim trả HTTP 403 và yêu cầu nâng quyền bị chính sách phiên từ chối. Người dùng yêu cầu cài để test. Runner CI đã là môi trường nghiệm thu được duyệt của repo; cài browser theo lock và giữ đầy đủ ca tốt/xấu cho bằng chứng thật, không đổi ngưỡng, không bỏ test và không viết tay trạng thái máy.
+- Đường lùi: Revert riêng phần runner CI nếu môi trường thay đổi; giữ log và ảnh đã đo, chỉ đóng task khi có Gate thực đạt ở đúng nguồn.
+
 ### D-604 · 2026-11-25T05:13:00+00:00 · T-5031 làm phép thử mutant SRM ổn định bằng số thao tác thật
 
 - Phương án: (1) Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị · (2) Giữ phép đo CPU của mutant rồi chỉ chạy lại khi trượt
