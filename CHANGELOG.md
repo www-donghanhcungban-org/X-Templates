@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Phép thử mutant `srm` đếm các thao tác băm/so sánh thật để phân biệt implementation tuyến tính và mutant `list.count` bậc hai, thay phép đo CPU không ổn định trên runner. Giữ nguyên ngưỡng mutant 6, năm Gate CPU và mọi ngưỡng chất lượng; có đối chứng trên cùng dữ liệu (T-5031, D-604).
+
 - `static-check design-evidence` kiểm schema 1 của brief, ít nhất hai phương án, lựa chọn và biên bản thử tác vụ. Draft nhận `not_tested` có lý do/bước tiếp; `--opt mode=pilot` đòi số đo từng người ẩn danh và tổng khớp, từ chối dữ liệu thiếu/sai kiểu hoặc chưa thử. Có ba mẫu thiết kế và bước rà hình ảnh toàn luồng trong `ui-verify`; không thêm MUST và không coi hồ sơ hợp lệ là bằng chứng người thật đã thử (T-5014/T-5015, D-583/D-584).
 
 - Ngân sách lõi kiểm số dòng của `scripts/xt.py` (23.644) và `.claude/hooks/guard.py` (24.645) theo mốc `main` sau #797. Logic mới đặt trong module riêng; tăng trần cần ADR. Giữ nguyên ngân sách byte và các ngưỡng chất lượng (T-5016, D-595).

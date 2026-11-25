@@ -1064,3 +1064,10 @@
 - Chọn: Tách chủ sở hữu cho trần lõi, nguồn sổ lát và bằng chứng thiết kế; phiên chính tích hợp sổ sách chung và mở PR tuần tự sau Gate
 - Lý do (tiêu chí chất lượng cuối): Các hợp đồng D-580, D-582, D-583 và D-584 đã chốt. Worktree riêng tránh ghi đè; một chủ cho xt.py và xt_flow, một chủ cho thiết kế, một chủ cho ngân sách. Giữ trần lõi tại main 65e7d9a và giữ nguyên cổng; sau lát ngắn chuyển sang bộ kiểm bằng chứng T-5024 theo D-581. Chỉ mở PR kế khi PR đáy đã merge.
 - Đường lùi: Bỏ từng worktree chưa xuất bản hoặc revert PR tương ứng bằng commit mới; không sửa sổ máy hay nới Gate.
+
+### D-604 · 2026-11-25T05:13:00+00:00 · T-5031 làm phép thử mutant SRM ổn định bằng số thao tác thật
+
+- Phương án: (1) Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị · (2) Giữ phép đo CPU của mutant rồi chỉ chạy lại khi trượt
+- Chọn: Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị
+- Lý do (tiêu chí chất lượng cuối): Gate UI tại 28da5fc gặp AssertionError not raised trong MutationTest của SRM; blob giống main, chạy riêng đạt nhưng số CPU hai lượt biến động lớn. Đếm thực trên dữ liệu đầu vào cho production 256/1024 và mutant 16256/261632, tách rõ tuyến tính và bậc hai ở cùng ngưỡng 6. Giữ nguyên code sản phẩm, năm kiểm CPU đầu-cuối, helper, floor và slack; tránh biến lần chạy may mắn thành bằng chứng cổng tin cậy.
+- Đường lùi: Revert riêng phép thử và giữ log đỏ cùng số đo; không nới ngưỡng hay bỏ kiểm mutant.

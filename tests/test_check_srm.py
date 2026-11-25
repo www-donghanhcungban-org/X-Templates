@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,8 +21,7 @@ from cpu_budget import assert_not_quadratic
 from xt_checks import CheckError, kind_srm
 
 BOM = chr(0xFEFF)
-# Bản đột biến bậc hai tốn ~16 lần khi cỡ tăng 4 lần; ngưỡng 6 (> 4 của tuyến tính) cho biên rộng trên runner chậm,
-# như `tests/test_check_i18n.py` (CI #783: ngưỡng mặc định 10 chỉ hở ~1,5 lần).
+# Tăng số đơn vị 4 lần: số phép băm tăng 4 lần, số phép so sánh của bản đột biến tăng gần 16 lần.
 MUTANT_RATIO = 6
 
 
@@ -580,16 +580,38 @@ class LinearTimeTest(Base):
 
 
 class MutationTest(Base):
-    """Đếm bằng `list.count` cho mỗi đơn vị (bậc hai) PHẢI làm bài kiểm thời gian đỏ."""
+    """Số phép băm và so sánh phân biệt cách đếm bằng bảng băm với `list.count` theo từng đơn vị."""
+
+    def unit_operations(self, units_for: Callable[[list[kind_srm._Rec]], dict[str, list[object]]], n: int) -> int:
+        count = 0
+
+        class CountedStr(str):
+            def __hash__(self) -> int:
+                nonlocal count
+                count += 1
+                return super().__hash__()
+
+            def __eq__(self, other: object) -> bool:
+                nonlocal count
+                count += 1
+                return super().__eq__(other)
+
+        recs = [kind_srm._Rec(i, "a", CountedStr(f"u{i}"), None) for i in range(n)]
+        with unittest.mock.patch.object(kind_srm, "_units", units_for):
+            self.assertEqual(kind_srm._unit_findings("p", recs), [])
+        self.assertGreater(count, 0, "chưa quan sát được phép băm hoặc so sánh mã đơn vị")
+        return count
 
     def test_list_count_mutant_is_detected(self) -> None:
         def slow(recs: list[kind_srm._Rec]) -> dict[str, list[object]]:
             units = [r.unit for r in recs]
             return {str(u): [1, units.count(u), None, False] for u in units}
 
-        recs = [kind_srm._Rec(i, "a", f"u{i}", None) for i in range(20000)]
-        with unittest.mock.patch.object(kind_srm, "_units", slow), self.assertRaises(AssertionError):
-            assert_not_quadratic(self, lambda n: kind_srm._unit_findings("p", recs[:n]), 5000, ratio=MUTANT_RATIO)
+        for units_for, linear in ((kind_srm._units, True), (slow, False)):
+            with self.subTest(units_for=units_for.__name__):
+                small = self.unit_operations(units_for, 128)
+                big = self.unit_operations(units_for, 512)
+                self.assertEqual(big < MUTANT_RATIO * small, linear, f"{small} → {big} phép băm và so sánh")
 
 
 if __name__ == "__main__":

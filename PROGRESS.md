@@ -17,7 +17,7 @@
 3. Hạn: 2026-12-02 bỏ `pull_request_target` khỏi `pr-review.yml`; 2026-12-31 rà stored; **2027-01-21** xét lại hàng rào guard + đánh giá sandbox Bash opt-in (D-331/D-332, ADR-0072) và các chấp nhận AUD-SEC-406/931/943/955/965.
 4. Ruleset `main` đủ 5 check (2026-11-20); ruleset tag live chưa có. Việc của người: T-4007; xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
 5. Còn: máy hoá `LOOP-HARNESS-031`, `LOOP-STOP-030`; task `[perf]` trong `loop` (D-041); URL phiên do máy chủ MCP gắn vào thân PR; ép báo "đã đo/chưa đo" cho UI (`LOOP-DESIGN-021`); tách khung khỏi đích bằng `.pyz` ([PLAN](docs/autopilot/PLAN-tool-independence-2026-11-24.md), ADR-0097: P0–P1 xong).
-6. [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md), D-574/D-575: T-5001–5008 và T-5016 đã merge (#797/#798). Tiếp tục nguồn sổ lát, hồ sơ thiết kế, runner UI và tách lõi theo D-595. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký còn NO-GO.
+6. [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md): T-5001–5008, T-5014–5016 đã merge (#797–#799). Sửa test mutant SRM trượt khi tích hợp UI (T-5031); tiếp tục Chromium CI, sổ lát, bằng chứng và guard. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký còn NO-GO.
 7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), quy ước tên định danh ở `scripts/AGENTS.md` — không `noqa`/pragma; nới trần chỉ bằng ADR (ADR-0092).
 
 ## Quyết định
@@ -33,6 +33,6 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- #798 merge `5edefb7`: trần lõi đã áp; check protection-guard được chạy lại để hết trạng thái treo. #797 merge `65e7d9a`, CI 32/32 xanh, coverage 100 %. T-5014/T-5015 đã qua Gate cục bộ.
+- #799 merge `28da5fc`, CI 32/32 và coverage 100 %. #798 `5edefb7`, #797 `65e7d9a`. Gate UI gặp test SRM có từ trước không ổn định; D-604 giữ nguyên ngưỡng và đổi phép đo mutant sang số thao tác thật.
 - Mốc `main` `42f3c64` (#765; tag `v3.36.0` cùng commit). Cắt bản: cần CPython 3.15.2 (`dev-task.sh bootstrap`, `XT_PYTHON`; `uv` không tải được: dựng từ nguồn); PLAN mới có dòng Gate sinh nợ review sau mốc quét; ký bằng một lệnh đơn `python3 scripts/xt.py release-sign --note …`. "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
