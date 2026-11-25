@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `LOOP-DESIGN-029` nói rõ chờ CI hoặc merge không phải lúc nghỉ: mặc định, sau khi mở PR và bật `merge-watch` nền thì làm tiếp lát độc lập kế (ID và mức SHOULD giữ nguyên). `AGENTS.md` của khung và `framework/templates/AGENTS.md` cho dự án đích thêm một dòng nối tới luật này. Dự án đích nhận khi nâng khung; không đổi blueprint.
+
 - `verify-render` trả năm nợ rà #801 (AUD-HAR-534…538): bỏ điều khiển `:disabled` (kể cả trong `fieldset` vô hiệu) khỏi phạm vi đo; báo cáo che userinfo, query và fragment của đích (ngoại lệ vẫn khớp URL đầy đủ); phản hồi HTTP không phải 2xx thoát 2 kèm `UNMEASURED` thay vì đạt; ngoại lệ nhận `*` đã escape trong định danh; test in số đo từng phạm vi vào log CI. Bốn ca Chromium mới đỏ khi thiếu bản sửa.
 
 - Cổng UI chạy Chromium thật: starter `web-api-ts` dùng token màu ngữ nghĩa và 25 cặp contrast, kiểm 15 tổ hợp 1280/390/320 px với năm trạng thái, bàn phím, axe và ảnh; hai ca sai phải đỏ đúng lỗi tràn ngang/thiếu nhãn. `verify-render` đo lại axe và contrast theo viewport/theme, báo phần chưa đo; ngoại lệ chỉ nhận `UNMEASURED` đúng phạm vi với lý do, bằng chứng, hạn UTC, không miễn vi phạm đã đo. `pack-web-api.yml` cài Playwright/Chromium đã ghim và chạy nguyên hai Gate, lưu ảnh starter; không đổi quyền hay ngưỡng (T-5012/T-5013, D-598/D-599/D-602/D-603).
