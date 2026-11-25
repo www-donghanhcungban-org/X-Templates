@@ -6,6 +6,9 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Cổng UI chạy Chromium thật: starter `web-api-ts` dùng token màu ngữ nghĩa và 25 cặp contrast, kiểm 15 tổ hợp 1280/390/320 px với năm trạng thái, bàn phím, axe và ảnh; hai ca sai phải đỏ đúng lỗi tràn ngang/thiếu nhãn. `verify-render` đo lại axe và contrast theo viewport/theme, báo phần chưa đo; ngoại lệ chỉ nhận `UNMEASURED` đúng phạm vi với lý do, bằng chứng, hạn UTC, không miễn vi phạm đã đo. `pack-web-api.yml` cài Playwright/Chromium đã ghim và chạy nguyên hai Gate, lưu ảnh starter; không đổi quyền hay ngưỡng (T-5012/T-5013, D-598/D-599/D-602/D-603).
+- Khép lỗi review chặn #801: phép đo tương phản nền trong suốt lấy màu hệ thống `Canvas` theo theme của gốc tài liệu; ca Chromium bắt chữ tối bị chìm khi hover ở theme tối, giữ đối chứng theme sáng. Nợ review còn lại ghi trong sổ để trả cuối pha (AUD-HAR-533–538).
+
 - Phép thử mutant `srm` đếm các thao tác băm/so sánh thật để phân biệt implementation tuyến tính và mutant `list.count` bậc hai, thay phép đo CPU không ổn định trên runner. Giữ nguyên ngưỡng mutant 6, năm Gate CPU và mọi ngưỡng chất lượng; có đối chứng trên cùng dữ liệu (T-5031, D-604).
 
 - `static-check design-evidence` kiểm schema 1 của brief, ít nhất hai phương án, lựa chọn và biên bản thử tác vụ. Draft nhận `not_tested` có lý do/bước tiếp; `--opt mode=pilot` đòi số đo từng người ẩn danh và tổng khớp, từ chối dữ liệu thiếu/sai kiểu hoặc chưa thử. Có ba mẫu thiết kế và bước rà hình ảnh toàn luồng trong `ui-verify`; không thêm MUST và không coi hồ sơ hợp lệ là bằng chứng người thật đã thử (T-5014/T-5015, D-583/D-584).

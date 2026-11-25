@@ -12,11 +12,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import time
 from uuid import uuid4
 
-from playwright.sync_api import Browser, BrowserContext, Page, Route, expect, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Error, Page, Route, expect, sync_playwright
 
 
 PREVIEW_ORIGIN = "http://127.0.0.1:4317"
@@ -113,12 +114,7 @@ def browser_flow(expected_digest: str, account: dict[str, str]) -> str:
     return observed
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", required=True, type=Path)
-    args = parser.parse_args()
-    if args.output.exists() or args.output.is_symlink():
-        parser.error("Đích bằng chứng đã tồn tại. Hãy chọn tên mới hoặc chạy bash tests_e2e/preview.sh.")
+def preview_receipt(output: Path) -> None:
     start = time.monotonic()
     current, artifact = confirmed_candidate()
     result = subprocess.run(
@@ -140,16 +136,52 @@ def main() -> None:
         "elapsed_seconds": round(time.monotonic() - start, 3),
         "run_url": run_url,
     }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=args.output.parent, delete_on_close=False
-    ) as draft:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=output.parent, delete_on_close=False) as draft:
         json.dump(proof, draft, ensure_ascii=False, indent=2)
         draft.write("\n")
         draft.close()
-        os.link(draft.name, args.output)
+        os.link(draft.name, output)
     print(f"Đã xác nhận luồng ghi chú ở bản {observed}.")
 
 
+def ui_matrix(axe: Path, output: Path) -> int:
+    from pack_ui_matrix import MatrixFailure, matrix
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(executable_path=os.environ.get("XT_E2E_CHROMIUM") or None)
+            try:
+                matrix(browser, PREVIEW_ORIGIN, axe, output)
+            finally:
+                browser.close()
+    except (MatrixFailure, AssertionError) as exc:
+        print(f"pack-ui: {exc}", file=sys.stderr)
+        return 1
+    except (Error, OSError) as exc:
+        print(f"pack-ui: chưa đo đủ ma trận trình duyệt: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--output", type=Path, help="ghi biên nhận bản dev đã triển khai")
+    mode.add_argument("--ui-matrix", type=Path, help="thư mục bằng chứng ma trận UI trên starter")
+    parser.add_argument("--axe", type=Path, help="đường dẫn axe đã ghim, dùng cùng --ui-matrix")
+    args = parser.parse_args()
+    if args.ui_matrix is not None:
+        if args.axe is None or not args.axe.is_file():
+            parser.error("--ui-matrix cần --axe trỏ đến tệp axe đã ghim.")
+        return ui_matrix(args.axe.resolve(), args.ui_matrix)
+    if args.axe is not None:
+        parser.error("--axe dùng cùng --ui-matrix.")
+    if args.output.exists() or args.output.is_symlink():
+        parser.error("Đích bằng chứng đã tồn tại. Hãy chọn tên mới hoặc chạy bash tests_e2e/preview.sh.")
+    preview_receipt(args.output)
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
