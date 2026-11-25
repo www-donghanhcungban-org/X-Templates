@@ -81,6 +81,12 @@ class ModelTiersTest(unittest.TestCase):
         rank = xt.MODEL_TIER
         self.assertLess(rank[meta["model"]], rank[frontmatter(AGENTS["reviewer"])["model"]])  # LOOP-ORCH-005
 
+    def test_every_agent_declares_a_positive_turn_cap(self):
+        # LOOP-ORCH-008 (MUST@L), AUD-HAR-563: install.py chép mọi agent sang dự án đích; agent có Write/Edit cần trần turn
+        for name, text in AGENTS.items():
+            with self.subTest(agent=name):
+                self.assertRegex(frontmatter(text).get("maxTurns", ""), r"^[1-9][0-9]*$")
+
     def test_codex_mirror_has_every_agent(self):
         mirror = {p.stem for p in (ROOT / ".codex" / "agents").glob("*.toml")}
         self.assertEqual(mirror, set(AGENTS))
