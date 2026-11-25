@@ -178,6 +178,23 @@ class CliTest(TmpTest):
         rc, out, _ = run_cli("nfc", str(self.base), "--json", "--opt", "ignore=NFC001")
         self.assertEqual((rc, json.loads(out)["findings"]), (0, []))
 
+    def test_lone_surrogate_in_a_finding_is_escaped_not_a_traceback(self):
+        # AUD-HAR-546: khoá catalog có `\ud800` đi vào thông điệp; stdout UTF-8 nghiêm ngặt từng ném UnicodeEncodeError
+        source = self.put("src.json", '{"a":"x"}')
+        catalog = self.put("vi.json", '{"a":"x","\\ud800":"y"}')
+        for flags in ((), ("--json",)):
+            with self.subTest(flags=flags):
+                raw = io.BytesIO()
+                out = io.TextIOWrapper(raw, encoding="utf-8", errors="strict", newline="")
+                with redirect_stdout(out), redirect_stderr(io.StringIO()):
+                    rc = xt.main(["static-check", "i18n", str(catalog), "--opt", f"source={source}", *flags])
+                out.flush()
+                text = raw.getvalue().decode("utf-8")
+                self.assertEqual(rc, 1)
+                self.assertIn("\\ud800", text)
+                if flags:
+                    self.assertEqual(json.loads(text)["kind"], "i18n")
+
     def test_checked_counts_files_and_only_visited_items(self):
         for kind, header, key, mixed, count in (
             ("sbom", {"bomFormat": "CycloneDX"}, "components", [None, {"components": [{}]}], 2),

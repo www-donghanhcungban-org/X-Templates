@@ -89,9 +89,12 @@ def _hits(path: Path, key: str) -> bool:
     return posix == key or posix.endswith("/" + key)
 
 
-def _is_missing(key: str, credits: Path, files: list[Path]) -> bool:
-    """Tệp `key` không còn mà vị trí dự kiến nằm cùng cây với các tệp được kiểm."""
-    root = Path(os.path.commonpath([str(p.resolve().parent) for p in files]))
+def _common_root(files: list[Path]) -> Path:
+    return Path(os.path.commonpath([str(p.resolve().parent) for p in files]))
+
+
+def _is_missing(key: str, credits: Path, root: Path) -> bool:
+    """Tệp `key` không còn mà vị trí dự kiến nằm cùng cây với các tệp được kiểm (gốc chung tính một lần, AUD-HAR-549)."""
     bases = (credits.parent, credits.parent.parent, Path("."))
     try:
         spots = [(base / key).resolve() for base in bases]
@@ -116,12 +119,15 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     for path in media:
         if not any(_hits(path, k) for k in keys):
             found.append(Finding(str(path), 0, "CRD001", "tệp media chưa có dòng trong bảng credits"))
+    root: Path | None = None
     for number, cells, src, lic in rows:
         name = str(credits)
         if src is None or _at(cells, src).lower() in EMPTY:
             found.append(Finding(name, number, "CRD002", f"{_key(cells)}: thiếu nguồn (URL hoặc tác giả)"))
         if _at(cells, lic).lower() not in allow:
             found.append(Finding(name, number, "CRD003", f"{_key(cells)}: license không thuộc danh sách cho phép"))
-        if not any(_hits(p, _key(cells)) for p in media) and _is_missing(_key(cells), credits, media):
-            found.append(Finding(name, number, "CRD004", f"{_key(cells)}: tệp không còn tồn tại"))
+        if not any(_hits(p, _key(cells)) for p in media):
+            root = root or _common_root(media)
+            if _is_missing(_key(cells), credits, root):
+                found.append(Finding(name, number, "CRD004", f"{_key(cells)}: tệp không còn tồn tại"))
     return found

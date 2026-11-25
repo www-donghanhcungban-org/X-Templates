@@ -76,6 +76,17 @@ class OptsTest(Base):
         self.assertEqual(kind_i18n.check([], {"source": str(src), "min": "99.5"}), [])
 
 
+class LoadBoundsTest(Base):
+    def test_flattened_key_length_is_capped_instead_of_exhausting_memory(self) -> None:
+        # AUD-HAR-547: tiền tố dài lặp ở mỗi lá làm bộ nhớ bậc hai theo cỡ tệp; vượt trần → LOC000, đóng an toàn
+        wide = {"k" * 40: {f"c{i}": "v" for i in range(50)}}
+        self.assertNotIn("LOC000", self.codes({"a": "x"}, wide))
+        with unittest.mock.patch.object(kind_i18n, "MAX_PATH_CHARS", 500):
+            found = self.run_check({"a": "x"}, wide)
+        self.assertEqual([f.code for f in found], ["LOC000"])
+        self.assertIn("vượt trần", found[0].message)
+
+
 class SniffTest(Base):
     def test_sniff_accepts_only_objects(self) -> None:
         self.assertTrue(kind_i18n.sniff('{"a": "b"}'))

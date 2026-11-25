@@ -198,6 +198,12 @@ def parse_opts(items: list[str]) -> dict[str, str]:
     return opts
 
 
+def printable(text: str) -> str:
+    """Chuỗi in được qua stdout UTF-8 nghiêm ngặt: surrogate đơn (khoá JSON hay tên tham số chứa nửa cặp, tên tệp không phải
+    UTF-8) thành dạng thoát `\\udXXX` thay vì `UnicodeEncodeError` ở `print` (rà lô 3, AUD-HAR-546); JSON vẫn hợp lệ."""
+    return text.encode("utf-8", "backslashreplace").decode("utf-8")
+
+
 CODE_RE = re.compile(r"[A-Z]{3}[0-9]{3}")
 
 

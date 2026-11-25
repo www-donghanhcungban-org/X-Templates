@@ -88,6 +88,21 @@ class SbomTest(unittest.TestCase):
         self.assertCountEqual(codes, ["SBM000", "SBM000", "SBM003"])
         self.assert_shape(self.bom(components=[nested, 5]), "components[0].components[1]", "components[1]")
 
+    def test_component_nesting_is_capped(self) -> None:
+        # AUD-HAR-547: `where` dài dần theo tầng nên bộ nhớ bậc hai theo độ sâu; vượt trần → một SBM000, không văng
+        def chain(levels: int) -> dict:
+            node = dict(GOOD_COMP)
+            for _ in range(levels - 1):
+                node = {**GOOD_COMP, "components": [node]}
+            return node
+
+        limit = kind_sbom.MAX_COMPONENT_DEPTH
+        within = [f for f in self.findings(self.bom(components=[chain(limit)])) if f.code == "SBM000"]
+        self.assertEqual(within, [])
+        over = [f.message for f in self.findings(self.bom(components=[chain(limit + 5)])) if f.code == "SBM000"]
+        self.assertEqual(len(over), 1)
+        self.assertIn(f"lồng không quá {limit} tầng", over[0])
+
     def assert_shape(self, doc: object, *fields: str) -> None:
         errors = [f.message for f in self.findings(doc) if f.code == "SBM000"]
         self.assertCountEqual([message.split(":")[0] for message in errors], fields)
