@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createServer } from 'node:http';
 import { copyFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,16 +55,31 @@ async function fixture(t, html) {
       await writeFile(file, JSON.stringify({ schema: 1, exceptions: entries }));
       return file;
     },
-    async run(args = [], env = process.env) {
+    async run(args = [], env = process.env, targets = [sample]) {
+      let result;
       try {
-        const { stdout, stderr } = await execute(process.execPath, [script, sample, ...args], { cwd: root, env });
-        return { code: 0, stdout, stderr };
+        const { stdout, stderr } = await execute(process.execPath, [script, ...targets, ...args], { cwd: root, env });
+        result = { code: 0, stdout, stderr };
       } catch (error) {
         if (typeof error.code !== 'number') throw error;
-        return { code: error.code, stdout: error.stdout, stderr: error.stderr };
+        result = { code: error.code, stdout: error.stdout, stderr: error.stderr };
       }
+      // Cổng đã che userinfo/query khỏi định danh; số đo từng phạm vi vào log CI để xem lại khi job xanh.
+      t.diagnostic(`verify-render exit=${result.code}\n${result.stdout.trimEnd()}`);
+      return result;
     },
   };
+}
+
+async function serve(t, routes) {
+  const server = createServer((request, response) => {
+    const route = routes[new URL(request.url, 'http://localhost').pathname];
+    response.writeHead(route ? 200 : 404, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(route ?? '<!doctype html><title>missing</title>');
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  t.after(() => new Promise((done) => server.close(done)));
+  return server.address().port;
 }
 
 const status = ({ code, stdout, stderr }, expected) => assert.equal(code, expected, stdout + stderr);
@@ -199,6 +215,58 @@ test('malformed or conflicting exceptions and invalid widths fail before browser
   const width = await sample.run(['--widths', '1.5,Infinity']);
   status(width, 2);
   assert.match(width.stderr, /số nguyên dương/);
+});
+
+test('disabled controls, including those inside a disabled fieldset, are outside the contrast scope', async (t) => {
+  const sample = await fixture(t, page({
+    markup: '<fieldset disabled><legend>Frozen</legend><button id="frozen" tabindex="0">Frozen</button></fieldset>' +
+      '<button id="off" tabindex="0" disabled>Off</button>',
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 0);
+  assert.doesNotMatch(result.stdout, /^UNMEASURED /m);
+  for (const state of STATES) count(result.stdout, 'CONTRAST', 320, 'light', state, 'measured=1 unmeasured=0 exempted=0');
+});
+
+test('report identifiers hide userinfo and query values while exceptions still match the full target', async (t) => {
+  const port = await serve(t, { '/page.html': page() });
+  const sample = await fixture(t, page());
+  const target = `http://user:pw-secret@127.0.0.1:${port}/page.html?token=query-secret#frag-secret`;
+  const result = await sample.run(['--strict', '--widths', '320'], process.env, [target]);
+  status(result, 0);
+  assert.doesNotMatch(result.stdout + result.stderr, /pw-secret|query-secret|frag-secret|user:/);
+  assert.match(result.stdout, new RegExp(`^AXE target="http://127\\.0\\.0\\.1:${port}/page\\.html\\[đã che\\]" `, 'm'));
+  const file = await sample.exceptions([exception(target, { check: 'axe:image-alt', element: '#missing' })]);
+  const unused = await sample.run(['--strict', '--widths', '320', '--exceptions', file], process.env, [target]);
+  status(unused, 0);
+  assert.match(unused.stdout, /^EXCEPTION UNUSED target="http:\/\/127\.0\.0\.1:\d+\/page\.html\[đã che\]"/m);
+  assert.doesNotMatch(unused.stdout + unused.stderr, /pw-secret|query-secret|frag-secret/);
+});
+
+test('an element identifier with an escaped asterisk is exact, while a bare or backslash-pair asterisk is a wildcard', async (t) => {
+  const sample = await fixture(t, page({ markup: '<button id="star*name">Star</button>' }));
+  const accepted = await sample.exceptions([exception(sample.target, { element: '#star\\*name' })]);
+  const exact = await sample.run(['--strict', '--widths', '320', '--exceptions', accepted]);
+  status(exact, 0);
+  assert.match(exact.stdout, /EXCEPTION UNUSED .*element="#star\\\\\*name"/);
+  for (const element of ['#star*name', '#a\\\\*']) {
+    const file = await sample.exceptions([exception(sample.target, { element })]);
+    const wildcard = await sample.run(['--strict', '--widths', '320', '--exceptions', file]);
+    status(wildcard, 2);
+    assert.match(wildcard.stderr, /ký tự đại diện/);
+  }
+});
+
+test('an HTTP error page is UNMEASURED instead of passing', async (t) => {
+  const port = await serve(t, { '/ok.html': page() });
+  const sample = await fixture(t, page());
+  const missing = `http://127.0.0.1:${port}/missing.html?token=query-secret`;
+  const result = await sample.run(['--strict', '--widths', '320'], process.env, [missing]);
+  status(result, 2);
+  assert.match(result.stderr, /UNMEASURED.*HTTP 404 tại "?http:\/\/127\.0\.0\.1:\d+\/missing\.html\[đã che\]/);
+  assert.doesNotMatch(result.stdout + result.stderr, /query-secret|^✓/m);
+  const ok = await sample.run(['--strict', '--widths', '320'], process.env, [`http://127.0.0.1:${port}/ok.html`]);
+  status(ok, 0);
 });
 
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
