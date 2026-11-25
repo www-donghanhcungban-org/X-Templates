@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `static-check pii-vn` bỏ BOM UTF-8 đầu tệp trước khi đọc tiêu đề CSV/TSV: CSV "UTF-8" của Excel từng làm cột nhạy cảm đầu tiên không được nhận và báo xanh giả. `static-check credits` báo `CRD002` khi bảng có cột License nhưng thiếu cột nguồn, thay vì đọc nhầm cột License làm nguồn; tiêu đề không có chữ nhận dạng vẫn theo thứ tự mặc định. Hai ca hồi quy đỏ khi thiếu bản sửa (rà lô 3).
+
 - `merge-check` escape đường dẫn nghiệm thu literal khi ghép vào tập rủi ro (AUD-HAR-539): tên tệp có `[`…`]`, như route `[id].spec.ts`, không còn lọt khỏi làn chuẩn/review. Thêm ca hồi quy cho `[id]`, `*`, `?` và `[[]`; chú thích bậc reviewer nói đúng nguồn cấu hình (AUD-HAR-540).
 
 - `LOOP-DESIGN-029` nói rõ chờ CI hoặc merge không phải lúc nghỉ: mặc định, sau khi mở PR và bật `merge-watch` nền thì làm tiếp lát độc lập kế (ID và mức SHOULD giữ nguyên). `AGENTS.md` của khung và `framework/templates/AGENTS.md` cho dự án đích thêm một dòng nối tới luật này. Dự án đích nhận khi nâng khung; không đổi blueprint.
