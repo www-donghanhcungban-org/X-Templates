@@ -15,7 +15,9 @@ HOST = rf"{HOST_LABEL}(?:\.{HOST_LABEL})*"
 SLUG = r"[A-Za-z0-9_-][A-Za-z0-9_.-]*/(?!\.{1,2}(?![A-Za-z0-9_.-]))[A-Za-z0-9_.-]+"
 PR_URL_BASE = rf"https://(?P<host>{HOST})/(?P<repo>{SLUG})/pull/(?P<pr>[1-9][0-9]*)"
 PR_URL = re.compile(rf"{PR_URL_BASE}/?\Z", re.ASCII)
-PR_USER_URL = re.compile(rf"{PR_URL_BASE}(?:/(?:files|commits|checks)(?:/[a-f0-9]+)?)?/?(?:[?#][^\s]*)?\Z", re.ASCII)
+PR_USER_URL = re.compile(
+    rf"{PR_URL_BASE}(?:/(?:files|changes|commits|checks)(?:/[a-f0-9]+)?)?/?(?:[?#][^\s]*)?\Z", re.ASCII
+)
 NAMED_PR = re.compile(rf"(?P<repo>{SLUG})#(?P<pr>[1-9][0-9]*)", re.ASCII)
 ENV_REPO = re.compile(rf"(?:(?P<host>{HOST})/)?(?P<repo>{SLUG})", re.ASCII)
 ORIGIN_URL = re.compile(
@@ -234,30 +236,43 @@ def read_pr(
     fetch: Callable[[str], list[Any]],
     details: PrDetails,
     error: type[Exception],
+    on_selector: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     repo = target.path
     with at_host(setting, target.host):
         number = pr_number(selector, target, branch, items, error)
+        route = target.pull_url(number)
+        if on_selector is not None:
+            on_selector(route)  # giữ đích đọc ngay cả khi phản hồi đầu tiên lỗi
         values = fetch(f"{repo}/pulls/{number}")
         if len(values) != 1 or not isinstance(values[0], dict):
             raise error(f"không xác minh được phản hồi duy nhất cho PR #{number}")
         pull = values[0]
         intent = verified(pull, repo, number, target.host, error)
         result = details(repo, number, local_check, pull, intent._asdict() if intent else None)
-        return {**result, "live_host": target.host}
+        return {**result, "live_host": target.host, "live_selector": route}
 
 
 def verified(pull: dict[str, Any], repo: str, number: str, host: str, error: type[Exception]) -> MergeIntent | None:
-    intent = MergeIntent.from_pull(pull)
-    if intent and (str(intent.pr) != number or repo.lower() != "repos/" + intent.repo or host != intent.host):
+    raw_number = pull.get("number")
+    if "number" in pull and (type(raw_number) is not int or str(raw_number) != number):
+        raise error(f"Đích PR trả về khác host, repo hoặc số PR đã yêu cầu (số trả về không phải #{number})")
+    raw_url, base = pull.get("html_url"), pull.get("base")
+    url = PR_USER_URL.fullmatch(raw_url) if isinstance(raw_url, str) else None
+    base_repo = base.get("repo") if isinstance(base, dict) else None
+    full_name = base_repo.get("full_name") if isinstance(base_repo, dict) else None
+    repo = repo.lower()
+    if (
+        url
+        and (url["pr"] != number or url["host"].lower() != host or "repos/" + url["repo"].lower() != repo)
+        or (full_name and "repos/" + str(full_name).lower() != repo)
+    ):
         raise error("Đích PR trả về khác host, repo hoặc số PR đã yêu cầu")
-    return intent
+    return MergeIntent.from_pull(pull)
 
 
 def watch_selector(decision: dict[str, Any], fallback: str = "") -> str:
-    host, repo, number = decision.get("host"), decision.get("repo"), decision.get("pr")
-    url = f"https://{host}/{repo}/pull/{number}"
-    return url if PR_URL.fullmatch(url) else fallback or str(number or "")
+    return str(decision.get("live_selector") or fallback or decision.get("pr") or "")
 
 
 def review_target(target: RepoTarget, selector: str, key: str, error: type[Exception]) -> RepoTarget:

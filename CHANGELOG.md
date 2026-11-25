@@ -52,6 +52,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ### Fixed
 
+- Guard merge dùng parser cờ chung để xử cả cờ ngắn gộp, từ chối selector mơ hồ và xét đúng môi trường sau `env -u`/`env -i`; host được đối chiếu theo lệnh thực thi. `pr next` và watch từ chối danh tính phản hồi mâu thuẫn ngay cả khi thiếu URL/SHA, giữ selector đã chọn qua lỗi và chờ. URL tab `changes` được nhận ở đầu vào người dùng; URL chuẩn từ API vẫn được kiểm chặt (AUD-HAR-526–529, D-590, T-5028).
+
 - CI của PR #797: parser origin tách rõ scheme, userinfo và host, giữ SSH bắt buộc `git@` và HTTPS không userinfo để bộ quét `BASE-CFG-001` không nhận nhầm username thành host. Bổ sung test nhánh không có/nhiều PR và steward thiếu pin live; giữ nguyên bộ quét, tập URL hợp lệ và ngưỡng coverage 100 % (D-589, T-5008).
 
 - Adapter `deploy` lọc họ biến `GIT_*` khỏi môi trường kế thừa và chỉ cho khai tường minh `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH` (T-5007, D-578). `deploy_env_pass:` rỗng chỉ truyền nhóm biến hệ thống cho adapter. **Dự án đích:** khai khóa này cho `run` và `rollback` ở mọi môi trường ngoài `dev`, liệt kê tên biến cần hoặc để rỗng. Các giá trị `null`, `Null`, `NULL`, `~` báo lỗi cấu hình.

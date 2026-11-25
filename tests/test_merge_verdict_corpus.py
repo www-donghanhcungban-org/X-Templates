@@ -180,6 +180,73 @@ class MergeVerdictCorpusTest(TmpRepoCase):
                     with self.subTest(command=command):
                         self.assertEqual(result["code"], code, result)
 
+    def test_merge_uses_gh_option_value_boundaries(self):
+        cli = f"gh pr merge 7 --match-head-commit {HEAD}"
+        cases = (
+            (cli + " -R github.com/o/r -sRother.example/o/r", "UNVERIFIED"),
+            (cli + " -sR github.com/o/r --repo github.com/o/r", "UNVERIFIED"),
+            (cli + " -sRgithub.com/o/r", "OTHER_ASK"),
+            (cli + " -sR github.com/o/r", "OTHER_ASK"),
+            (cli + " -sR=github.com/o/r", "OTHER_ASK"),
+            (cli + " -s=false -R github.com/o/r", "OTHER_ASK"),
+            (cli + " -R github.com/o/r -sb --repo", "OTHER_ASK"),
+            (cli + " -R github.com/o/r -st title", "RULE_DENY"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            env = xt.BenchEnv(Path(tmp))
+            for command, code in cases:
+                for policy in POLICIES:
+                    with self.subTest(command=command, policy=policy):
+                        result = xt._bench_guard(
+                            {"command": command, "policy": policy, "merge_check": merge_result()}, env
+                        )
+                        self.assertEqual(result["code"], code, result)
+                        self.assertEqual(result["allowed"], code == "OTHER_ASK" and policy == "default", result)
+
+    def test_gh_pr_normalization_does_not_apply_to_explicit_api_host(self):
+        host = "www.git.example"
+        cli = f"gh pr merge 7 -R {host}/o/r --squash --match-head-commit {HEAD}"
+        rest = f"gh api -X PUT --hostname {host} repos/o/r/pulls/7/merge -f sha={HEAD}"
+        with tempfile.TemporaryDirectory() as tmp:
+            env = xt.BenchEnv(Path(tmp))
+            for command, code in ((cli, "UNVERIFIED"), (rest, "OTHER_ASK")):
+                for policy in POLICIES:
+                    with self.subTest(command=command, policy=policy):
+                        inp = {"command": command, "policy": policy, "merge_check": merge_result(host=host)}
+                        result = xt._bench_guard(inp, env)
+                        self.assertEqual(result["code"], code, result)
+                        self.assertEqual(result["allowed"], code == "OTHER_ASK" and policy == "default", result)
+
+    def test_merge_proves_selectors_after_env_unset_and_reset(self):
+        cli = f"gh pr merge 7 --squash --match-head-commit {HEAD}"
+        rest = f"gh api -X PUT --hostname github.com repos/o/r/pulls/7/merge -f sha={HEAD}"
+        qualified = cli + " --repo github.com/o/r"
+        cases = (
+            ("env -u GH_REPO " + cli, "UNVERIFIED"),
+            ('env -u "$SELECTOR_NAME" ' + cli, "UNVERIFIED"),
+            ("env --unset=GH_HOST " + cli, "OTHER_ASK"),  # GH_REPO giàu host
+            ("env -u GH_REPO env -i GH_REPO=o/r " + cli, "UNVERIFIED"),
+            ("env -i " + cli, "UNVERIFIED"),
+            ("env - " + cli, "UNVERIFIED"),
+            ("env -i " + qualified, "OTHER_ASK"),
+            ("env -i " + rest, "OTHER_ASK"),
+            ("env --ignore-environment UNRELATED=value GH_REPO=o/r GH_HOST=github.com " + cli, "OTHER_ASK"),
+            ("GH_REPO=o/r GH_HOST=github.com env -iuGH_REPO " + cli, "UNVERIFIED"),
+        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(os.environ, {"GH_REPO": "github.com/o/r", "GH_HOST": "github.com"}),
+        ):
+            env = xt.BenchEnv(Path(tmp))
+            for command, code in cases:
+                for policy in POLICIES:
+                    with self.subTest(command=command, policy=policy):
+                        result = xt._bench_guard(
+                            {"command": command, "policy": policy, "merge_check": merge_result()}, env
+                        )
+                        self.assertEqual(result["code"], code, result)
+                        self.assertEqual(result["allowed"], code == "OTHER_ASK" and policy == "default", result)
+
     def test_steward_reads_and_writes_same_enterprise_target(self):
         host = "git.example"
         pull = {

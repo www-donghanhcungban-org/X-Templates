@@ -7965,7 +7965,7 @@ def _split_words(text: str) -> List[str]:
         return text.split()
 
 
-def _skip_env_args(a: List[str], dirs: Optional[List[str]] = None) -> None:
+def _skip_env_args(a: List[str], dirs: Optional[List[str]] = None, merge_env: Optional[Dict[str, str]] = None) -> None:
     """Sau `env`: bỏ tuỳ chọn và gán biến tại chỗ (`-u`/`-C`/`--unset`/`--chdir` kèm một giá trị); `-S '<lệnh>'` tách
     chuỗi thành lệnh thật (`env -S "git push --force"`, AUD-SEC-024). Thư mục của `-C DIR`/`-CDIR`/`--chdir[=]DIR` ghi
     vào `dirs` (lệnh sau `env` chạy ở đó — review #186 lần 2)."""
@@ -7974,6 +7974,8 @@ def _skip_env_args(a: List[str], dirs: Optional[List[str]] = None) -> None:
         key, val = _env_opt(opt)
         if key and val is None:
             val = a.pop(0) if a else ""
+        if merge_env is not None:
+            _env_merge_selectors(merge_env, opt, key, val)
         if key == "S" and val:
             a[:0] = _split_words(val)
         if key == "C" and val and dirs is not None:
@@ -8019,6 +8021,33 @@ def _env_opt(opt: str) -> Tuple[str, Optional[str]]:
     return (m[1], m[2] or None) if m else ("", None)
 
 
+def _assign_merge_selector(merge_env: Optional[Dict[str, str]], word: str) -> None:
+    if merge_env is not None:
+        name, value = _assign_split(word)
+        if name in merge_env:
+            merge_env[name] = value
+
+
+def _env_merge_selectors(merge_env: Dict[str, str], opt: str, key: str, val: Optional[str]) -> None:
+    """Ghi lại gỡ/đặt biến chọn đích chỉ trong tiến trình `env`, theo thứ tự các trình bọc."""
+    short = opt[1:].split(key, 1)[0] if key else opt[1:]
+    if (
+        opt == "-"
+        or _env_long_name(opt) == "--ignore-environment"
+        or opt.startswith("-")
+        and not opt.startswith("--")
+        and "i" in short
+        or key == "u"
+        and val
+        and GH_DYN_RAW_RE.search(val)
+    ):
+        merge_env.update(dict.fromkeys(merge_env, ""))
+    if key == "u" and val is not None and val in merge_env:
+        merge_env[val] = ""
+    if ENV_ASSIGN_RE.fullmatch(opt):
+        _assign_merge_selector(merge_env, opt)
+
+
 def _env_file_why(c: List[str]) -> str:
     """`env -f F`/`--file=F` ở bất kỳ `env` nào của argv (cả sau trình bọc khác): biến nạp từ tệp guard không đọc."""
     for i, t in enumerate(c):
@@ -8057,7 +8086,9 @@ def _skip_env_args_keep_assigns(a: List[str]) -> None:
 SHELL_KEYWORDS = {"{", "}", "!", "if", "then", "else", "elif", "while", "until", "do"}
 
 
-def _strip_prefixes(argv: List[str], dirs: Optional[List[str]] = None) -> List[str]:
+def _strip_prefixes(
+    argv: List[str], dirs: Optional[List[str]] = None, merge_env: Optional[Dict[str, str]] = None
+) -> List[str]:
     """Bỏ từ khoá shell, gán biến đầu lệnh, chuyển hướng đặt đầu lệnh (`2>/dev/null cd x`, `>/dev/null rm …` — review
     #186) và wrapper (`command`, `env -i`, `nohup`…) cho tới khi gặp lệnh thật. Đích của chuyển hướng vẫn được
     `write_targets` đọc từ argv gốc. `dirs`: nhận thư mục của `env -C` (theo thứ tự)."""
@@ -8073,10 +8104,11 @@ def _strip_prefixes(argv: List[str], dirs: Optional[List[str]] = None) -> List[s
         elif head in SHELL_KEYWORDS:
             a.pop(0)
         elif ENV_ASSIGN_RE.fullmatch(head):
+            _assign_merge_selector(merge_env, head)
             a.pop(0)
         elif posixpath.basename(head) == "env":
             a.pop(0)
-            _skip_env_args(a, dirs)
+            _skip_env_args(a, dirs, merge_env)
         elif posixpath.basename(head) in WRAPPERS:
             a.pop(0)
             _skip_wrapper_args(posixpath.basename(head), a)
@@ -9506,13 +9538,16 @@ def _long_match(key: str, opts: Tuple[str, ...]) -> bool:
     return key in opts or (key.startswith("--") and len(key) > 2 and any(o.startswith(key) for o in opts))
 
 
-def _short_cluster(a: str, nxt: List[str], short_val: str) -> Tuple[List[str], List[Tuple[str, str]], int]:
+def _short_cluster(
+    a: str, nxt: List[str], short_val: str, pflag: bool = False
+) -> Tuple[List[str], List[Tuple[str, str]], int]:
     """Một cụm cờ ngắn (`-fb`, `-bx`): (cờ, [(cờ nhận giá trị, giá trị)], số token kế tiếp bị ăn làm giá trị)."""
-    k = next((j for j, c in enumerate(a[1:], 1) if c in short_val), len(a))
+    k = next((j for j, c in enumerate(a[1:], 1) if c in short_val or pflag and a[j + 1 : j + 2] == "="), len(a))
     flags = ["-" + c for c in a[1 : k + 1]]
-    if k == len(a):
+    if k == len(a) or a[k] not in short_val:
         return flags, [], 0
-    took = [a[k + 1 :]] if k + 1 < len(a) else nxt
+    rest = a[k + 1 :]
+    took = [rest.removeprefix("=") if pflag else rest] if rest else nxt
     return flags, [("-" + a[k], v) for v in took], len(took) if k + 1 == len(a) else 0
 
 
@@ -9529,10 +9564,10 @@ def _negate(flags: Set[str], full: str) -> None:
     flags.difference_update(short for name, short in NEGATABLE_SHORT.items() if name.startswith(full))
 
 
-def _parse_opts(args: List[str], short_val: str, long_val: Tuple[str, ...]) -> ParsedOpts:
+def _parse_opts(args: List[str], short_val: str, long_val: Tuple[str, ...], *, pflag: bool = False) -> ParsedOpts:
     """(cờ đã gặp, đối số vị trí, [(tuỳ chọn, giá trị)]) theo kiểu parse-options của git: cụm cờ ngắn dừng ở chữ nhận
     giá trị (`-fb x`, `-bx`), `--opt=v`/`--opt v`, viết tắt tuỳ chọn dài, `--no-<x>` huỷ `--<x>`/cờ ngắn của nó đứng
-    trước, sau `--` là đối số vị trí."""
+    trước, sau `--` là đối số vị trí. pflag dùng tên dài đầy đủ, nhận `-so=v` và chỉ `--` kết thúc cờ."""
     flags: Set[str] = set()
     pos: List[str] = []
     vals: List[Tuple[str, str]] = []
@@ -9540,18 +9575,19 @@ def _parse_opts(args: List[str], short_val: str, long_val: Tuple[str, ...]) -> P
     while i < len(args):
         a, nxt = args[i], args[i + 1 : i + 2]
         i += 1
-        if a in OPTS_END:  # `--end-of-options` (git ≥ 2.24) như `--`; là giá trị của `-o`… thì đã bị tuỳ chọn đó ăn
+        if a == "--" or not pflag and a in OPTS_END:
             return flags, pos + args[i:], vals
         if a.startswith("--"):
             key, eq, val = a.partition("=")
             if key.startswith("--no-") and len(key) > 5:
                 _negate(flags, "--" + key[5:])
             flags.add(key)
-            took = ([val] if eq else nxt) if _long_match(key, long_val) else []
+            takes_value = key in long_val if pflag else _long_match(key, long_val)
+            took = ([val] if eq else nxt) if takes_value else []
             vals += [(key, v) for v in took]
             i += 0 if eq else len(took)
         elif a.startswith("-") and len(a) > 1:
-            short, got, ate = _short_cluster(a, nxt, short_val)
+            short, got, ate = _short_cluster(a, nxt, short_val, pflag)
             flags.update(short)
             vals += got
             i += ate
@@ -10406,8 +10442,6 @@ GH_MERGE_VALUE_FLAGS: Tuple[str, ...] = (
     *("--match-head-commit", "-b", "--body", "-F", "--body-file", "-t", "--subject"),
     *("-A", "--author-email", "-R", "--repo"),
 )
-# `-t` của `gh pr merge`, kể cả gộp sau cờ bool ngắn `-s/-m/-r/-d` (pflag: `-st x`, `-dtx` — review #343).
-GH_MERGE_SUBJECT_RE = re.compile(r"-[smrd]*t")
 MERGE_CHECK_TIMEOUT = 90
 # Cờ được phép khi tự merge (AUD-SEC-016): cờ khác (`--admin…`, `--repo`, `--body-file`, `-b`…) → hỏi người.
 # `--delete-branch|-d` bị chặn trước (REMOTE_DELETE, AUD-SEC-565) — không còn trong danh sách.
@@ -10487,59 +10521,30 @@ def merge_check(selector: List[str], root: str) -> Dict[str, object]:
 ADMIN_MERGE_WHY = "gh pr merge --admin vượt ruleset nhánh — máy không dùng, người merge trên GitHub"
 
 
-def _merge_pin_values(args: List[str]) -> List[str]:
-    """Mọi pin CLI thật; chuỗi giống cờ trong body/email/tên file chỉ là dữ liệu, không phải pin."""
-    out: List[str] = []
-    skip = False
-    for i, arg in enumerate(args):
-        if skip:
-            skip = False
-            continue
-        if arg == "--":
-            break
-        if arg == "--match-head-commit" and i + 1 < len(args):
-            out.append(args[i + 1])
-        elif arg.startswith("--match-head-commit="):
-            out.append(arg.split("=", 1)[1])
-        skip = arg in GH_MERGE_VALUE_FLAGS or bool(re.fullmatch(r"-[smrd]*[bFAR]", arg))
-    return out
-
-
 def gh_pr_merge_rule(args: List[str], root: str, plain: bool = True) -> Tuple[str, str]:
     """`gh pr merge`: kiểm số PR, đích và pin. `--admin` và bật auto-merge luôn chặn (ADR-0102, ADR-0036)."""
-    selector = _positionals(args, GH_MERGE_VALUE_FLAGS)
-    repos = _flag_values(args, GH_REPO_FLAGS)
-    repo = repos[0] if len(repos) == 1 else "?" if repos else ""
+    flags, selector, values = _parse_opts(args, "bFtAR", GH_MERGE_VALUE_FLAGS, pflag=True)
     # Tắt auto-merge (chỉ người bật được): máy phải tắt được — `pr next`/steward `disable-auto-merge` (ADR-0036,
     # LOOP-STOP-005) — không chặn.
     if plain and args and set(args) - set(selector) == {"--disable-auto"}:
         return "ask", f"{EXTERNAL_ASK} — tắt auto-merge"
-    names = {arg.partition("=")[0] for arg in args}
+    names = {arg.partition("=")[0] for arg in args}  # giữ hai deny phẳng qua mọi cách đọc cờ
     if "--auto" in names:
         return "deny", AUTO_MERGE_WHY
     if "--admin" in names:
         return "deny", ADMIN_MERGE_WHY
-    if _merge_subject_flag(args):
+    if flags & {"-t", "--subject"}:
         return "deny", SQUASH_SUBJECT_WHY
-    pins = _merge_pin_values(args)
-    flags = {arg for arg in names if arg.startswith("-")} - MERGE_ALLOW_FLAGS
-    if not plain or len(pins) != 1 or flags or repo:
+    repos = [v for k, v in values if k in GH_REPO_FLAGS]
+    repo = repos[0] if len(repos) == 1 and repos[0] else "?" if flags.intersection(GH_REPO_FLAGS) else ""
+    pins = [v for k, v in values if k == "--match-head-commit"]
+    extra = {arg for arg in names if arg.startswith("-")} - MERGE_ALLOW_FLAGS
+    if not plain or len(pins) != 1 or extra or repo:
         why = (
             f"{EXTERNAL_ASK} — tự merge cần `--match-head-commit <sha>`, chỉ cờ {', '.join(sorted(MERGE_ALLOW_FLAGS))}"
         )
-        return _merge_ask(why, selector, root, repo, pins)
-    return _merge_ask("", selector, root, pins=pins)
-
-
-def _merge_subject_flag(args: List[str]) -> bool:
-    """`gh pr merge` có `-t`/`--subject` (cả `--subject=x`, `-tx`, `-st'x'` kiểu pflag) — subject squash tường minh; giá
-    trị của cờ khác (`-b "-t x"`) không tính."""
-    skip = False
-    for a in args:
-        if not skip and (a == "--subject" or a.startswith("--subject=") or GH_MERGE_SUBJECT_RE.match(a)):
-            return True
-        skip = not skip and a in GH_MERGE_VALUE_FLAGS
-    return False
+        return _merge_ask(why, selector, root, repo, pins, gh_pr=True)
+    return _merge_ask("", selector, root, pins=pins, gh_pr=True)
 
 
 def _rm_rule(args: List[str], root: str = "", cwd: Optional[str] = None) -> Tuple[str, str]:
@@ -12460,10 +12465,9 @@ GH_MERGE_ENV = contextvars.ContextVar("gh_merge_env", default=("", "", "", ""))
 
 
 def _gh_merge_env(argv: List[str], prior: Dict[str, str], root: str, cwd: Optional[str]) -> Tuple[str, str, str, str]:
-    command = _strip_prefixes(argv)
-    local = _assign_values(argv[: len(argv) - len(command)])
-    repo, host = (local.get(k, prior.get(k, os.environ.get(k, ""))) for k in ("GH_REPO", "GH_HOST"))
-    return repo, host, root, cwd or ""
+    env = {k: prior.get(k, os.environ.get(k, "")) for k in ("GH_REPO", "GH_HOST")}
+    _strip_prefixes(argv, merge_env=env)
+    return env["GH_REPO"], env["GH_HOST"], root, cwd or ""
 
 
 def _merge_checkout_same(root: str, cwd: str) -> bool:
@@ -12503,13 +12507,15 @@ def _hard_gate(selector: List[str], root: str, repo: str) -> Tuple[Dict[str, obj
     return d, ("ask", block) if block else ("", "")
 
 
-def _merge_target_ok(d: Dict[str, object], selector: List[str], repo: str, host: str) -> bool:
+def _merge_target_ok(d: Dict[str, object], selector: List[str], repo: str, host: str, gh_pr: bool) -> bool:
     inherited_repo, inherited_host, root, cwd = GH_MERGE_ENV.get()
     repo = repo or (inherited_repo if inherited_repo and cwd and _merge_checkout_same(root, cwd) else "")
     if repo.count("/") == 2:
         repo_host, repo = repo.split("/", 1)
         host = host or repo_host
     host = host or inherited_host
+    if gh_pr and host.lower().startswith("www."):  # gh pr bỏ `www.` khi đọc selector repo; gh api dùng đúng hostname
+        return False
     number = selector[0]
     pr = d.get("pr")
     fields = ((d.get(k), pattern) for k, pattern in MERGE_FIELDS.items())
@@ -12534,7 +12540,14 @@ def _review_block(d: Dict[str, object]) -> str:
 
 
 def _merge_ask(
-    why: str, selector: List[str], root: str, repo: str = "", pins: Iterable[str] = (), host: str = ""
+    why: str,
+    selector: List[str],
+    root: str,
+    repo: str = "",
+    pins: Iterable[str] = (),
+    host: str = "",
+    *,
+    gh_pr: bool = False,
 ) -> Tuple[str, str]:
     """Kiểm mọi đường merge (ADR-0096, ADR-0102). `why` rỗng cho phép tự merge khi đích và pin đã khớp."""
     d, gate = _hard_gate(selector, root, repo)
@@ -12548,7 +12561,7 @@ def _merge_ask(
         and (pin := next((v for v in pins if head != v), None)) is not None
     ):
         return "ask", CodedReason(f"{EXTERNAL_ASK} — head đã kiểm {d.get('head')} khác {pin}", "MERGE_HEAD_MISMATCH")
-    if not _merge_target_ok(d, selector, repo, host):
+    if not _merge_target_ok(d, selector, repo, host, gh_pr):
         return "ask", f"{EXTERNAL_ASK} — {UNVERIFIED_ASK}: cần host/repo/PR tường minh; dùng lệnh REST từ pr next"
     if len(pins) != 1:
         return "ask", CodedReason(

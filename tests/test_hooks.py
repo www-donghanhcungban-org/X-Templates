@@ -7859,8 +7859,8 @@ class GuardTitleRuleTest(unittest.TestCase):
                 self.assertEqual(dec, "deny")
                 self.assertIn("squash_merge_commit_title: PR_TITLE", why)
         check.assert_not_called()
-        self.assertFalse(self.g._merge_subject_flag(["7", "-b", "-t ghi chú", "--squash"]))  # giá trị của `-b`
-        self.assertFalse(self.g._merge_subject_flag(["7", "-sd", "--squash"]))  # cờ bool gộp không có `t`
+        self.assertNotIn("PR_TITLE", self.g.gh_pr_merge_rule(["7", "-b", "-t ghi chú", "--squash"], d)[1])
+        self.assertNotIn("PR_TITLE", self.g.gh_pr_merge_rule(["7", "-sd", "--squash"], d)[1])
         inp = {"owner": "o", "repo": "r", "pullNumber": 7, "expectedHeadSha": "abc", "commit_title": "x"}
         dec, why = self.g.mcp_decision("mcp__github__merge_pull_request", inp, d)
         self.assertEqual((dec, "PR_TITLE" in why), ("deny", True))

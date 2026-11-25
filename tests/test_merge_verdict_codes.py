@@ -204,11 +204,11 @@ class MergeVerdictCodesTest(unittest.TestCase):
         for command in commands:
             with self.subTest(command=command):
                 raw = self.raw("cli", merge_result(), command=command)
-                missing = command.endswith(" --match-head-commit")
+                unverified = command.endswith(" --match-head-commit") or " -- " in command
                 self.assertEqual(
-                    (raw["decision"], guard.decide(raw).code), ("ask", "UNVERIFIED" if missing else "OTHER_ASK"), raw
+                    (raw["decision"], guard.decide(raw).code), ("ask", "UNVERIFIED" if unverified else "OTHER_ASK"), raw
                 )
-                self.assertEqual(guard.apply_policy(raw)["decision"], "deny" if missing else "", raw)
+                self.assertEqual(guard.apply_policy(raw)["decision"], "deny" if unverified else "", raw)
 
     def test_new_codes_are_carried_from_source_not_reason_text(self):
         codes = {"MERGE_INELIGIBLE", "MERGE_HEAD_MISMATCH"}

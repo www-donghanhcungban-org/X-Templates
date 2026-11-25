@@ -1365,6 +1365,7 @@ class MergeCheckCliTest(unittest.TestCase):
                     requiredChecks=[{"context": "test"}],
                     live_intent=None,
                     live_host="github.com",
+                    live_selector="https://github.com/o/r/pull/7",
                 ),
             )  # như fixture `gh pr view`
         cases = {

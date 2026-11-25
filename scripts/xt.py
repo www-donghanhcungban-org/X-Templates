@@ -7870,7 +7870,13 @@ def _pr_open(target: RepoTarget) -> List[Dict[str, Any]]:
         return _gh_items(f"{target.path}/pulls?state=open&per_page=100")
 
 
-def _pr_rest(pr_arg: Optional[str], local_check: bool = True, target: Optional[RepoTarget] = None) -> Dict[str, Any]:
+def _pr_rest(
+    pr_arg: Optional[str],
+    local_check: bool = True,
+    target: Optional[RepoTarget] = None,
+    *,
+    on_selector: Optional[Callable[[str], None]] = None,
+) -> Dict[str, Any]:
     """Dựng JSON dạng `gh pr view --json MERGE_FIELDS` chỉ bằng REST — `merge_decision` dùng nguyên như trước.
     `local_check=False` (app chỉ đọc, ADR-0038): không kiểm xung đột cục bộ (`git fetch` + `merge-tree` ghi ref/object)."""
     _sibling_imports()
@@ -7886,6 +7892,7 @@ def _pr_rest(pr_arg: Optional[str], local_check: bool = True, target: Optional[R
         _gh_api,
         _pr_rest_details,
         PrInputError,
+        on_selector,
     )
 
 
@@ -8009,7 +8016,7 @@ def load_pr(args: argparse.Namespace) -> Dict[str, Any]:
     """JSON của PR: `--pr-json FILE|-` (định dạng `gh pr view --json MERGE_FIELDS`) hoặc lấy qua REST; lỗi → PrInputError."""
     try:
         if not args.pr_json:
-            return _pr_rest(args.pr)
+            return _pr_rest(args.pr, on_selector=getattr(args, "on_pr_selector", None))
         text = sys.stdin.read() if args.pr_json == "-" else Path(args.pr_json).read_text(encoding="utf-8")
         data = json.loads(text)
     except (OSError, json.JSONDecodeError) as exc:
@@ -8018,6 +8025,7 @@ def load_pr(args: argparse.Namespace) -> Dict[str, Any]:
         raise PrInputError("JSON của PR không đọc được: không phải object")
     data.pop("live_intent", None)
     data.pop("live_host", None)
+    data.pop("live_selector", None)
     data.pop("strictBaseRepo", None)  # --pr-json chỉ tính từ ảnh chụp đã cấp, không gọi API so nhánh sống.
     return data
 
@@ -13041,6 +13049,8 @@ def _merge_eval(pr: Dict[str, Any], local: bool = False) -> Tuple[Dict[str, Any]
     needs_review = bool(protected or immediate)
     if not needs_review and _committed_xt_keys(project_dir(), ref).get("merge_review", "optional") == "optional":
         decision = optional_review_decision(pr, autonomy, risk, hard_auto, phase)
+    if selector := pr.get("live_selector"):
+        decision["live_selector"] = selector
     return decision, notes + hard_notes + phase_notes
 
 
@@ -17130,9 +17140,11 @@ def _merge_check_json(pr: Optional[str]) -> Tuple[int, Dict[str, Any], str]:
     """`cmd_merge_check --json` chạy trong tiến trình: (exit, JSON, stderr). Dùng lại đúng đường quyết định của
     `merge-check` (cấu hình xt.yaml, ngoại lệ cứng…) nên `merge-watch` không có luật riêng."""
     out, err = io.StringIO(), io.StringIO()
+    resolved: List[str] = []
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        rc = cmd_merge_check(argparse.Namespace(pr=pr, pr_json=None, json=True))
-    return rc, (json.loads(out.getvalue()) if rc != 2 else {}), err.getvalue()
+        rc = cmd_merge_check(argparse.Namespace(pr=pr, pr_json=None, json=True, on_pr_selector=resolved.append))
+    fallback = {"live_selector": resolved[0]} if resolved else {}
+    return rc, (json.loads(out.getvalue()) if rc != 2 else fallback), err.getvalue()
 
 
 def _watch_pr_next(pr: Optional[str]) -> None:
@@ -17171,6 +17183,7 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
     while True:
         rc, d, err = _merge_check_json(selector)
         stamp = _dt.datetime.now().strftime("%H:%M:%S")
+        selector = watch_selector(d, selector or "")
         if rc == 2:
             errors += 1
             print(f"[{stamp}] lỗi đọc PR ({errors}/{WATCH_ERROR_LIMIT}): {err.strip()}", flush=True)
@@ -17178,7 +17191,6 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
                 return 2
         else:
             errors = 0
-            selector = watch_selector(d, selector or "")
             print(f"[{stamp}] {d['verdict'].upper()} · PR #{d['pr']} — {'; '.join(d['reasons'])}", flush=True)
             if d["verdict"] != "wait":
                 return _watch_final(d, selector)

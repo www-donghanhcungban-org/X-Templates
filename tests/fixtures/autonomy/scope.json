@@ -12,6 +12,12 @@
    ]
   },
   {
+   "reason": "Theo D-590, ca giữ PR đã chọn qua phản hồi thiếu danh tính, retry và bàn giao cần checkout thật cùng chuỗi phản hồi REST. Schema corpus chỉ chạy từng quyết định. Ca hồi quy chạy bằng `python3 -m unittest tests.test_merge_target_binding.MergeTargetBindingTest.test_watch_retries_a_rejected_first_response_on_the_resolved_pr`.",
+   "ids": [
+    "AUD-HAR-527"
+   ]
+  },
+  {
    "reason": "Tài liệu / bằng chứng blueprint — đỡ bằng `validate`, `check-links`, `audit plan`; không phải quyết định cho/chặn của PR, rollup, review hay guard; PLAN của repo đọc được bằng máy (AUD-HAR-192/193): `tests.test_plan_files`; ký tự vô hình thật trong tài liệu agent đọc (AUD-DOC-270): `tests.test_content_facts`",
    "ids": [
     "AUD-DOC-215",

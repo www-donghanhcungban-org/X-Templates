@@ -287,6 +287,63 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assertEqual(reads, [("GET", HOST, f"repos/{SLUG}/pulls/{PR}")] * 3)
         self.assert_target_routes()
 
+    def test_watch_retries_a_rejected_first_response_on_the_resolved_pr(self):
+        reply = self.gh.payload
+        first = True
+
+        def payload(host, repo, path, page):
+            nonlocal first
+            if path == "/pulls/7" and first:
+                first = False
+                self.gh.open_prs = [{"number": 8}]
+                partial = reply(host, repo, path, page)
+                partial.pop("html_url")
+                return {**partial, "number": 8}
+            if path == "/pulls/8":
+                return {**reply(host, repo, "/pulls/7", page), "number": 8, "html_url": pr_url()[:-1] + "8"}
+            return reply(host, repo, path.replace("/8/", "/7/"), page)
+
+        self.gh.checks = [None, "success"]
+        with mock.patch.object(self.gh, "payload", side_effect=payload), mock.patch.object(xt.time, "sleep"):
+            rc, out, err = run_main("merge-watch")
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("lỗi đọc PR (1/3)", out)
+        self.assertIn("WAIT · PR #7", out)
+        self.assertIn(f"--hostname {HOST} repos/{SLUG}/pulls/7/merge", out)
+        paths = [path for _, _, path, _ in self.gh.calls if path.rsplit("/", 1)[-1] in {"pulls", "7", "8"}]
+        self.assertEqual(paths, [f"repos/{SLUG}/pulls", *([f"repos/{SLUG}/pulls/7"] * 4)])
+        self.assert_target_routes()
+
+    def test_pr_read_rejects_partial_conflicting_identity_before_details(self):
+        self.gh.head = "short"
+        for changes in (
+            {"html_url": None, "number": 8},
+            {"html_url": pr_url("another.example")},
+            {"html_url": None, "base": {"repo": {"full_name": "o/other"}}},
+            {"html_url": pr_url(slug="o/other") + "/changes"},
+        ):
+            with self.subTest(changes=changes):
+                pull = {**self.gh.pull(HOST, SLUG), **changes}
+                self.gh.calls.clear()
+                with mock.patch.object(self.gh, "pull", return_value=pull):
+                    rc, out, err = run_main("pr", "next", "--pr", PR, "--json")
+                self.assertEqual(rc, 2, out + err)
+                self.assertIn("Đích PR trả về khác host, repo hoặc số PR", err)
+                self.assertEqual([call[:3] for call in self.gh.calls], [("GET", HOST, f"repos/{SLUG}/pulls/{PR}")])
+
+    def test_pending_pr_wait_hint_uses_resolved_route_without_verified_url(self):
+        pull = self.gh.pull(HOST, SLUG)
+        pull.pop("html_url")
+        self.gh.checks = [None]
+        with mock.patch.object(self.gh, "pull", return_value=pull):
+            rc, out, err = run_main("pr", "next", "--pr", "feature/x", "--json")
+        self.assertEqual(rc, 0, err)
+        data = json.loads(out)
+        self.assertEqual((data["pr"], data["action"]), (7, "wait"))
+        self.assertIn(pr_url(), data["do"])
+        self.assertNotIn("merge_intent", data)
+        self.assert_target_routes()
+
     def test_member_write_permission_cache_isolated_by_host(self):
         self.gh.association = "MEMBER"
         with mock.patch.dict(xt._WRITER_CACHE, clear=True):
@@ -303,12 +360,16 @@ class MergeTargetBindingTest(TmpRepoCase):
     def test_offline_snapshot_cannot_offer_a_mutating_command(self):
         snap = pr(
             headRefOid=self.head,
+            live_selector=pr_url("another.example"),
             autoMergeRequest={"enabledBy": {"login": "fixture"}, "mergeMethod": "SQUASH"},
             statusCheckRollup=[{"__typename": "CheckRun", "name": "test", "status": "IN_PROGRESS"}],
         )
         rc, out, err = run_main("pr", "next", "--pr-json", "-", "--json", stdin=json.dumps(snap))
         self.assertEqual(rc, 0, err)
         self.assertEqual(json.loads(out).get("do"), "")
+        rc, out, err = run_main("merge-check", "--pr-json", "-", "--json", stdin=json.dumps(snap))
+        self.assertEqual(rc, 1, out + err)
+        self.assertNotIn("live_selector", json.loads(out))
         self.assertEqual(self.gh.calls, [])
         isolated = REAL_RUN(
             [sys.executable, "-I", "-B", str(xt.SCRIPT_DIR / "xt.py"), "pr", "next", "--pr-json", "-", "--json"],
@@ -338,8 +399,10 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assert_target_routes()
 
     def test_files_tab_and_matching_steward_repo_are_accepted(self):
-        selector = pr_url() + "/files"
-        self.assert_pinned_next(run_main("pr", "next", "--pr", selector, "--json"))
+        for tab in ("/files", "/changes#diff-abcd"):
+            with self.subTest(tab=tab):
+                self.assert_pinned_next(run_main("pr", "next", "--pr", pr_url() + tab, "--json"))
+        selector = pr_url() + "/changes"
         rc, out, err = run_main("pr", "steward", "--repo", f"{HOST}/{SLUG}", "--pr", selector, "--json")
         self.assertEqual(rc, 0, out + err)
         self.assertEqual(json.loads(out)[0]["action"], "merge")
@@ -347,6 +410,18 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.gh.calls.clear()
         rc, out, err = run_main("pr", "steward", "--repo", f"{HOST}/{SLUG}", "--pr", pr_url(slug="o/other"))
         self.assertNotEqual(rc, 0, out + err)
+        self.assertEqual(self.gh.calls, [])
+
+    def test_changes_tab_is_not_a_canonical_live_response_url(self):
+        pull = {**self.gh.pull(HOST, SLUG), "html_url": pr_url() + "/changes"}
+        with mock.patch.object(self.gh, "pull", return_value=pull):
+            rc, out, err = run_main("merge-check", "--pr", PR, "--json")
+        self.assertEqual(rc, 1, out + err)
+        data = json.loads(out)
+        self.assertEqual((data["host"], data["verdict"], data["eligible"], data["next"]), ("", "wait", False, ""))
+        self.gh.calls.clear()
+        rc, out, err = run_main("pr", "next", "--pr", pr_url() + "/changes/not-a-commit", "--json")
+        self.assertEqual(rc, 2, out + err)
         self.assertEqual(self.gh.calls, [])
 
     def test_native_review_publication_uses_the_bound_enterprise_target(self):

@@ -1022,3 +1022,10 @@
 - Chọn: Tách scheme, userinfo và host của origin; kiểm SSH bắt buộc git@ và HTTPS không userinfo, giữ bộ quét hiện tại; thêm test cho nhánh lỗi hiện có
 - Lý do (tiêu chí chất lượng cuối): Run 45466895506, checks job 138704077943 nhận nhầm userinfo thành host; coverage job 138713852620 thiếu xt.py:7636,7638,18564. Phương án 1 biểu diễn rõ giao thức mà vẫn nhận và từ chối cùng tập origin, giữ nguyên gate và ngưỡng 100%, kiểm steward không ghi khi thiếu danh tính live.
 - Đường lùi: Revert riêng commit sửa CI nếu ma trận URL hoặc cổng hồi quy không đạt; giữ nguyên điều kiện CI xanh trước merge.
+
+### D-590 · 2026-11-24T23:22:22+00:00 · PR #797: khép các lỗ hổng chọn đích còn lại trước merge thế nào?
+
+- Phương án: (1) Dùng bộ phân tích cờ pflag đã có; kiểm host theo đúng lệnh, môi trường thực thi hiệu lực và đối chiếu danh tính phản hồi từng phần với PR đã yêu cầu · (2) Bổ sung từng mẫu chuỗi cho cờ gộp và chỉ kiểm đích khi toàn bộ merge intent đã đầy đủ
+- Chọn: Dùng bộ phân tích cờ pflag đã có; kiểm host theo đúng lệnh, môi trường thực thi hiệu lực và đối chiếu danh tính phản hồi từng phần với PR đã yêu cầu
+- Lý do (tiêu chí chất lượng cuối): Rà độc lập ở eb04e18 tái hiện đổi repo qua -sR sau -R hợp lệ, khác host do gh pr bỏ www., và merge-watch chuyển PR7 sang PR8 từ phản hồi thiếu html_url. Cần giữ nguyên đích đã chọn kể cả khi phản hồi chưa đủ SHA; tái dùng parser có sẵn và dừng khi mơ hồ. Bổ sung môi trường env -u/-i vào kiểm provenance của selector, giữ nguyên policy, coverage và cổng.
+- Đường lùi: Revert commit sửa riêng nếu hồi quy; không merge PR khi còn lỗi đỏ hoặc CI chưa xanh.
