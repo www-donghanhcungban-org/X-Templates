@@ -898,6 +898,23 @@
    "ids": [
     "AUD-HAR-530"
    ]
+  },
+  {
+   "reason": "Rà lô 2–5 (hàng 🟠 đã sửa ở #812, #813, #814): bộ đọc tệp `static-check`, `xt_deploy`, `xt_acceptance` và `verify-render` nằm ngoài sáu adapter của corpus. Ca hồi quy: `python3 -m unittest tests.test_static_check tests.test_check_i18n tests.test_check_sbom tests.test_deploy_prod tests.test_acceptance_lock` và `node --test tests_e2e/verify_render.test.mjs`.",
+   "ids": [
+    "AUD-HAR-546",
+    "AUD-HAR-547",
+    "AUD-HAR-551",
+    "AUD-HAR-552",
+    "AUD-HAR-556",
+    "AUD-HAR-557"
+   ]
+  },
+  {
+   "reason": "Rà lô 6 (`acceptance-author` thiếu `maxTurns`): tệp định nghĩa agent nằm ngoài sáu adapter của corpus. Ca hồi quy: `python3 -m unittest tests.test_model_tiers tests.test_codex_harness`.",
+   "ids": [
+    "AUD-HAR-563"
+   ]
   }
  ]
 }
