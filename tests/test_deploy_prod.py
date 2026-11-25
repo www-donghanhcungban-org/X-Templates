@@ -7,8 +7,7 @@ import os
 import subprocess
 from pathlib import Path
 import sys
-import unittest
-from unittest import mock
+from unittest import TestCase, mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_admin_plan import GithubFixture
@@ -336,7 +335,7 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
         self.assertTrue(xt.read_state(self.repo)["blocked"])
 
 
-class SymlinkedTempDirTest(unittest.TestCase):
+class SymlinkedTempDirTest(TestCase):
     """AUD-HAR-551: TMPDIR qua symlink (macOS /var → /private/var) không được chặn triển khai ngoài dev và quay lui."""
 
     def test_clean_checkout_and_artifact_paths_survive_a_symlinked_tempdir(self):
