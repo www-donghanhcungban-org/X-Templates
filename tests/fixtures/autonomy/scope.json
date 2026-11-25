@@ -12,6 +12,12 @@
    ]
   },
   {
+   "reason": "Sổ review và sự kiện chi phí/lát phải giữ nguyên khi URL khác checkout ở cả hai chế độ đăng. Schema corpus chỉ đo một quyết định. Ca có checkout, sổ và gh giả ở tests.test_merge_target_binding.MergeTargetBindingTest.test_wrong_review_url_leaves_review_slice_and_cost_unchanged.",
+   "ids": [
+    "AUD-HAR-532"
+   ]
+  },
+  {
    "reason": "Theo D-590, ca giữ PR đã chọn qua phản hồi thiếu danh tính, retry và bàn giao cần checkout thật cùng chuỗi phản hồi REST. Schema corpus chỉ chạy từng quyết định. Ca hồi quy chạy bằng `python3 -m unittest tests.test_merge_target_binding.MergeTargetBindingTest.test_watch_retries_a_rejected_first_response_on_the_resolved_pr`.",
    "ids": [
     "AUD-HAR-527"
@@ -847,6 +853,12 @@
    "reason": "Tên model trong NỘI DUNG tệp đẩy lên repo (AUD-HAR-476): guard chỉ quét thông điệp commit và PR (ai_attribution, LOOP-HARNESS-027), nên corpus mô phỏng quyết định của guard không có ca nào cho nội dung tệp; AGENTS §3 giao phần này cho review. Chưa có máy quét tệp; đỡ bằng grep ở dòng Gate của hàng sổ và review ở head.",
    "ids": [
     "AUD-HAR-476"
+   ]
+  },
+  {
+   "reason": "Theo D-591, ca chọn chính sách merge cần kho Git tạm có ref theo dõi và nhánh cục bộ cùng tên. Corpus quyết định dùng dữ liệu chính sách đã đọc. Ca hồi quy chạy bằng `python3 -m unittest tests.test_merge_review_source tests.test_immediate_effect_review tests.test_acceptance_lock`.",
+   "ids": [
+    "AUD-HAR-530"
    ]
   }
  ]

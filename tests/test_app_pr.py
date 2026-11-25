@@ -146,7 +146,18 @@ WRITERS = (
     "cmd_merge_check",
     "cmd_merge_watch",
 )
-GIT_READ = {"show", "cat-file", "rev-parse", "merge-tree", "ls-files", "log", "diff", "merge-base", "config"}
+GIT_READ = {
+    "show",
+    "show-ref",
+    "cat-file",
+    "rev-parse",
+    "merge-tree",
+    "ls-files",
+    "log",
+    "diff",
+    "merge-base",
+    "config",
+}
 
 
 class ProcSpy:
@@ -175,6 +186,9 @@ class ProcSpy:
                 rest = rest[2:] if rest[0] in ("-c", "-C") else rest[1:]
             sub = rest[0]
             assert sub in GIT_READ, cmd
+            if sub == "show-ref":
+                assert len(rest) == 4 and rest[1:3] == ["--verify", "--hash"], cmd
+                assert rest[3].startswith("refs/remotes/origin/"), cmd
             if cmd[-1] == "remote.origin.url":
                 return subprocess.CompletedProcess(cmd, 0, "https://github.com/o/r\0", "")
             return subprocess.CompletedProcess(cmd, 128, "", "fatal: giả")

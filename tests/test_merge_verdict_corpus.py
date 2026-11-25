@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -246,6 +247,122 @@ class MergeVerdictCorpusTest(TmpRepoCase):
                         )
                         self.assertEqual(result["code"], code, result)
                         self.assertEqual(result["allowed"], code == "OTHER_ASK" and policy == "default", result)
+
+    def test_shell_selector_proof_matches_child_environment(self):
+        host = "git.example"
+        cli = f"gh pr merge 7 --squash --match-head-commit {HEAD}"
+        cases = (
+            ("{name}={value}; ", ""),
+            ("export {name}={value}; unset {name}; ", ""),
+            ("export {name}={value}; export -n {name}; ", ""),
+            ("declare {name}={value}; ", ""),
+            ("export {name}={value}; declare +x {name}; ", ""),
+            ("(export {name}={value}); ", ""),
+            ("export {name}={value} | true; ", ""),
+            ("export {name}={value}; exec -c ", ""),
+            ("declare -x {name}={value}; ", "{value}"),
+            ("export {name}='{value}' && ", "{value}"),
+            ("export {name}={value}; ", "{value}"),
+            ("{name}={value} ", "{value}"),
+        )
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ):
+            env = xt.BenchEnv(Path(tmp))
+            for key in ("GH_HOST", "GH_REPO"):
+                os.environ.pop(key, None)
+            for name, value, target in (("GH_HOST", host, cli + " -R o/r"), ("GH_REPO", host + "/o/r", cli)):
+                for pattern, expected in cases:
+                    prefix = pattern.format(name=name, value=value)
+                    child = subprocess.run(
+                        ["bash", "--noprofile", "--norc", "-c", prefix + "printenv " + name],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    with self.subTest(prefix=prefix):
+                        self.assertEqual(child.returncode, 0 if expected else 1, child.stderr)
+                        self.assertEqual(child.stdout.strip(), expected.format(value=value))
+                        for policy in POLICIES:
+                            data = {
+                                "command": prefix + target,
+                                "policy": policy,
+                                "merge_check": merge_result(host=host),
+                            }
+                            result = xt._bench_guard(data, env)
+                            self.assertEqual(result["code"], "OTHER_ASK" if expected else "UNVERIFIED", result)
+                            self.assertEqual(result["allowed"], bool(expected) and policy == "default", result)
+
+    def test_selector_scope_at_the_command_matches_a_real_child(self):
+        host = "git.example"
+        target = f"gh pr merge 7 --squash --repo o/r --match-head-commit {HEAD}"
+        local = "export GH_HOST=git.example"
+        locked = "export GH_HOST=other.example; readonly GH_HOST"
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ):
+            env = xt.BenchEnv(Path(tmp))
+            os.environ.pop("GH_HOST", None)
+            os.environ.pop("GH_REPO", None)
+            cases = (
+                ("true; GH_HOST=git.example {cmd} && true", host),
+                ("unset GH_HOST; GH_HOST=git.example {cmd}", host),
+                ("export -n GH_HOST=git.example; {cmd}", ""),
+                ("true && " + local + "; {cmd}; unset GH_HOST", host),
+                (f"cd {tmp} && " + local + "; {cmd}", host),
+                (f"cd {tmp}/missing && " + local + "; {cmd}", ""),
+                ("false && " + local + "; {cmd}", ""),
+                ("bash -c '" + local + "; {cmd}'", host),
+                ('printf %s "$(' + local + '; {cmd})"', host),
+                (locked + "; GH_HOST=git.example {cmd}", "other.example"),
+                (locked + "; env GH_HOST=git.example {cmd}", host),
+                (locked + '; echo "$(' + local + '; {cmd})"', "other.example"),
+                (local + "; {cmd}; unset GH_HOST; {cmd}", host),
+            )
+            for template, expected in cases:
+                with self.subTest(template=template):
+                    child = subprocess.run(
+                        ["bash", "--noprofile", "--norc", "-c", template.format(cmd="printenv GH_HOST")],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(child.stdout.strip(), expected)
+                    # Hai lần cùng argv nhận hai môi trường khác nhau: lần cuối không có GH_HOST.
+                    bound = expected == host and template.count("{cmd}") == 1
+                    for policy in POLICIES:
+                        data = {
+                            "command": template.format(cmd=target),
+                            "policy": policy,
+                            "merge_check": merge_result(host=host),
+                        }
+                        result = xt._bench_guard(data, env)
+                        self.assertEqual(result["code"], "OTHER_ASK" if bound else "UNVERIFIED", result)
+                        self.assertEqual(result["allowed"], bound and policy == "default", result)
+
+    def test_qualified_inline_repo_and_checkout_inheritance_in_another_directory(self):
+        host = "git.example"
+        cli = f"gh pr merge 7 --squash --match-head-commit {HEAD}"
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.dict(os.environ, {"GH_REPO": host + "/o/r", "GH_HOST": host}),
+        ):
+            root = Path(tmp) / "checkout"
+            root.mkdir()
+            env = xt.BenchEnv(root)
+            for prefix, bound in (
+                ("", False),
+                ("GH_REPO=o/r ", False),
+                ("GH_REPO=git.example/o/r ", True),
+                ("env GH_REPO=git.example/o/r ", True),
+                ("GH_REPO=git.example/o/r env -u GH_REPO ", False),
+            ):
+                for policy in POLICIES:
+                    with self.subTest(prefix=prefix, policy=policy):
+                        data = {
+                            "command": f"cd {tmp} && " + prefix + cli,
+                            "policy": policy,
+                            "merge_check": merge_result(host=host),
+                        }
+                        result = xt._bench_guard(data, env)
+                        self.assertEqual(result["code"], "OTHER_ASK" if bound else "UNVERIFIED", result)
+                        self.assertEqual(result["allowed"], bound and policy == "default", result)
 
     def test_steward_reads_and_writes_same_enterprise_target(self):
         host = "git.example"

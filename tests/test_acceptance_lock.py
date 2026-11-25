@@ -270,6 +270,14 @@ class AcceptanceLockTest(unittest.TestCase):
         self.write(lock.LEDGER, "{}")
         self.assertEqual(lock.review_paths(xt, self.base, "HEAD", files), files)
 
+    def test_review_with_missing_remote_ref_does_not_read_the_index_ledger(self):
+        self.create()
+        self.git("add", lock.LEDGER)
+        self.configure("")
+        (self.base / lock.LEDGER).unlink()
+        files = [self.case, self.spec, lock.LEDGER, "README.md"]
+        self.assertEqual(lock.review_paths(xt, self.base, None, files), [lock.LEDGER])
+
     def test_gate_review_and_compatibility_for_opted_out_products(self):
         from tests.test_merge_review_source import std
 

@@ -1029,3 +1029,24 @@
 - Chọn: Dùng bộ phân tích cờ pflag đã có; kiểm host theo đúng lệnh, môi trường thực thi hiệu lực và đối chiếu danh tính phản hồi từng phần với PR đã yêu cầu
 - Lý do (tiêu chí chất lượng cuối): Rà độc lập ở eb04e18 tái hiện đổi repo qua -sR sau -R hợp lệ, khác host do gh pr bỏ www., và merge-watch chuyển PR7 sang PR8 từ phản hồi thiếu html_url. Cần giữ nguyên đích đã chọn kể cả khi phản hồi chưa đủ SHA; tái dùng parser có sẵn và dừng khi mơ hồ. Bổ sung môi trường env -u/-i vào kiểm provenance của selector, giữ nguyên policy, coverage và cổng.
 - Đường lùi: Revert commit sửa riêng nếu hồi quy; không merge PR khi còn lỗi đỏ hoặc CI chưa xanh.
+
+### D-591 · 2026-11-25T01:28:38+00:00 · T-5029: đọc policy nhánh đích thế nào để nhánh cục bộ không che ref thật?
+
+- Phương án: (1) Chỉ đổi tên ngắn sang refs/remotes/origin/<base> khi gọi git show · (2) Xác minh ref chính xác bằng show-ref --verify, đọc bằng OID và giữ mặc định chặt khi vắng
+- Chọn: Xác minh ref chính xác bằng show-ref --verify, đọc bằng OID và giữ mặc định chặt khi vắng
+- Lý do (tiêu chí chất lượng cuối): Tên đầy đủ vẫn có thể bị git phân giải sang nhánh cục bộ khi ref thật vắng; OID từ đúng ref khóa nguồn đọc, kiểm hồi quy với repo Git thật và không nới cổng.
+- Đường lùi: git revert commit của PR sửa T-5029
+
+### D-592 · 2026-11-25T01:31:19+00:00 · PR #797: sửa hai lỗi review mới về môi trường lệnh và sổ review thế nào?
+
+- Phương án: (1) Tái sử dụng sổ gán biến bảo thủ và chỉ kiểm đích lúc đăng review · (2) Tách bằng chứng môi trường thực thi và kiểm URL review trước mọi tác dụng phụ
+- Chọn: Tách bằng chứng môi trường thực thi và kiểm URL review trước mọi tác dụng phụ
+- Lý do (tiêu chí chất lượng cuối): Bằng chứng chọn host/repo phải phản ánh môi trường của tiến trình con; review lệch đích không được ghi vào sổ cục bộ. Sửa nhỏ trong giao thức hiện có, thêm ca đỏ/xanh thật, giữ mọi ngưỡng và chính sách tự chủ.
+- Đường lùi: git revert commit của PR sửa AUD-HAR-531 và AUD-HAR-532
+
+### D-593 · 2026-11-25T02:09:36+00:00 · PR #797: nguồn policy T-5029 được tích hợp riêng hay kiểm cùng giao thức merge đã sửa?
+
+- Phương án: (1) Giữ T-5029 ở PR kế tiếp sau #797 · (2) Gộp bản sửa T-5029 đã rà độc lập vào cùng commit khép giao thức merge và kiểm toàn bộ trên một cây mã
+- Chọn: Gộp bản sửa T-5029 đã rà độc lập vào cùng commit khép giao thức merge và kiểm toàn bộ trên một cây mã
+- Lý do (tiêu chí chất lượng cuối): Đích thực thi và nguồn policy cùng quyết định một quyền merge; kiểm chúng trên cùng HEAD tránh chốt giao thức khi nguồn policy còn bị che. T-5029 đã tái hiện đỏ, qua rà độc lập và 4264 test; vẫn chạy lại cổng kết hợp và CI, giữ mọi ngưỡng, giữ ID và bằng chứng riêng.
+- Đường lùi: git revert commit khép giao thức merge; vẫn giữ lịch sử ba phát hiện audit

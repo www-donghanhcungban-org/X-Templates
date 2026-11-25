@@ -7219,17 +7219,26 @@ def _xt_keys(base: Path) -> Dict[str, str]:
     return _yaml_keys(p.read_text(encoding="utf-8") if p.is_file() else "")
 
 
-def _committed_xt_text(base: Path, ref: str) -> Optional[str]:
+def _pr_policy_ref(base: Path, branch: object) -> Optional[str]:
+    """OID của ref theo dõi nhánh đích. `show-ref --verify` chỉ đọc đúng tên ref, kể cả khi ref vắng."""
+    ref = f"refs/remotes/origin/{branch or 'main'}"
+    result = _git(base, "show-ref", "--verify", "--hash", ref, env=_go_git_env())
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _committed_xt_text(base: Path, ref: Optional[str]) -> Optional[str]:
     """xt.yaml **đã commit ở `ref`** (nhánh đích); không đọc được (không có repo/ref/file) → None."""
+    if ref is None:
+        return None
     r = _git(base, "show", f"{ref}:./xt.yaml", env=_go_git_env())
     return r.stdout if r.returncode == 0 else None
 
 
-def _committed_xt_keys(base: Path, ref: str) -> Dict[str, str]:
+def _committed_xt_keys(base: Path, ref: Optional[str]) -> Dict[str, str]:
     return _yaml_keys(_committed_xt_text(base, ref) or "")
 
 
-def merge_hard_mode(base: Path, ref: str) -> Tuple[bool, List[str]]:
+def merge_hard_mode(base: Path, ref: Optional[str]) -> Tuple[bool, List[str]]:
     """(ngoại lệ cứng không giữ người?, ghi chú) từ `merge_hard_exceptions: human|auto` (ADR-0020) trong xt.yaml **đã
     commit ở `ref`** (nhánh đích), không phải cây làm việc: agent sửa file tại chỗ không tự gỡ được chốt; đổi khoá phải
     qua PR mà `HARD_KEY_REASON` giữ cho người merge. Không đọc được ref hay thiếu khoá → human; giá trị lạ → human kèm
@@ -7289,7 +7298,7 @@ def immediate_review_error(keys: Dict[str, str]) -> Optional[str]:
     return f"xt.yaml: {IMMEDIATE_KEY} '{keys[IMMEDIATE_KEY]}' không hợp lệ (on|off)"
 
 
-def immediate_effect_paths(base: Path, ref: str, changed: List[str], prefix: str) -> List[str]:
+def immediate_effect_paths(base: Path, ref: Optional[str], changed: List[str], prefix: str) -> List[str]:
     """Đường dẫn đổi thuộc lớp tác động tức thì, kể cả khi đặt dưới tiền tố dự án con. Chỉ `off` đã commit ở nhánh đích
     mới tắt (PR không tự miễn bằng cách sửa xt.yaml của nó); giá trị lạ → như `on`."""
     if _committed_xt_keys(base, ref).get(IMMEDIATE_KEY) == "off":
@@ -7325,7 +7334,7 @@ def cmd_commit_gate(args: argparse.Namespace) -> int:
     return 0
 
 
-def delivery_phase(base: Path, ref: str) -> Tuple[str, List[str]]:
+def delivery_phase(base: Path, ref: Optional[str]) -> Tuple[str, List[str]]:
     """(pha, ghi chú) cho `merge-check`: `build` chỉ khi CẢ xt.yaml đã commit ở `ref` (nhánh đích) LẪN cây làm việc đều
     `build` — PR không tự chuyển sang build cho chính nó (như `pr_title_check`); còn lại `harden`. Giá trị lạ → harden kèm
     ghi chú."""
@@ -7355,7 +7364,7 @@ def _risk_globs(keys: Dict[str, str]) -> List[str]:
     return [g.strip() for g in keys.get("merge_risk_paths", "").split(",") if g.strip()]
 
 
-def merge_risk_globs(base: Path, ref: str) -> List[str]:
+def merge_risk_globs(base: Path, ref: Optional[str]) -> List[str]:
     """`merge_risk_paths` của cây làm việc HỢP với bản đã commit ở `ref` (nhánh đích): checkout cũ hay sửa tại chỗ không
     làm rơi glob của nhánh đích (bỏ glob phải qua PR sửa xt.yaml — làn chuẩn, D-031); glob thêm tại chỗ chỉ chặt hơn."""
     globs = [*_risk_globs(_xt_keys(base)), *_risk_globs(_committed_xt_keys(base, ref))]
@@ -7382,7 +7391,7 @@ def _autonomy(keys: Dict[str, str], where: str = "") -> Tuple[int, List[str]]:
     return int(level[1]), []
 
 
-def merge_autonomy_level(base: Path, ref: str) -> Tuple[int, List[str]]:
+def merge_autonomy_level(base: Path, ref: Optional[str]) -> Tuple[int, List[str]]:
     """(mức tự chủ, ghi chú) cho `merge-check`: mức THẤP hơn giữa cây làm việc và xt.yaml đã commit ở `ref` (nhánh
     đích) — sửa tại chỗ chỉ hạ được, nâng mức phải qua PR đã merge vào nhánh đích (khi đó chính PR nâng mức được quyết ở
     mức cũ). Không đọc được ref hay thiếu khoá → L1."""
@@ -7390,7 +7399,11 @@ def merge_autonomy_level(base: Path, ref: str) -> Tuple[int, List[str]]:
     text = _committed_xt_text(base, ref)
     committed, more = _autonomy(_yaml_keys(text or ""), " ở nhánh đích")
     if committed < work:
-        why = f"không đọc được xt.yaml ở {ref}" if text is None else f"merge_autonomy ở {ref} là L{committed}"
+        why = (
+            f"không đọc được xt.yaml ở {ref or 'nhánh đích'}"
+            if text is None
+            else f"merge_autonomy ở {ref} là L{committed}"
+        )
         more.append(f"{why} < cây làm việc L{work} — dùng L{committed}")
     return min(work, committed), notes + more
 
@@ -7919,7 +7932,8 @@ def _pr_rest_details(
     files = _gh_items(f"{repo}/pulls/{n}/files?per_page=100")
     # Làn derived (ADR-0087): chỉ PR chạm docs/derived/ mới hỏi thêm API; nội dung đọc như dữ liệu, không chạy mã PR.
     derived = _derived().lane(sys.modules[__name__], repo, pr, files) if DERIVED_MODULE.is_file() else None
-    cfg = review_config(project_dir(), f"origin/{(pr.get('base') or {}).get('ref') or 'main'}")
+    project = project_dir()
+    cfg = review_config(project, _pr_policy_ref(project, (pr.get("base") or {}).get("ref")))
     marks = _published_marks(repo, n, cfg.get("review_identity", ""))
     mergeable = pr.get("mergeable")  # REST: true · false · null (GitHub đang tính)
     raw_base = pr.get("base")
@@ -13007,7 +13021,7 @@ def _print_doctor(base: Path, findings: List[Finding], fixed: List[str], fixing:
         print(f"✓ Sẵn sàng cho autopilot: {tail}")
 
 
-def pr_title_check_off(base: Path, ref: str) -> bool:
+def pr_title_check_off(base: Path, ref: Optional[str]) -> bool:
     """`pr_title_check: off` chỉ có hiệu lực khi cả xt.yaml đã commit ở `ref` (nhánh đích) lẫn cây làm việc đều `off`:
     PR không tự tắt được luật tiêu đề cho chính nó bằng cách sửa xt.yaml trên nhánh của nó — như `merge_autonomy`."""
     return (
@@ -13018,7 +13032,7 @@ def pr_title_check_off(base: Path, ref: str) -> bool:
 def _merge_eval(pr: Dict[str, Any], local: bool = False) -> Tuple[Dict[str, Any], List[str]]:
     """(quyết định, ghi chú cấu hình) của `merge-check` cho PR đã đọc — dùng chung với `pr next`/steward. `local`: đọc thêm
     sổ review cục bộ của PR, chỉ để chặt hơn (D-104) — `merge-check` của phiên; steward chạy ở CI, không có sổ."""
-    ref = f"origin/{pr.get('baseRefName') or 'main'}"
+    ref = _pr_policy_ref(project_dir(), pr.get("baseRefName"))
     if pr_title_check_off(project_dir(), ref):  # dự án không theo Conventional Commits (review #140)
         pr = {k: v for k, v in pr.items() if k != "title"}
     autonomy, notes = merge_autonomy_level(project_dir(), ref)
@@ -17327,7 +17341,7 @@ def pr_rethink_cap(base: Path, pr: Dict[str, Any]) -> int:
     """Trần `max_rethink` CHẶT hơn giữa cây làm việc và xt.yaml đã commit ở nhánh đích của PR (như `merge_autonomy_level`):
     sửa tại chỗ chỉ siết được, nới (kể cả `0` = không trần) phải qua PR đã merge (review #380). `0` là lỏng nhất."""
     work = rethink_cap(_xt_keys(base))
-    committed = rethink_cap(_committed_xt_keys(base, f"origin/{pr.get('baseRefName') or 'main'}"))
+    committed = rethink_cap(_committed_xt_keys(base, _pr_policy_ref(base, pr.get("baseRefName"))))
     caps = [c for c in (work, committed) if c > 0]
     return min(caps) if caps else 0
 
@@ -17945,7 +17959,7 @@ def review_capability_error(
     )
 
 
-def review_config(base: Path, ref: str) -> Dict[str, str]:
+def review_config(base: Path, ref: Optional[str]) -> Dict[str, str]:
     """`review_identity`, `*_model_family`, `*_effort` từ xt.yaml **đã commit ở `ref`** (nhánh đích): danh
     tính reviewer là gốc tin cậy nên PR không tự đổi được (T-1508, AUD-HAR-066). `ref` không đọc được (PR chồng nhắm nhánh
     chưa fetch, fetch hỏng) → lấy từ xt.yaml ở cây làm việc thay vì bỏ trống: bỏ trống làm `published_reviews` quay về tin
@@ -18043,7 +18057,16 @@ def _pr_key(pr: object) -> Optional[str]:
     if num is None:
         print(f"✗ --pr phải là số PR, #N hoặc URL …/pull/N — không phải {pr!r}", file=sys.stderr)
         return None
-    return str(int(num[1] or num[2]))  # 08, chữ số Unicode → "8"
+    key = str(int(num[1] or num[2]))  # 08, chữ số Unicode → "8"
+    if num[2]:  # URL chỉ được ghi vào sổ của đúng checkout, kể cả --no-publish; số PR vẫn dùng được ngoại tuyến.
+        from xt_merge_intent import review_target
+
+        try:
+            review_target(_pr_checkout(), str(pr), key, PrInputError)
+        except PrInputError as exc:
+            print(f"✗ {exc}", file=sys.stderr)
+            return None
+    return key
 
 
 def _decision_at(base: Path, did: str, pr: str) -> Optional[_dt.datetime]:

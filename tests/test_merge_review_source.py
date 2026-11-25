@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,7 +22,7 @@ sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 import guard
 import xt
 from xt_merge_intent import RepoTarget
-from test_merge import GREEN, commit_base_xt, pr, run_main
+from test_merge import GREEN, FakeGh, commit_base_xt, pr, run_main
 
 HEAD = "c" * 40
 AUTO = {"enabledBy": {"login": "a"}, "mergeMethod": "SQUASH"}
@@ -48,6 +49,13 @@ def std(**over: Any) -> dict:
 
 def mark(clean: bool, head: str = HEAD, at: str = "2026-10-20T10:00:00Z") -> dict:
     return {"head": head, "clean": clean, "at": at}
+
+
+def commit_shadowed_policy(base: Path, remote: str, local: str) -> None:
+    commit_base_xt(base, local)
+    for name in ("origin/main", "refs/remotes/origin/main"):
+        subprocess.run(["git", "-C", str(base), "update-ref", "refs/heads/" + name, "HEAD"], check=True)
+    commit_base_xt(base, remote, working=local)
 
 
 class MergeCheckReviewStepTest(unittest.TestCase):
@@ -103,6 +111,29 @@ class MergeCheckReviewStepTest(unittest.TestCase):
     def check_json(self, p: dict) -> tuple[int, dict]:
         rc, out = self.check(p, "--json")
         return rc, dict(json.loads(out))
+
+    def test_merge_review_gate_and_rethink_cap_use_the_exact_remote_branch(self):
+        remote = "merge_autonomy: L3\nmerge_review: required\ndelivery_phase: harden\nmax_rethink: 1\n"
+        local = "merge_autonomy: L3\nmerge_review: optional\ndelivery_phase: build\nmax_rethink: 0\n"
+        commit_shadowed_policy(self.base, remote, local)
+        rc, decision = self.check_json(std())
+        self.assertEqual((rc, decision["verdict"], decision["eligible"]), (1, "review", False), decision)
+        self.assertEqual(decision["delivery_phase"], "harden")
+        self.assertEqual(xt.pr_rethink_cap(self.base, std()), 1)
+
+    def test_missing_remote_policy_does_not_resolve_a_qualified_local_name(self):
+        local = "merge_autonomy: L3\nmerge_review: optional\ndelivery_phase: build\n"
+        commit_shadowed_policy(self.base, "merge_autonomy: L3\nmerge_review: required\n", local)
+        subprocess.run(["git", "-C", str(self.base), "update-ref", "-d", "refs/remotes/origin/main"], check=True)
+        rc, decision = self.check_json(std())
+        self.assertEqual((rc, decision["verdict"], decision["autonomy"], decision["eligible"]), (1, "human", 1, False))
+        self.assertEqual(decision["delivery_phase"], "harden")
+
+    def test_live_review_identity_uses_the_exact_remote_branch(self):
+        commit_shadowed_policy(self.base, "review_identity: remote-reviewer\n", "review_identity: local-reviewer\n")
+        with FakeGh(real_git=True).patch():
+            details = xt._pr_rest("7")
+        self.assertEqual(details["reviewIdentity"], "remote-reviewer")
 
     def test_merge_check_local_unpublished_blocking_blocks(self):
         """AUD-XFEAT-015 (D-104): review `clean:false` (lỗi chặn/chưa kết luận) chỉ có ở sổ cục bộ, đúng head hiện tại →

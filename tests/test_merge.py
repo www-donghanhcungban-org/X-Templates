@@ -2021,11 +2021,17 @@ class PrNextTest(unittest.TestCase):
                 self.subTest(work=work, committed=committed),
                 unittest.mock.patch.object(xt, "_xt_keys", return_value={} if work is None else {"max_rethink": work}),
                 unittest.mock.patch.object(
+                    xt, "_git", return_value=subprocess.CompletedProcess([], 0, self.H + "\n", "")
+                ) as resolve,
+                unittest.mock.patch.object(
                     xt, "_committed_xt_keys", return_value={"max_rethink": str(committed)}
                 ) as ck,
             ):
                 self.assertEqual(xt.pr_rethink_cap(Path("."), {"baseRefName": "dev"}), want)
-                self.assertEqual(ck.call_args.args[1], "origin/dev")
+                self.assertEqual(
+                    resolve.call_args.args, (Path("."), "show-ref", "--verify", "--hash", "refs/remotes/origin/dev")
+                )
+                ck.assert_called_once_with(Path("."), self.H)
         # head chỉ là cập nhật nhánh đích của head đã rà (`base_merge_of`): ADR-0062 — đã có review kết luận → ghi nợ
         self.assertEqual(self.act(rec={"reviews": [b1, b2]}, base_merge_of=[self.H2])["action"], "debt")
         # AUD-HAR-136: head cập nhật nhánh đã rà (`merges` nhớ lúc `pr next` thấy) gộp với head nguồn khi đếm head đã rà

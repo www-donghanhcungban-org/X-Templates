@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 import xt
 from test_merge import commit_base_xt
-from test_merge_review_source import STANDARD, std
+from test_merge_review_source import STANDARD, commit_shadowed_policy, std
 
 OPTIONAL = "merge_autonomy: L3\nmerge_hard_exceptions: auto\nmerge_review: optional\ndelivery_phase: build\n"
 IN_CLASS = [
@@ -97,6 +97,13 @@ class ImmediateEffectReviewTest(unittest.TestCase):
     def test_policy_comes_from_target_branch_not_working_tree(self):
         commit_base_xt(self.base, OPTIONAL, working=OPTIONAL + "immediate_review: off\n")
         self.assertEqual(self.decide(".claude/hooks/guard.py")["verdict"], "review")
+
+    def test_policy_comes_from_the_exact_remote_branch(self):
+        commit_shadowed_policy(self.base, OPTIONAL, OPTIONAL + "immediate_review: off\n")
+        decision = self.decide(".github/workflows/ci.yml")
+        self.assertEqual((decision["verdict"], decision["eligible"]), ("review", False))
+        ordinary = self.decide("src/checkout.py")
+        self.assertEqual((ordinary["verdict"], ordinary["review"]), ("merge", "optional"))
 
     def test_target_branch_can_turn_it_off(self):
         commit_base_xt(self.base, OPTIONAL + "immediate_review: off\n")

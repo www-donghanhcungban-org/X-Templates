@@ -8061,10 +8061,12 @@ def _env_file_why(c: List[str]) -> str:
     return ""
 
 
-def _skip_wrapper_args(name: str, a: List[str]) -> None:
+def _skip_wrapper_args(name: str, a: List[str], merge_env: Optional[Dict[str, str]] = None) -> None:
     """Sau wrapper: bỏ tuỳ chọn (kèm giá trị nếu có) và đối số thời lượng của `timeout`."""
     while a and a[0].startswith("-") and a[0] != "-":
         opt = a.pop(0)
+        if name == "exec" and merge_env is not None and "c" in opt:  # bash exec -c xoá môi trường của tiến trình con
+            merge_env.update(dict.fromkeys(merge_env, ""))
         if name == "ssh-agent" and opt == "--":
             break
         if _wrapper_opt_takes_next(name, opt) and a:
@@ -8087,7 +8089,11 @@ SHELL_KEYWORDS = {"{", "}", "!", "if", "then", "else", "elif", "while", "until",
 
 
 def _strip_prefixes(
-    argv: List[str], dirs: Optional[List[str]] = None, merge_env: Optional[Dict[str, str]] = None
+    argv: List[str],
+    dirs: Optional[List[str]] = None,
+    merge_env: Optional[Dict[str, str]] = None,
+    *,
+    shell_assigns: bool = True,
 ) -> List[str]:
     """Bỏ từ khoá shell, gán biến đầu lệnh, chuyển hướng đặt đầu lệnh (`2>/dev/null cd x`, `>/dev/null rm …` — review
     #186) và wrapper (`command`, `env -i`, `nohup`…) cho tới khi gặp lệnh thật. Đích của chuyển hướng vẫn được
@@ -8104,14 +8110,14 @@ def _strip_prefixes(
         elif head in SHELL_KEYWORDS:
             a.pop(0)
         elif ENV_ASSIGN_RE.fullmatch(head):
-            _assign_merge_selector(merge_env, head)
+            _assign_merge_selector(merge_env if shell_assigns else None, head)
             a.pop(0)
         elif posixpath.basename(head) == "env":
             a.pop(0)
             _skip_env_args(a, dirs, merge_env)
         elif posixpath.basename(head) in WRAPPERS:
             a.pop(0)
-            _skip_wrapper_args(posixpath.basename(head), a)
+            _skip_wrapper_args(posixpath.basename(head), a, merge_env)
         elif REMOTE_SCAN.get() and posixpath.basename(head) in ("sudo", "doas"):
             a.pop(0)  # T-3955 B3: luật sudo là chính sách máy dev; ở máy xa quét lệnh sau nó
             _skip_sudo_args(a)
@@ -12461,13 +12467,94 @@ def _mcp_merge_target(tool: str, inp: Dict[str, object], root: str) -> Tuple[str
     return gate if gate[0] else ("ask", f"{EXTERNAL_ASK} — {UNVERIFIED_ASK}: không có host MCP đã xác minh; dùng REST")
 
 
-GH_MERGE_ENV = contextvars.ContextVar("gh_merge_env", default=("", "", "", ""))
+GH_MERGE_ENV = contextvars.ContextVar("gh_merge_env", default=("", "", "", "", False))
+GH_SELECTORS = ("GH_REPO", "GH_HOST")
+GH_SELECTOR_ASSIGN = re.compile(r"""(GH_HOST|GH_REPO)=(['"]?)([A-Za-z0-9_./-]*)\2""")
 
 
-def _gh_merge_env(argv: List[str], prior: Dict[str, str], root: str, cwd: Optional[str]) -> Tuple[str, str, str, str]:
-    env = {k: prior.get(k, os.environ.get(k, "")) for k in ("GH_REPO", "GH_HOST")}
-    _strip_prefixes(argv, merge_env=env)
-    return env["GH_REPO"], env["GH_HOST"], root, cwd or ""
+@functools.lru_cache(maxsize=16)
+def _gh_shell_commands(script: str) -> Tuple[SimpleCmds, Dict[Tuple[str, ...], int]]:
+    """Ghép argv đang quét với đúng tiền tố của tầng shell. Hai lần có cùng argv thì không suy ra vị trí."""
+    lead, commands = _simple_commands(_raw_tokens(script) or [])
+    positions: Dict[Tuple[str, ...], int] = {}
+    if not lead and "\r" not in script:
+        for i, (words, _) in enumerate(commands):
+            key = tuple(map(_dequote, words))
+            positions[key] = -1 if key in positions else i
+    return commands, positions
+
+
+def _gh_unexported(words: List[str]) -> List[str]:
+    """Tên mất bằng chứng export; gán trần có thể chỉ đặt biến cục bộ."""
+    if words[0] == "unset" or words[:2] in (["export", "-n"], ["declare", "+x"]):
+        names = words[1:] if words[0] == "unset" else words[2:]
+        return names if all(name in GH_SELECTORS for name in names) else []
+    args = words[1:] if words[0] == "declare" else words
+    return [word.partition("=")[0] for word in args] if all(map(GH_SELECTOR_ASSIGN.fullmatch, args)) else []
+
+
+def _gh_prior_step(exports: Dict[str, str], words: List[str]) -> bool:
+    """Chỉ nối bước có hiệu ứng biết chắc. Một cd dùng làm điều kiện phải vào được thư mục chữ tuyệt đối."""
+    if words == ["true"]:
+        return True
+    if words[:1] == ["cd"]:
+        return len(words) == 2 and posixpath.isabs(words[1]) and _enterable_dir(words[1])
+    if names := _gh_unexported(words):
+        exports.update(dict.fromkeys(names, ""))
+        return True
+    start = 2 if words[:2] == ["declare", "-x"] else 1
+    if start == 1 and words[0] != "export":
+        return False
+    for word in words[start:]:
+        assign = GH_SELECTOR_ASSIGN.fullmatch(word)
+        if not assign:
+            return False
+        exports[assign[1]] = assign[3]
+    return True
+
+
+def _gh_literal_exports(script: str, argv: List[str]) -> Optional[Dict[str, str]]:
+    commands, positions = _gh_shell_commands(script)
+    end = positions.get(tuple(argv), -1)
+    if end < 0:
+        return None
+    exports: Dict[str, str] = {}
+    for words, after in commands[:end]:
+        if any(sep not in (";", "&&", "\n") for sep in after) or not _gh_prior_step(exports, words):
+            return None
+    return exports
+
+
+def _gh_nested_entry(script: str, child: str) -> bool:
+    # Thay lệnh kế thừa thuộc tính readonly. Chỉ nhận thân thực sự được chạy từ một lệnh cha đơn.
+    commands, positions = _gh_shell_commands(script)
+    if len(commands) != 1 or not positions:
+        return False
+    words = commands[0][0]
+    if words[:2] in (["bash", "-c"], ["sh", "-c"]):
+        return len(words) == 3 and _dequote(words[2]) == child
+    return words[-1] in (f'"$({child})"', f"$({child})") and all(
+        re.fullmatch(r"[-A-Za-z0-9_./%+]+", _dequote(word)) for word in words[:-1]
+    )
+
+
+def _gh_merge_env(argv: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str, str, str, bool]:
+    scripts = SHADOW.get()
+    exports = (
+        _gh_literal_exports(scripts[-1], argv)
+        if scripts and all(_gh_nested_entry(a, b) for a, b in zip(scripts, scripts[1:]))
+        else None
+    )
+    # Phân biệt biến không đặt ở argv với biến đã bị env -u/-i/exec -c gỡ. Chỉ env chạy riêng mới bỏ qua readonly.
+    inherit = "\0"
+    env = dict.fromkeys(GH_SELECTORS, inherit)
+    _strip_prefixes(argv, merge_env=env, shell_assigns=exports is not None)
+    qualified = env["GH_REPO"].count("/") == 2
+    for key in GH_SELECTORS:
+        if env[key] == inherit:
+            ambient = os.environ.get(key, "") if len(scripts) == 1 else ""
+            env[key] = exports.get(key, ambient) if exports is not None else ""
+    return env["GH_REPO"], env["GH_HOST"], root, cwd or "", qualified
 
 
 def _merge_checkout_same(root: str, cwd: str) -> bool:
@@ -12508,8 +12595,10 @@ def _hard_gate(selector: List[str], root: str, repo: str) -> Tuple[Dict[str, obj
 
 
 def _merge_target_ok(d: Dict[str, object], selector: List[str], repo: str, host: str, gh_pr: bool) -> bool:
-    inherited_repo, inherited_host, root, cwd = GH_MERGE_ENV.get()
-    repo = repo or (inherited_repo if inherited_repo and cwd and _merge_checkout_same(root, cwd) else "")
+    inherited_repo, inherited_host, root, cwd, qualified = GH_MERGE_ENV.get()
+    repo = repo or (
+        inherited_repo if inherited_repo and (qualified and gh_pr or cwd and _merge_checkout_same(root, cwd)) else ""
+    )
     if repo.count("/") == 2:
         repo_host, repo = repo.split("/", 1)
         host = host or repo_host
@@ -17716,10 +17805,10 @@ def _track_env(res: Dict[str, object], argv: List[str]) -> Dict[str, str]:
 
 
 def _command_verdict(
-    n: List[str], argv: List[str], root: str, cwd: Optional[str], gdir: Optional[str], env: Dict[str, str]
+    n: List[str], argv: List[str], root: str, cwd: Optional[str], gdir: Optional[str]
 ) -> Tuple[str, str]:
     """`command_rules` rồi nới việc chỉ trong dự án/tmp ở pha build (ADR-0040)."""
-    bound = GH_MERGE_ENV.set(_gh_merge_env(argv, env, root, cwd)) if n[0] == "gh" else None
+    bound = GH_MERGE_ENV.set(_gh_merge_env(argv, root, cwd)) if n[0] == "gh" else None
     try:
         verdict = command_rules(n, root, (gdir if n[0] == "git" else cwd) or root)
     finally:
@@ -18128,7 +18217,7 @@ def _scan_one(
     # Lệnh git ghi ref (AUD-SEC-119) cũng cần repo thật để đọc tên remote của nó.
     gdir = _git_dir(argv, cwd) if n[0] == "git" and n[1:2] and n[1] in GIT_DIR_SUBS else None
     # Lệnh khác git (rm/find) xét đích theo thư mục đang đứng sau `cd` (`cd ~ && rm -rf projects`).
-    decision, why = _stricter(_command_verdict(n, argv, root, cwd, gdir, env), remote_config_oneshot(argv, n, env))
+    decision, why = _stricter(_command_verdict(n, argv, root, cwd, gdir), remote_config_oneshot(argv, n, env))
     t12 = _stricter(t12_command_rule(argv, n, env), t14_command_rule(n, root, cwd))  # T-3952/T-3955: thắng khi hoà
     decision, why = _stricter(t12, (decision, why)) if t12[0] else (decision, why)
     if decision == "deny":

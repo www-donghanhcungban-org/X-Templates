@@ -9,7 +9,7 @@ import subprocess
 import sys
 from contextlib import chdir
 from pathlib import Path
-from unittest import mock
+from unittest import main, mock
 from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -424,11 +424,25 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assertEqual(rc, 2, out + err)
         self.assertEqual(self.gh.calls, [])
 
+    def test_wrong_review_url_leaves_review_slice_and_cost_unchanged(self):
+        review = ("pr", "reviewed", "--head", self.head, "--slice", "PLAN-x/T-1", "--cost", "id=review,usd=0.1")
+        rc, out, err = run_main(*review, "--pr", PR, "--inconclusive", "--no-publish")
+        self.assertEqual(rc, 0, out + err)
+        state = xt.state_dir(self.repo)
+        ledger = state / xt.REVIEWS_FILE
+        events = state / xt.SLICES_SUBDIR / "PLAN-x__T-1.jsonl"
+        before = ledger.read_bytes(), events.read_bytes()
+        for selector in (pr_url(PUBLIC), pr_url(slug="o/other")):
+            for extra in ((), ("--no-publish",)):
+                with self.subTest(selector=selector, extra=extra):
+                    rc, out, err = run_main(*review, "--pr", selector, "--blocking", *extra)
+                    self.assertEqual((ledger.read_bytes(), events.read_bytes()), before)
+                    self.assertEqual(rc, 2, out + err)
+                    self.assertIn("URL review", err)
+                    self.assertEqual(self.gh.calls, [])
+
     def test_native_review_publication_uses_the_bound_enterprise_target(self):
         review = ("pr", "reviewed", "--head", self.head, "--blocking", "--pr")
-        rc, out, err = run_main(*review, pr_url(PUBLIC))
-        self.assertEqual(rc, 3, out + err)
-        self.assertEqual(self.gh.calls, [])
         rc, out, err = run_main(*review, pr_url() + "/files#diff-abcd")
         self.assertEqual(rc, 0, out + err)
         self.assertEqual(self.gh.calls[-1][:3], ("POST", HOST, f"repos/{SLUG}/issues/{PR}/comments"))
@@ -436,6 +450,4 @@ class MergeTargetBindingTest(TmpRepoCase):
 
 
 if __name__ == "__main__":
-    import unittest
-
-    unittest.main()
+    main()
