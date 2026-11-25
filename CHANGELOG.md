@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `static-check` không còn sập khi thông điệp chứa surrogate đơn (khoá catalog hay tên tham số ICU dạng `\ud800`, tên tệp không phải UTF-8): đầu ra qua `printable()` thành dạng thoát, mã thoát giữ 1 và JSON vẫn hợp lệ (AUD-HAR-546). `i18n` đặt trần tổng độ dài khoá làm phẳng (32 triệu ký tự) và `sbom` đặt trần 16 tầng `components`: chuỗi đường dẫn dài dần theo độ sâu từng làm bộ nhớ tăng bậc hai theo cỡ tệp; vượt trần báo `LOC000` hoặc `SBM000` thay vì cạn bộ nhớ (AUD-HAR-547). `credits` tính gốc chung của media một lần thay vì ở mỗi dòng mồ côi (AUD-HAR-549). Ba ca hồi quy đỏ khi thiếu bản sửa.
+
 - `deploy run` và `deploy rollback` ngoài dev không còn dừng sớm khi thư mục tạm đi qua symlink (macOS `/var` trỏ `/private/var`): checkout adapter dùng đường dẫn đã `resolve()` (AUD-HAR-551). `loop record` và `release-check` không còn đỏ giả ở dự án không khai nghiệm thu mà `docs/` là symlink: đường dẫn sổ chỉ bị bắt buộc "không qua symlink" khi sổ có thật; sổ nằm sau symlink vẫn bị từ chối, sổ đã có trong Git mà bị xoá vẫn bị báo (AUD-HAR-552). Hai ca hồi quy đỏ khi thiếu bản sửa.
 
 - `verify-render` đo màu sau khi kết thúc transition và animation hữu hạn (AUD-HAR-556): nút có chữ chuyển dần sang màu tương phản thấp từng báo "đạt" vì cổng đọc màu ở đầu chuyển tiếp; hoạt ảnh vô hạn chạm tới điều khiển nay báo `UNMEASURED`. Thông điệp lỗi của trình duyệt (từ chối kết nối, hết giờ) che userinfo, query và fragment như định danh trong báo cáo (AUD-HAR-557). Ba ca Chromium mới đỏ khi thiếu bản sửa.

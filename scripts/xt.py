@@ -11957,10 +11957,10 @@ def cmd_static_check(args: argparse.Namespace) -> int:
     found = report.findings
     if args.json:
         payload = {"schema": 1, "kind": args.kind, "checked": report.checked, "findings": [f.as_dict() for f in found]}
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        print(xt_checks.printable(json.dumps(payload, ensure_ascii=False, indent=2)))
     else:
         for f in found:
-            print(f"✗ {f.path}:{f.line}: [{f.code}] {f.message}")
+            print(xt_checks.printable(f"✗ {f.path}:{f.line}: [{f.code}] {f.message}"))
         if not found:
             print(f"✓ static-check {args.kind}: không phát hiện.")
     return 1 if found else 0

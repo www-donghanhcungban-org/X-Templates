@@ -37,13 +37,22 @@ def _load(text: str) -> dict[str, Any] | None:
     return None
 
 
+MAX_COMPONENT_DEPTH = (
+    16  # `where` dài dần theo tầng nên bộ nhớ bậc hai theo độ sâu; SBOM thật lồng vài tầng (AUD-HAR-547)
+)
+
+
 def _components(shape: JsonShape, field: str, items: object) -> Iterator[tuple[str, dict[str, Any]]]:
-    stack = list(reversed(shape.entries(field, items, dict)))
+    stack = [(1, where, comp) for where, comp in reversed(shape.entries(field, items, dict))]
     while stack:
-        where, comp = stack.pop()
+        depth, where, comp = stack.pop()
         yield where, comp
         if "components" in comp:
-            stack.extend(reversed(shape.entries(f"{where}.components", comp["components"], dict)))
+            if depth >= MAX_COMPONENT_DEPTH:
+                shape.error(f"{where}.components", f"lồng không quá {MAX_COMPONENT_DEPTH} tầng")
+                continue
+            entries = shape.entries(f"{where}.components", comp["components"], dict)
+            stack.extend((depth + 1, child, item) for child, item in reversed(entries))
 
 
 def _component_fields(shape: JsonShape, where: str, comp: dict[str, Any]) -> None:
