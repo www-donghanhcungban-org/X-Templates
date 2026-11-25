@@ -12,6 +12,16 @@
    ]
   },
   {
+   "reason": "Nợ rà #797 đã sửa trong chính #797: ca cần Git checkout thật và GitHub CLI giả hoặc chạy `xt.py pr next` cô lập, ngoài schema quyết định đơn của corpus. Snapshot offline không sinh lệnh ghi (AUD-HAR-522), tên repo `.github` (523), gốc worktree từ thư mục `scripts` (524), URL tab `/files` và cặp `--repo` cùng `--pr` (525), URL tab `/changes` không là `html_url` chuẩn (528): `python3 -m unittest tests.test_merge_target_binding tests.test_hooks.MergeGuardPinnedMergeTest.test_numeric_pr_and_verified_worktree_for_environment_routing`",
+   "ids": [
+    "AUD-HAR-522",
+    "AUD-HAR-523",
+    "AUD-HAR-524",
+    "AUD-HAR-525",
+    "AUD-HAR-528"
+   ]
+  },
+  {
    "reason": "Sổ review và sự kiện chi phí/lát phải giữ nguyên khi URL khác checkout ở cả hai chế độ đăng. Schema corpus chỉ đo một quyết định. Ca có checkout, sổ và gh giả ở tests.test_merge_target_binding.MergeTargetBindingTest.test_wrong_review_url_leaves_review_slice_and_cost_unchanged.",
    "ids": [
     "AUD-HAR-532"
@@ -740,6 +750,15 @@
    "reason": "Origin của trang login, chuyển hướng HTTP, WebSocket và health của smoke là hợp đồng trình duyệt Playwright trên dev. Các adapter corpus hiện có không điều khiển browser/network. tests.test_pack_ui.PackUiTest.test_browser_preview_restricts_fixture_login_and_redirects kiểm origin, redirect và receipt; hành trình Chromium kiểm hai phiên.",
    "ids": [
     "AUD-SEC-994"
+   ]
+  },
+  {
+   "reason": "Nợ rà #801 đã sửa ở #805: loại điều khiển vô hiệu khỏi phạm vi đo (AUD-HAR-534), che userinfo/query/fragment trong báo cáo (535), log số đo từng phạm vi trong CI (536), từ chối HTTP không phải 2xx (538). Cần Chromium và máy chủ HTTP cục bộ, ngoài sáu adapter của corpus; các ca `disabled controls…`, `report identifiers hide userinfo…`, `an HTTP error page is UNMEASURED…` trong `tests_e2e/verify_render.test.mjs` chạy Chromium thật trên CI.",
+   "ids": [
+    "AUD-HAR-534",
+    "AUD-HAR-535",
+    "AUD-HAR-536",
+    "AUD-HAR-538"
    ]
   },
   {
