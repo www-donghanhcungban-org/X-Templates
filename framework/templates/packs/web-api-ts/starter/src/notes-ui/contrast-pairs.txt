@@ -1,0 +1,26 @@
+# Chữ, nền điều khiển và viền focus theo cách dùng trong app.css.
+text-main on surface-page
+text-main on surface-card
+text-main on surface-editor
+text-main on surface-field
+text-main on surface-notice
+text-main on surface-error
+text-muted on surface-page
+text-muted on surface-card
+primary-foreground on primary
+primary-foreground on primary-hover
+primary on surface-page
+primary on surface-quiet-hover
+primary on surface-card min 3
+primary on surface-editor min 3
+primary-hover on surface-card min 3
+primary-hover on surface-editor min 3
+border-control on surface-page min 3
+border-control on surface-card min 3
+border-control on surface-editor min 3
+border-control on surface-field min 3
+border-control on surface-quiet-hover min 3
+ring-focus on surface-page min 3
+ring-focus on surface-card min 3
+ring-focus on surface-editor min 3
+border-error on surface-error min 3

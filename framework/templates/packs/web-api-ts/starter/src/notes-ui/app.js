@@ -7,6 +7,8 @@ const refresh = element("refresh");
 const logout = element("logout");
 const status = element("status");
 const dates = new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" });
+const themeColor = getComputedStyle(document.documentElement).getPropertyValue("--surface-page").trim();
+document.querySelector("meta[name=theme-color]")?.setAttribute("content", themeColor);
 let session = "";
 
 function report(message, error = false) {
@@ -71,23 +73,31 @@ async function loadNotes() {
 }
 
 // Một thao tác tại mỗi thời điểm để lần tải lại cũ không ghi đè ghi chú vừa lưu.
-async function perform(task) {
+async function perform(message, task) {
   const buttons = document.querySelectorAll("button");
   if (refresh.disabled) return;
+  const focused = document.activeElement;
   for (const button of buttons) button.disabled = true;
-  report("");
+  report(message);
   try {
     await task();
   } catch (error) {
     report(error instanceof TypeError ? "Mất kết nối. Hãy kiểm tra mạng và tải lại." : error.message, true);
   } finally {
     for (const button of buttons) button.disabled = false;
+    if (
+      document.activeElement === document.body &&
+      focused instanceof HTMLButtonElement &&
+      !focused.closest("[hidden]")
+    ) {
+      focused.focus();
+    }
   }
 }
 
 login.addEventListener("submit", (event) => {
   event.preventDefault();
-  perform(async () => {
+  perform("Đang đăng nhập…", async () => {
     const { token } = await request("/v1/login", {
       email: element("email").value.trim(),
       password: element("password").value,
@@ -96,7 +106,9 @@ login.addEventListener("submit", (event) => {
     element("password").value = "";
     setSignedIn(true);
     input.focus();
+    report("Đang tải ghi chú…");
     await loadNotes();
+    report("");
   });
 });
 
@@ -108,7 +120,7 @@ editor.addEventListener("submit", (event) => {
     input.focus();
     return;
   }
-  perform(async () => {
+  perform("Đang lưu ghi chú…", async () => {
     const note = await request("/v1/notes", { body }, session);
     list.prepend(entry(note));
     if (list.children.length > 100) list.lastElementChild.remove();
@@ -120,7 +132,7 @@ editor.addEventListener("submit", (event) => {
 });
 
 refresh.addEventListener("click", () =>
-  perform(async () => {
+  perform("Đang tải ghi chú…", async () => {
     await loadNotes();
     report("Đã tải lại danh sách.");
   }),
