@@ -73,7 +73,9 @@ function validateException(item, index) {
     throw new Error(`${field} sai width, theme hoặc state`);
   }
   const axe = /^axe:[a-z0-9-]+$/.test(item.check) && item.state === 'default';
-  if ((!axe && item.check !== 'contrast') || item.target.includes('*') || item.element.includes('*')) {
+  // Dấu `*` đã escape (CSS.escape của id có sao) là ký tự thật, chỉ dấu trần mới là ký tự đại diện.
+  const unescaped = item.element.replace(/\\[\s\S]/g, '');
+  if ((!axe && item.check !== 'contrast') || item.target.includes('*') || unescaped.includes('*')) {
     throw new Error(`${field} sai check hoặc có ký tự đại diện`);
   }
   if (!dateStamp(item.expires)) throw new Error(`${field}.expires cần ngày UTC YYYY-MM-DD hợp lệ`);
@@ -159,8 +161,20 @@ const elementPath = (el) => {
   return root instanceof ShadowRoot ? null : parts.join(' > ');
 };
 
+// Định danh trong báo cáo không mang userinfo, query hay fragment của đích (có thể chứa khoá hoặc phiên);
+// khoá phạm vi ngoại lệ vẫn so URL đầy đủ.
+function reportTarget(target) {
+  const url = new URL(target);
+  const hidden = Boolean(url.username || url.password || url.search || url.hash);
+  url.username = '';
+  url.password = '';
+  url.search = '';
+  url.hash = '';
+  return hidden ? `${url.href}[đã che]` : url.href;
+}
+
 function scopeText({ target, width, theme, state, check, element }) {
-  const group = `target=${JSON.stringify(target)} viewport=${width}x${HEIGHT} theme=${theme} state=${state}`;
+  const group = `target=${JSON.stringify(reportTarget(target))} viewport=${width}x${HEIGHT} theme=${theme} state=${state}`;
   return check ? `${group} check=${check} element=${JSON.stringify(element)}` : group;
 }
 
@@ -234,7 +248,8 @@ async function auditContrast(page, scope, results, limit) {
   const controls = await page.locator(INTERACTIVE).elementHandles();
   let visible = 0;
   for (const control of controls) {
-    if (!await control.isVisible()) continue;
+    // Điều khiển vô hiệu (kể cả kế thừa từ fieldset disabled) không nhận focus nên không thuộc phạm vi đo.
+    if (!await control.isVisible() || await control.evaluate((el) => el.matches(':disabled'))) continue;
     const element = await control.evaluate(elementPath);
     visible++;
     for (const state of STATES) {
@@ -270,7 +285,9 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
   });
   try {
     const page = await context.newPage();
-    await page.goto(scope.target);
+    const response = await page.goto(scope.target);
+    // Trang lỗi HTTP không được báo đạt: file: trả null, còn http(s) phải là 2xx sau chuyển hướng.
+    if (response && !response.ok()) throw new Error(`HTTP ${response.status()} tại ${reportTarget(scope.target)}`);
     await auditAxe(page, AxeBuilder, settings.tags, scope, results);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) {

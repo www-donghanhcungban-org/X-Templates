@@ -41,7 +41,9 @@ Nếu Chromium không xác định được màu `Canvas` đục, phép đo đư
 
 Exit 0 khi không có vi phạm đã đo và điều kiện nghiêm ngặt đã chọn được đáp ứng. Exit 1 khi có vi phạm đã đo hoặc
 `--strict` còn `UNMEASURED` chưa miễn. Exit 2 khi cấu hình sai hoặc cổng không chạy hết, ví dụ thiếu Chromium, thiếu
-phụ thuộc hoặc lỗi tải trang. Báo cáo vẫn ghi `UNMEASURED` khi ngoại lệ được áp dụng.
+phụ thuộc, lỗi tải trang hoặc phản hồi HTTP không phải 2xx. Điều khiển vô hiệu (`:disabled`, kể cả trong `fieldset`
+vô hiệu) nằm ngoài phạm vi đo. Báo cáo vẫn ghi `UNMEASURED` khi ngoại lệ được áp dụng. Định danh `target` trong báo cáo
+bỏ userinfo, query và fragment (đánh dấu `[đã che]`); ngoại lệ vẫn khớp theo URL đầy đủ.
 
 ## Ngoại lệ có bằng chứng
 
@@ -70,7 +72,7 @@ dạng YYYY-MM-DD, còn hiệu lực hết ngày đó.
 }
 ```
 
-Phạm vi dùng giá trị chính xác, không có wildcard hoặc mục trùng. Ngoại lệ hết hạn và không dùng được in riêng. Ngoại lệ
+Phạm vi dùng giá trị chính xác, không có wildcard hoặc mục trùng (`*` đã escape bằng `\`, như `#star\*name`, là ký tự thật). Ngoại lệ hết hạn và không dùng được in riêng. Ngoại lệ
 chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương phản đã đo vẫn làm đỏ.
 
 ## Giới hạn
