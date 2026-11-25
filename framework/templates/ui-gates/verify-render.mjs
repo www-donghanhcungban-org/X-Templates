@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 
 const HEIGHT = 800;
 const DESKTOP = 1280;
+const REFLOW_WIDTH = 400;
 const THEMES = ['light', 'dark'];
 const STATES = ['default', 'hover', 'focus'];
 const INTERACTIVE = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role=button], [tabindex]:not([tabindex="-1"])';
@@ -98,45 +99,71 @@ async function readExceptions(file, today) {
   return entries;
 }
 
-// Chạy trong trang: màu chữ hiệu dụng trên nền hiệu dụng của phần tử (canvas chuyển mọi màu CSS về sRGB).
+// Chạy trong trang: màu chữ hiệu dụng trên nền hiệu dụng của phần tử (canvas chuyển mọi màu CSS về sRGB). Đo cả chữ của
+// phần tử con và nội dung ::before/::after (mỗi phần có màu riêng), trả kết quả tệ nhất; đi theo cây phẳng (slot, shadow
+// host). Độ mờ, bộ lọc, hoà trộn hay chữ trong suốt làm màu thật không tính được: trả `unmeasured`.
 const measure = (el) => {
   const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
   if (!ctx) return { unmeasured: 'không đọc được màu qua canvas' };
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
-  const layers = [];
-  for (let n = el; n; n = n.parentElement) {
-    const s = getComputedStyle(n);
-    if (s.backgroundImage !== 'none') return { unmeasured: 'nền là ảnh/gradient' };
-    const bg = rgba(s.backgroundColor);
-    if (bg[3] > 0) layers.push(bg);
-    if (bg[3] === 1) break;
+  const up = (n) => n.assignedSlot || n.parentElement || n.getRootNode().host || null;
+  const kids = (n) => [...(n.shadowRoot ? n.shadowRoot.children : n.children), ...(n.localName === 'slot' ? n.assignedElements() : [])];
+  const hasText = (n) => [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
+  const nodes = [el];
+  for (let i = 0; i < nodes.length && nodes.length < 200; i++) nodes.push(...kids(nodes[i]));
+  const readings = nodes.filter((n) => n === el || hasText(n)).map((n) => [n, null]);
+  for (const node of nodes.slice(0, 50)) {
+    for (const pseudo of ['::before', '::after']) {
+      const content = getComputedStyle(node, pseudo).content;
+      if (content && !['none', 'normal', '""', "''"].includes(content)) readings.push([node, pseudo]);
+    }
   }
-  if (layers.at(-1)?.[3] !== 1) {
-    // Canvas của trang dùng color-scheme thực tế của root, kể cả khi root và body trong suốt.
-    const root = el.ownerDocument.documentElement;
-    const probe = el.ownerDocument.createElement('span');
-    probe.style.setProperty('all', 'initial', 'important');
-    probe.style.setProperty('color-scheme', 'inherit', 'important');
-    probe.style.setProperty('color', 'Canvas', 'important');
-    probe.style.setProperty('display', 'none', 'important');
-    root.append(probe);
-    const color = getComputedStyle(probe).color;
-    probe.remove();
-    if (!/^(?:rgba?|color)\(/.test(color)) return { unmeasured: 'không xác định được màu Canvas của trang' };
-    const canvas = rgba(color);
-    if (canvas[3] !== 1) return { unmeasured: 'không xác định được màu Canvas của trang' };
-    layers.push(canvas);
+  const read = ([node, pseudo]) => {
+    const layers = [];
+    for (let n = node; n; n = up(n)) {
+      const s = getComputedStyle(n);
+      if (s.opacity !== '1' || s.filter !== 'none' || s.mixBlendMode !== 'normal') return { unmeasured: 'độ mờ, bộ lọc hay chế độ hoà trộn' };
+      if (s.backgroundImage !== 'none') return { unmeasured: 'nền là ảnh/gradient' };
+      const bg = rgba(s.backgroundColor);
+      if (bg[3] > 0) layers.push(bg);
+      if (bg[3] === 1) break;
+    }
+    if (layers.at(-1)?.[3] !== 1) {
+      // Canvas của trang dùng color-scheme thực tế của root, kể cả khi root và body trong suốt.
+      const root = node.ownerDocument.documentElement;
+      const probe = node.ownerDocument.createElement('span');
+      probe.style.setProperty('all', 'initial', 'important');
+      probe.style.setProperty('color-scheme', 'inherit', 'important');
+      probe.style.setProperty('color', 'Canvas', 'important');
+      probe.style.setProperty('display', 'none', 'important');
+      root.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      if (!/^(?:rgba?|color)\(/.test(color)) return { unmeasured: 'không xác định được màu Canvas của trang' };
+      const canvas = rgba(color);
+      if (canvas[3] !== 1) return { unmeasured: 'không xác định được màu Canvas của trang' };
+      layers.push(canvas);
+    }
+    let base = layers.pop().slice(0, 3);
+    for (const [r, g, b, a] of layers.reverse()) base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)];
+    const s = getComputedStyle(node, pseudo);
+    if (pseudo && (s.backgroundImage !== 'none' || rgba(s.backgroundColor)[3] > 0)) return { unmeasured: 'nội dung giả có nền riêng' };
+    const fg = rgba(s.webkitTextFillColor || s.color);
+    if (fg[3] === 0) return { unmeasured: 'chữ trong suốt' };
+    const text = [0, 1, 2].map((i) => fg[i] * fg[3] + base[i] * (1 - fg[3]));
+    const [hi, lo] = [lum(text), lum(base)].sort((x, y) => y - x);
+    const px = parseFloat(s.fontSize), bold = Number(s.fontWeight) >= 700;
+    const large = px >= 24 || (px >= 18.66 && bold);
+    return { ratio: (hi + 0.05) / (lo + 0.05), need: large ? 3 : 4.5 };
+  };
+  let worst = null;
+  for (const item of readings) {
+    const reading = read(item);
+    if (reading.unmeasured) return reading;
+    if (!worst || reading.ratio / reading.need < worst.ratio / worst.need) worst = reading;
   }
-  let base = layers.pop().slice(0, 3);
-  for (const [r, g, b, a] of layers.reverse()) base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)];
-  const s = getComputedStyle(el);
-  const fg = rgba(s.color);
-  const text = [0, 1, 2].map((i) => fg[i] * fg[3] + base[i] * (1 - fg[3]));
-  const [hi, lo] = [lum(text), lum(base)].sort((x, y) => y - x);
-  const px = parseFloat(s.fontSize), bold = Number(s.fontWeight) >= 700;
-  const large = px >= 24 || (px >= 18.66 && bold);
-  return { ratio: (hi + 0.05) / (lo + 0.05), need: large ? 3 : 4.5, label: (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 40) };
+  return { ...worst, label: (el.getAttribute('aria-label') || el.textContent || el.tagName).trim().slice(0, 40) };
 };
 
 // Tạo định danh ổn định cho phạm vi ngoại lệ, ưu tiên id duy nhất rồi dùng đường CSS đầy đủ.
@@ -275,14 +302,33 @@ const settle = (el) => {
   return infinite;
 };
 
+// Chạy trong trang: các phần tử nhìn thấy bị cắt ngang (tối đa 20), tên theo `path`.
+const findClipped = (path) => {
+  const found = [];
+  for (const el of document.querySelectorAll('*')) {
+    const s = getComputedStyle(el);
+    const clips = ['hidden', 'clip'].includes(s.overflowX);
+    if (!clips || s.textOverflow === 'ellipsis' || el.clientWidth <= 0 || el.scrollWidth <= el.clientWidth + 1) continue;
+    if (s.visibility === 'hidden' || !el.getClientRects().length) continue;
+    found.push(path(el) ?? el.localName);
+    if (found.length === 20) break;
+  }
+  return found;
+};
+
 async function auditContrast(page, scope, results, limit) {
   const counts = new Map(STATES.map((state) => [state, tally()]));
-  const controls = await page.locator(INTERACTIVE).elementHandles();
+  // Mỗi khung (iframe, kể cả lồng nhau) có cây DOM riêng: bộ chọn của trang không đi vào khung nên duyệt từng khung.
+  const controls = [];
+  for (const [index, frame] of page.frames().entries()) {
+    for (const handle of await frame.locator(INTERACTIVE).elementHandles()) controls.push({ handle, frame: index });
+  }
   let visible = 0;
-  for (const control of controls) {
+  for (const { handle: control, frame } of controls) {
     // Điều khiển vô hiệu (kể cả kế thừa từ fieldset disabled) không nhận focus nên không thuộc phạm vi đo.
     if (!await control.isVisible() || await control.evaluate((el) => el.matches(':disabled'))) continue;
-    const element = await control.evaluate(elementPath);
+    const path = await control.evaluate(elementPath);
+    const element = frame ? `frame[${frame}] ${path}` : path;
     visible++;
     for (const state of STATES) {
       const row = counts.get(state);
@@ -328,6 +374,13 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (overflow > 0) {
       recordViolation(results, { ...scope, state: 'default', check: 'reflow', element: 'html' }, `tràn ngang +${overflow}px`);
+    }
+    // Reflow (WCAG 1.4.10) ở khổ hẹp: vùng `overflow:hidden|clip` mà nội dung rộng hơn khung thì phần thừa bị cắt chứ
+    // không cuộn, nên `scrollWidth` của gốc không thấy. Cắt chữ có chủ ý bằng `text-overflow:ellipsis` thì bỏ qua.
+    if (scope.width <= REFLOW_WIDTH) {
+      for (const element of await page.evaluate(`(${findClipped})(${elementPath})`)) {
+        recordViolation(results, { ...scope, state: 'default', check: 'reflow', element }, 'nội dung bị cắt ngang bởi overflow:hidden');
+      }
     }
     await auditContrast(page, scope, results, settings.limit);
   } finally {

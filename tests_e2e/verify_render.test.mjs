@@ -317,6 +317,64 @@ test('an infinite animation on the control is UNMEASURED instead of a guess', as
   assert.doesNotMatch(advisory.stdout, /^✓/m);
 });
 
+const contrastLine = (stdout, needle) => stdout.split('\n').find((line) => line.startsWith('✗ ') && line.includes('check=contrast') && line.includes(needle));
+
+test('controls inside an iframe are measured, not skipped', async (t) => {
+  const inner = '<button style="color:#ddd;background:#fff;min-width:48px;min-height:44px">Pay</button>';
+  const sample = await fixture(t, page({ markup: `<iframe title="payment" width="200" height="80" srcdoc="${inner.replaceAll('"', '&quot;')}"></iframe>` }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'element="frame[1] '), result.stdout);
+});
+
+test('a control inside a shadow root is measured against the host background', async (t) => {
+  const sample = await fixture(t, page({
+    css: 'x-card { display: block; background: #111; padding: 8px; }',
+    markup: `<x-card id="card"></x-card><script>
+      const root = document.getElementById('card').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="color:#222;background:transparent;min-width:48px;min-height:44px">Shadow</button>';
+    </script>`,
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'state=default'), result.stdout);
+});
+
+test('text colour of a child element and of ::before is measured, not only the control colour', async (t) => {
+  const child = await fixture(t, page({ markup: '<button id="child"><span style="color:#ddd">Quiet label</span></button>' }));
+  const childResult = await child.run(['--strict', '--widths', '320']);
+  status(childResult, 1);
+  assert.ok(contrastLine(childResult.stdout, 'element="#child"'), childResult.stdout);
+  const pseudo = await fixture(t, page({ css: '#icon::before { content: "!"; color: #ddd; }', markup: '<button id="icon">Alert</button>' }));
+  const pseudoResult = await pseudo.run(['--strict', '--widths', '320']);
+  status(pseudoResult, 1);
+  assert.ok(contrastLine(pseudoResult.stdout, 'element="#icon"'), pseudoResult.stdout);
+});
+
+test('opacity and transparent text fill make a control UNMEASURED instead of a guess', async (t) => {
+  const sample = await fixture(t, page({
+    css: '#faded { opacity: .3; } #ghost { -webkit-text-fill-color: transparent; }',
+    markup: '<button id="faded">Faded</button><button id="ghost">Ghost</button>',
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^UNMEASURED .*check=contrast element="#faded" — độ mờ/m);
+  assert.match(result.stdout, /^UNMEASURED .*check=contrast element="#ghost" — chữ trong suốt/m);
+});
+
+test('content clipped by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
+  const wide = '<div id="{id}" tabindex="0" role="region" aria-label="wide content" style="{style}"><div style="width:600px;height:10px;white-space:nowrap">content wider than its box</div></div>';
+  const clipped = await fixture(t, page({ markup: wide.replace('{id}', 'clip').replace('{style}', 'overflow:hidden;width:200px') }));
+  const result = await clipped.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — nội dung bị cắt/m);
+  assert.doesNotMatch(result.stdout, /^✗ .*viewport=1280x800 .*check=reflow/m);
+  const scrollable = await fixture(t, page({ markup: wide.replace('{id}', 'scroll').replace('{style}', 'overflow:auto;width:200px') }));
+  status(await scrollable.run(['--widths', '320']), 0);
+  const ellipsis = await fixture(t, page({ markup: '<p id="e" style="overflow:hidden;width:200px;white-space:nowrap;text-overflow:ellipsis">a very long single line of text that will be cut with an ellipsis</p>' }));
+  status(await ellipsis.run(['--widths', '320']), 0);
+});
+
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
   const sample = await fixture(t, page());
   const result = await sample.run(['--strict'], { ...process.env, XT_CHROMIUM: '/missing/xt-chromium' });
