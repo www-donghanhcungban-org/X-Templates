@@ -43,7 +43,9 @@ Exit 0 khi không có vi phạm đã đo và điều kiện nghiêm ngặt đã 
 `--strict` còn `UNMEASURED` chưa miễn. Exit 2 khi cấu hình sai hoặc cổng không chạy hết, ví dụ thiếu Chromium, thiếu
 phụ thuộc, lỗi tải trang hoặc phản hồi HTTP không phải 2xx. Điều khiển vô hiệu (`:disabled`, kể cả trong `fieldset`
 vô hiệu) nằm ngoài phạm vi đo. Báo cáo vẫn ghi `UNMEASURED` khi ngoại lệ được áp dụng. Định danh `target` trong báo cáo
-bỏ userinfo, query và fragment (đánh dấu `[đã che]`); ngoại lệ vẫn khớp theo URL đầy đủ.
+bỏ userinfo, query và fragment (đánh dấu `[đã che]`), cả trong thông điệp lỗi của trình duyệt; ngoại lệ vẫn khớp theo URL
+đầy đủ. Transition và animation hữu hạn được kết thúc trước khi đọc màu; hoạt ảnh vô hạn chạm tới điều khiển thì báo
+`UNMEASURED`.
 
 ## Ngoại lệ có bằng chứng
 

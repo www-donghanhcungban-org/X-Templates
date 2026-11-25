@@ -269,6 +269,54 @@ test('an HTTP error page is UNMEASURED instead of passing', async (t) => {
   status(ok, 0);
 });
 
+async function closedPort() {
+  const server = createServer();
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const { port } = server.address();
+  await new Promise((done) => server.close(done));
+  return port;
+}
+
+test('a navigation failure does not echo userinfo, query or fragment of the target', async (t) => {
+  const sample = await fixture(t, page());
+  const target = `http://user:pw-secret@127.0.0.1:${await closedPort()}/p.html?token=query-secret#frag-secret`;
+  const result = await sample.run(['--strict', '--widths', '320'], process.env, [target]);
+  status(result, 2);
+  assert.match(result.stderr, /UNMEASURED.*không chạy hết cổng/);
+  assert.doesNotMatch(result.stdout + result.stderr, /pw-secret|query-secret|frag-secret/);
+});
+
+test('a hover colour reached through a transition is measured at its final value', async (t) => {
+  const sample = await fixture(t, page({ css: `
+    #sample { transition: color 2s linear; }
+    #sample:hover, #sample:focus-visible { background: #fff; color: #d0d0d0; }
+  ` }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  const failures = result.stdout.split('\n').filter((line) => line.startsWith('✗ '));
+  for (const width of [1280, 320]) {
+    for (const state of ['hover', 'focus']) {
+      assert.ok(failures.some((line) => line.includes(scoped(width, 'light', state)) &&
+        line.includes('check=contrast element="#sample"')), result.stdout);
+    }
+  }
+  assert.ok(!failures.some((line) => line.includes('state=default')), result.stdout);
+});
+
+test('an infinite animation on the control is UNMEASURED instead of a guess', async (t) => {
+  const sample = await fixture(t, page({ css: `
+    @keyframes pulse { from { color: #111; } to { color: #fff; } }
+    #sample { animation: pulse 1s infinite alternate; }
+  ` }));
+  const strict = await sample.run(['--strict', '--widths', '320']);
+  status(strict, 1);
+  assert.match(strict.stdout, /^UNMEASURED .*check=contrast element="#sample" — hoạt ảnh vô hạn/m);
+  for (const state of STATES) count(strict.stdout, 'CONTRAST', 320, 'light', state, 'measured=0 unmeasured=1 exempted=0');
+  const advisory = await sample.run(['--widths', '320']);
+  status(advisory, 0);
+  assert.doesNotMatch(advisory.stdout, /^✓/m);
+});
+
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
   const sample = await fixture(t, page());
   const result = await sample.run(['--strict'], { ...process.env, XT_CHROMIUM: '/missing/xt-chromium' });

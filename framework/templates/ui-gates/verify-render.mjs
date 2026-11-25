@@ -173,6 +173,19 @@ function reportTarget(target) {
   return hidden ? `${url.href}[đã che]` : url.href;
 }
 
+// Thông điệp lỗi của trình duyệt (từ chối kết nối, hết giờ) in lại nguyên URL đích: che như định danh trong báo cáo.
+const URL_IN_TEXT = /\b(?:https?|file):\/\/[^\s"'<>]+(?: che\])?/gi;
+function redactUrls(text) {
+  return String(text).replace(URL_IN_TEXT, (raw) => {
+    if (raw.endsWith(' che]')) return raw; // đã qua `reportTarget`: giữ nguyên, không che lần hai
+    try {
+      return reportTarget(raw);
+    } catch {
+      return '[url đã che]';
+    }
+  });
+}
+
 function scopeText({ target, width, theme, state, check, element }) {
   const group = `target=${JSON.stringify(reportTarget(target))} viewport=${width}x${HEIGHT} theme=${theme} state=${state}`;
   return check ? `${group} check=${check} element=${JSON.stringify(element)}` : group;
@@ -243,6 +256,25 @@ async function inState(page, control, state) {
   }, state);
 }
 
+// Chạy trong trang: đưa transition/animation hữu hạn về trạng thái cuối trước khi đọc màu (đo giữa chừng chuyển tiếp là
+// xanh giả). Hoạt ảnh vô hạn chạm tới điều khiển (chính nó, tổ tiên hoặc con) thì màu không ổn định: báo để đánh UNMEASURED.
+const settle = (el) => {
+  let infinite = false;
+  for (const animation of el.ownerDocument.getAnimations()) {
+    const target = animation.effect?.target;
+    if (animation.effect?.getComputedTiming().endTime === Infinity) {
+      infinite ||= Boolean(target && (target === el || target.contains(el) || el.contains(target)));
+      continue;
+    }
+    try {
+      animation.finish();
+    } catch {
+      // hoạt ảnh không kết thúc được: giữ nguyên trạng thái hiện tại
+    }
+  }
+  return infinite;
+};
+
 async function auditContrast(page, scope, results, limit) {
   const counts = new Map(STATES.map((state) => [state, tally()]));
   const controls = await page.locator(INTERACTIVE).elementHandles();
@@ -261,6 +293,10 @@ async function auditContrast(page, scope, results, limit) {
       }
       if (!await inState(page, control, state)) {
         recordUnknown(results, row, check, 'không kích hoạt được trạng thái');
+        continue;
+      }
+      if (await control.evaluate(settle)) {
+        recordUnknown(results, row, check, 'hoạt ảnh vô hạn đang chạy trên điều khiển');
         continue;
       }
       const reading = await control.evaluate(measure);
@@ -334,14 +370,14 @@ async function main() {
     settings = options(process.argv.slice(2));
     exceptions = await readExceptions(settings.exceptionsFile, new Date().toISOString().slice(0, 10));
   } catch (error) {
-    console.error(`Cấu hình không hợp lệ: ${error.message}`);
+    console.error(`Cấu hình không hợp lệ: ${redactUrls(error.message)}`);
     return 2;
   }
   const results = { exceptions, violations: 0, unmeasured: 0, exempted: 0 };
   try {
     await run(settings, results);
   } catch (error) {
-    console.error(`UNMEASURED — không chạy hết cổng: ${error.message}`);
+    console.error(`UNMEASURED — không chạy hết cổng: ${redactUrls(error.message)}`);
     return 2;
   }
   return conclusion(settings, results);
