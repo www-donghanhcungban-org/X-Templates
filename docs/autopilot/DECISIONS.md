@@ -1050,3 +1050,10 @@
 - Chọn: Gộp bản sửa T-5029 đã rà độc lập vào cùng commit khép giao thức merge và kiểm toàn bộ trên một cây mã
 - Lý do (tiêu chí chất lượng cuối): Đích thực thi và nguồn policy cùng quyết định một quyền merge; kiểm chúng trên cùng HEAD tránh chốt giao thức khi nguồn policy còn bị che. T-5029 đã tái hiện đỏ, qua rà độc lập và 4264 test; vẫn chạy lại cổng kết hợp và CI, giữ mọi ngưỡng, giữ ID và bằng chứng riêng.
 - Đường lùi: git revert commit khép giao thức merge; vẫn giữ lịch sử ba phát hiện audit
+
+### D-594 · 2026-11-25T02:56:52+00:00 · PR #797: khép hai dòng thiếu coverage khi đăng review thế nào?
+
+- Phương án: (1) Thêm hồi quy mất origin lúc đăng review và kiểm gửi lại đúng đích sau khi khôi phục · (2) Bỏ xử lý PrInputError tại bước đăng review vì URL đã được kiểm trước
+- Chọn: Thêm hồi quy mất origin lúc đăng review và kiểm gửi lại đúng đích sau khi khôi phục
+- Lý do (tiêu chí chất lượng cuối): CI run 45534056621, job 138939373237 báo scripts/xt.py:18520–18521 chưa được phủ. Số PR vẫn hợp lệ ngoại tuyến nên lỗi origin tại bước đăng có thể xảy ra; cần giữ mã thoát 3, sổ chưa đăng và khả năng gửi lại đúng một lần, giữ nguyên ngưỡng coverage 100 %.
+- Đường lùi: Revert riêng commit bổ sung hồi quy nếu test sai; không bỏ handler hay thay ngưỡng cổng.

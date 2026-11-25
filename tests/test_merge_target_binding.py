@@ -448,6 +448,38 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assertEqual(self.gh.calls[-1][:3], ("POST", HOST, f"repos/{SLUG}/issues/{PR}/comments"))
         self.assert_target_routes()
 
+    def test_review_publication_without_origin_preserves_review_for_retry(self):
+        self.git("remote", "remove", "origin")
+        previous = xt.PR_READ_HOST.set(PUBLIC)
+        self.addCleanup(xt.PR_READ_HOST.reset, previous)
+        review = ("pr", "reviewed", "--pr", PR, "--head", self.head, "--blocking")
+        rc, out, err = run_main(*review)
+        self.assertEqual(rc, 3, out + err)
+        self.assertIn("chưa đăng được review lên PR #7", err)
+        self.assertIn("không xác minh được host/repo của origin", err)
+        self.assertIn("chạy lại `xt.py pr reviewed", err)
+        self.assertNotIn("đã đăng review", out)
+        self.assertEqual(self.gh.calls, [])
+        self.assertEqual(xt.PR_READ_HOST.get(), PUBLIC)
+        reviews = xt.read_reviews(self.repo)[PR]["reviews"]
+        self.assertEqual(len(reviews), 1)
+        self.assertEqual(reviews[0]["head"], self.head)
+        self.assertFalse(reviews[0]["clean"])
+        self.assertNotIn("published", reviews[0])
+
+        self.git("remote", "add", "origin", f"https://{HOST}/{SLUG}.git")
+        rc, out, err = run_main(*review)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("đã ghi trước đó — không ghi thêm", out)
+        self.assertIn("đã đăng review lên PR #7", out)
+        self.assert_target_routes()
+        self.assertEqual(
+            [call[:3] for call in self.gh.calls if call[0] != "GET"],
+            [("POST", HOST, f"repos/{SLUG}/issues/{PR}/comments")],
+        )
+        self.assertEqual(xt.PR_READ_HOST.get(), PUBLIC)
+        self.assertEqual(xt.read_reviews(self.repo)[PR]["reviews"], [{**reviews[0], "published": True}])
+
 
 if __name__ == "__main__":
     main()
