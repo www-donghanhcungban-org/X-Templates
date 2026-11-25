@@ -9094,18 +9094,27 @@ def _glob_sub(repl: str, text: str, count: int = 0) -> str:
 
 
 TAG_LIKE_RE = re.compile(r"v?[0-9.]*(?:[-+][0-9A-Za-z.+-]*)?")
+GLOB_SEG_RE = re.compile(rf"(?:{GLOB_UNIT_RE.pattern}|[^/:])+")
+
+
+def _glob_segs(word: str) -> List[str]:
+    """Đoạn của từ: tách `/`, `:` như luật cũ ∪ tách không cắt trong lớp ký tự (`[[:digit:]]`, `[!:]`, `[:rc:]` chứa `:`).
+    Lớp chỉ đọc tới `]` cuối (tuyến tính, như `_glob_sub`)."""
+    cut = word.rfind("]") + 1
+    head, tail = GLOB_SEG_RE.findall(word[:cut]), re.split("[/:]", word[cut:])
+    aware = [*head[:-1], head[-1] + tail[0], *tail[1:]] if head else tail
+    return [*dict.fromkeys([*re.split("[/:]", word), *aware])]
 
 
 def _tag_glob(word: str) -> bool:
     """AUD-SEC-996b: glob bash bung theo tệp (`touch v1.2.3`) có thể ra tag phiên bản — đoạn (tách `/`, `:`) có glob mà
     chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ.
     AUD-HAR-541: đoạn chỉ gồm glob (`??.?.?`, `[v][0-9].[0-9].[0-9]`) — thay đơn vị glob bằng chữ số (đơn vị đầu: `v`)."""
-    word = re.sub(r"\[:([a-z]+):\]", r"@\1@", word)  # lớp POSIX `[[:digit:]]` chứa `:`, không tách đoạn ở đó
-    segs = re.split("[/:]", word) if GLOB_UNIT_RE.search(word) else []
-    globs = [s for s in segs if GLOB_UNIT_RE.search(s)]
+    segs = _glob_segs(word) if GLOB_LOOSE_RE.search(word) else []
+    globs = [s for s in segs if GLOB_LOOSE_RE.search(s)]
     lits = [_glob_sub("", s).lower() for s in globs]  # `shopt -s nocaseglob`: `V1.2.?` khớp `v1.2.0`
     only = [  # đoạn chỉ gồm glob và dấu chấm mà bash bung được ra `vX.Y.Z`: có dấu chấm, ≥ 6 đơn vị, hay lớp kèm `*`
-        ("*" in s and ("." in x or "[" in s)) or "*" not in s and len(GLOB_UNIT_RE.findall(s)) + len(x) >= 6
+        ("*" in s and ("." in x or "[" in s)) or "*" not in s and _glob_sub("\0", s).count("\0") + len(x) >= 6
         for s, x in zip(globs, lits)
         if re.fullmatch(r"\.*", x)
     ]

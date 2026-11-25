@@ -5343,6 +5343,10 @@ class GuardDeltaAuditTest(unittest.TestCase):
         "git tag '[[:alpha:]][[:digit:]].[[:digit:]].[[:digit:]]'",
         "git update-ref 'refs/tags/??????' HEAD",
         "git push origin 'HEAD:refs/tags/??????'",
+        # rà #818 🔴: `[:x:]` ngoài lớp là một lớp ký tự có `:`, không phải lớp POSIX; `:` trong lớp không tách đoạn
+        "git tag 'v1.2.3-[:rc:]'",
+        "git push origin 'HEAD[:a:]refs/tags/v1.2.3'",
+        "git tag 'v1.2.[!:]'",
     )
     RELEASE_TAG_OK = (
         "gh release create nightly --notes x",
