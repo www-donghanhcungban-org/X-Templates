@@ -20,6 +20,7 @@ KINDS: tuple[str, ...] = (
     "ac-trace",
     "credits",
     "dedup-leak",
+    "design-evidence",
     "i18n",
     "llms-txt",
     "motion",

@@ -1,7 +1,7 @@
 ---
 title: Mẫu tài liệu
 kind: index
-updated: 2026-11-23
+updated: 2026-11-25
 ---
 
 # Mẫu tài liệu
@@ -17,6 +17,9 @@ updated: 2026-11-23
 | File | Dùng cho | Giai đoạn · cổng |
 |---|---|---|
 | [`PROJECT.md`](PROJECT.md) | `PROJECT.md` — vấn đề, người dùng (JTBD), chỉ số thành công có baseline, MVP MoSCoW, "không làm", dữ liệu & pháp lý, giả định, các bên | G0–G2 · cổng G0/G1; `PM-REQ-*`, `PM-PRIO-*` |
+| [`DESIGN-BRIEF.md`](DESIGN-BRIEF.md) | Người dùng, tác vụ, thiết bị, dữ liệu dài/rỗng và tiêu chí thành công | G4 · trước khi dựng phương án |
+| [`DESIGN-OPTIONS.md`](DESIGN-OPTIONS.md) | So sánh 2–3 phương án cho cùng tác vụ và ghi lý do chọn | G4 · trước khi dựng prototype |
+| [`TASK-TRIAL.md`](TASK-TRIAL.md) | Biên bản thử tác vụ với số người hoàn thành, thời gian, lỗi thao tác và trợ giúp | G4–G7 · khi thử với người dùng |
 | [`PLAN.md`](PLAN.md) | `docs/autopilot/PLAN.md` — task `T-NNN` ≤1 ngày có `Gate:` máy kiểm (đúng regex `xt.py`), điểm dừng bắt buộc, ngân sách 4 con số, hạn thật | G4–G6 · `xt.py loop init/status`; `PM-PLAN-*` |
 | [`PROGRESS.md`](PROGRESS.md) | `PROGRESS.md` — ≤ 8 KB, 4 mục (Đang làm / Tiếp theo / Quyết định / Bàn giao phiên + SHA tổ tiên HEAD) | Mọi phiên · hook SessionStart; `LOOP-HARNESS-004`/`005` |
 | [`SPEC.md`](SPEC.md) | `docs/specs/SPEC-<slug>.md` — user story, scenario `S-NNN` Given/When/Then, 8 nhóm ca biên, dữ liệu, lỗi, DoR/DoD, truy vết | G3 · cổng G3; `PM-SPEC-*` |

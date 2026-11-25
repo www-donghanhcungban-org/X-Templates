@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
 sys.path.insert(0, str(HERE))
 import xt_checks
+from test_check_design_evidence import GOOD as DESIGN, UNTESTED
 from test_check_sbom import GOOD as SBOM, GOOD_COMP
 from test_check_trace import S1, doc, span
 from test_check_vex import GOOD as VEX, STMT
@@ -83,7 +84,7 @@ class ShapeTest(unittest.TestCase):
                         self.assertIn(code, codes)
 
     def test_registry(self):
-        structured = {"sbom", "vex", "trace", "srm", "i18n", "dedup-leak"}
+        structured = {"sbom", "vex", "trace", "srm", "i18n", "dedup-leak", "design-evidence"}
         self.assertEqual(set(xt_checks.KINDS), TEXT.keys() | structured)
         for kind in structured:
             self.assertTrue(hasattr(self, "test_" + kind.replace("-", "_")))
@@ -161,6 +162,12 @@ class ShapeTest(unittest.TestCase):
                 self.assertIn("SRM000", self.codes("srm", {"records": sample}))
             if not isinstance(sample, dict):
                 self.assertIn("SRM004", self.codes("srm", {"records": [sample, *records]}))
+
+    def test_design_evidence(self):
+        self.matrix("design-evidence", DESIGN, "DES000", opts={"mode": "pilot"})
+        self.matrix("design-evidence", UNTESTED, "DES000")
+        for path in (("options",), ("trial", "participants")):
+            self.assertIn("DES000", self.codes("design-evidence", replace(DESIGN, path, [])))
 
     def test_dedup_leak(self):
         opts = {"train": "train", "eval": "eval"}

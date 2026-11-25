@@ -1,7 +1,7 @@
 ---
 title: Thiết kế & UI/UX
 kind: index
-updated: 2026-10-16
+updated: 2026-11-25
 ---
 
 # 06 — Thiết kế & UI/UX
@@ -25,3 +25,10 @@ updated: 2026-10-16
 
 **Prefix ID:** `UX-DS` · `UX-A11Y` · `UX-STATE` · `UX-CONTENT` · `UX-RESP` · `UX-AI` · `UX-VISUAL` · `UX-VIZ`. Ghép vào blueprint qua
 `modules: [06-design-ux/*]` của hồ sơ; hồ sơ không có UI (API, CLI, thư viện) không ghép mảng này.
+
+## Thiết kế và kiểm một luồng
+
+1. Viết [brief](../templates/DESIGN-BRIEF.md) cho một tác vụ chính, với tiêu chí thành công quan sát được trên thiết bị đích.
+2. Phác thảo [2–3 phương án](../templates/DESIGN-OPTIONS.md), đi hết các bước với dữ liệu dài và rỗng, rồi ghi lý do chọn.
+3. Dùng `/ui-verify` để rà hình ảnh toàn luồng trên bản chạy. Lưu ảnh các bước và trạng thái để người khác kiểm lại.
+4. Dùng [biên bản thử tác vụ](../templates/TASK-TRIAL.md) để ghi số người hoàn thành, thời gian, lỗi thao tác và chỗ cần trợ giúp.
