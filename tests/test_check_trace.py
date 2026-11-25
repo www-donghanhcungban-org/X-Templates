@@ -60,6 +60,17 @@ class TraceTest(unittest.TestCase):
         lines = json.dumps(doc(span(S1))) + "\n\n" + json.dumps(doc(span(S2, S1))) + "\n"
         self.assertEqual(self.codes(lines, name="t.jsonl"), [])
 
+    def test_jsonl_preserves_unicode_in_string_values(self):
+        first = json.dumps(doc(span(S1, name="a\u2028b")), ensure_ascii=False)
+        found = self.run_check(first + "\n" + json.dumps(doc(span(S2, S3))), name="t.jsonl")
+        self.assertEqual([(f.code, f.line) for f in found], [("TRC001", 2)])
+
+    def test_jsonl_only_lf_separates_documents(self):
+        first = json.dumps(doc(span(S1)))
+        for char in ("\u2028", "\f"):
+            with self.subTest(char=char):
+                self.assertEqual(self.codes(first + char + first, name="t.jsonl"), ["TRC000"])
+
     def test_invalid_inputs_are_trc000(self):
         bad = [
             b"\xff\xfe",
@@ -154,10 +165,12 @@ class TraceTest(unittest.TestCase):
         )
         self.assertEqual(self.codes(text, {"required": ""}), [])
 
-    def test_attributes_malformed_tolerated(self):
-        for attrs in ("x", [1, {"key": 3}]):
-            with self.subTest(attrs=attrs):
-                self.assertEqual(self.codes(json.dumps(doc(span(S1, attributes=attrs)))), [])
+    def test_attributes_report_shape_and_keep_valid_siblings(self):
+        attrs = [1, {"key": 3}, {"key": "gen_ai.operation.name"}, {"key": None, "value": None}]
+        text = json.dumps(doc(span(S1))) + "\n" + json.dumps(doc(span(S2, attributes=attrs)))
+        found = self.run_check(text)
+        self.assertEqual([(f.code, f.line) for f in found], [("TRC000", 2), ("TRC000", 2), ("TRC002", 2)])
+        self.assertIn("attributes[1].key", found[1].message)
 
     def test_jsonl_line_numbers(self):
         text = json.dumps(doc(span(S1))) + "\n\n" + json.dumps(doc(span(S2, S3))) + "\n"

@@ -11,8 +11,8 @@ import datetime as _dt
 from typing import Any, Dict, List, Tuple
 
 from xt_app.server import Ctx, Routes
+from xt_merge_intent import RepoTarget
 
-OPEN_PRS = "repos/{owner}/{repo}/pulls?state=open&per_page=100"
 DAYS_DEFAULT = 7
 DAYS_MAX = 90
 # Dữ liệu GitHub lạ (thiếu khoá, sai kiểu), git/file không đọc được không được làm màn PR 500.
@@ -35,7 +35,7 @@ def _reasons(out: Dict[str, Any], d: Dict[str, Any]) -> List[str]:
     return ([why] if why else []) + rest
 
 
-def _pr_row(ctx: Ctx, item: Dict[str, Any]) -> Dict[str, Any]:
+def _pr_row(ctx: Ctx, item: Dict[str, Any], target: RepoTarget) -> Dict[str, Any]:
     """Một dòng PR: như `xt.py pr next` bỏ bước ghi `standard_seen` vào sổ — chỉ áp trong bộ nhớ."""
     xt, n = ctx.xt, str(item.get("number", ""))
     head = item.get("head")
@@ -45,7 +45,7 @@ def _pr_row(ctx: Ctx, item: Dict[str, Any]) -> Dict[str, Any]:
         "head_sha": str(head.get("sha") or "") if isinstance(head, dict) else "",
     }
     try:
-        pr = xt._pr_rest(n, local_check=False)
+        pr = xt._pr_rest(n, local_check=False, target=target)
         d, _notes = xt._merge_eval(pr)
         rec = dict(xt._pr_record(xt.read_reviews(ctx.base), str(d["pr"])))
         if d.get("lane") == "chuẩn" or xt._standard_seen(pr):
@@ -66,10 +66,11 @@ def _pr_row(ctx: Ctx, item: Dict[str, Any]) -> Dict[str, Any]:
 
 def _prs(ctx: Ctx) -> Tuple[int, Dict[str, Any]]:
     try:
-        items = ctx.xt._gh_items(OPEN_PRS)
+        target = ctx.xt._pr_checkout()
+        items = ctx.xt._pr_open(target)
     except (ctx.xt.PrInputError, *_DATA_ERRORS) as exc:
         return _unavailable(exc)
-    return 200, {"available": True, "prs": [_pr_row(ctx, it) for it in items]}
+    return 200, {"available": True, "prs": [_pr_row(ctx, it, target) for it in items]}
 
 
 def _days(ctx: Ctx) -> int:

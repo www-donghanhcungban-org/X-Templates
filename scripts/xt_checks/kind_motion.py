@@ -25,7 +25,9 @@ ALLOW = re.compile(r"xt-allow:\s*([A-Z0-9, ]+)")
 TRANSITION_ALL = re.compile(r"\btransition(?:-property)?\s*:[^;}]{0,300}\ball\b")
 # Neo lookbehind (cho phép tiền tố nhà cung cấp `-webkit-`): chỉ thử ở đầu mỗi tên thuộc tính; `\b` khớp sau mỗi dấu `-` nên
 # `animation-animation-…` từng bậc hai (rà #776 lượt hai).
-MOTION = re.compile(r"@keyframes\b|(?<![\w-])(?:-[a-z]+-)?(?:animation|transition)[\w-]*+\s*:", re.IGNORECASE)
+MOTION = re.compile(
+    r"@keyframes\b|(?<![\w-])(?:-[a-z]+-)?(?:(?:animation|transition)[\w-]*+|view-transition-name)\s*:", re.IGNORECASE
+)
 REDUCED = re.compile(r"@media[^{]{0,300}prefers-reduced-motion\s*:\s*reduce")
 INFINITE = re.compile(r"\banimation(?:-iteration-count)?\s*:[^;}]{0,300}\binfinite\b")
 DURATION = re.compile(r"animation-duration\s*:\s*(\d++(?:\.\d++)?|\.\d++)(ms|s)\b")

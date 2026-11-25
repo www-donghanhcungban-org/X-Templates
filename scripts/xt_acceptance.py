@@ -400,16 +400,16 @@ def release_rows(
     return [core._release_row("acceptance_lock", "FAIL" if problems else "PASS", evidence)]
 
 
-def review_paths(core: ModuleType, base: Path, ref: str, changed: list[str]) -> list[str]:
+def review_paths(core: ModuleType, base: Path, ref: str | None, changed: list[str]) -> list[str]:
     """Xét phạm vi ở cả cây làm việc và nhánh đích, kể cả khi cấu hình mới bỏ khoá."""
     paths = {LEDGER}
     try:
         keys = [_inputs(core, base)[0], core._committed_xt_keys(base, ref).get("acceptance_paths", "").split()]
         paths.update(p for items in keys for p in items)
         disk = project_file(base, LEDGER)
-        committed = core._git(base, "show", f"{ref}:./{LEDGER}")
+        committed = core._git(base, "show", f"{ref}:./{LEDGER}", env=core._go_git_env()) if ref is not None else None
         sources = ([disk.read_text(encoding="utf-8")] if disk.exists() else []) + (
-            [committed.stdout] if committed.returncode == 0 else []
+            [committed.stdout] if committed is not None and committed.returncode == 0 else []
         )
         for source in sources:
             for record in json.loads(source)["locks"]:

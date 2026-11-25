@@ -101,8 +101,10 @@
     "AUD-SEC-016"
    ],
    "input": {
-    "command": "gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "command": "GH_REPO=github.com/o/r GH_HOST=github.com gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "merge_check": {
+     "host": "github.com",
+     "pr": 7,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -119,7 +121,8 @@
    },
    "expect": {
     "allowed": true,
-    "decision": "allow"
+    "decision": "",
+    "code": "OTHER_ASK"
    }
   },
   {
@@ -612,6 +615,8 @@
    "input": {
     "command": "gh pr merge 7 --squash --match-head-commit \"$(git rev-parse HEAD)\"",
     "merge_check": {
+     "host": "github.com",
+     "pr": 7,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -856,6 +861,8 @@
    "input": {
     "command": "gh api -X PUT repos/o/r/pulls/5/merge",
     "merge_check": {
+     "host": "github.com",
+     "pr": 5,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -890,6 +897,8 @@
      "pullNumber": 5
     },
     "merge_check": {
+     "host": "github.com",
+     "pr": 5,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -1273,6 +1282,8 @@
    "input": {
     "command": "gh pr merge 5 --squash > \ud800",
     "merge_check": {
+     "host": "github.com",
+     "pr": 5,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -1288,8 +1299,8 @@
     }
    },
    "expect": {
-    "allowed": true,
-    "code": "OTHER_ASK"
+    "allowed": false,
+    "code": "UNVERIFIED"
    }
   },
   {
@@ -2761,8 +2772,10 @@
     "AUD-XFEAT-010"
    ],
    "input": {
-    "command": "gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "command": "GH_REPO=github.com/o/r GH_HOST=github.com gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "merge_check": {
+     "host": "github.com",
+     "pr": 7,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -2780,7 +2793,8 @@
    },
    "expect": {
     "allowed": true,
-    "decision": "allow"
+    "decision": "",
+    "code": "OTHER_ASK"
    }
   },
   {
@@ -3088,6 +3102,8 @@
    "input": {
     "command": "gh pr merge 5 --squash",
     "merge_check": {
+     "host": "github.com",
+     "pr": 5,
      "verdict": "merge",
      "hard": [],
      "repo": "o/r",
@@ -3103,7 +3119,8 @@
     }
    },
    "expect": {
-    "allowed": true
+    "allowed": false,
+    "code": "UNVERIFIED"
    }
   },
   {
@@ -23721,7 +23738,7 @@
 {"id": "adr76-ctl-gh-run-rerun-failed", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "gh run rerun 123456789 --failed"}, "expect": {"allowed": true}},
 {"id": "adr76-ctl-gh-api-read-jq", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "gh api repos/{owner}/{repo}/pulls/524/comments --jq '.[].body'"}, "expect": {"allowed": true}},
 {"id": "adr76-ctl-gh-issue-list", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "gh issue list --label bug"}, "expect": {"allowed": true}},
-{"id": "adr76-ctl-gh-pr-merge-pinned", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "gh pr merge 524 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "merge_check": {"verdict": "merge", "hard": [], "repo": "o/r", "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "autonomy": 3, "eligible": true, "auto_merge_ok": true, "review": "ok", "reasons": ["làn nhanh, CI xanh"], "stacked": false}}, "expect": {"allowed": true}},
+{"id": "adr76-ctl-gh-pr-merge-pinned", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "GH_REPO=github.com/o/r GH_HOST=github.com gh pr merge 524 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "merge_check": {"host":"github.com","pr":524,"verdict": "merge", "hard": [], "repo": "o/r", "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "autonomy": 3, "eligible": true, "auto_merge_ok": true, "review": "ok", "reasons": ["làn nhanh, CI xanh"], "stacked": false}}, "expect": {"allowed": true}},
 {"id": "adr76-ctl-rm-var-path", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "rm -rf \"$TMP\"/x"}, "expect": {"allowed": true}},
 {"id": "adr76-ctl-rm-glob", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "rm -f *.tmp"}, "expect": {"allowed": true}},
 {"id": "adr76-ctl-rm-build", "origin": "control", "refs": ["ADR-0076"], "input": {"command": "rm -rf build/ dist/"}, "expect": {"allowed": true}},
@@ -25340,17 +25357,57 @@
   {"id":"guard-har454-rest-closed-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"verdict":"closed","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":false,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_INELIGIBLE"}},
   {"id":"guard-har454-mcp-closed-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"closed","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":false,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_INELIGIBLE"}},
   {"id":"guard-har454-mcp-closed-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"closed","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":false,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_INELIGIBLE"}},
-  {"id":"guard-har454-cli-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-cli-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-rest-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-rest-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-mcp-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-mcp-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_HEAD_MISMATCH"}},
-  {"id":"guard-har454-cli-merge-default","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}},
-  {"id":"guard-har454-cli-merge-strict","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}},
-  {"id":"guard-har454-rest-merge-default","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}},
-  {"id":"guard-har454-rest-merge-strict","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT repos/{owner}/{repo}/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}},
-  {"id":"guard-har454-mcp-merge-default","origin":"control","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}},
-  {"id":"guard-har454-mcp-merge-strict","origin":"control","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":true,"decision":"allow","code":"RULE_ALLOW"}}
+  {"id":"guard-har454-cli-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --repo github.com/o/r","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_HEAD_MISMATCH"}},
+  {"id":"guard-har454-cli-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --repo github.com/o/r","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_HEAD_MISMATCH"}},
+  {"id":"guard-har454-rest-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT --hostname github.com repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"MERGE_HEAD_MISMATCH"}},
+  {"id":"guard-har454-rest-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT --hostname github.com repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"MERGE_HEAD_MISMATCH"}},
+  {"id":"guard-har454-mcp-head-mismatch-default","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har454-mcp-head-mismatch-strict","origin":"audit","refs":["AUD-HAR-454"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har454-cli-merge-default","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --repo github.com/o/r","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har454-cli-merge-strict","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa --repo github.com/o/r","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har454-rest-merge-default","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT --hostname github.com repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har454-rest-merge-strict","origin":"control","refs":["AUD-HAR-454"],"input":{"command":"gh api -X PUT --hostname github.com repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f merge_method=squash","merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har454-mcp-merge-default","origin":"audit","refs":["AUD-HAR-454","AUD-HAR-520"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har454-mcp-merge-strict","origin":"audit","refs":["AUD-HAR-454","AUD-HAR-520"],"input":{"tool":"mcp","tool_name":"mcp__github__merge_pull_request","tool_input":{"owner":"o","repo":"r","pullNumber":7,"expectedHeadSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_method":"squash"},"merge_check":{"host":"github.com","pr":7,"verdict":"merge","hard":[],"repo":"o/r","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","autonomy":3,"eligible":true,"review":"optional","reasons":["PR state"]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har492-repo-default","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"GH_REPO=other/repo gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har492-repo-strict","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"GH_REPO=other/repo gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har492-env-default","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"env GH_HOST=other.example gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har492-env-strict","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"env GH_HOST=other.example gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har492-export-default","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"export GH_REPO=other/repo; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har492-export-strict","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"export GH_REPO=other/repo; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har492-unpinned-default","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"gh pr merge 7 --squash","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har492-unpinned-strict","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"gh pr merge 7 --squash","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har492-bound-default","origin":"control","refs":["AUD-HAR-492","AUD-HAR-519"],"input":{"command":"gh api -X PUT --hostname code.example repos/owner/project/pulls/7/merge -f merge_method=squash -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har492-bound-strict","origin":"control","refs":["AUD-HAR-492","AUD-HAR-519"],"input":{"command":"gh api -X PUT --hostname code.example repos/owner/project/pulls/7/merge -f merge_method=squash -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"host":"code.example","repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har492-incomplete-default","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har492-incomplete-strict","origin":"repro","refs":["AUD-HAR-492"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"pr":7,"repo":"owner/project","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har519-no-pr-number-default","origin":"audit","refs":["AUD-HAR-519"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com gh pr merge --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har519-no-pr-number-strict","origin":"audit","refs":["AUD-HAR-519"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com gh pr merge --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har526-clustered-repo-default","origin":"repro","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 -R github.com/o/r -sRother.example/o/r --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har526-clustered-repo-strict","origin":"repro","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 -R github.com/o/r -sRother.example/o/r --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har526-clustered-repo-matching-default","origin":"control","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 -sRgithub.com/o/r --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har526-clustered-repo-matching-strict","origin":"control","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 -sRgithub.com/o/r --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har526-www-cli-default","origin":"repro","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R www.git.example/o/r","merge_check":{"host":"www.git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har526-www-cli-strict","origin":"repro","refs":["AUD-HAR-526"],"input":{"command":"gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R www.git.example/o/r","merge_check":{"host":"www.git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har526-www-api-default","origin":"control","refs":["AUD-HAR-526"],"input":{"command":"gh api -X PUT --hostname www.git.example repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"www.git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har526-www-api-strict","origin":"control","refs":["AUD-HAR-526"],"input":{"command":"gh api -X PUT --hostname www.git.example repos/o/r/pulls/7/merge -f sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"www.git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har529-env-unset-default","origin":"repro","refs":["AUD-HAR-529"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com env -u GH_REPO gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har529-env-unset-strict","origin":"repro","refs":["AUD-HAR-529"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com env -u GH_REPO gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har529-env-reset-default","origin":"repro","refs":["AUD-HAR-529"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com env -i gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har529-env-reset-strict","origin":"repro","refs":["AUD-HAR-529"],"input":{"command":"GH_REPO=github.com/o/r GH_HOST=github.com env -i gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har529-env-reset-explicit-default","origin":"control","refs":["AUD-HAR-529"],"input":{"command":"env -i gh pr merge 7 --repo github.com/o/r --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har529-env-reset-explicit-strict","origin":"control","refs":["AUD-HAR-529"],"input":{"command":"env -i gh pr merge 7 --repo github.com/o/r --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"github.com","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har531-host-local-default","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har531-host-local-strict","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har531-repo-unset-default","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"export GH_REPO=git.example/o/r; unset GH_REPO; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har531-repo-unset-strict","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"export GH_REPO=git.example/o/r; unset GH_REPO; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har531-host-export-default","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"export GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har531-host-export-strict","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"export GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har531-repo-inline-default","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"GH_REPO=git.example/o/r gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har531-repo-inline-strict","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"GH_REPO=git.example/o/r gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}},
+  {"id":"guard-har531-repo-exec-clear-default","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"export GH_REPO=git.example/o/r; exec -c gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":false,"decision":"deny","code":"UNVERIFIED"}},
+  {"id":"guard-har531-repo-exec-clear-strict","origin":"repro","refs":["AUD-HAR-531"],"input":{"command":"export GH_REPO=git.example/o/r; exec -c gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"UNVERIFIED"}},
+  {"id":"guard-har531-host-declare-export-default","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"declare -x GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"default"},"expect":{"allowed":true,"decision":"","code":"OTHER_ASK"}},
+  {"id":"guard-har531-host-declare-export-strict","origin":"control","refs":["AUD-HAR-531"],"input":{"command":"declare -x GH_HOST=git.example; gh pr merge 7 --squash --match-head-commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -R o/r","merge_check":{"host":"git.example","repo":"o/r","pr":7,"head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verdict":"merge","hard":[],"eligible":true,"reasons":[]},"policy":"strict"},"expect":{"allowed":false,"decision":"ask","code":"OTHER_ASK"}}
  ]
 }

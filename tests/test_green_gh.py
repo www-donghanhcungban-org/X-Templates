@@ -21,7 +21,16 @@ import guard
 
 SHA = "a" * 40
 MARK = "<!-- xt-review v1 head=" + SHA + " verdict=clean -->"
-MERGE_OK = {"verdict": "merge", "hard": [], "head": SHA, "eligible": True, "reasons": ["ok"]}
+MERGE_OK = {
+    "host": "github.com",
+    "repo": "o/r",
+    "pr": 7,
+    "verdict": "merge",
+    "hard": [],
+    "head": SHA,
+    "eligible": True,
+    "reasons": ["ok"],
+}
 
 
 def decide(cmd: str, cwd: str = str(ROOT)) -> dict:
@@ -39,6 +48,7 @@ class _Case(unittest.TestCase):
         # repo đang checkout; quyết định không phụ thuộc mạng hay trạng thái PR thật.
         patcher = mock.patch.object(guard, "merge_check", return_value=MERGE_OK)
         self.merge_check = patcher.start()
+        self.enterContext(mock.patch.dict(os.environ, {"GH_REPO": "github.com/o/r", "GH_HOST": "github.com"}))
         self.addCleanup(patcher.stop)
 
     def assert_code(self, cmds: tuple, code: str, cwd: str = str(ROOT)) -> None:
@@ -120,10 +130,10 @@ class MergeDeleteBranchTest(_Case):  # AUD-SEC-565
             )
 
     def test_allow(self):
-        with mock.patch.object(guard, "merge_check", return_value=MERGE_OK):
+        with mock.patch.object(guard, "merge_check", return_value={**MERGE_OK, "pr": 12}):
             result = decide(f"gh pr merge 12 --squash --match-head-commit {SHA}")
             self.assertEqual(result["decision"], "allow", result["reason"])
-            self.assert_runs(("gh pr merge 12 -d --help", "gh pr merge 12 -b -d --squash"))
+            self.assert_runs(("gh pr merge 12 -d --help", f"gh pr merge 12 -b -d --squash --match-head-commit {SHA}"))
         self.assertNotIn("--delete-branch", guard.MERGE_ALLOW_FLAGS)
 
 

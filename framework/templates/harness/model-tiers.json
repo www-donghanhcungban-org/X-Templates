@@ -43,6 +43,6 @@
   "plan_spec_decision": "top-1",
   "write_code": "top-1",
   "write_code_max_effort": "xhigh",
-  "top_opt_in": "Fable (top) chỉ khi chủ dự án bật cho phiên lập PLAN/SPEC; viết code vẫn ở top-1 (D-569)"
+  "top_opt_in": "Fable (top) chỉ khi chủ dự án bật cho phiên lập PLAN/SPEC; viết code vẫn ở top-1 (D-605)"
  }
 }

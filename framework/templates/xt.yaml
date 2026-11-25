@@ -68,9 +68,9 @@ acceptance_paths: "" # file/thư mục nghiệm thu cách nhau bằng dấu các
 acceptance_report: "" # vd reports/junit.xml — trong dự án VÀ trong .gitignore (file chưa commit làm hàng `tree` FAIL)
 release_artifacts: "" # artifact ứng viên, cách nhau bởi khoảng trắng (sidecar <file>.sha256 nếu có) → `subject.digest`; GO-NO-GO ghi dòng `subject: digest` (mẫu GO-NO-GO.md §1)
 # Triển khai theo ADR-0077: khai deploy_envs, deploy_<env>, smoke_<env>, digest_<env>, rollback_<env>, url_<env> khi đã có đích.
-# deploy_env_pass: tên biến môi trường (khoá, cấu hình) mà lệnh triển khai được thấy, cách nhau dấu cách hoặc phẩy; khai thì
-# chỉ biến hệ thống (PATH, HOME, LANG…) và các tên này qua, thiếu tên nào lệnh dừng nêu tên biến. Chưa khai: lệnh chỉ bỏ biến
-# khởi động/nạp thư viện (BASH_ENV, LD_*, PYTHON*, NODE_OPTIONS…) và `doctor` cảnh báo; allowlist sẽ là mặc định ở bản MINOR kế.
+# deploy_env_pass: tên biến môi trường lệnh triển khai cần, cách nhau bằng dấu cách hoặc phẩy. Phải khai cho mọi đích khác
+# dev. Khai rỗng để chỉ truyền biến hệ thống (PATH, HOME…); thiếu tên đã khai thì dừng trước khi chạy. Dev chưa khai sẽ
+# thừa kế biến thông thường của phiên. Biến GIT_* bị lọc, chỉ GIT_SSL_CAINFO và GIT_SSL_CAPATH có thể khai tường minh.
 # Adapter đọc artifact tại $XT_DEPLOY_ARTIFACT_ROOT/<tên trong XT_DEPLOY_ARTIFACTS> khi deploy/rollback. Lệnh digest hỏi bản đang chạy.
 release_approval_days: "" # hạn chữ ký GO-NO-GO §5 để `promotion: approved` (mặc định 30 ngày)
 # release_signoff_scale: M # Trần mặc định S. M/L cần bằng chứng máy và quyền ở nhánh chính.

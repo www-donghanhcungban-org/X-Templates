@@ -890,7 +890,189 @@
 - Lý do (tiêu chí chất lượng cuối): XC-DOCAI-025 đòi mỗi skill mới có câu mẫu và description không trùng; ý stored phần lớn đã có; description giữ nguyên nên định tuyến không đổi
 - Đường lùi: git revert commit nâng skill
 
-### D-569 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
+### D-569 · 2026-11-24T09:52:43+00:00 · Áp dụng đối chiếu XT-H-163 và đợt 2 static-check trong một PR
+
+- Phương án: (1) một PR hai việc nhỏ cùng đợt · (2) tách hai PR
+- Chọn: một PR hai việc nhỏ cùng đợt
+- Lý do (tiêu chí chất lượng cuối): cả hai chỉ thêm tài liệu và module độc lập, không chung tệp nóng; tách thêm một vòng CI mà không giảm rủi ro
+- Đường lùi: git revert commit của PR
+
+### D-570 · 2026-11-24T10:37:00+00:00 · Ghi quy tắc làm lát kế trên nhánh cục bộ khi PR đáy chờ merge
+
+- Phương án: (1) ID mới LOOP-DESIGN-029 SHOULD · (2) chỉ sửa LOOP-DESIGN-020 · (3) chỉ ghi vào AGENTS.md
+- Chọn: ID mới LOOP-DESIGN-029 SHOULD
+- Lý do (tiêu chí chất lượng cuối): 020 mô tả PR chồng cần đẩy nhiều nhánh; trường hợp một nhánh được phép là khác; một chủ đề một nhà, ID ổn định; SHOULD vì nhiều dự án đẩy được nhiều nhánh
+- Đường lùi: git revert commit của PR
+
+### D-571 · 2026-11-24T11:31:41+00:00 · Sửa phát hiện rà Opus trước khi mở PR srm/llms-txt
+
+- Phương án: (1) sửa 🔴 và 🟠 rẻ ngay trước PR · (2) mở PR rồi ghi nợ 🟠
+- Chọn: sửa 🔴 và 🟠 rẻ ngay trước PR
+- Lý do (tiêu chí chất lượng cuối): 🔴 bắt buộc sửa (ADR-0062); 🟠 đều rẻ, cùng tệp, và một cái (biên test đột biến) đã làm CI đỏ lần trước; tránh thêm PR nợ
+- Đường lùi: git revert commit của PR
+
+### D-572 · 2026-11-24T11:50:40+00:00 · Thoát mã nào khi một loại static-check gặp lỗi ngoài dự kiến
+
+- Phương án: (1) mã 2 kèm tên lỗi · (2) để traceback mã 1
+- Chọn: mã 2 kèm tên lỗi
+- Lý do (tiêu chí chất lượng cuối): mã 1 nghĩa là có phát hiện; CI tách được hỏng công cụ khỏi phát hiện thật; không nuốt lỗi vì vẫn in tên lỗi
+- Đường lùi: git revert commit của PR
+
+### D-573 · 2026-11-24T12:36:58+00:00 · Hoàn thiện PLAN nâng trần và tiếp quản PR #786 sau khi main đã dùng D-571/D-572
+
+- Phương án: (1) Giữ kế hoạch năm đợt, sửa phụ thuộc và Gate để kiểm kết quả thật, merge PR tài liệu rồi triển khai từng task ở PR riêng · (2) Merge nguyên kế hoạch, chỉ sửa xung đột văn bản và để Gate yếu cho các phiên sau
+- Chọn: Giữ kế hoạch năm đợt, sửa phụ thuộc và Gate để kiểm kết quả thật, merge PR tài liệu rồi triển khai từng task ở PR riêng
+- Lý do (tiêu chí chất lượng cuối): Kế thừa quyết định trên nhánh ngày 2026-11-24T11:29:42+00:00 (D-571 chưa merge); cấp số mới để giữ nguyên D-571/D-572 đã có trên main. Báo cáo đã tái hiện lỗi SBOM/VEX và thiếu nguồn sổ lát; Gate chỉ validate hoặc tìm chữ không chứng minh chức năng. Tách test diễn tập chín nguồn khỏi sự kiện thực của pilot, gắn đúng quyền admin với T-5020 và khóa đủ phụ thuộc trước phát hành.
+- Đường lùi: git revert PR tài liệu; các phát hiện và hạn chấp nhận trong sổ audit giữ nguyên
+
+### D-574 · 2026-11-24T13:18:43+00:00 · Duyệt PLAN-harden-2026-11-24 thực thi kế hoạch nâng trần và xử lý NO-GO đầu vào
+
+- Phương án: (1) Thực thi đủ các lát tự động, cùng ID cho cùng việc; Gate hồi quy và CI, audit theo lô ở cổng ký; defer quyền hoặc dữ liệu bên ngoài thiếu · (2) Chỉ đóng nợ sổ đầu vào và để nguyên các lỗi nâng trần đã tái hiện
+- Chọn: Thực thi đủ các lát tự động, cùng ID cho cùng việc; Gate hồi quy và CI, audit theo lô ở cổng ký; defer quyền hoặc dữ liệu bên ngoài thiếu
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu complete sau khi kế hoạch đã merge. NO-GO hiện có audit và review_debt; sáu input SBOM/VEX sai kiểu đang báo sạch, strict pack thiếu package vẫn đạt. Giữ API cũ, thêm checked trong cùng lượt đọc; cấu trúc sai dùng SBM000/VEX000; viết ADR mới. Không được coi kế hoạch hoặc bằng chứng tổng hợp là triển khai xong.
+- Đường lùi: Revert từng PR nhỏ bằng commit mới nếu hồi quy; giữ sổ, không sửa lịch sử hay nới cổng.
+
+### D-575 · 2026-11-24T13:27:44+00:00 · Giữ ID ổn định khi chuyển PLAN-ceiling sang PLAN-harden mà không trùng task máy đọc
+
+- Phương án: (1) Chuyển toàn bộ danh sách task máy đọc sang PLAN-harden, PLAN-ceiling giữ chiến lược và liên kết; giữ nguyên ID và Gate · (2) Cấp ID mới cho cùng công việc trong PLAN-harden và giữ các task cũ chưa xong
+- Chọn: Chuyển toàn bộ danh sách task máy đọc sang PLAN-harden, PLAN-ceiling giữ chiến lược và liên kết; giữ nguyên ID và Gate
+- Lý do (tiêu chí chất lượng cuối): Gate test_task_ids_unique_across_plans tái hiện đỏ khi hai PLAN cùng khai T-5001 đến T-5020. Một chủ đề một nhà: chuyển nơi quản lý task, không sửa test hay tăng ngoại lệ KNOWN. Lịch sử đầy đủ còn ở PR #786.
+- Đường lùi: Chuyển danh sách task trở lại một PLAN duy nhất; không tạo hai chủ sở hữu cho cùng ID.
+
+### D-576 · 2026-11-24T13:28:08+00:00 · T-5004 dùng parser thực thi chung và mô-đun hiện có để phát hiện thay đổi tài liệu thực thi
+
+- Phương án: (1) So cấu trúc ID–lệnh bằng parser thật ở hai cây Git, đặt điều phối đọc cây trong xt_release_ops đã được phân phối/kiểm kiểu; giữ facade và ranh giới lỗi hiện hành · (2) Tiếp tục regex dòng diff trong xt.py, thêm từng ca ngoại lệ
+- Chọn: So cấu trúc ID–lệnh bằng parser thật ở hai cây Git, đặt điều phối đọc cây trong xt_release_ops đã được phân phối/kiểm kiểu; giữ facade và ranh giới lỗi hiện hành
+- Lý do (tiêu chí chất lượng cuối): AUD-HAR-478 có hoán Gate, NFD, grant viết hoa, backlog và file nhị phân cùng false positive. Vá regex tiếp sẽ lệch parser; mô-đun release hiện có quản lý bằng chứng đọc, giảm logic trùng trong xt.py và giữ trần dòng tại 08a9ad2. Cần regression cho cả chín mặt của phát hiện trước khi đóng sổ.
+- Đường lùi: Revert riêng PR parser bằng commit mới; giữ ca hồi quy và trạng thái sổ trung thực nếu hồi quy.
+
+### D-577 · 2026-11-24T13:32:20+00:00 · T-5012 dùng axe đã ghim trong repo cho cổng UI của starter
+
+- Phương án: (1) Runner CI luôn chạy ma trận trình duyệt với đường dẫn axe đã ghim, thiếu axe hoặc trình duyệt thì đỏ; thêm chế độ rõ ràng cho pack_preview và giữ biên nhận hiện có · (2) Thêm gói axe vào mọi dự án đích dù chính sách hiện tại chỉ vendor trong repo khung
+- Chọn: Runner CI luôn chạy ma trận trình duyệt với đường dẫn axe đã ghim, thiếu axe hoặc trình duyệt thì đỏ; thêm chế độ rõ ràng cho pack_preview và giữ biên nhận hiện có
+- Lý do (tiêu chí chất lượng cuối): tests_e2e/vendor/axe đã có nguồn và digest theo D-133. Dùng cùng runner trên starter được scaffold thật cho ca tốt/xấu, không thêm phụ thuộc hay đổi chính sách phân phối. Lỗi môi trường trình duyệt phải được báo là chưa đo, không thành xanh.
+- Đường lùi: Revert riêng cổng UI của lát này, giữ biên nhận deploy và bài kiểm hiện có.
+
+### D-578 · 2026-11-24T13:32:21+00:00 · T-5007 phân biệt allowlist vắng/rỗng và chặn điều khiển Git trong adapter
+
+- Phương án: (1) Khóa vắng là kế thừa đã lọc, khóa rỗng là không kế thừa tùy ý; production đòi khai khóa; cấm họ GIT_* mặc định và trong allowlist trừ hai biến CA khai tường minh; null/Null/NULL/~ là cấu hình lỗi · (2) Giữ cách hiểu khóa rỗng như khóa vắng và chỉ chặn vài biến Git đã biết
+- Chọn: Khóa vắng là kế thừa đã lọc, khóa rỗng là không kế thừa tùy ý; production đòi khai khóa; cấm họ GIT_* mặc định và trong allowlist trừ hai biến CA khai tường minh; null/Null/NULL/~ là cấu hình lỗi
+- Lý do (tiêu chí chất lượng cuối): Giữ đường dev hiện có nhưng production không âm thầm kế thừa môi trường. Hai ngoại lệ GIT_SSL_CAINFO/GIT_SSL_CAPATH theo GO_GIT_KEEP_ENV đã có; không cho Git config/SSH/exec/repo overrides. Bộ đọc phẳng không phân biệt chữ null có quote nên dành các cách viết này cho lỗi rõ ràng. Logic vào xt_deploy hiện có, facade xt giữ tương thích và lỗi config; không tăng trần dòng.
+- Đường lùi: Revert PR adapter bằng commit mới; không tự thay allowlist production hay đọc giá trị bí mật.
+
+### D-579 · 2026-11-24T13:42:16+00:00 · T-5008 ràng buộc merge bằng host, repo, PR và SHA đầy đủ
+
+- Phương án: (1) Bản ghi bất biến MergeIntent từ dữ liệu PR đã chuẩn hóa, executor kiểm lại live và dùng đúng tuple với SHA ghim; guard xét cả đích môi trường và yêu cầu pin, giữ ưu tiên verdict/review · (2) Tiếp tục dựng lại lệnh merge từ các chuỗi repo riêng và cho phép lệnh thiếu pin sau kiểm cũ
+- Chọn: Bản ghi bất biến MergeIntent từ dữ liệu PR đã chuẩn hóa, executor kiểm lại live và dùng đúng tuple với SHA ghim; guard xét cả đích môi trường và yêu cầu pin, giữ ưu tiên verdict/review
+- Lý do (tiêu chí chất lượng cuối): AUD-HAR-492 cho thấy đích và pin không được ràng buộc xuyên suốt. Intent là dữ liệu định danh, không phải quyền bỏ qua cổng. Snapshot offline chỉ xem trước, ghi thật phải kiểm lại live đúng tuple. Tách helper kiểu chặt vào module nhỏ nếu cần để giữ trần core; ADR-0102 ghi renderer, precedence host/repo và cả CLI/REST/MCP. Thay cấu hình typecheck/install chỉ để bao phủ module mới, không nới ngưỡng.
+- Đường lùi: Revert riêng PR intent; không tắt guard, nới cổng hay chuyển sang merge không ghim SHA.
+
+### D-580 · 2026-11-24T13:42:17+00:00 · T-5009 gắn sự kiện CLI vào đúng lát và nguồn thực
+
+- Phương án: (1) Nguồn gốc xác định hoặc --slice khai rõ khi mơ hồ; giữ binding PR đã xác lập, SHA/thời điểm merge thật, receipt hash bền; incident có introduced_by tùy chọn được kiểm, không suy từ issue · (2) Gán mọi sự kiện vào lát mới nhất và suy merge/sự cố từ các số liên kết có sẵn
+- Chọn: Nguồn gốc xác định hoặc --slice khai rõ khi mơ hồ; giữ binding PR đã xác lập, SHA/thời điểm merge thật, receipt hash bền; incident có introduced_by tùy chọn được kiểm, không suy từ issue
+- Lý do (tiêu chí chất lượng cuối): Loop init ghi requirement cho từng lát đúng SPEC, qua map một lượt. PR merge phải có merge SHA và thời điểm từ nguồn; deployed chỉ sau biên nhận lưu thành công. Receipt thuộc nhiều lát chỉ gán theo lineage Git kiểm được hoặc phạm vi khai rõ, không chọn lát mới nhất. Mẫu post-mortem thêm introduced_by (PR hoặc null); null không tạo suy đoán. Ghi lặp khử trùng trong khóa trạng thái, lỗi metric không làm sai kết quả thao tác gốc. Gate phải chạy thật cả chín nguồn.
+- Đường lùi: Revert từng PR producer/report; giữ file sự kiện cũ, không sửa tay sổ hay bịa số còn thiếu.
+
+### D-581 · 2026-11-24T13:45:26+00:00 · Chuẩn bị bộ kiểm bằng chứng dù diễn tập admin, pilot và rollout chưa mở khóa
+
+- Phương án: (1) Tách T-5024 làm hợp đồng và validator có test, giữ nguyên Gate dữ liệu thật của T-5020/T-5017/T-5018 và trạng thái chờ · (2) Chờ đủ quyền và người thử mới viết cả bộ kiểm
+- Chọn: Tách T-5024 làm hợp đồng và validator có test, giữ nguyên Gate dữ liệu thật của T-5020/T-5017/T-5018 và trạng thái chờ
+- Lý do (tiêu chí chất lượng cuối): Ba task gốc còn phần mã có thể làm trong phiên. Chuẩn bị bộ kiểm khiến bước người thực hiện có tiêu chí cụ thể; test dùng fixture được ghi rõ, không xuất thành bằng chứng production. Live corroboration chỉ đọc và fail-closed khi không có quyền hay nguồn. Không tick task gốc từ kết quả unit test.
+- Đường lùi: Revert riêng validator và SPEC nếu chưa phù hợp, không động vào hệ thống hay bằng chứng thật.
+
+### D-582 · 2026-11-24T13:52:40+00:00 · T-5011 và bộ kiểm pilot dùng chung hợp đồng xuất sổ lát có nguồn gốc
+
+- Phương án: (1) Schema 1 với entries gồm repo/commit/event; gộp theo repo và JSON sự kiện chuẩn, giữ toàn bộ nguồn ở origins khi trùng · (2) Gộp dòng sự kiện không giữ repo hoặc commit nguồn
+- Chọn: Schema 1 với entries gồm repo/commit/event; gộp theo repo và JSON sự kiện chuẩn, giữ toàn bộ nguồn ở origins khi trùng
+- Lý do (tiêu chí chất lượng cuối): Các worktree có thể chứa bản sao cùng sự kiện; đếm lại làm sai số đo. Repo là owner/name, commit là SHA đầy đủ của checkout khi xuất, event giữ schema 1 native. origins bảo toàn nhiều nguồn sau gộp, repo/commit đại diện phải nằm trong origins. Host mặc định github.com cho registry hiện tại; host tường minh phải được kiểm. Validator đối chiếu native merge_sha, head, digest và receipt với pilot thật.
+- Đường lùi: Revert exporter và validator tương ứng cùng phiên bản hợp đồng, giữ sổ nguồn nguyên vẹn.
+
+### D-583 · 2026-11-24T14:07:40+00:00 · Tách phụ thuộc triển khai của hướng dẫn thiết kế và hai cổng trình duyệt độc lập
+
+- Phương án: (1) T-5013 và T-5014 theo T-5005; hai runner UI có Gate thật riêng, workflow tích hợp tuần tự, mẫu thiết kế được làm ngay · (2) Giữ mọi tài liệu và bộ kiểm thiết kế chờ runner starter dù không dùng mã hoặc kết quả của runner đó
+- Chọn: T-5013 và T-5014 theo T-5005; hai runner UI có Gate thật riêng, workflow tích hợp tuần tự, mẫu thiết kế được làm ngay
+- Lý do (tiêu chí chất lượng cuối): T-5012 kiểm starter còn T-5013 kiểm verify-render trên fixture riêng; T-5014 là brief/phương án/thử tác vụ và không cần browser chạy để soạn. Chúng chỉ cùng sửa workflow nên tích hợp theo lượt. Chromium cục bộ bị môi trường chặn, nhưng điều đó không chặn phần tài liệu độc lập. Giữ nguyên cả hai Gate trình duyệt, không tick từ unit test hay đổi yêu cầu dữ liệu thật của pilot.
+- Đường lùi: Khôi phục phụ thuộc nếu kiểm tra cho thấy có giao ước thực thi bắt buộc; không bỏ hoặc làm yếu Gate.
+
+### D-584 · 2026-11-24T14:13:19+00:00 · T-5015 giao ước draft và pilot của static-check design-evidence
+
+- Phương án: (1) Schema 1: brief, ít nhất hai phương án và lựa chọn, trial có not_tested rõ hoặc dữ liệu từng người ẩn danh; pilot yêu cầu đo được và tổng đếm khớp, checked báo phạm vi đã kiểm · (2) Chỉ tìm đủ tên mục trong Markdown, cho phép pilot qua với trạng thái chưa thử
+- Chọn: Schema 1: brief, ít nhất hai phương án và lựa chọn, trial có not_tested rõ hoặc dữ liệu từng người ẩn danh; pilot yêu cầu đo được và tổng đếm khớp, checked báo phạm vi đã kiểm
+- Lý do (tiêu chí chất lượng cuối): T-5014 đã có mẫu và D-581/D-582 đã có envelope ceiling phụ trợ. Bộ kiểm phải kiểm cấu trúc/kiểu, ID duy nhất, số hữu hạn không âm, tổng số người/hoàn thành và dữ liệu thời gian/lỗi/trợ giúp; không suy dữ liệu thiếu thành 0. Draft cho not_tested kèm lý do và bước kế, pilot từ chối trạng thái đó. Đây là kiểm hồ sơ, không chứng minh người thật đã tham gia; T-5017 vẫn đòi nguồn và kết quả thật.
+- Đường lùi: Revert kind và SPEC mới, giữ API static-check hiện có và tài liệu gốc.
+
+### D-587 · 2026-11-24T14:39:07+00:00 · Khắc phục phép thử mutant llms.txt không ổn định trên CI #791
+
+- Phương án: (1) Giữ nguyên hai phép đo CPU implementation thật; đối chiếu production và mutant bằng tổng byte đường dẫn qua os.open/os.stat/os.lstat thực, tỷ lệ 6 hiện có và khẳng định đã đo · (2) Tăng kích thước hoặc chạy lại phép đo thời gian mutant cho tới khi vượt ngưỡng
+- Chọn: Giữ nguyên hai phép đo CPU implementation thật; đối chiếu production và mutant bằng tổng byte đường dẫn qua os.open/os.stat/os.lstat thực, tỷ lệ 6 hiện có và khẳng định đã đo
+- Lý do (tiêu chí chất lượng cuối): Job 138516996544 ở head b5af328 báo AssertionError not raised; tái hiện cục bộ dưới coverage sysmon cho kết quả phụ thuộc cặp thời gian, do parser/I/O và syscall che tỷ lệ concat. Đo OS API thật tại n128/512: production 24/24 byte, mutant 19764/275508 byte (13.94 lần). Kiểm tất định đúng hồi quy prefix, giữ các phép đo CPU đầu-cuối đang bảo vệ implementation và không thay cpu_budget hay ngưỡng chung. T-5027 sửa Gate CI này trong cùng PR, không rerun mù và không bỏ test.
+- Đường lùi: Revert riêng thay đổi positive-control nếu đối chứng không phân biệt được; giữ hai test CPU và yêu cầu CI xanh trước merge.
+
+### D-588 · 2026-11-24T17:37:34+00:00 · PR #797: gắn danh tính đích và nguồn policy cho mọi bước đọc, kiểm quyền, merge và theo dõi như thế nào?
+
+- Phương án: (1) Xác minh origin của checkout trước lần đọc đầu; chỉ dùng policy của checkout cùng host/repo; giữ bộ host/repo/PR/head tường minh xuyên suốt, đích hoặc endpoint chưa xác minh thì dừng · (2) Cho phép checkout điều khiển repo khác bằng cách tải động policy từ base đã xác minh của repo đích và mở rộng ngữ cảnh nhiều host
+- Chọn: Xác minh origin của checkout trước lần đọc đầu; chỉ dùng policy của checkout cùng host/repo; giữ bộ host/repo/PR/head tường minh xuyên suốt, đích hoặc endpoint chưa xác minh thì dừng
+- Lý do (tiêu chí chất lượng cuối): Review độc lập tại c319bf8 đã tái hiện 7 lỗi đỏ: lần đọc đầu chọn sai host, policy từ checkout khác, thao tác đi kèm mất đích, watch mất selector, PR suy từ nhánh khác PR gh chọn, MCP không chứng minh host, cache quyền trộn host. Phương án 1 giữ nguồn policy và đích thống nhất, ít trạng thái hơn và có ca hồi quy rõ. Unattended merge cần số PR tường minh; MCP không có metadata endpoint tin cậy trả UNVERIFIED và dùng lệnh REST ghim đích đã xác minh. So sánh gốc worktree khi đứng trong thư mục con, tách chuẩn hóa URL người dùng khỏi API html_url chuẩn; snapshot chỉ xem trước. Mọi sửa lỗi đỏ nằm trong một commit theo ADR-0062; không sửa ngưỡng, bỏ test hay tự đăng dấu review.
+- Đường lùi: Revert nguyên lát T-5008 nếu hợp đồng chưa đủ, giữ đường merge đã được policy kiểm và không nới nhánh chưa xác minh; không tự động chuyển sang tải policy từ repo khác.
+
+### D-589 · 2026-11-24T22:52:53+00:00 · PR #797: sửa CI BASE-CFG-001 và ba nhánh thiếu coverage thế nào để giữ nguyên hợp đồng merge?
+
+- Phương án: (1) Tách scheme, userinfo và host của origin; kiểm SSH bắt buộc git@ và HTTPS không userinfo, giữ bộ quét hiện tại; thêm test cho nhánh lỗi hiện có · (2) Thêm ngoại lệ ssh://git vào bộ quét hoặc bỏ helper chưa phủ để làm coverage xanh
+- Chọn: Tách scheme, userinfo và host của origin; kiểm SSH bắt buộc git@ và HTTPS không userinfo, giữ bộ quét hiện tại; thêm test cho nhánh lỗi hiện có
+- Lý do (tiêu chí chất lượng cuối): Run 45466895506, checks job 138704077943 nhận nhầm userinfo thành host; coverage job 138713852620 thiếu xt.py:7636,7638,18564. Phương án 1 biểu diễn rõ giao thức mà vẫn nhận và từ chối cùng tập origin, giữ nguyên gate và ngưỡng 100%, kiểm steward không ghi khi thiếu danh tính live.
+- Đường lùi: Revert riêng commit sửa CI nếu ma trận URL hoặc cổng hồi quy không đạt; giữ nguyên điều kiện CI xanh trước merge.
+
+### D-590 · 2026-11-24T23:22:22+00:00 · PR #797: khép các lỗ hổng chọn đích còn lại trước merge thế nào?
+
+- Phương án: (1) Dùng bộ phân tích cờ pflag đã có; kiểm host theo đúng lệnh, môi trường thực thi hiệu lực và đối chiếu danh tính phản hồi từng phần với PR đã yêu cầu · (2) Bổ sung từng mẫu chuỗi cho cờ gộp và chỉ kiểm đích khi toàn bộ merge intent đã đầy đủ
+- Chọn: Dùng bộ phân tích cờ pflag đã có; kiểm host theo đúng lệnh, môi trường thực thi hiệu lực và đối chiếu danh tính phản hồi từng phần với PR đã yêu cầu
+- Lý do (tiêu chí chất lượng cuối): Rà độc lập ở eb04e18 tái hiện đổi repo qua -sR sau -R hợp lệ, khác host do gh pr bỏ www., và merge-watch chuyển PR7 sang PR8 từ phản hồi thiếu html_url. Cần giữ nguyên đích đã chọn kể cả khi phản hồi chưa đủ SHA; tái dùng parser có sẵn và dừng khi mơ hồ. Bổ sung môi trường env -u/-i vào kiểm provenance của selector, giữ nguyên policy, coverage và cổng.
+- Đường lùi: Revert commit sửa riêng nếu hồi quy; không merge PR khi còn lỗi đỏ hoặc CI chưa xanh.
+
+### D-591 · 2026-11-25T01:28:38+00:00 · T-5029: đọc policy nhánh đích thế nào để nhánh cục bộ không che ref thật?
+
+- Phương án: (1) Chỉ đổi tên ngắn sang refs/remotes/origin/<base> khi gọi git show · (2) Xác minh ref chính xác bằng show-ref --verify, đọc bằng OID và giữ mặc định chặt khi vắng
+- Chọn: Xác minh ref chính xác bằng show-ref --verify, đọc bằng OID và giữ mặc định chặt khi vắng
+- Lý do (tiêu chí chất lượng cuối): Tên đầy đủ vẫn có thể bị git phân giải sang nhánh cục bộ khi ref thật vắng; OID từ đúng ref khóa nguồn đọc, kiểm hồi quy với repo Git thật và không nới cổng.
+- Đường lùi: git revert commit của PR sửa T-5029
+
+### D-592 · 2026-11-25T01:31:19+00:00 · PR #797: sửa hai lỗi review mới về môi trường lệnh và sổ review thế nào?
+
+- Phương án: (1) Tái sử dụng sổ gán biến bảo thủ và chỉ kiểm đích lúc đăng review · (2) Tách bằng chứng môi trường thực thi và kiểm URL review trước mọi tác dụng phụ
+- Chọn: Tách bằng chứng môi trường thực thi và kiểm URL review trước mọi tác dụng phụ
+- Lý do (tiêu chí chất lượng cuối): Bằng chứng chọn host/repo phải phản ánh môi trường của tiến trình con; review lệch đích không được ghi vào sổ cục bộ. Sửa nhỏ trong giao thức hiện có, thêm ca đỏ/xanh thật, giữ mọi ngưỡng và chính sách tự chủ.
+- Đường lùi: git revert commit của PR sửa AUD-HAR-531 và AUD-HAR-532
+
+### D-593 · 2026-11-25T02:09:36+00:00 · PR #797: nguồn policy T-5029 được tích hợp riêng hay kiểm cùng giao thức merge đã sửa?
+
+- Phương án: (1) Giữ T-5029 ở PR kế tiếp sau #797 · (2) Gộp bản sửa T-5029 đã rà độc lập vào cùng commit khép giao thức merge và kiểm toàn bộ trên một cây mã
+- Chọn: Gộp bản sửa T-5029 đã rà độc lập vào cùng commit khép giao thức merge và kiểm toàn bộ trên một cây mã
+- Lý do (tiêu chí chất lượng cuối): Đích thực thi và nguồn policy cùng quyết định một quyền merge; kiểm chúng trên cùng HEAD tránh chốt giao thức khi nguồn policy còn bị che. T-5029 đã tái hiện đỏ, qua rà độc lập và 4264 test; vẫn chạy lại cổng kết hợp và CI, giữ mọi ngưỡng, giữ ID và bằng chứng riêng.
+- Đường lùi: git revert commit khép giao thức merge; vẫn giữ lịch sử ba phát hiện audit
+
+### D-594 · 2026-11-25T02:56:52+00:00 · PR #797: khép hai dòng thiếu coverage khi đăng review thế nào?
+
+- Phương án: (1) Thêm hồi quy mất origin lúc đăng review và kiểm gửi lại đúng đích sau khi khôi phục · (2) Bỏ xử lý PrInputError tại bước đăng review vì URL đã được kiểm trước
+- Chọn: Thêm hồi quy mất origin lúc đăng review và kiểm gửi lại đúng đích sau khi khôi phục
+- Lý do (tiêu chí chất lượng cuối): CI run 45534056621, job 138939373237 báo scripts/xt.py:18520–18521 chưa được phủ. Số PR vẫn hợp lệ ngoại tuyến nên lỗi origin tại bước đăng có thể xảy ra; cần giữ mã thoát 3, sổ chưa đăng và khả năng gửi lại đúng một lần, giữ nguyên ngưỡng coverage 100 %.
+- Đường lùi: Revert riêng commit bổ sung hồi quy nếu test sai; không bỏ handler hay thay ngưỡng cổng.
+
+### D-595 · 2026-11-25T03:32:04+00:00 · Tiếp tục harden sau #797 với ba lát độc lập theo worktree
+
+- Phương án: (1) Tách chủ sở hữu cho trần lõi, nguồn sổ lát và bằng chứng thiết kế; phiên chính tích hợp sổ sách chung và mở PR tuần tự sau Gate · (2) Thực hiện tuần tự toàn bộ mã và sổ sách trong một checkout
+- Chọn: Tách chủ sở hữu cho trần lõi, nguồn sổ lát và bằng chứng thiết kế; phiên chính tích hợp sổ sách chung và mở PR tuần tự sau Gate
+- Lý do (tiêu chí chất lượng cuối): Các hợp đồng D-580, D-582, D-583 và D-584 đã chốt. Worktree riêng tránh ghi đè; một chủ cho xt.py và xt_flow, một chủ cho thiết kế, một chủ cho ngân sách. Giữ trần lõi tại main 65e7d9a và giữ nguyên cổng; sau lát ngắn chuyển sang bộ kiểm bằng chứng T-5024 theo D-581. Chỉ mở PR kế khi PR đáy đã merge.
+- Đường lùi: Bỏ từng worktree chưa xuất bản hoặc revert PR tương ứng bằng commit mới; không sửa sổ máy hay nới Gate.
+
+### D-604 · 2026-11-25T05:13:00+00:00 · T-5031 làm phép thử mutant SRM ổn định bằng số thao tác thật
+
+- Phương án: (1) Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị · (2) Giữ phép đo CPU của mutant rồi chỉ chạy lại khi trượt
+- Chọn: Giữ năm Gate CPU và ngưỡng mutant 6, dùng số lần băm/so sánh thật cho đối chứng production và mutant list.count tại 128/512 đơn vị
+- Lý do (tiêu chí chất lượng cuối): Gate UI tại 28da5fc gặp AssertionError not raised trong MutationTest của SRM; blob giống main, chạy riêng đạt nhưng số CPU hai lượt biến động lớn. Đếm thực trên dữ liệu đầu vào cho production 256/1024 và mutant 16256/261632, tách rõ tuyến tính và bậc hai ở cùng ngưỡng 6. Giữ nguyên code sản phẩm, năm kiểm CPU đầu-cuối, helper, floor và slack; tránh biến lần chạy may mắn thành bằng chứng cổng tin cậy.
+- Đường lùi: Revert riêng phép thử và giữ log đỏ cùng số đo; không nới ngưỡng hay bỏ kiểm mutant.
+
+### D-605 · 2026-11-24T08:27:24+00:00 · Vai trò model theo độ khó: lập kế hoạch ở Opus và thêm tầng Haiku cho việc cơ học có sửa tệp (sửa ADR-0098)?
 
 - Phương án: (1) Giữ ADR-0098: phiên chính lập PLAN/SPEC ở Fable, Haiku chỉ cho tra cứu chỉ đọc · (2) Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
 - Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật

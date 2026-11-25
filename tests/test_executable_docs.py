@@ -1,5 +1,4 @@
-"""T-4004 (AUD-HAR-460, D-535): tài liệu có lệnh chạy được tính nợ review theo DÒNG ĐỔI — sửa mô tả thuần không sinh nợ,
-đổi lệnh `Kiểm:` / Gate / `- grant:` / lệnh trong mẫu thì tính như mã."""
+"""Nợ review từ các lệnh thực thi ở hai cây Git (AUD-HAR-460, AUD-HAR-478)."""
 
 from __future__ import annotations
 
@@ -7,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -19,13 +19,13 @@ from test_xt import audit_status_text
 
 BLUEPRINT = (
     "# Blueprint\n\n"
-    '- [x] `BASE-X-001` **MUST** Mô tả ban đầu. — Kiểm: `python3 -c "print(1)"`\n'
+    '- [x] `BASE-X-001` **MUST** Mô tả ban đầu. → Kiểm: đọc kết quả. — Kiểm: `python3 -c "print(1)"`\n'
     "- [ ] `BASE-X-002` **SHOULD** Việc khác.\n"
 )
 PLAN = (
     "# PLAN\n\n"
     "- [ ] `T-9001` Làm việc A (files: src/) — Gate: `python3 -m unittest tests.test_a`\n"
-    "- grant: deploy env=staging\n"
+    "- grant: deploy | env=staging\n"
     "Ghi chú tự do.\n"
 )
 TEMPLATE = "# Mẫu\n\nChạy `<XT> loop status` để xem trạng thái.\nVăn xuôi giải thích.\n"
@@ -93,6 +93,109 @@ class ExecutableDocsDebtTest(unittest.TestCase):
             self.debt("docs/autopilot/PLAN-x.md", PLAN.replace("env=staging", "env=prod")),
             ["docs/autopilot/PLAN-x.md"],
         )
+
+    def commit_file(self, rel, text):
+        self.write(rel, text)
+        self.git("add", "--", rel)
+        if self.git("diff", "--cached", "--name-only"):
+            self.git("commit", "-qm", f"fixture {rel}")
+        return self.git("rev-parse", "HEAD")
+
+    def debt_since(self, sha):
+        rows = {n: ("đã quét", sha, "2026-11-23", "quét") for n, _, _ in xt.AUDIT_GROUPS}
+        self.status.write_text(audit_status_text(rows), encoding="utf-8")
+        return xt.review_debt(self.repo, self.status)[0]
+
+    def check_edit(self, rel, before, after, expected):
+        sha = self.commit_file(rel, before)
+        self.commit_file(rel, after)
+        self.assertEqual(self.debt_since(sha), expected)
+
+    def test_gate_pairing_and_duplicate_task_order(self):
+        rel = "docs/specs/PLAN-y.md"
+        for ids in (("T-101", "T-102"), ("T-101", "T-101")):
+            with self.subTest(ids=ids):
+                rows = [f"- [ ] `{task}` — Gate: " for task in ids]
+                before = rows[0] + "`true`\n" + rows[1] + "`false`\n"
+                after = rows[0] + "`false`\n" + rows[1] + "`true`\n"
+                self.check_edit(rel, before, after, [rel])
+        without, with_gate = "- [ ] `T-101` Việc khác\n", "- [ ] `T-101` — Gate: `true`\n"
+        self.check_edit(rel, without + with_gate, with_gate + without, [rel])
+        self.check_edit(rel, PLAN, PLAN.replace("tests.test_a", "tests.test_b"), [rel])
+        rel = "docs/autopilot/PLAN-x.md"
+        start = "- [ ] `T-101` — Gate: `true`\n- [ ] `T-102` — Gate: `false`\n"
+        self.check_edit(
+            rel, start, start.replace("T-101", "T-103").replace("T-102", "T-101").replace("T-103", "T-102"), [rel]
+        )
+
+    def test_grants_respect_case_fences_and_last_definition(self):
+        rel = "docs/autopilot/PLAN-x.md"
+        active = PLAN.replace("grant:", "Grant:")
+        self.check_edit(rel, active, active.replace("env=staging", "env=other"), [rel])
+        for before in ("~~~\n" + active + "~~~\n", active + "- grant: deploy | env=final\n"):
+            with self.subTest(before=before):
+                self.check_edit(rel, before, before.replace("env=staging", "env=local"), [])
+
+    def test_blueprint_and_plan_prose_are_not_executable(self):
+        bp = "BLUEPRINT.md"
+        self.check_edit(bp, BLUEPRINT, BLUEPRINT.replace("đọc kết quả", "xem báo cáo"), [])
+        note = BLUEPRINT.replace("[ ] `BASE-X-002`", "[x] `BASE-X-002`").replace(
+            "Việc khác.", "Việc khác. — Bằng chứng: log"
+        )
+        self.check_edit(bp, BLUEPRINT, note, [])
+        self.check_edit("docs/autopilot/PLAN-x.md", PLAN, PLAN + "- Timeout Gate: `note`\n- [ ] `T-999` Việc sau\n", [])
+        self.check_edit(bp, "# one\n", "# two\n", [])
+
+    def test_commands_match_runtime_normalization_and_git_binary_classification(self):
+        for source in (
+            BLUEPRINT.replace("— Kiểm:", "— Kiểm :"),
+            unicodedata.normalize("NFD", BLUEPRINT),
+            BLUEPRINT + "\x00\n",
+            BLUEPRINT.replace("\n", "\r\n"),
+        ):
+            with self.subTest(source=source):
+                self.check_edit("BLUEPRINT.md", source, source.replace("print(1)", "print(2)"), ["BLUEPRINT.md"])
+        invalid = BLUEPRINT.replace("print(1)", r"print(\`one\`)")
+        self.assertEqual(xt._scan_checks(invalid, "BLUEPRINT.md")[0][0]["cmd"], "")
+        self.check_edit("BLUEPRINT.md", BLUEPRINT, invalid, ["BLUEPRINT.md"])
+        self.check_edit("BLUEPRINT.md", invalid, invalid.replace("one", "two"), [])
+
+    def test_bound_backlog_and_changed_binding_are_debt(self):
+        bp, path = "BLUEPRINT.md", "extra/checks.md"
+        self.commit_file(path, BLUEPRINT)
+        self.commit_file("empty.md", "# Backlog\n")
+        before = "---\nbacklog: empty.md\n---\n" + BLUEPRINT
+        after = before.replace("empty.md", path)
+        self.check_edit(bp, before, after, [bp])
+        self.check_edit(path, BLUEPRINT, BLUEPRINT.replace("print(1)", "print(2)"), [path])
+        # Chỉ bản quét còn liên kết. Xoá cả hai vẫn phải ghi nhận lệnh cũ của backlog.
+        sha = self.git("rev-parse", "HEAD")
+        self.git("rm", bp, path)
+        self.git("commit", "-qm", "remove")
+        self.assertEqual(self.debt_since(sha), [bp, path])
+
+    def test_empty_or_unreadable_sources(self):
+        docs = {"docs/note.md"}
+        self.assertEqual(xt._changed_exec_docs(self.repo, self.base, set()), set())
+        with unittest.mock.patch.object(xt, "sibling_exists", side_effect=lambda name: name != "xt_distribution.py"):
+            self.assertEqual(xt._changed_exec_docs(self.repo, self.base, docs), docs)
+        self.assertTrue(xt._exec_doc_edited(self.repo, "missing-revision", "docs/note.md"))
+        self.git("rm", "BLUEPRINT.md")
+        (self.repo / "BLUEPRINT.md").symlink_to("docs/note.md")
+        self.git("add", "BLUEPRINT.md")
+        self.git("commit", "-qm", "link")
+        self.assertEqual(xt._changed_exec_docs(self.repo, self.base, docs), docs)
+
+    def test_unresolved_backlog_path_keeps_document_for_review(self):
+        bp = "BLUEPRINT.md"
+        self.commit_file(bp, "---\nbacklog: missing.md\n---\n" + BLUEPRINT)
+        self.check_edit("docs/note.md", "one", "two", [])
+        self.commit_file("examples/note.md", BLUEPRINT)
+        (self.repo / "via").symlink_to("examples", target_is_directory=True)
+        self.git("add", "via")
+        self.git("commit", "-qm", "alias")
+        self.commit_file(bp, "---\nbacklog: via/note.md\n---\n" + BLUEPRINT)
+        self.check_edit("examples/note.md", BLUEPRINT, BLUEPRINT.replace("print(1)", "print(2)"), ["examples/note.md"])
 
     def test_template_command_is_debt(self):
         self.assertEqual(

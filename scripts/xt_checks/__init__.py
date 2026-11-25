@@ -1,10 +1,12 @@
 """Bộ kiểm tĩnh theo loại (ADR-0099): `xt.py static-check <loại> [ĐƯỜNG…]`. Mỗi loại là một module `kind_<tên>.py` có `HELP`,
-`SUFFIXES` (đuôi tệp khi quét thư mục; rỗng = mọi tệp) và `check(files, opts) -> list[Finding]`. Chỉ stdlib, tất định, chỉ đọc.
+`SUFFIXES` (đuôi tệp khi quét thư mục; rỗng = mọi tệp), `OPTS`, tuỳ chọn `SNIFF` (`sniff(text)` hay `sniff(text, opts)`) và
+`NAMES` (tên tệp được nhận khi quét thư mục), và `check(files, opts) -> list[Finding]`. Chỉ stdlib, tất định, chỉ đọc.
 Danh sách `KINDS` là tường minh (không tự dò module) để test kiểm được và zipapp không phụ thuộc cách quét gói."""
 
 from __future__ import annotations
 
 import importlib
+import inspect
 import os
 import re
 import stat
@@ -12,8 +14,24 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
+from typing import Any, TypeVar
 
-KINDS: tuple[str, ...] = ("ac-trace", "credits", "motion", "nfc", "pii-vn", "sbom", "tokens", "trace", "vex")
+KINDS: tuple[str, ...] = (
+    "ac-trace",
+    "credits",
+    "dedup-leak",
+    "design-evidence",
+    "i18n",
+    "llms-txt",
+    "motion",
+    "nfc",
+    "pii-vn",
+    "sbom",
+    "srm",
+    "tokens",
+    "trace",
+    "vex",
+)
 SKIP_DIRS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__", ".mypy_cache", ".ruff_cache"})
 MAX_BYTES = 2 * 1024 * 1024
 
@@ -31,6 +49,46 @@ class Finding:
 
     def as_dict(self) -> dict[str, object]:
         return {"path": self.path, "line": self.line, "code": self.code, "message": self.message}
+
+
+@dataclass
+class CheckReport:
+    findings: list[Finding]
+    checked: dict[str, int]
+
+
+_Item = TypeVar("_Item")
+
+
+@dataclass
+class JsonShape:
+    """Ghi lỗi cấu trúc ở đúng trường, giữ các phần tử cùng mảng còn kiểm được."""
+
+    path: str
+    code: str
+    findings: list[Finding]
+
+    def error(self, field: str, expected: str) -> None:
+        self.findings.append(Finding(self.path, 0, self.code, f"{field}: cần {expected}"))
+
+    def mapping(self, field: str, value: object) -> dict[str, Any]:
+        if isinstance(value, dict):
+            return value
+        self.error(field, "object")
+        return {}
+
+    def entries(self, field: str, value: object, item_type: type[_Item]) -> list[tuple[str, _Item]]:
+        if not isinstance(value, list):
+            self.error(field, "mảng")
+            return []
+        result = []
+        for index, item in enumerate(value):
+            where = f"{field}[{index}]"
+            if isinstance(item, item_type):
+                result.append((where, item))
+            else:
+                self.error(where, "object" if item_type is dict else "chuỗi")
+        return result
 
 
 def load(kind: str) -> ModuleType:
@@ -87,13 +145,13 @@ def _sniffed(sniff: Callable[[str], bool], path: Path) -> bool:
     return head is None or sniff(head)
 
 
-def _walk(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
+def _walk(folder: Path, suffixes: tuple[str, ...], only: frozenset[str] | None = None) -> list[Path]:
     found: list[Path] = []
     for here, dirs, names in os.walk(folder, followlinks=False):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not Path(here, d).is_symlink())
         for name in sorted(names):
             path = Path(here, name)
-            if suffixes and path.suffix.lower() not in suffixes:
+            if (suffixes and path.suffix.lower() not in suffixes) or (only is not None and name not in only):
                 continue
             try:
                 regular = stat.S_ISREG(os.lstat(path).st_mode)  # lstat: liên kết và FIFO/thiết bị bị bỏ, không mở chúng
@@ -104,10 +162,16 @@ def _walk(folder: Path, suffixes: tuple[str, ...]) -> list[Path]:
     return found
 
 
-def collect(paths: list[str], suffixes: tuple[str, ...], sniff: Callable[[str], bool] | None = None) -> list[Path]:
-    """Tệp cần kiểm theo thứ tự ổn định: tệp nêu đích danh (bất kể đuôi) và tệp trong thư mục có đuôi khớp. Khi quét
-    thư mục, `sniff` (nếu có) giữ lại tệp mang dấu hiệu đúng định dạng — nên `sbom` không báo mọi `.json` của repo (rà #776).
-    Liên kết tượng trưng hoặc đường dẫn không có → `CheckError` (không âm thầm bỏ qua đích người dùng đã nêu)."""
+def collect(
+    paths: list[str],
+    suffixes: tuple[str, ...],
+    sniff: Callable[[str], bool] | None = None,
+    names: frozenset[str] | None = None,
+) -> list[Path]:
+    """Tệp cần kiểm theo thứ tự ổn định: tệp nêu đích danh (bất kể đuôi, tên) và tệp trong thư mục có đuôi khớp. Khi quét
+    thư mục, `names` (nếu có) chỉ giữ tệp đúng tên (`llms-txt` không kiểm mọi `.txt`), `sniff` (nếu có) giữ lại tệp mang
+    dấu hiệu đúng định dạng — nên `sbom` không báo mọi `.json` của repo (rà #776). Liên kết tượng trưng hoặc đường dẫn
+    không có → `CheckError` (không âm thầm bỏ qua đích người dùng đã nêu)."""
     out: list[Path] = []
     for raw in paths:
         path = Path(raw)
@@ -116,7 +180,7 @@ def collect(paths: list[str], suffixes: tuple[str, ...], sniff: Callable[[str], 
         if path.is_file():
             out.append(path)
         elif path.is_dir():
-            found = _walk(path, suffixes)
+            found = _walk(path, suffixes, names)
             out.extend(p for p in found if sniff is None or _sniffed(sniff, p))
         else:
             raise CheckError(f"không thấy: {raw}")
@@ -149,9 +213,35 @@ def validate_opts(module: ModuleType, opts: dict[str, str]) -> None:
             raise CheckError(f"--opt ignore nhận mã dạng ABC123, không phải {code!r}")
 
 
-def run(kind: str, paths: list[str], opts: dict[str, str]) -> list[Finding]:
+def sniff_for(module: ModuleType, opts: dict[str, str]) -> Callable[[str], bool] | None:
+    """`SNIFF` của loại dưới dạng hàm một tham số: `sniff(text)` dùng nguyên; `sniff(text, opts)` (nhận diện phụ thuộc
+    `--opt`, vd tên trường biến thể của `srm`) được gắn `opts` — để quét thư mục không bỏ im lặng tệp dùng tên tuỳ chỉnh."""
+    found: Callable[..., object] | None = getattr(module, "SNIFF", None)
+    if found is None:
+        return None
+    sniff = found
+    with_opts = len(inspect.signature(sniff).parameters) >= 2
+
+    def bound(text: str) -> bool:
+        return bool(sniff(text, opts) if with_opts else sniff(text))
+
+    return bound
+
+
+def run_report(kind: str, paths: list[str], opts: dict[str, str]) -> CheckReport:
     """Chạy loại `kind` trên `paths`; kết quả sắp theo (đường dẫn, dòng, mã)."""
     module = load(kind)
     validate_opts(module, opts)
-    files = collect(paths, module.SUFFIXES, getattr(module, "SNIFF", None))
-    return sorted(module.check(files, opts), key=lambda f: (f.path, f.line, f.code))
+    files = collect(paths, module.SUFFIXES, sniff_for(module, opts), getattr(module, "NAMES", None))
+    report: CheckReport
+    if hasattr(module, "check_report"):
+        report = module.check_report(files, opts)
+    else:
+        report = CheckReport(module.check(files, opts), {"files": len(files)})
+    report.findings.sort(key=lambda f: (f.path, f.line, f.code))
+    return report
+
+
+def run(kind: str, paths: list[str], opts: dict[str, str]) -> list[Finding]:
+    """API danh sách của ADR-0099."""
+    return run_report(kind, paths, opts).findings

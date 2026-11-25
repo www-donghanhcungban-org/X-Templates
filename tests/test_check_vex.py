@@ -33,10 +33,13 @@ class VexTest(unittest.TestCase):
     def setUp(self) -> None:
         self.base = Path(self.enterContext(tempfile.TemporaryDirectory()))
 
-    def run_check(self, doc: object) -> list[str]:
+    def findings(self, doc: object) -> list[xt_checks.Finding]:
         path = self.base / "vex.json"
         path.write_text(doc if isinstance(doc, str) else json.dumps(doc), encoding="utf-8")
-        return [f.code for f in kind_vex.check([path], {})]
+        return kind_vex.check([path], {})
+
+    def run_check(self, doc: object) -> list[str]:
+        return [f.code for f in self.findings(doc)]
 
     def one(self, **over: object) -> list[str]:
         return self.run_check({**GOOD, "statements": [{**STMT, **over}]})
@@ -105,14 +108,40 @@ class VexTest(unittest.TestCase):
         self.assertEqual(self.run_check({**GOOD, "version": 0}), [])
 
     def test_statements_not_a_list_or_item_not_dict(self) -> None:
-        self.assertEqual(self.run_check({**GOOD, "statements": "sai"}), [])
-        self.assertEqual(self.run_check({**GOOD, "statements": ["rác"]}), ["VEX002", "VEX003"])
+        for value in (None, [], "sai", 3, {}):
+            self.assert_shape({**GOOD, "statements": value}, "statements")
+        self.assert_shape({k: v for k, v in GOOD.items() if k != "statements"}, "statements")
+        mixed = {**GOOD, "statements": [3, {**STMT, "status": "unknown"}]}
+        self.assertCountEqual(self.run_check(mixed), ["VEX000", "VEX003"])
+        self.assert_shape(mixed, "statements[0]")
+
+    def assert_shape(self, doc: object, *fields: str) -> None:
+        errors = [f.message for f in self.findings(doc) if f.code == "VEX000"]
+        self.assertCountEqual([message.split(":")[0] for message in errors], fields)
+
+    def test_product_shapes(self) -> None:
+        for bad in (None, 3, "sai", {}):
+            self.assert_shape({**GOOD, "statements": [{**STMT, "products": bad}]}, "statements[0].products")
+        entries = [None, {"identifiers": [], "hashes": [], "subcomponents": [3, {"hashes": 4}]}]
+        self.assert_shape(
+            {**GOOD, "statements": [{**STMT, "products": entries}]},
+            "statements[0].products[0]",
+            *(
+                "statements[0].products[1]." + key
+                for key in ("identifiers", "hashes", "subcomponents[0]", "subcomponents[1].hashes")
+            ),
+        )
+        self.assertEqual(self.one(products=[{"hashes": {}, "identifiers": {}, "subcomponents": []}]), [])
 
     def test_vex002_vulnerability_and_products(self) -> None:
         self.assertEqual(self.one(vulnerability={"@id": "https://nvd.nist.gov/vuln/detail/CVE-1"}), [])
-        for bad in ({"vulnerability": None}, {"vulnerability": "CVE-1"}, {"vulnerability": {}}, {"products": []}):
-            with self.subTest(bad=bad):
-                self.assertEqual(self.one(**bad), ["VEX002"])
+        for bad in (None, "CVE-1"):
+            self.assert_shape({**GOOD, "statements": [{**STMT, "vulnerability": bad}]}, "statements[0].vulnerability")
+        alias = {**STMT, "vulnerability": {"name": "CVE-1", "aliases": ["ALT", 3]}}
+        self.assert_shape({**GOOD, "statements": [alias]}, "statements[0].vulnerability.aliases[1]")
+        for bad in ({"vulnerability": {}}, {"products": []}):
+            self.assertEqual(self.one(**bad), ["VEX002"])
+        self.assertEqual(self.run_check({**GOOD, "statements": [{"status": "fixed"}]}), ["VEX002"])
 
     def test_vex003_status(self) -> None:
         self.assertEqual(self.one(status="sai"), ["VEX003"])

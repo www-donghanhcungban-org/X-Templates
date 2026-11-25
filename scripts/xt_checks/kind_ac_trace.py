@@ -23,7 +23,7 @@ def _definitions(files: list[Path]) -> tuple[dict[str, tuple[str, int]], list[Fi
     found: list[Finding] = []
     for path in files:
         text = read_text(path)
-        for number, line in enumerate((text or "").splitlines(), 1):
+        for number, line in enumerate((text or "").split("\n"), 1):
             match = DEFINE.match(line)
             if match is None:
                 continue
@@ -49,7 +49,7 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     mentioned: set[str] = set()
     for path in tests:
         text = read_text(path)
-        for number, line in enumerate((text or "").splitlines(), 1):
+        for number, line in enumerate((text or "").split("\n"), 1):
             for code in sorted(set(MENTION.findall(line))):
                 mentioned.add(code)
                 if code not in defined:

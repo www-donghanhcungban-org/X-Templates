@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import tempfile
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from urllib.parse import urlsplit
@@ -18,8 +20,53 @@ Doc = dict[str, Any]
 
 class Core(xt_release_ops.Core, Protocol):
     DEPLOY_LEDGER: str
+    DEPLOY_ENV_DROP: frozenset[str]
+    DEPLOY_ENV_DROP_PREFIX: tuple[str, ...]
+    DEPLOY_ENV_SYSTEM: tuple[str, ...]
+    GO_GIT_KEEP_ENV: tuple[str, ...]
     _go_git: Callable[..., str]
     _validate_deploy_ledger: Callable[[Any], Doc]
+
+
+# Danh sách khai tường minh cho phép một số tuỳ chọn trình thông dịch đã bị lọc khỏi môi trường thừa kế.
+_ENV_NEVER = frozenset({"BASH_ENV", "ENV", "SHELLOPTS", "BASHOPTS", "PS4"})
+_ENV_NEVER_PREFIX = ("LD_", "DYLD_", "BASH_FUNC_", "XT_DEPLOY_")
+_ENV_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_NULL_MARKERS = ("null", "Null", "NULL", "~")
+
+
+def _check_env_names(core: Core, names: Sequence[str]) -> None:
+    for name in names:
+        forbidden_git = name.startswith("GIT_") and name not in core.GO_GIT_KEEP_ENV
+        if (
+            not _ENV_NAME.fullmatch(name)
+            or name in _NULL_MARKERS
+            or name in _ENV_NEVER
+            or name.startswith(_ENV_NEVER_PREFIX)
+            or forbidden_git
+        ):
+            raise core.DeployError(f"xt.yaml: deploy_env_pass có tên không hợp lệ hoặc không được phép qua: {name}")
+
+
+def env_pass_names(core: Core, value: str) -> tuple[str, ...]:
+    names = tuple(dict.fromkeys(name for name in re.split(r"[\s,]+", value) if name))
+    _check_env_names(core, names)
+    return names
+
+
+def command_env(core: Core, environ: Mapping[str, str], names: Sequence[str] | None) -> dict[str, str]:
+    """Môi trường dùng chung cho deploy, smoke, digest và rollback. Chỉ nêu tên khi thiếu biến."""
+    if names is None:
+        return {
+            k: v
+            for k, v in environ.items()
+            if k not in core.DEPLOY_ENV_DROP and not k.startswith(core.DEPLOY_ENV_DROP_PREFIX)
+        }
+    _check_env_names(core, names)
+    missing = [name for name in names if name not in environ]
+    if missing:
+        raise core.DeployError(f"deploy_env_pass khai {', '.join(missing)} nhưng môi trường chạy không có biến đó")
+    return {k: environ[k] for k in (*core.DEPLOY_ENV_SYSTEM, *names) if k in environ}
 
 
 def receipt_url(value: str) -> str | None:

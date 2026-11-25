@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from . import Finding, read_text
+from . import CheckReport, Finding, JsonShape, read_text
 
 HELP = "OpenVEX thiếu trường tài liệu, vulnerability/products, status sai, justification hay action_statement"
 SUFFIXES = (".json",)
@@ -58,16 +58,27 @@ def _load(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _has_vuln(stmt: dict[str, Any]) -> bool:
-    vuln = stmt.get("vulnerability")
-    return isinstance(vuln, dict) and bool(vuln.get("name") or vuln.get("@id"))
+def _product_fields(shape: JsonShape, field: str, product: dict[str, Any]) -> None:
+    for key in ("hashes", "identifiers"):
+        if key in product:
+            shape.mapping(f"{field}.{key}", product[key])
 
 
-def _statement(path: str, index: int, stmt: dict[str, Any]) -> list[Finding]:
-    tag = f"statement #{index}"
-    found: list[Finding] = []
-    if not _has_vuln(stmt) or not stmt.get("products"):
-        found.append(Finding(path, 0, "VEX002", f"{tag} thiếu vulnerability (name/@id) hoặc products"))
+def _targets(shape: JsonShape, field: str, stmt: dict[str, Any]) -> None:
+    vuln = shape.mapping(f"{field}.vulnerability", stmt.get("vulnerability", {}))
+    shape.entries(f"{field}.vulnerability.aliases", vuln.get("aliases", []), str)
+    products = stmt.get("products", [])
+    if not (vuln.get("name") or vuln.get("@id")) or products == []:
+        shape.findings.append(Finding(shape.path, 0, "VEX002", f"{field} thiếu vulnerability (name/@id) hoặc products"))
+    for where, product in shape.entries(f"{field}.products", products, dict):
+        _product_fields(shape, where, product)
+        for subfield, sub in shape.entries(f"{where}.subcomponents", product.get("subcomponents", []), dict):
+            _product_fields(shape, subfield, sub)
+
+
+def _statement(shape: JsonShape, tag: str, stmt: dict[str, Any]) -> None:
+    path, found = shape.path, shape.findings
+    _targets(shape, tag, stmt)
     status = stmt.get("status")
     if status not in STATUSES:
         found.append(Finding(path, 0, "VEX003", f"{tag} có status không hợp lệ: {status!r}"))
@@ -79,27 +90,33 @@ def _statement(path: str, index: int, stmt: dict[str, Any]) -> list[Finding]:
         found.append(Finding(path, 0, "VEX004", f"{tag} not_affected thiếu justification hợp lệ hoặc impact_statement"))
     if status == "affected" and not stmt.get("action_statement"):
         found.append(Finding(path, 0, "VEX005", f"{tag} affected thiếu action_statement"))
-    return found
 
 
-def _doc(path: str, data: dict[str, Any]) -> list[Finding]:
-    found: list[Finding] = []
+def _doc(shape: JsonShape, data: dict[str, Any]) -> int:
     miss = [key for key in ("author", "timestamp", "version") if data.get(key) in (None, "")]
     if miss:
-        found.append(Finding(path, 0, "VEX001", f"tài liệu thiếu: {', '.join(miss)}"))
+        shape.findings.append(Finding(shape.path, 0, "VEX001", f"tài liệu thiếu: {', '.join(miss)}"))
     statements = data.get("statements")
-    for index, raw in enumerate(statements if isinstance(statements, list) else [], 1):
-        found.extend(_statement(path, index, raw if isinstance(raw, dict) else {}))
-    return found
+    if statements == []:
+        shape.error("statements", "ít nhất một statement")
+    entries = shape.entries("statements", statements, dict)
+    for field, stmt in entries:
+        _statement(shape, field, stmt)
+    return len(entries)
 
 
-def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
-    found: list[Finding] = []
+def check_report(files: list[Path], opts: dict[str, str]) -> CheckReport:
+    report = CheckReport([], {"files": len(files), "statements": 0})
     for path in files:
         text = read_text(path)
         data = None if text is None else _load(text)
         if data is None:
-            found.append(Finding(str(path), 0, "VEX000", "không phải JSON OpenVEX hợp lệ (hoặc quá lớn)"))
+            report.findings.append(Finding(str(path), 0, "VEX000", "không phải JSON OpenVEX hợp lệ (hoặc quá lớn)"))
         else:
-            found.extend(_doc(str(path), data))
-    return found
+            shape = JsonShape(str(path), "VEX000", report.findings)
+            report.checked["statements"] += _doc(shape, data)
+    return report
+
+
+def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
+    return check_report(files, opts).findings

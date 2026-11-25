@@ -78,6 +78,13 @@ class CreditsTest(unittest.TestCase):
             self.codes(self.run_check(table, files)), [("CRD002", 3), ("CRD002", 4), ("CRD002", 5), ("CRD003", 5)]
         )
 
+    def test_table_lines_follow_lf_only(self) -> None:
+        files = self.media("a.png")
+        for char in ("\u2028", "\f"):
+            with self.subTest(char=char):
+                table = HEAD + f"| a.png | A{char}B | MIT |\n| gone.png | An | MIT |\n"
+                self.assertEqual(self.codes(self.run_check(table, files)), [("CRD004", 4)])
+
     def test_crd003_license_outside_allow(self) -> None:
         files = self.media("a.png", "b.png")
         table = HEAD + "| a.png | src | Proprietary |\n| b.png | src |  |\n"

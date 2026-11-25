@@ -19,6 +19,8 @@ ADAPTER = """import hashlib, os, sys
 from pathlib import Path
 state = Path(os.environ['XT_DEPLOY_STATE'])
 step = sys.argv[1]
+if os.environ['XT_DEPLOY_ENV'] != 'dev':
+    assert 'DEPLOY_TEST_HOST_ONLY' not in os.environ
 with (state / 'calls').open('a') as log:
     print(step, file=log)
 live = state / 'live.bin'
@@ -50,6 +52,7 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
         plan.write_text("- grant: deploy | env=prod\n")
         self.setup_xt(
             deploy_envs="dev prod",
+            deploy_env_pass="",
             release_artifacts="dist/app.bin",
             **{
                 f"{action}_{env}": f"python3 adapter.py {action}"
@@ -97,6 +100,7 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
         return receipt
 
     def test_approved_run_and_verified_saved_rollback(self):
+        self.enterContext(mock.patch.dict(os.environ, {"DEPLOY_TEST_HOST_ONLY": "fixture"}))
         a = self.candidate(b"A")
         self.assertEqual(self.call()["served_digest"], a["served_digest"])
         self.candidate(b"B")
@@ -105,6 +109,47 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
         self.artifact.unlink()
         self.assertEqual(self.call(op="rollback")["served_digest"], a["served_digest"])
         self.assertEqual((self.state / "live.bin").read_bytes(), b"A")
+
+    def test_any_production_target_requires_explicit_allowlist_before_lock(self):
+        config = self.repo / "xt.yaml"
+        original = config.read_text()
+        for env in ("prod", "edge"):
+            config.write_text(original.replace("deploy_env_pass: \n", "").replace("prod", env))
+            for op in ("run", "rollback"):
+                with (
+                    self.subTest(env=env, op=op),
+                    mock.patch.object(xt, "_dev_lock", side_effect=AssertionError("lock")),
+                ):
+                    self.assertIn("deploy_env_pass", self.call(env, op, rc=2))
+                self.assertFalse((self.repo / ".git/xt-preview" / env).exists())
+        self.assertFalse(self.ledger.exists())
+
+    def test_invalid_production_allowlist_is_rejected_before_lock(self):
+        config = self.repo / "xt.yaml"
+        original = config.read_text()
+        for raw in ("null", "GIT_EXEC_PATH"):
+            config.write_text(original.replace("deploy_env_pass: \n", f"deploy_env_pass: {raw}\n"))
+            with self.subTest(raw=raw), mock.patch.object(xt, "_dev_lock", side_effect=AssertionError("lock")):
+                self.assertIn(raw, self.call(rc=2))
+        self.assertFalse(self.ledger.exists())
+
+    def test_allowlist_must_match_the_authorized_configuration(self):
+        self.candidate(b"A")
+        before = self.ledger.read_bytes()
+        # Mô phỏng cấu hình đọc trước khi kiểm HEAD đã cũ.
+        self.state.mkdir(parents=True)  # thư mục đã được _dev_lock tạo ở lối vào CLI
+        config = xt._xt_keys(self.repo)
+        for stale in (
+            {**config, "deploy_env_pass": "LANG"},
+            {k: v for k, v in config.items() if k != "deploy_env_pass"},
+        ):
+            with (
+                self.subTest(env_pass=stale.get("deploy_env_pass")),
+                self.assertRaisesRegex(xt.DeployError, "cấu hình"),
+            ):
+                xt._dev_execute(self.repo, self.state, 30, False, "prod", stale)
+        self.assertFalse((self.state / "calls").exists())
+        self.assertEqual(self.ledger.read_bytes(), before)
 
     def test_preconditions_leave_target_and_receipt_untouched(self):
         self.candidate(b"A")
@@ -227,7 +272,7 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
             mock.patch.object(xt_deploy, "production_authority", return_value=clean),
             self.assertRaisesRegex(xt.DeployError, "cấu hình"),
         ):
-            xt._deploy_authorized_head(self.repo, "prod", commands, {})
+            xt._deploy_authorized_head(self.repo, "prod", commands, {}, ())
         driver = xt.DevPreview(
             self.repo, self.state, 1, {"head": "b" * 40, "digest": "a" * 64}, "", approved_head="c" * 40
         )

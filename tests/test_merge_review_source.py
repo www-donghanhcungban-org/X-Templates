@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,7 +21,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 import guard
 import xt
-from test_merge import GREEN, commit_base_xt, pr, run_main
+from xt_merge_intent import RepoTarget
+from test_merge import GREEN, FakeGh, commit_base_xt, pr, run_main
 
 HEAD = "c" * 40
 AUTO = {"enabledBy": {"login": "a"}, "mergeMethod": "SQUASH"}
@@ -32,12 +34,28 @@ STANDARD = [
 MODELS = ("--reviewer-model", "claude-fable-5-1", "--author-model", "claude-opus-5-5")  # bậc cao hơn (D-161)
 
 
+LIVE_INTENT = {"host": "github.com", "repo": "o/r", "pr": 7, "expected_head": HEAD}
+
+
 def std(**over: Any) -> dict:
-    return pr(headRefOid=HEAD, files=STANDARD, repo="o/r", **over)
+    return pr(
+        headRefOid=HEAD,
+        files=STANDARD,
+        repo="o/r",
+        live_intent=LIVE_INTENT,
+        **over,
+    )
 
 
 def mark(clean: bool, head: str = HEAD, at: str = "2026-10-20T10:00:00Z") -> dict:
     return {"head": head, "clean": clean, "at": at}
+
+
+def commit_shadowed_policy(base: Path, remote: str, local: str) -> None:
+    commit_base_xt(base, local)
+    for name in ("origin/main", "refs/remotes/origin/main"):
+        subprocess.run(["git", "-C", str(base), "update-ref", "refs/heads/" + name, "HEAD"], check=True)
+    commit_base_xt(base, remote, working=local)
 
 
 class MergeCheckReviewStepTest(unittest.TestCase):
@@ -75,14 +93,14 @@ class MergeCheckReviewStepTest(unittest.TestCase):
         rc, out = self.check(std(xtReviews=[mark(True)]))
         self.assertEqual(rc, 0)
         self.assertTrue(out.startswith("MERGE · PR #7 · làn chuẩn"), out)
-        self.assertIn(f"→ gh pr merge 7 --squash --match-head-commit {HEAD}", out)
+        self.assertNotIn("gh pr merge", out)
 
     def test_merge_check_build_phase_still_merges_without_review(self):
         commit_base_xt(self.base, "merge_autonomy: L3\ndelivery_phase: build\n")
         rc, out = self.check(std())
         self.assertEqual(rc, 0)
         self.assertIn("pha build: bỏ qua review, ghi nợ (ADR-0031)", out)
-        self.assertIn(f"→ gh pr merge 7 --squash --match-head-commit {HEAD}", out)
+        self.assertNotIn("gh pr merge", out)
         rc, out = self.check(std(xtReviews=[mark(False)]))  # lỗi chặn vẫn chặn ở pha build
         self.assertEqual(rc, 1)
         self.assertNotIn("match-head-commit", out)
@@ -93,6 +111,29 @@ class MergeCheckReviewStepTest(unittest.TestCase):
     def check_json(self, p: dict) -> tuple[int, dict]:
         rc, out = self.check(p, "--json")
         return rc, dict(json.loads(out))
+
+    def test_merge_review_gate_and_rethink_cap_use_the_exact_remote_branch(self):
+        remote = "merge_autonomy: L3\nmerge_review: required\ndelivery_phase: harden\nmax_rethink: 1\n"
+        local = "merge_autonomy: L3\nmerge_review: optional\ndelivery_phase: build\nmax_rethink: 0\n"
+        commit_shadowed_policy(self.base, remote, local)
+        rc, decision = self.check_json(std())
+        self.assertEqual((rc, decision["verdict"], decision["eligible"]), (1, "review", False), decision)
+        self.assertEqual(decision["delivery_phase"], "harden")
+        self.assertEqual(xt.pr_rethink_cap(self.base, std()), 1)
+
+    def test_missing_remote_policy_does_not_resolve_a_qualified_local_name(self):
+        local = "merge_autonomy: L3\nmerge_review: optional\ndelivery_phase: build\n"
+        commit_shadowed_policy(self.base, "merge_autonomy: L3\nmerge_review: required\n", local)
+        subprocess.run(["git", "-C", str(self.base), "update-ref", "-d", "refs/remotes/origin/main"], check=True)
+        rc, decision = self.check_json(std())
+        self.assertEqual((rc, decision["verdict"], decision["autonomy"], decision["eligible"]), (1, "human", 1, False))
+        self.assertEqual(decision["delivery_phase"], "harden")
+
+    def test_live_review_identity_uses_the_exact_remote_branch(self):
+        commit_shadowed_policy(self.base, "review_identity: remote-reviewer\n", "review_identity: local-reviewer\n")
+        with FakeGh(real_git=True).patch():
+            details = xt._pr_rest("7")
+        self.assertEqual(details["reviewIdentity"], "remote-reviewer")
 
     def test_merge_check_local_unpublished_blocking_blocks(self):
         """AUD-XFEAT-015 (D-104): review `clean:false` (lỗi chặn/chưa kết luận) chỉ có ở sổ cục bộ, đúng head hiện tại →
@@ -172,14 +213,19 @@ class MergeCheckReviewStepTest(unittest.TestCase):
         self.assertEqual(d["review"], "deferred")
         rest = {**std(), "author": "a", "authorAssociation": "OWNER"}
         with unittest.mock.patch.object(xt, "_pr_rest", return_value=rest):
-            out = xt._steward_one("7", "repos/o/r", self.base, False, [])
+            out = xt._steward_one("7", RepoTarget("github.com", "o/r"), self.base, False)
         self.assertEqual(out["action"], "republish-review")
-        self.assertEqual(xt._steward_command(out, "repos/o/r"), [])
+        self.assertEqual(xt._steward_command(out, RepoTarget("github.com", "o/r")), [])
 
     def test_merge_check_local_standard_seen_keeps_strict(self):
         """AUD-XFEAT-016: PR từng vào làn chuẩn (sổ cục bộ `standard_seen`, chưa có nhãn) rồi thu về làn nhanh — `merge-check`
         vẫn đòi review ở head như `pr next`, không trả `merge`."""
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         self.assertEqual(self.check_json(fast)[0], 0)
         self.seed([], standard_seen=True)
         rc, d = self.check_json(fast)
@@ -209,6 +255,9 @@ class GuardReviewMissingTest(unittest.TestCase):
         f"gh api -X PUT repos/{{owner}}/{{repo}}/pulls/7/merge -f sha={HEAD} -f merge_method=squash",
     )
     AUTO_MERGES = ("gh pr merge 7 --auto --squash", f"gh pr merge 7 --auto --squash --match-head-commit {HEAD}")
+
+    def setUp(self):
+        self.enterContext(unittest.mock.patch.dict(os.environ, {"GH_REPO": "github.com/o/r", "GH_HOST": "github.com"}))
 
     def test_auto_merge_denied_whatever_the_review(self):
         """ADR-0036 §3: `--auto` → deny mã `AUTO_MERGE_ENABLE` cả khi review thiếu/chặn lẫn khi review sạch, pha build;
@@ -278,7 +327,12 @@ class GuardReviewMissingTest(unittest.TestCase):
     def test_default_policy_not_ready_is_blocked_without_claiming_missing_review(self):
         """ADR-0096: làn nhanh, build và dưới L3 vẫn chờ CI/sửa lỗi; mã không được báo nhầm thiếu review."""
         running = [{**GREEN[0], "status": "IN_PROGRESS", "conclusion": ""}]
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         cases = {
             "làn nhanh wait": xt.merge_check_result({**fast, "statusCheckRollup": running}, 3, [], False),
             "làn nhanh fix": xt.merge_check_result({**fast, "mergeable": "CONFLICTING"}, 3, [], False),
@@ -330,7 +384,12 @@ class GuardReviewMissingTest(unittest.TestCase):
 
     def test_default_policy_review_missing_unpinned_controls(self):
         """Review sạch/build/làn nhanh đã đủ điều kiện giữ hành vi cũ; làn chuẩn L2 cần người, ADR-0096 chặn."""
-        fast = pr(headRefOid=HEAD, files=[{"path": "README.md", "additions": 1, "deletions": 0}], repo="o/r")
+        fast = pr(
+            headRefOid=HEAD,
+            files=[{"path": "README.md", "additions": 1, "deletions": 0}],
+            repo="o/r",
+            live_intent=LIVE_INTENT,
+        )
         cases = {
             "sạch": xt.merge_check_result(std(xtReviews=[mark(True)]), 3, [], False),
             "pha build": xt.merge_check_result(std(), 3, [], False, "build"),
@@ -338,11 +397,12 @@ class GuardReviewMissingTest(unittest.TestCase):
             "L2": xt.merge_check_result(std(), 2, [], False),
         }
         for name, d in cases.items():
-            expected = ("deny", "MERGE_INELIGIBLE") if name == "L2" else ("", "OTHER_ASK")
+            expected = ("deny", "MERGE_INELIGIBLE") if name == "L2" else ("deny", "UNVERIFIED")
             for cmd in self.UNPINNED:
                 with self.subTest(name, cmd=cmd):
                     res = self.final(d, cmd)
-                    self.assertEqual((res["decision"], res.get("code")), expected, res)
+                    want = ("", "OTHER_ASK") if HEAD in cmd and name != "L2" else expected
+                    self.assertEqual((res["decision"], res.get("code")), want, res)
             with self.subTest(name, cmd="mcp"):
                 result = self.mcp_unpinned(d)
                 self.assertEqual((result["decision"], result.get("code")), expected, result)
@@ -366,7 +426,7 @@ class GuardReviewMissingTest(unittest.TestCase):
             for cmd in self.MERGES:
                 with self.subTest(name, cmd=cmd):
                     self.assertEqual(self.final(d, cmd)["decision"], "allow")
-            self.assertEqual(self.mcp(d)["decision"], "allow")
+            self.assertEqual((self.mcp(d)["decision"], self.mcp(d)["code"]), ("deny", "UNVERIFIED"))
 
 
 class ReviewSourceTest(unittest.TestCase):
@@ -498,7 +558,7 @@ class ReviewSourceChainTest(unittest.TestCase):
             out = self.nxt(p)
             actions.append(out["action"])
         self.assertEqual(actions, ["republish-review"] * 3)
-        self.assertIn(f"xt.py pr reviewed --pr 7 --head {HEAD} --clean", out["do"])
+        self.assertEqual(out["do"], "")  # ảnh chụp chỉ báo cần đăng lại
         self.assertNotIn("merge", actions)
         # merge-check cùng nguồn: chưa có dấu đã đăng → chưa merge
         rc, out, _ = run_main("merge-check", "--json", "--pr-json", "-", stdin=json.dumps(p))
@@ -516,9 +576,11 @@ class ReviewSourceChainTest(unittest.TestCase):
         run_main("pr", "reviewed", "--pr", "7", "--head", HEAD, "--clean", *MODELS)
         rest = {**std(), "author": "a", "authorAssociation": "OWNER"}
         with unittest.mock.patch.object(xt, "_pr_rest", return_value=rest):
-            out = xt._steward_one("7", "repos/o/r", self.base, False, [])
+            out = xt._steward_one("7", RepoTarget("github.com", "o/r"), self.base, False)
         self.assertEqual(out["action"], "republish-review")
-        self.assertEqual(xt._steward_command(out, "repos/o/r"), [])  # steward chỉ báo, không bật/merge
+        self.assertEqual(
+            xt._steward_command(out, RepoTarget("github.com", "o/r")), []
+        )  # steward chỉ báo, không bật/merge
 
 
 if __name__ == "__main__":

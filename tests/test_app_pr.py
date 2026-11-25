@@ -34,6 +34,7 @@ def iso(days_ago: float) -> str:
 def pr_json(n: int, sha: str, title: str) -> Dict[str, Any]:
     return {
         "number": n,
+        "html_url": f"https://github.com/o/r/pull/{n}",
         "title": title,
         "state": "open",
         "draft": False,
@@ -145,7 +146,18 @@ WRITERS = (
     "cmd_merge_check",
     "cmd_merge_watch",
 )
-GIT_READ = {"show", "cat-file", "rev-parse", "merge-tree", "ls-files", "log", "diff", "merge-base", "config"}
+GIT_READ = {
+    "show",
+    "show-ref",
+    "cat-file",
+    "rev-parse",
+    "merge-tree",
+    "ls-files",
+    "log",
+    "diff",
+    "merge-base",
+    "config",
+}
 
 
 class ProcSpy:
@@ -159,11 +171,12 @@ class ProcSpy:
     def __call__(self, cmd: List[str], *args: Any, **kwargs: Any) -> "subprocess.CompletedProcess[str]":
         self.cmds.append(list(cmd))
         if cmd[:2] == ["gh", "api"]:
-            assert len(cmd) == 3 and not cmd[2].startswith("-"), cmd
+            assert len(cmd) == 3 or cmd[2:4] == ["--hostname", "github.com"] and len(cmd) == 5, cmd
+            assert not cmd[-1].startswith("-"), cmd
             if self.gh_error is not None:
                 raise self.gh_error
             try:
-                pages = gh_pages(cmd[2])
+                pages = gh_pages(cmd[-1])
             except xt.PrInputError as exc:
                 return subprocess.CompletedProcess(cmd, 1, "", str(exc))
             return subprocess.CompletedProcess(cmd, 0, "\n".join(json.dumps(p) for p in pages), "")
@@ -173,6 +186,11 @@ class ProcSpy:
                 rest = rest[2:] if rest[0] in ("-c", "-C") else rest[1:]
             sub = rest[0]
             assert sub in GIT_READ, cmd
+            if sub == "show-ref":
+                assert len(rest) == 4 and rest[1:3] == ["--verify", "--hash"], cmd
+                assert rest[3].startswith("refs/remotes/origin/"), cmd
+            if cmd[-1] == "remote.origin.url":
+                return subprocess.CompletedProcess(cmd, 0, "https://github.com/o/r\0", "")
             return subprocess.CompletedProcess(cmd, 128, "", "fatal: giả")
         raise AssertionError(f"lệnh lạ: {cmd}")
 
@@ -256,7 +274,7 @@ class PrsTest(unittest.TestCase):
         self.assertEqual(row["reasons"][0], want["why"])
 
     def test_strict_base_compare_is_read_only(self) -> None:
-        live = f"repos/{{owner}}/{{repo}}/compare/refs%2Fheads%2Fmain...{SHA7}?per_page=1"
+        live = f"repos/o/r/compare/refs%2Fheads%2Fmain...{SHA7}?per_page=1"
 
         def gh(path: str, paginate: bool = False) -> List[Any]:
             if "state=open" in path:
@@ -361,6 +379,8 @@ class PrsTest(unittest.TestCase):
                 sb.assert_no_write(self)
 
         def not_logged(cmd: List[str], *a: Any, **k: Any) -> "subprocess.CompletedProcess[str]":
+            if cmd[0] == "git":
+                return ProcSpy()(cmd, *a, **k)
             return subprocess.CompletedProcess(cmd, 4, "", "To get started with GitHub CLI, please run:  gh auth login")
 
         with Sandbox() as sb, mock.patch.object(xt.subprocess, "run", not_logged):
@@ -380,7 +400,10 @@ class PrsTest(unittest.TestCase):
         self.assertTrue(gh)
         for c in gh:
             self.assertEqual(c[:2], ["gh", "api"])
-            self.assertEqual(len(c), 3, c)
+            if c[-1].startswith("repos/o/r/"):
+                self.assertEqual(c[2:-1], ["--hostname", "github.com"], c)
+            else:
+                self.assertEqual(len(c), 3, c)
         self.assertFalse([c for c in proc.cmds if c[0] not in ("gh", "git")])
 
     def test_concurrent_requests(self) -> None:

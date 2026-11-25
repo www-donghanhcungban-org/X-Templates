@@ -43,6 +43,12 @@ class MotionTest(unittest.TestCase):
         self.assertEqual(self.codes(css), [(2, "MOT002")])
         self.assertEqual(self.codes("@keyframes x { to { opacity: 1; } }\n"), [(1, "MOT002")])
 
+    def test_view_transition_name_requires_reduced_motion(self) -> None:
+        css = ".card { --view-transition-name: example; }\n.card { view-transition-name: card; }"
+        self.assertEqual(self.codes(css), [(2, "MOT002")])
+        self.assertEqual(self.codes(css + "\n" + REDUCED), [])
+        self.assertEqual(self.codes(".card { view-transition-name-extra: card; }"), [])
+
     def test_short_infinite_in_ms_and_seconds(self) -> None:
         for dur in ("100ms", "0.2s", ".3s"):
             with self.subTest(dur=dur):

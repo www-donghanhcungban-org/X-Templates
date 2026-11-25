@@ -127,10 +127,34 @@ class PackTest(unittest.TestCase):
         with self.assertRaisesRegex(xt_pack.PackError, "liên kết tượng trưng"):
             xt_pack.build_bytes(s)
 
-    def test_strict_also_requires_version(self):
+    def strict_scripts(self) -> Path:
         s = self.fake_scripts()
         for name in xt_pack.ARTIFACT_SCRIPTS[1:]:
             (s / name).write_text("X = 1\n", encoding="utf-8")
+        (s / "xt_checks").mkdir()
+        (s / "xt_checks" / "__init__.py").touch()
+        return s
+
+    def test_strict_requires_each_package_directory_and_initializer(self):
+        s = self.strict_scripts()
+        for pkg in xt_pack.PACKAGES:
+            root = s / pkg
+            saved = self.tmp / pkg
+            root.rename(saved)
+            with self.subTest(pkg=pkg, case="absent"), self.assertRaisesRegex(xt_pack.PackError, pkg):
+                xt_pack.build_bytes(s, strict=True)
+            root.touch()
+            with self.subTest(pkg=pkg, case="file"), self.assertRaisesRegex(xt_pack.PackError, pkg):
+                xt_pack.build_bytes(s, strict=True)
+            root.unlink()
+            saved.rename(root)
+            (root / "__init__.py").unlink()
+            with self.subTest(pkg=pkg, case="initializer"), self.assertRaisesRegex(xt_pack.PackError, "__init__"):
+                xt_pack.build_bytes(s, strict=True)
+            (root / "__init__.py").touch()
+
+    def test_strict_also_requires_version(self):
+        s = self.strict_scripts()
         xt_pack.build_bytes(s, strict=True)
         (self.tmp / "VERSION").unlink()
         with self.assertRaisesRegex(xt_pack.PackError, "VERSION"):
@@ -163,6 +187,66 @@ class PackTest(unittest.TestCase):
         self.assertIn("sha256", errors[0])
         self.assertEqual(len(xt_pack.verify(out, s)), 1)
 
+    def test_verify_reports_failure_from_each_packaged_command(self):
+        s = self.fake_scripts()
+        out = self.tmp / "xt.pyz"
+        for pkg, arg in (("xt_app", "app"), ("xt_checks", "static-check")):
+            with self.subTest(pkg=pkg):
+                (s / "xt.py").write_text(f"import sys\ndef main():\n    return 9 if {arg!r} in sys.argv else 0\n")
+                pin = xt_pack.build(s, out)
+                errors = xt_pack.verify(out, s, pin)
+                self.assertTrue(any(pkg in error and "9" in error for error in errors), errors)
+                self.assertEqual(xt_pack.main(["--scripts", str(s), "verify", str(out)]), 1)
+
+    def test_verify_smoke_uses_verified_bytes_and_isolated_environment(self):
+        s = self.fake_scripts()
+        out = self.tmp / "xt.pyz"
+        pin = xt_pack.build(s, out)
+        data = out.read_bytes()
+        launches = []
+        run = subprocess.run
+
+        def replace_artifact(scripts):
+            out.write_bytes(b"changed after reading")
+            return data
+
+        def check_launch(argv, **kwargs):
+            archive = Path(argv[3])
+            work = Path(kwargs["cwd"])
+            self.assertEqual(argv[:3], [sys.executable, "-I", "-S"])
+            self.assertNotEqual(archive, out)
+            self.assertEqual(archive.read_bytes(), data)
+            self.assertEqual(Path(kwargs["env"]["CLAUDE_PROJECT_DIR"]), work)
+            self.assertEqual(list(Path(kwargs["env"]["PATH"]).iterdir()), [])
+            self.assertGreater(kwargs["timeout"], 0)
+            launches.append(argv[4:])
+            if "static-check" in argv:
+                self.assertTrue((work / argv[-2]).is_file())
+            return run(argv, **kwargs)
+
+        with mock.patch.object(xt_pack, "build_bytes", side_effect=replace_artifact):
+            with mock.patch.object(subprocess, "run", side_effect=check_launch):
+                self.assertEqual(xt_pack.verify(out, s, pin), [])
+        self.assertEqual(len(launches), len(xt_pack.PACKAGES))
+        self.assertEqual(launches[0], ["--framework", str(self.tmp / "framework"), "app", "--smoke"])
+        self.assertEqual(launches[1][:2], ["static-check", "nfc"])
+        self.assertEqual(launches[1][-1], "--json")
+
+    def test_verify_reports_smoke_timeout_and_skips_execution_on_mismatch(self):
+        s = self.fake_scripts()
+        out = self.tmp / "xt.pyz"
+        xt_pack.build(s, out)
+        with mock.patch.object(subprocess, "run", side_effect=subprocess.TimeoutExpired("xt.pyz", 1)) as run:
+            self.assertTrue(xt_pack.verify(out, s, "0" * 64))
+            out.write_bytes(out.read_bytes() + b"x")
+            self.assertTrue(xt_pack.verify(out, s))
+            run.assert_not_called()
+            xt_pack.build(s, out)
+            errors = xt_pack.verify(out, s)
+            self.assertEqual(errors, [f"{pkg}: lệnh kiểm quá hạn" for pkg in xt_pack.PACKAGES])
+        with mock.patch.object(subprocess, "run", side_effect=OSError("launch failed")):
+            self.assertEqual(xt_pack.main(["--scripts", str(s), "verify", str(out)]), 1)
+
     def test_cli_exit_codes(self):
         s = self.fake_scripts()
         out = self.tmp / "dist" / "xt.pyz"
@@ -190,6 +274,7 @@ class PackTest(unittest.TestCase):
     def test_real_artifact_has_the_contract_commands_and_version(self):
         out = self.tmp / "xt.pyz"
         xt_pack.build(SCRIPTS, out, strict=True)
+        self.assertEqual(xt_pack.verify(out, SCRIPTS), [])
         version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         r = run_pyz(out, "--version")
         self.assertEqual((r.returncode, r.stdout.strip()), (0, f"xt.py {version}"))

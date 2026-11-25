@@ -5,8 +5,8 @@ của bench — `xt.BenchEnv` + `xt._bench_guard` (bộ luật, `_failure_decisi
 Ba bất biến:
 1. **deny đơn điệu** — ca `allowed: false` bọc trong lệnh giữ nguyên ngữ nghĩa vẫn bị chặn;
 2. **không ngoại lệ** — `_rule_decision` không ném (ngoại lệ = fail-open với lệnh không phải merge, AUD-SEC-077/091);
-3. **allow giữ** — ca `allowed: true` bọc vô hại vẫn được cho chạy (không chặn oan). Ngoại lệ theo hợp đồng có sẵn:
-   merge được `allow` ở strict chỉ khi đứng một mình; biến thể bọc phải là đúng `ask/OTHER_ASK`, không allow hay deny.
+3. **allow giữ** — ca `allowed: true` bọc vô hại vẫn được cho chạy (không chặn oan). Đối chứng merge có đích đầy đủ
+   ở strict giữ đúng `ask/OTHER_ASK` khi bọc (D-588), kể cả khi lệnh đứng riêng vốn được `allow`.
 
 Lưới bậc 1 (mỗi ca × mỗi bộ bọc áp được) luôn chạy; thêm `XT_FUZZ_ROUNDS` biến thể ghép 2–3 bộ bọc chọn bằng
 `random.Random(SEED)` (mặc định nhỏ, vài giây). Biến thể đỏ đã biết nằm ở `KNOWN_RED` (kèm lý do + ID sổ audit) và trong
@@ -413,8 +413,13 @@ class _Runner:
 
 
 def _strict_merge_control(case: Dict[str, Any]) -> bool:
-    """ADR-0036: allow merge ở strict là ngoại lệ chỉ cho lệnh đứng riêng, không phải allow cho cả shell bọc."""
-    return case["input"].get("policy") == "strict" and case["expect"].get("code") == "RULE_ALLOW"
+    """D-588: đối chứng merge đã ghim đích phải giữ ask khi bọc ở strict."""
+    return (
+        case["origin"] == "control"
+        and case["input"].get("policy") == "strict"
+        and isinstance(case["input"].get("merge_check"), dict)
+        and case["expect"].get("code") in ("RULE_ALLOW", "OTHER_ASK")
+    )
 
 
 def fuzz(rounds: int = ROUNDS, seed: int = SEED, cases: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -500,7 +505,7 @@ class GuardFuzzWrapTest(unittest.TestCase):
     """Bộ bọc: áp đúng chỗ, từ chối chỗ đổi nghĩa; tất định theo seed."""
 
     def test_strict_merge_controls_require_ask_for_every_wrapper(self) -> None:
-        """Không bỏ ca strict: oracle đòi đúng ask, bắt cả cho qua sai và deny oan ở 12 biến thể CLI/REST."""
+        """Oracle đòi đúng ask cho mọi biến thể CLI/REST, bắt cả cho qua sai và deny oan."""
         cases = [case for case in _cases() if _strict_merge_control(case)]
         self.assertTrue(cases)
         with tempfile.TemporaryDirectory() as tmp:

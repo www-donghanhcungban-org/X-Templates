@@ -2,6 +2,28 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "D-588: lần đọc đầu, chính sách checkout, tác vụ phụ, watch và cache nhiều host cần Git checkout thật cùng nhiều phản hồi REST liên tiếp; kiểm trong tests.test_merge_target_binding bằng GitHub CLI giả, ngoài schema quyết định đơn của corpus",
+   "ids": [
+    "AUD-HAR-515",
+    "AUD-HAR-516",
+    "AUD-HAR-517",
+    "AUD-HAR-518",
+    "AUD-HAR-521"
+   ]
+  },
+  {
+   "reason": "Sổ review và sự kiện chi phí/lát phải giữ nguyên khi URL khác checkout ở cả hai chế độ đăng. Schema corpus chỉ đo một quyết định. Ca có checkout, sổ và gh giả ở tests.test_merge_target_binding.MergeTargetBindingTest.test_wrong_review_url_leaves_review_slice_and_cost_unchanged.",
+   "ids": [
+    "AUD-HAR-532"
+   ]
+  },
+  {
+   "reason": "Theo D-590, ca giữ PR đã chọn qua phản hồi thiếu danh tính, retry và bàn giao cần checkout thật cùng chuỗi phản hồi REST. Schema corpus chỉ chạy từng quyết định. Ca hồi quy chạy bằng `python3 -m unittest tests.test_merge_target_binding.MergeTargetBindingTest.test_watch_retries_a_rejected_first_response_on_the_resolved_pr`.",
+   "ids": [
+    "AUD-HAR-527"
+   ]
+  },
+  {
    "reason": "Tài liệu / bằng chứng blueprint — đỡ bằng `validate`, `check-links`, `audit plan`; không phải quyết định cho/chặn của PR, rollup, review hay guard; PLAN của repo đọc được bằng máy (AUD-HAR-192/193): `tests.test_plan_files`; ký tự vô hình thật trong tài liệu agent đọc (AUD-DOC-270): `tests.test_content_facts`",
    "ids": [
     "AUD-DOC-215",
@@ -248,9 +270,10 @@
    ]
   },
   {
-   "reason": "Nợ review của file luật agent ở `release-check` hàng `review_debt` (`is_doc_path` ↔ `AGENT_RULE_GLOBS`) — không thuộc lớp quyết định cho/chặn mà autonomy-bench kiểm; đỡ bằng Gate unittest `-k test_delivery_phase_review_debt_agent_rule_files tests.test_delivery_phase` (AUD-XFEAT-030)",
+   "reason": "Nợ review của file luật agent ở `release-check` hàng `review_debt` (`is_doc_path` ↔ `AGENT_RULE_GLOBS`) — không thuộc lớp quyết định cho/chặn mà autonomy-bench kiểm; đỡ bằng Gate unittest `-k test_delivery_phase_review_debt_agent_rule_files tests.test_delivery_phase` (AUD-XFEAT-030). So lệnh tài liệu giữa hai cây Git và backlog khai ở từng bản (AUD-HAR-478) cần repo với lịch sử thật, có Gate `tests.test_executable_docs`.",
    "ids": [
-    "AUD-XFEAT-030"
+    "AUD-XFEAT-030",
+    "AUD-HAR-478"
    ]
   },
   {
@@ -830,6 +853,12 @@
    "reason": "Tên model trong NỘI DUNG tệp đẩy lên repo (AUD-HAR-476): guard chỉ quét thông điệp commit và PR (ai_attribution, LOOP-HARNESS-027), nên corpus mô phỏng quyết định của guard không có ca nào cho nội dung tệp; AGENTS §3 giao phần này cho review. Chưa có máy quét tệp; đỡ bằng grep ở dòng Gate của hàng sổ và review ở head.",
    "ids": [
     "AUD-HAR-476"
+   ]
+  },
+  {
+   "reason": "Theo D-591, ca chọn chính sách merge cần kho Git tạm có ref theo dõi và nhánh cục bộ cùng tên. Corpus quyết định dùng dữ liệu chính sách đã đọc. Ca hồi quy chạy bằng `python3 -m unittest tests.test_merge_review_source tests.test_immediate_effect_review tests.test_acceptance_lock`.",
+   "ids": [
+    "AUD-HAR-530"
    ]
   }
  ]
