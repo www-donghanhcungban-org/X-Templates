@@ -93,7 +93,8 @@ LEGACY_RE = re.compile(r"\.xstored\b|\bxs\.(?:py|yaml)\b|\bXS_[A-Z]")
 # job `merge-gate` luôn xanh, chỉ giữ context cũ còn trong ruleset sống của dự án — vẫn phát để bản cũ (gọi lệnh
 # `xt.py merge-gate` đã gỡ) được cập nhật tại chỗ thay vì làm đỏ mọi PR; bỏ khỏi danh sách này khi ruleset sống đã gỡ
 # context (T-1834). Mẫu PR, ruleset, Dependabot, CI, quét bí mật lấy từ framework/templates: bản ở `.github/` của khung là
-# của riêng repo khung.
+# của riêng repo khung — trừ `release-tag.yml` và `rulesets/tags*.json`, được chép nguyên văn sang dự án đích (cùng luật
+# tag phiên bản), nên sửa các tệp đó ở khung là đổi luôn bản của dự án đích.
 GITHUB_FILES = {
     ".github/rulesets/tags.json": ".github/rulesets/tags.json",
     ".github/rulesets/tags-create.json": ".github/rulesets/tags-create.json",
@@ -3091,7 +3092,7 @@ def sync_flags_error(args: argparse.Namespace) -> bool:
     """`--sync-codex` chỉ đi một mình (cùng đích là gốc repo khung) — cờ cài khác không có nghĩa ở đó."""
     names = (
         *("new", "idea", "name", "scale", "force_harness", "no_harness", "label", "with_github", "plan"),
-        *("no_git_hooks", "preset", "stage_init", "harness", "pack"),
+        *("no_git_hooks", "preset", "stage_init", "harness", "pack", "codex_models"),
     )
     used = [f"--{n.replace('_', '-')}" for n in names if getattr(args, n) not in (None, False, "")]
     if used:

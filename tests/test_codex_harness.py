@@ -838,7 +838,8 @@ class SyncCodexTest(unittest.TestCase):
         rc, err = self.sync(target=self.outside)
         self.assertEqual(rc, 2)
         self.assertIn("chỉ chạy ở gốc repo khung", err)
-        for flags in (("--plan",), ("--harness", "codex"), ("--no-harness",), ("--new",)):
+        # AUD-HAR-564: `--codex-models` ghi `model` OpenAI chưa xác minh vào .codex/agents của repo khung: không đi cùng
+        for flags in (("--plan",), ("--harness", "codex"), ("--no-harness",), ("--new",), ("--codex-models",)):
             with self.subTest(flags=flags):
                 self.assertEqual(self.sync(*flags)[0], 2)
         self.assertFalse((self.src / ".agents").exists())
