@@ -12,6 +12,7 @@ updated: 2026-11-25
 
 - Không có cải tiến nào buộc đổi khung ngay. Phần đáng làm là chỉnh cấu hình giảm token và cập nhật số liệu cho dự án đích.
 - Claude Ship: không có thay đổi mới so với [`2026-11-24-claude-ship.md`](2026-11-24-claude-ship.md); giữ ADR-0100.
+- Thực thi mã với MCP: lợi ích thật nhưng con số 150.000 → 2.000 token chỉ là ví dụ của Anthropic; Code Mode còn thử nghiệm và không có ở phiên cloud — chưa bật, đo trước (§6).
 - Đặc tả MCP bản mới nhất: **chưa xác minh** (host `modelcontextprotocol.io` bị chặn trong môi trường; nguồn thứ cấp nói có bản sửa 2026-07-28 bỏ phiên — mức c).
 
 ## 2. Claude Code 2.1.318 → 2.1.332 (changelog chính thức, đọc 2026-11-25)
@@ -78,11 +79,43 @@ Số và tên đúng như trang ghi.
 6. Kiểm `.claude/hooks/guard.py` có phủ hook `PreSkillShellCommand` và nguồn skill từ MCP.
 7. Ghi vào hồ sơ đánh giá sandbox (D-331/332) thay đổi 2.1.325.
 
-## 6. Chưa xác minh
+## 6. Thực thi mã với MCP và Code Mode (bổ sung 2026-11-25)
+
+**Bài gốc** ("Code execution with MCP", 2025-11-04, Adam Jones và Conor Kelly; đọc nguyên trang, mức a): ví dụ Google Drive → Salesforce giảm "from 150,000 tokens to 2,000 tokens—a time and cost saving of 98.7%". Bài không nêu khối lượng, model hay số tool đằng sau con số: đây là một ví dụ minh hoạ, không phải đo lường. Năm lợi ích bài nêu và mức khớp với khung:
+
+| Lợi ích (theo bài) | Khớp khung | Việc |
+|---|---|---|
+| Nạp dần: tool là tệp dưới `./servers/`, mở đúng tệp cần; tuỳ chọn `search_tools` với mức chi tiết | Tool search hoãn nạp đã mặc định ở Claude Code (§3) | Không |
+| Kết quả gọn: lọc 10.000 dòng trong mã, model chỉ thấy 5 dòng | `LOOP-CTX-002` và `loop record` (40 dòng) | Hook cắt output Bash thô (§7 mục 2) |
+| Luồng điều khiển trong mã: vòng lặp, rẽ nhánh, thăm dò chạy ngoài model; bài nói còn giảm độ trễ "time to first token" | `LOOP-DESIGN-029`, `merge-watch` nền | Rà chỗ agent còn tự thăm dò bằng nhiều lượt |
+| Riêng tư mặc định: kết quả trung gian ở lại môi trường chạy; có thể thay PII bằng token như `[EMAIL_1]` để model không thấy giá trị thật | Chưa có | Đề xuất cho dự án đích xử lý dữ liệu cá nhân (§7 mục 4) |
+| Giữ trạng thái và skills: lưu hàm chạy tốt vào `./skills/` kèm `SKILL.md` | `.claude/skills/` | Không |
+
+Chi phí bài nêu: cần môi trường chạy an toàn có sandbox, giới hạn tài nguyên và giám sát; "These infrastructure requirements add operational overhead and security considerations that direct tool calls avoid." Bài yêu cầu cân nhắc lợi ích so với chi phí này.
+
+**Code Mode của Claude Code** (trang `code-mode`, đọc 2026-11-25, mức a; các trang env-vars, mcp, hooks chỉ đọc một phần, mức b):
+- Trạng thái: "experimental and off by default. It may change or be removed in any release". Bật bằng biến `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1` (shell hoặc khối `env` của settings người dùng); **file settings dự án bỏ qua biến này**, nên repo tải về không tự bật được; managed settings đặt `0` để chặn cả tổ chức. Chưa thấy khoá settings hay cờ CLI.
+- Điều kiện: Claude Code ≥ 2.1.323 (nhà cung cấp cloud ≥ 2.1.331, agent teams ≥ 2.1.326); model Opus 5.5, Sonnet 5.5, Haiku 5.5 hoặc Fable 5.2 (tên đầy đủ, không dùng bí danh); phiên `claude` tương tác trong terminal; **không** có ở phiên cloud, VS Code, Desktop, gateway, cấu hình HIPAA hoặc ZDR; không dùng với Remote Control, Claude in Chrome, computer use. Subagent cần thêm `REPL` vào danh sách `tools`.
+- Cơ chế: model viết JavaScript gọi nhiều tool trong một bước; người dùng thấy lời gọi tool, xem mã bằng `Ctrl+O`.
+- Quyền và hook: quy tắc quyền và hook viết theo tên tool quen thuộc (`Bash`, tên tool MCP), nên `PreToolUse` **áp dụng** cho lời gọi bên trong Code Mode. Muốn kiểm chính đoạn mã thì khớp `REPL` và đọc `tool_input.code`. Sandbox chỉ bao lệnh shell mà mã chạy; JavaScript và các lời gọi file, web, MCP của nó chạy ngoài sandbox (cần container hoặc VM nếu muốn cô lập). Chế độ Auto: bộ phân loại duyệt cả đoạn mã, không thấy giá trị tính lúc chạy. Quy tắc `ask` trên `REPL` buộc duyệt từng đoạn mã. `"onFailure": "block"` trên hook `command`, `http`, `mcp_tool` (≥ 2.1.295; `mcp_tool` ≥ 2.1.328) làm hook lỗi hoặc hết giờ thì từ chối thay vì cho qua kiểm quyền; không tác dụng với `Stop`, `SubagentStop`, `TaskCompleted`, `TeammateIdle` hay hook nền.
+- Giới hạn: mã không chạy nền dừng sau 10 phút, chạy nền tối đa 2 giờ ở Auto hoặc `bypassPermissions`; phiên chỉ nối lại được khi Code Mode đang bật.
+- Số token hoặc chi phí: **trang không nêu số nào**; lập luận là giảm số vòng gọi tool.
+
+**Kết luận.** Lợi ích thật nhưng chưa đo trên dự án này, và Code Mode không có ở phiên cloud mà khung đang chạy (ghi chú này viết từ phiên cloud). Chưa bật; đo thử cục bộ ở một dự án đích trước (`LOOP-ORCH-020`). Phần dùng được ngay không cần Code Mode là hai ý của bài: lọc output trong mã và đưa thăm dò ra khỏi model.
+
+## 7. Khuyến nghị bổ sung cho khung (chưa làm)
+
+1. Guard (`guard.py`): xác nhận phủ lời gọi tên `REPL` và đọc được `tool_input.code`, vì hook `PreToolUse` áp dụng cho Code Mode; đồng thời hook của khung nên đặt `"onFailure": "block"` cho hàng rào (guard hiện fail-open về luồng, fail-closed về hành động nguy hiểm — ADR-0002).
+2. Hook cắt output lệnh Gate (nhắc lại §5 mục 2); đây là cách rẻ nhất có hiệu lực tương tự "lọc trong mã".
+3. Không bật `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE` trong mẫu dự án đích; ghi trong tài liệu rằng settings dự án vốn bỏ qua biến này.
+4. Dự án đích có dữ liệu cá nhân (Luật 91/2025, NĐ 356/2025; số điều NĐ chưa đối chiếu bản gốc): đề xuất mẫu "token hoá PII trước khi đến model" thành mục SHOULD ở module `13-ai-engineering` sau khi tra pháp lý.
+
+## 8. Chưa xác minh
 
 - Đặc tả MCP bản mới nhất và các thay đổi của nó; cần cho phép host `modelcontextprotocol.io`.
 - Changelog Claude Code 2026-10-15 → 2026-11-03; chi tiết các bản 2.1.318–2.1.330 (chỉ có tóm tắt).
-- Số token/chi phí thực mỗi lát và mỗi PR của dự án; mức tiết kiệm của từng đề xuất ở §5.
+- Số token/chi phí thực mỗi lát và mỗi PR của dự án; mức tiết kiệm của từng đề xuất ở §5 và §7.
+- Quan hệ giữa Code Mode và tool search; lời gọi tool lập trình (programmatic tool calling) không được trang Code Mode nhắc; số tiết kiệm của Code Mode.
 - Phần trăm chiết khấu Batch API; trạng thái GA của context editing và compaction API.
 
 ## Nguồn
@@ -93,3 +126,5 @@ Số và tên đúng như trang ghi.
 - <https://platform.claude.com/docs/en/agents-and-tools/tool-use/manage-tool-context> — 2026-11-25
 - <https://platform.claude.com/docs/en/build-with-claude/prompt-caching> — 2026-11-25 (đọc đầu và cuối nguyên văn, phần giữa qua tóm tắt)
 - <https://www.anthropic.com/engineering/advanced-tool-use>
+- <https://www.anthropic.com/engineering/code-execution-with-mcp> — 2025-11-04, đọc 2026-11-25
+- <https://code.claude.com/docs/en/code-mode> — 2026-11-25 (cùng các trang settings, env-vars, mcp, hooks đọc một phần)
