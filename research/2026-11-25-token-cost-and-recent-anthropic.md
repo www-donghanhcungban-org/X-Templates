@@ -13,6 +13,7 @@ updated: 2026-11-25
 - Không có cải tiến nào buộc đổi khung ngay. Phần đáng làm là chỉnh cấu hình giảm token và cập nhật số liệu cho dự án đích.
 - Claude Ship: không có thay đổi mới so với [`2026-11-24-claude-ship.md`](2026-11-24-claude-ship.md); giữ ADR-0100.
 - Thực thi mã với MCP: lợi ích thật nhưng con số 150.000 → 2.000 token chỉ là ví dụ của Anthropic; Code Mode còn thử nghiệm và không có ở phiên cloud — chưa bật, đo trước (§6).
+- Điều phối và bộ nhớ: mô hình trạng thái trên đĩa của khung khớp mẫu Anthropic khuyến nghị; auto memory (cục bộ máy, không review được) không hợp autopilot cloud. Việc đáng làm: để máy cưỡng chế độ sâu và số subagent đồng thời, `omitClaudeMd` cho agent nhẹ, `.claude/rules` có `paths:` cho dự án đích (§8).
 - Đặc tả MCP bản mới nhất: **chưa xác minh** (host `modelcontextprotocol.io` bị chặn trong môi trường; nguồn thứ cấp nói có bản sửa 2026-07-28 bỏ phiên — mức c).
 
 ## 2. Claude Code 2.1.318 → 2.1.332 (changelog chính thức, đọc 2026-11-25)
@@ -110,11 +111,56 @@ Chi phí bài nêu: cần môi trường chạy an toàn có sandbox, giới h�
 3. Không bật `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE` trong mẫu dự án đích; ghi trong tài liệu rằng settings dự án vốn bỏ qua biến này.
 4. Dự án đích có dữ liệu cá nhân (Luật 91/2025, NĐ 356/2025; số điều NĐ chưa đối chiếu bản gốc): đề xuất mẫu "token hoá PII trước khi đến model" thành mục SHOULD ở module `13-ai-engineering` sau khi tra pháp lý.
 
-## 8. Chưa xác minh
+## 8. Điều phối và bộ nhớ agent (bổ sung 2026-11-25)
+
+Nguồn: trang `sub-agents`, `agent-teams`, `memory` của Claude Code; bài kỹ thuật của Anthropic; tài liệu memory tool và Managed Agents. Trạng thái mức đọc ghi ở từng dòng; phần cuối trang `sub-agents` và `memory` chỉ có tóm tắt (b).
+
+### 8.1 Điều phối (Claude Code)
+
+| Dữ kiện | Mức | Đối chiếu khung |
+|---|---|---|
+| Subagent có thể lồng tới 3 tầng mặc định; `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` tắt lồng | b | `LOOP-ORCH-001` cấm lồng bằng kỷ luật; **settings.json của khung chưa đặt biến này** |
+| Số subagent đồng thời mặc định 20 (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`, ≥ 2.1.217) | b | `LOOP-ORCH-008` đòi ≤ 5; **chưa đặt biến** |
+| Subagent tuỳ chỉnh gọi từ phiên chính mặc định chạy **nền** (trừ `web-fetch`); kết quả về ở lượt sau; `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` hoặc `CLAUDE_CODE_FORK_SUBAGENT=0` để buộc chờ | b | Ảnh hưởng luồng "chạy Gate rồi tick" (`LOOP-ORCH-004`): cần kiểm kết quả đã về trước khi tick |
+| Fork (`/subtask`): kế thừa toàn bộ hội thoại, prompt, tool, model và cache; chỉ trả kết quả cuối; mặc định bật từ 2.1.302; chặn bằng `permissions.deny` `"Agent(fork)"` | b | Chưa có trong khung; rẻ hơn khi cần ngữ cảnh chung (cache dùng chung) |
+| Trường frontmatter đáng dùng: `omitClaudeMd: true` (≥ 2.1.271, bỏ CLAUDE.md), `autoCompactWindow` (≥ 100000, ≥ 2.1.296), `skills` (nạp trước tối đa 32), `effort`, `maxTurns` (đầy thì đánh dấu một phần và có thể nối lại), `isolation: worktree`, `background`, `experimental.cacheTtl` | a | Các agent của khung có `model`, `effort`, `maxTurns`; **chưa dùng `omitClaudeMd`**. Mỗi subagent nạp lại CLAUDE.md và AGENTS.md của khung — với `explore` và `executor-mech` là phí cố định |
+| Thứ tự chọn model subagent: tham số gọi → `model` trong định nghĩa → `CLAUDE_CODE_SUBAGENT_MODEL` → model phiên chính; `…_FORCE=1` (≥ 2.1.257) ép một model | a | Khớp `LOOP-ORCH-022` |
+| Agent teams: thử nghiệm, tắt mặc định; mỗi teammate là một instance riêng; danh sách việc chung có khoá tệp, hook `TeammateIdle` `TaskCreated` `TaskCompleted`; khuyến nghị 3–5 teammate, 5–6 việc mỗi người; hợp với nghiên cứu, rà, module tách tệp, debug nhiều giả thuyết; không hợp với việc tuần tự, sửa chung tệp, phụ thuộc nặng; cache mỗi teammate 5 phút | a | Giữ `LOOP-ORCH-021` (không bật trừ khi có ADR) |
+| Hướng dẫn chọn: phiên chính cho việc lặp qua lại hoặc ngữ cảnh chung; subagent khi output dài, cần hạn chế quyền hoặc việc khép kín trả tóm tắt; skill cho prompt tái dùng | b | Khớp `LOOP-ORCH-012` |
+
+Bài kỹ thuật: hệ nghiên cứu đa agent (Anthropic, 2025-06-13) báo agent dùng ~4 lần token chat, đa agent ~15 lần, lead Opus 4 cộng subagent Sonnet 4 hơn Opus 4 đơn "by 90.2%" trên bộ đánh giá nghiên cứu nội bộ (số tự công bố); mô hình điều phối-thực thi hợp việc rộng chạy song song, **"most coding tasks"** ít phần song song hoá được; mỗi subagent cần mục tiêu, khuôn đầu ra, hướng dẫn tool và ranh giới việc; thang nỗ lực: tra cứu đơn giản 1 agent 3–10 lần gọi tool, so sánh 2–4 subagent, phức tạp > 10; lỗi gặp: sinh 50 subagent cho câu hỏi đơn giản, việc trùng lặp, sai số cộng dồn. *Building effective agents* (2024-12-19, tác giả ghi chú nhiều công cụ đã đổi): "find the simplest solution possible"; năm mẫu (chuỗi prompt, định tuyến, song song, điều phối-thực thi, đánh giá-tối ưu). Đối chiếu: khớp `LOOP-ORCH-020` (mặc định tự làm), `LOOP-ORCH-011` (báo cáo ngắn) và vòng reviewer; không có gì buộc khung đổi.
+
+### 8.2 Bộ nhớ agent
+
+Ba lớp khác nhau, đừng nhầm:
+
+| Lớp | Nơi lưu | Chia sẻ | Hợp với khung? |
+|---|---|---|---|
+| `CLAUDE.md`, `.claude/rules/` (a) | Trong repo | Cả nhóm, đưa vào git | **Có** — chính là nhà của luật |
+| Bộ nhớ tự động (auto memory, a/b): `~/.claude/projects/<project>/memory/`, nạp 200 dòng hoặc 25 KB đầu của `MEMORY.md` mỗi phiên, tệp chủ đề đọc khi cần; bật mặc định ở phiên cục bộ; tắt bằng `autoMemoryEnabled: false` (settings dự án) hoặc `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`; phiên nền và phiên do phiên khác khởi động không bật lại được | Cục bộ máy, cá nhân | **Không cho autopilot**: container cloud mất sau phiên, trạng thái phải nằm trong repo (`LOOP-CTX-006`); ngoài repo thì không review được và có thể lệch kết quả giữa các phiên |
+| Bộ nhớ subagent (`memory: user\|project\|local`, a): `.claude/agent-memory/<tên>/` (`project`, khuyến nghị), `~/.claude/agent-memory/<tên>/`, `.claude/agent-memory-local/<tên>/`; cùng giới hạn 200 dòng hoặc 25 KB; tự bật Read/Write/Edit; vô hiệu nếu auto memory tắt | Theo phạm vi | **Có điều kiện** — xem 8.3 |
+
+Mẫu từ tài liệu API và bài kỹ thuật (a): memory tool `memory_20250818` ở phía client, thư mục `/memories`, lệnh `view`, `create`, `str_replace`, `insert`, `delete`, `rename`; xem tệp cắt ở 16.000 ký tự; mẫu nhiều phiên là phiên khởi tạo ghi nhật ký tiến độ và danh sách tính năng, phiên sau đọc và cập nhật trước khi kết thúc, lời nhắc "ASSUME INTERRUPTION"; rủi ro nêu rõ: duyệt đường dẫn (`/memories/../../secrets.env`), dữ liệu nhạy cảm trong bộ nhớ, tệp phình, ký ức cũ. Bài ngữ cảnh (2025-09-29): nạp "lightweight identifiers" khi chạy thay vì nhét sẵn, ghi chú có cấu trúc ra ngoài cửa sổ (`NOTES.md`), compaction giữ tóm tắt cộng năm tệp truy cập gần nhất, subagent trả tóm tắt 1.000–2.000 token, "context rot" khi dài. **Khung đang làm đúng mẫu này** bằng `PROGRESS.md` + `PLAN.md` + `DECISIONS.md` + checkpoint PreCompact; đây là xác nhận, không phải thiếu sót.
+
+Managed Agents (beta, header `managed-agents-2026-04-01`; không ZDR/HIPAA): kho bộ nhớ (memory stores, beta, header `agent-memory-2026-07-22`, gắn vào phiên lúc tạo, gắn ở `/mnt/memory/`, mặc định `read_write` hoặc `read_only`, mỗi ký ức ≤ 100 kB, mỗi kho ≤ 10.000 ký ức, ≤ 8 kho mỗi phiên, phiên bản giữ 30 ngày; trang cảnh báo prompt injection có thể ghi vào kho `read_write`) và "dreams" (research preview: gộp một kho với 1–100 phiên thành kho mới, kho gốc không bị sửa). Mức: kho bộ nhớ đọc nguyên văn phần đầu, phần sau là tóm tắt (b).
+
+### 8.3 Kết luận và đề xuất cho khung
+
+1. **Giữ nguyên mô hình trạng thái trên đĩa** (`PROGRESS.md`, `PLAN.md`, `DECISIONS.md`); không chuyển sang auto memory. Cân nhắc đặt `autoMemoryEnabled: false` trong `.claude/settings.json` mẫu để phiên autopilot không nạp ký ức ngoài repo (kiểm: ký ức không review được là nguồn lệch).
+2. **Đặt `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` và `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=5`** để máy cưỡng chế `LOOP-ORCH-001` và `LOOP-ORCH-008` thay vì kỷ luật; ghi vào `harness-files.md` và mẫu dự án đích. Kiểm trước: các biến này chỉ đọc từ môi trường hoặc `env` của settings; chưa xác minh settings dự án có hiệu lực (khác với `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE`, bị bỏ qua ở settings dự án).
+3. **Thêm `omitClaudeMd: true` cho `explore` và `executor-mech`** (agent chỉ đọc hoặc cơ học, đã nhận hướng dẫn đầy đủ trong gói handoff): bỏ phí nạp CLAUDE.md và AGENTS.md mỗi lần gọi. Không dùng cho `reviewer`/`executor` vì cần luật khung. Cần đo trước/sau.
+4. **Bộ nhớ subagent (`memory: project`): chưa dùng**; nếu thử thì chỉ cho `executor`/`researcher` ghi quy ước repo học được, **không bao giờ cho `reviewer`/`reviewer-alt`** (làm lệch độc lập của người chấm — `LOOP-ORCH-005`), và nội dung phải qua review như mã vì nằm trong git (rủi ro persistence của prompt injection).
+5. **Dự án đích**: dùng `.claude/rules/` có `paths:` để luật theo thư mục chỉ nạp khi chạm tệp khớp (giảm chi phí cố định, vì `@import` không giảm); `/doctor prompt-audit` (≥ 2.1.283) kiểm xung đột luật trong `/gate`; giữ `AGENTS.md` làm nguồn và `CLAUDE.md` mỏng (AGENTS.md chỉ được đọc khi không có CLAUDE.md, nên cầu nối `@AGENTS.md` là đúng).
+6. **Ba lần gọi nền**: xác nhận quy trình tick task chờ kết quả subagent nền trước khi `loop record`; thêm `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` hay `CLAUDE_CODE_FORK_SUBAGENT=0` nếu thấy kết quả về trễ.
+7. **Agent teams, Managed Agents memory stores, dreams**: không dùng cho khung; ghi vào danh sách theo dõi. Với dự án đích làm sản phẩm agentic, module `AI-AGENTIC` nên nêu: memory tool (ổn định) cần chặn duyệt đường dẫn, giới hạn kích thước, loại dữ liệu nhạy cảm, hết hạn ký ức; kho bộ nhớ Managed Agents còn beta, mặc định `read_only` cho agent không cần ghi.
+8. Giữ nguyên `LOOP-ORCH-020/021`: số của chính Anthropic (15 lần token, "most coding tasks" ít song song hoá được) ủng hộ mặc định tự làm.
+
+## 9. Chưa xác minh
 
 - Đặc tả MCP bản mới nhất và các thay đổi của nó; cần cho phép host `modelcontextprotocol.io`.
 - Changelog Claude Code 2026-10-15 → 2026-11-03; chi tiết các bản 2.1.318–2.1.330 (chỉ có tóm tắt).
 - Số token/chi phí thực mỗi lát và mỗi PR của dự án; mức tiết kiệm của từng đề xuất ở §5 và §7.
+- Biến `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` và `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` có hiệu lực khi đặt trong settings dự án hay không; hành vi fork, nền, lồng subagent chỉ có tóm tắt; chưa đọc trang costs về chi phí agent teams, trang worktrees, cross-session messaging; trang Managed Agents memory đọc nguyên văn khoảng 40.000/52.500 ký tự; bài `engineering/managed-agents` chưa đọc.
 - Quan hệ giữa Code Mode và tool search; lời gọi tool lập trình (programmatic tool calling) không được trang Code Mode nhắc; số tiết kiệm của Code Mode.
 - Phần trăm chiết khấu Batch API; trạng thái GA của context editing và compaction API.
 
@@ -128,3 +174,6 @@ Chi phí bài nêu: cần môi trường chạy an toàn có sandbox, giới h�
 - <https://www.anthropic.com/engineering/advanced-tool-use>
 - <https://www.anthropic.com/engineering/code-execution-with-mcp> — 2025-11-04, đọc 2026-11-25
 - <https://code.claude.com/docs/en/code-mode> — 2026-11-25 (cùng các trang settings, env-vars, mcp, hooks đọc một phần)
+- <https://code.claude.com/docs/en/sub-agents> · <https://code.claude.com/docs/en/agent-teams> · <https://code.claude.com/docs/en/memory> — 2026-11-25 (phần cuối sub-agents và memory chỉ có tóm tắt)
+- <https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool> · <https://platform.claude.com/docs/en/managed-agents/overview> · <https://platform.claude.com/docs/en/managed-agents/memory> · <https://platform.claude.com/docs/en/managed-agents/dreams> — 2026-11-25
+- <https://www.anthropic.com/engineering/multi-agent-research-system> (2025-06-13) · <https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents> (2025-09-29) · <https://www.anthropic.com/engineering/building-effective-agents> (2024-12-19) — đọc 2026-11-25
