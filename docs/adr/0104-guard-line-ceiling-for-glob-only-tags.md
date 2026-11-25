@@ -1,4 +1,4 @@
-# ADR-0104: Nới trần dòng của guard thêm 17 dòng cho tag glob chỉ gồm glob
+# ADR-0104: Nới trần dòng của guard thêm 25 dòng cho tag glob chỉ gồm glob
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-25 (D-607, AUD-HAR-541, AUD-HAR-566).
 - **Liên quan:** [ADR-0103](0103-guard-line-ceiling-for-tag-glob.md), [ADR-0018](0018-deny-dangerous-allow-rest.md), AUD-HAR-543.
@@ -14,12 +14,12 @@ ADR-0103 đóng một phần AUD-HAR-541. Rà lại #815, `reviewer-alt` đo th�
 - Chữ còn lại sau khi bỏ glob xét không phân biệt hoa thường (`nocaseglob`).
 - Đoạn mà chữ còn lại chỉ là dấu chấm bị coi là tag nếu: có `*` kèm dấu chấm hoặc lớp ký tự, hoặc không có `*` mà đủ dài (từ 6 ký tự) để khớp `vX.Y.Z`. `?.?.?` (5 ký tự) và `*` đơn lẻ vẫn được qua.
 
-Nâng `LINE_CAPS` của `.claude/hooks/guard.py` từ 24.664 lên 24.681, đúng số đo sau sửa. Trần của các tệp khác giữ nguyên.
+Nâng `LINE_CAPS` của `.claude/hooks/guard.py` từ 24.664 lên 24.689, đúng số đo sau sửa. Trần của các tệp khác giữ nguyên.
 
 Phương án đã xét: coi mọi glob ở vị trí tên tag là tag phiên bản (đơn giản hơn nhưng chặn oan `HEAD:refs/heads/*` và refspec `fetch`, vì `_tag_glob` dùng chung cho refspec); chấp nhận lỗ hổng và chờ ruleset tag phía máy chủ (T-4007 cần quyền admin).
 
 ## Hệ quả
 
-- Hồi quy: `RELEASE_TAG_DENY` thêm 13 lệnh. So với `main` trước #815, fuzz độ dài ≤ 5 (alphabet `[]!v0.?*:ar`, có `:`) chỉ có hai chuỗi base chặn mà head bỏ (`[]v[]`, `[]0[]`): đó là một lớp ký tự khớp đúng một ký tự, bash không bung ra tag nên không phải hồi quy an toàn.
+- Hồi quy: `RELEASE_TAG_DENY` thêm 16 lệnh. Từ được đọc theo cả bộ đọc lớp ký tự của bash lẫn bộ đọc của luật cũ (`GLOB_OLD_RE`, trong đó `[]v[]` là `[]` + `v` + `[]`) rồi lấy hợp, nên guard mới là tập cha của luật cũ theo cấu trúc. Rà #818 lượt hai chứng minh bộ đọc chỉ theo bash làm mất `[]v[]*-rc`, `[]v[]?????+b` (bash bung ra `v1.2.3-rc`, `v1.2.3+b`). Fuzz độ dài ký tự không với tới các dạng này; fuzz theo token (≤ 4 token, 88.740 chuỗi) và các danh sách lệnh c1–c3 của reviewer cho 0 chuỗi luật cũ chặn mà head bỏ.
 - Dạng chặn oan thêm: đoạn glob kèm dấu chấm như `*.*` ở tên tag hay đích refspec. Chấp nhận được vì `git` từ chối `*`, `?`, `[` trong tên ref.
 - Nới trần lần sau vẫn cần ADR riêng.
