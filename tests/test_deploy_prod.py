@@ -7,6 +7,7 @@ import os
 import subprocess
 from pathlib import Path
 import sys
+import unittest
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -333,3 +334,34 @@ class ProductionDeployTest(GithubFixture, ReleaseCase):
         self.assertEqual((self.state / "calls").read_text().splitlines()[len(calls_before) :], ["deploy", "smoke"])
         self.assertTrue(json.loads(self.ledger.read_text())["envs"]["prod"]["unknown"])
         self.assertTrue(xt.read_state(self.repo)["blocked"])
+
+
+class SymlinkedTempDirTest(unittest.TestCase):
+    """AUD-HAR-551: TMPDIR qua symlink (macOS /var → /private/var) không được chặn triển khai ngoài dev và quay lui."""
+
+    def test_clean_checkout_and_artifact_paths_survive_a_symlinked_tempdir(self):
+        import tempfile
+        import xt_deploy
+
+        with tempfile.TemporaryDirectory() as raw:
+            work = Path(raw).resolve()
+            (work / "real").mkdir()
+            (work / "link").symlink_to(work / "real", target_is_directory=True)
+            repo = work / "repo"
+            repo.mkdir()
+            git = ("git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=fixture@example.invalid")
+            subprocess.run((*git, "init", "-q"), check=True)
+            (repo / "adapter.txt").write_text("x", encoding="utf-8")
+            subprocess.run((*git, "add", "."), check=True)
+            subprocess.run((*git, "commit", "-qm", "Khởi tạo"), check=True)
+            head = subprocess.run(
+                (*git, "rev-parse", "HEAD"), check=True, capture_output=True, text=True
+            ).stdout.strip()
+            with mock.patch.object(tempfile, "tempdir", str(work / "link")):
+                with tempfile.TemporaryDirectory(prefix="xt-deploy-") as directory:
+                    self.assertNotEqual(Path(directory).resolve(), Path(directory))
+                    tree = xt_deploy.clean_adapter_checkout(xt, repo, Path(directory), head)
+                    self.assertEqual(tree, tree.resolve())
+                    self.assertEqual(xt_deploy.artifact_file(tree, "dist/app.tgz"), tree / "dist" / "app.tgz")
+                    with self.assertRaises(ValueError):
+                        xt_deploy.artifact_file(tree, "../escape")

@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `deploy run` và `deploy rollback` ngoài dev không còn dừng sớm khi thư mục tạm đi qua symlink (macOS `/var` trỏ `/private/var`): checkout adapter dùng đường dẫn đã `resolve()` (AUD-HAR-551). `loop record` và `release-check` không còn đỏ giả ở dự án không khai nghiệm thu mà `docs/` là symlink: đường dẫn sổ chỉ bị bắt buộc "không qua symlink" khi sổ có thật; sổ nằm sau symlink vẫn bị từ chối, sổ đã có trong Git mà bị xoá vẫn bị báo (AUD-HAR-552). Hai ca hồi quy đỏ khi thiếu bản sửa.
+
 - `verify-render` đo màu sau khi kết thúc transition và animation hữu hạn (AUD-HAR-556): nút có chữ chuyển dần sang màu tương phản thấp từng báo "đạt" vì cổng đọc màu ở đầu chuyển tiếp; hoạt ảnh vô hạn chạm tới điều khiển nay báo `UNMEASURED`. Thông điệp lỗi của trình duyệt (từ chối kết nối, hết giờ) che userinfo, query và fragment như định danh trong báo cáo (AUD-HAR-557). Ba ca Chromium mới đỏ khi thiếu bản sửa.
 
 - `static-check pii-vn` bỏ BOM UTF-8 đầu tệp trước khi đọc tiêu đề CSV/TSV: CSV "UTF-8" của Excel từng làm cột nhạy cảm đầu tiên không được nhận và báo xanh giả. `static-check credits` báo `CRD002` khi bảng có cột License nhưng thiếu cột nguồn, thay vì đọc nhầm cột License làm nguồn; tiêu đề không có chữ nhận dạng vẫn theo thứ tự mặc định. Hai ca hồi quy đỏ khi thiếu bản sửa (rà lô 3).
