@@ -26,6 +26,7 @@ EMAIL = re.compile(r"[\w.+-]{1,64}+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)")
 PAIR = re.compile(r"""(?<![\w-])["']?([\w-]++)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;}]+)""")
 ALLOW = re.compile(r"xt-allow:([\sA-Z0-9,]*)")
 LINE_BREAK = re.compile(r"\r\n|\r|\n")
+BOM = chr(0xFEFF)
 DOC_DOMAINS = ("example.com", "example.org", "example.net", "test", "invalid", "localhost")
 SENSITIVE = frozenset({"cccd", "cmnd", "sodienthoai", "sdt", "phone", "email", "hoten", "diachi", "ngaysinh"})
 HIDDEN = re.compile(r"x{3,}|\*|\[redacted\]", re.IGNORECASE)
@@ -95,6 +96,8 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
                     )
                 )
             continue
+        # BOM đầu tệp (Excel "CSV UTF-8") dính vào ô tiêu đề đầu làm cột nhạy cảm #1 không được nhận: xanh giả (rà lô 3).
+        text = text.removeprefix(BOM)
         delim = "\t" if path.suffix.lower() == ".tsv" else ","
         cols: list[int] | None = None
         # Ngắt dòng `\r\n`, `\r` hoặc `\n` (CSV xuất từ Mac cũ chỉ có `\r`: tách theo `\n` làm cả tệp thành một dòng và bỏ lọt

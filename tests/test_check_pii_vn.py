@@ -32,6 +32,14 @@ class PiiVnTest(unittest.TestCase):
         self.assertIn(".jsonl", kind_pii_vn.SUFFIXES)
         self.assertEqual(len(kind_pii_vn.SUFFIXES), 8)
 
+    def test_utf8_bom_does_not_hide_the_first_sensitive_column(self):
+        # Rà lô 3 🔴: CSV "UTF-8" của Excel có BOM dính vào ô tiêu đề đầu, cột nhạy cảm #1 không được nhận (xanh giả).
+        body = "ho_ten,ghi_chu\r\nNguyen Van A,x\r\nTran Thi B,y\r\n"
+        expected = [(2, "PII004"), (3, "PII004")]
+        self.assertEqual(self.scan("plain.csv", body), expected)
+        self.assertEqual(self.scan("bom.csv", b"\xef\xbb\xbf" + body.encode("utf-8")), expected)
+        self.assertEqual(self.scan("bom.tsv", b"\xef\xbb\xbf" + body.replace(",", "\t").encode("utf-8")), expected)
+
     def test_cccd(self):
         self.assertEqual(self.scan("a.log", f"id {CCCD}\n"), [(1, "PII001")])
         for bad in ("097" + CCCD[3:], "000" + CCCD[3:], "079" + "4" + CCCD[4:], CCCD + "1", "1" + CCCD, "x-" + CCCD):
