@@ -39,6 +39,7 @@ ARTIFACT_SCRIPTS = (
     "xt_distribution.py",
     "xt_scale.py",
     "xt_field.py",
+    "xt_design.py",
     "xt_toolcfg.py",
 )
 PACKAGES = ("xt_app", "xt_checks")

@@ -1,7 +1,7 @@
 ---
 title: Vòng đời dự án và các cổng
 kind: method
-updated: 2026-11-14
+updated: 2026-11-26
 ---
 
 # Vòng đời dự án và các cổng
@@ -17,11 +17,13 @@ updated: 2026-11-14
 | G1 | **Phân loại (Classify)** | Phần mềm loại gì, ngành gì, quy mô nào? | Hồ sơ + gói ngành + quy mô S/M/L; `BLUEPRINT.md` sinh bằng `xt.py compose` | `xt.py compose` chạy được; blueprint commit vào repo |
 | G2 | **Nghiên cứu (Research)** | Công nghệ/phiên bản nào, ràng buộc pháp lý gì? | ADR chọn stack; bảng phiên bản kèm ngày xác minh; danh sách luật áp dụng | Mỗi phiên bản có nguồn + ngày; luật ngành có số hiệu |
 | G3 | **Đặc tả (Specify)** | Xây chính xác cái gì? | Spec tính năng (luồng, dữ liệu, API, ca biên, tiêu chí chấp nhận dạng Given/When/Then) | Mỗi tính năng MVP có tiêu chí chấp nhận kiểm được |
-| G4 | **Thiết kế (Design)** | Kiến trúc, dữ liệu, giao diện, mối đe doạ? | Sơ đồ C4 mức 1–2; schema; hợp đồng API; threat model; wireframe/tokens | Threat model có biện pháp cho mỗi mối đe doạ mức cao |
+| G4 | **Thiết kế (Design)** | Kiến trúc, dữ liệu, giao diện, mối đe doạ? | Sơ đồ C4 mức 1–2; schema; hợp đồng API; threat model; wireframe/tokens | Threat model có biện pháp cho mỗi mối đe doạ mức cao; khai `Duyệt thiết kế: khách` → bản thiết kế đã được người ghi duyệt (`xt.py stage design-check` exit 0) |
 | G5 | **Dựng nền (Scaffold)** | Hàng rào chất lượng đã chạy chưa? | Repo + CI (lint/type/test/scan) + môi trường + secrets + observability tối thiểu | CI xanh trên commit rỗng tính năng; cổng commit chặn được lỗi |
 | G6 | **Xây (Build)** | Tính năng đã chạy đúng chưa? | Code + test theo từng lát dọc (vertical slice); mỗi lát một PR | PR qua cổng merge; blueprint tick theo bằng chứng |
 | G7 | **Kiểm & phát hành (Verify & Release)** | Đủ tốt để người thật dùng chưa? | Báo cáo GO/NO-GO; E2E luồng chính; bảo mật; hiệu năng; a11y; tài liệu; kế hoạch rollback | `xt.py release-check` GO (gom `blueprint-status --strict --run`, sổ audit `--strict`, kiểm lại cuối); 0 mục BLOCKER |
 | G8 | **Vận hành & tiến hoá (Operate)** | Có chạy ổn và tốt dần lên không? | SLO + cảnh báo; runbook; quy trình sự cố; post-mortem; lịch bảo trì phụ thuộc | Cảnh báo đã thử kích hoạt; backup đã thử khôi phục |
+
+**Trước G0 — dự án làm cho khách** (lời mời, hồ sơ yêu cầu; ADR-0106): chào giá bằng `PROPOSAL.md` (mẫu [`../templates/PROPOSAL.md`](../templates/PROPOSAL.md), `PM-PLAN-019`) — hiểu yêu cầu, phạm vi, công nghệ ghép thử, tiến độ theo cổng, ước lượng có khoảng. Chưa thiết kế, chưa code tới khi khách chấp nhận. Khi hợp đồng có khách duyệt thiết kế, `PROJECT.md` khai `Duyệt thiết kế: khách` (`UX-DS-023`): cuối G4 trình bản thiết kế, **người** ghi lời duyệt của khách bằng `xt.py stage approve --design`; trước đó máy không cho chạy task `(ui: yes)`.
 
 ## Quy tắc chung của cổng
 
