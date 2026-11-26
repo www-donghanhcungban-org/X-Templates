@@ -81,6 +81,13 @@ chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương ph
 
 - Đo chữ của `a[href]`, `button`, `input`, `select`, `textarea`, `[role=button]`, `[tabindex]`. Trạng thái
   `disabled` được miễn theo WCAG 1.4.3. Dùng phép kiểm bổ sung cho viền/icon, `active` và `selected`.
-- Phần tử chưa đo gồm nền ảnh/gradient, trạng thái không kích hoạt được và trường hợp axe yêu cầu xem lại bằng tay.
-- 320 CSS px là ngưỡng reflow WCAG 2.2 SC 1.4.10. 280 CSS px là phép thử căng của khung.
+- Phần tử chưa đo gồm nền ảnh/gradient, độ mờ/bộ lọc/hoà trộn trên điều khiển hoặc tổ tiên, chữ trong suốt
+  (`-webkit-text-fill-color`), nội dung giả `::before`/`::after` có nền riêng, trạng thái không kích hoạt được và trường
+  hợp axe yêu cầu xem lại bằng tay.
+- Mỗi điều khiển được đo theo chữ của chính nó, của phần tử con có chữ và của `::before`/`::after`; kết quả tệ nhất
+  quyết định. Cổng đi theo cây phẳng (slot, shadow host) và duyệt từng iframe (định danh `frame[N] …`, N là thứ tự khung).
+  Điều khiển trong shadow root báo `element=null` nên chưa khai ngoại lệ được.
+- 320 CSS px là ngưỡng reflow WCAG 2.2 SC 1.4.10. 280 CSS px là phép thử căng của khung. Ở khổ ≤ 400 px, vùng
+  `overflow:hidden|clip` mà nội dung rộng hơn khung (bị cắt, không cuộn) là vi phạm `reflow`; cắt chữ bằng
+  `text-overflow: ellipsis` thì bỏ qua.
 - Ý tưởng cổng đo trên bản render tham khảo `plugin87/ux-ui-agent-skills` (MIT) qua stored 06 §7d. Mã viết cho khung.
