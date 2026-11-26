@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Site giới thiệu có trang quản trị không còn rơi vào mặc định lệch (D-617): mục mới `PRF-STATIC-018` **MUST** (phần ASVS 5.0 L1 của ranh giới quản trị CMS tự host: CSRF, giới hạn đăng nhập sai, không tài khoản mặc định, lọc HTML biên tập, truy vấn tham số hoá, admin `noindex`/không cache), `PRF-STATIC-019` **MUST@M** và `PRF-WEB-020` **MUST@M** (MFA + hết hạn phiên cho tài khoản quản trị, ASVS L2). Hồ sơ `static-site` nhận site có biên tập viên đăng nhập CMS (trước đây ghi "không có đăng nhập" nên bị đẩy sang `web-app`, nơi SEO chỉ SHOULD). `/factory` chỉ dùng `--new --pack web-api-ts` khi ý tưởng khớp `profiles` của gói; còn lại cài thường và `compose` đúng hồ sơ. `UX-VISUAL-001` ghi đúng WCAG 2.2 SC 2.3.3 là AAA (giữ MUST, nêu lý do). Dự án đích: ghép lại blueprint theo ID.
+
 - `check-links.py` không còn quét `.claude/worktrees` (bản sao repo của subagent): `iter_md` duyệt bằng `os.walk` và tỉa `SKIP_DIRS` cùng thư mục đó tại chỗ thay vì `rglob` rồi lọc, nên checkout có 30 worktree giả từ ~35 s xuống ~0,8 s; dự án đích chạy subagent trong worktree không còn bị lint chậm hay đỏ giả vì link hỏng của bản sao (chỉ bỏ đúng tiền tố `.claude/worktrees` ở gốc, submodule vẫn được quét); `tests/test_doc_command_drift.py` loại cùng đường.
 
 - Guard: lookahead chặn `.`/`..` ở trường `repo` của lệnh merge ghim hoạt động thật (AUD-HAR-542, f-string viết `{1, 2}` thành `(1, 2)`); sổ audit đóng AUD-HAR-542/558…561/566 theo #822, #815, #818–#821; AUD-HAR-541 còn mở (`[[=v=]]`, `??????+b`, `?*` vẫn lọt).
