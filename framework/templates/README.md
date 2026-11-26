@@ -17,6 +17,8 @@ updated: 2026-11-25
 | File | Dùng cho | Giai đoạn · cổng |
 |---|---|---|
 | [`PROJECT.md`](PROJECT.md) | `PROJECT.md` — vấn đề, người dùng (JTBD), chỉ số thành công có baseline, MVP MoSCoW, "không làm", dữ liệu & pháp lý, giả định, các bên | G0–G2 · cổng G0/G1; `PM-REQ-*`, `PM-PRIO-*` |
+| [`PROPOSAL.md`](PROPOSAL.md) | Chào giá cho khách: đối chiếu yêu cầu, phạm vi, công nghệ ghép thử, tiến độ theo cổng, ước lượng, bàn giao | Trước G0 · `PM-PLAN-019` |
+| [`DESIGN-REVIEW.md`](DESIGN-REVIEW.md) | Bản thiết kế trình khách: link, phiên bản, màn hình × Desktop/Mobile | Cuối G4 · `UX-DS-023`, `stage design-submit` |
 | [`DESIGN-BRIEF.md`](DESIGN-BRIEF.md) | Người dùng, tác vụ, thiết bị, dữ liệu dài/rỗng và tiêu chí thành công | G4 · trước khi dựng phương án |
 | [`DESIGN-OPTIONS.md`](DESIGN-OPTIONS.md) | So sánh 2–3 phương án cho cùng tác vụ và ghi lý do chọn | G4 · trước khi dựng prototype |
 | [`TASK-TRIAL.md`](TASK-TRIAL.md) | Biên bản thử tác vụ với số người hoàn thành, thời gian, lỗi thao tác và trợ giúp | G4–G7 · khi thử với người dùng |

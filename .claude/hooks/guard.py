@@ -269,7 +269,7 @@ def _match_any(rel: str, patterns: Tuple[str, ...]) -> bool:
 
 STAGE_LEDGER = "docs/autopilot/STAGE.json"
 DEPLOY_LEDGER = "docs/ops/DEPLOYS.json"
-EVIDENCE_LEDGERS = (STAGE_LEDGER, "docs/autopilot/ACCEPTANCE.json", DEPLOY_LEDGER)
+EVIDENCE_LEDGERS = (STAGE_LEDGER, "docs/autopilot/ACCEPTANCE.json", DEPLOY_LEDGER, "docs/autopilot/DESIGN.json")
 LEDGER_COMPONENTS = tuple(path.split("/") for path in EVIDENCE_LEDGERS)
 
 

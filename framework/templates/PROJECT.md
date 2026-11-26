@@ -1,7 +1,7 @@
 ---
 title: Mẫu PROJECT
 kind: template
-updated: 2026-10-15
+updated: 2026-11-26
 ---
 
 # Mẫu PROJECT.md
@@ -75,6 +75,7 @@ Tổng nỗ lực Must / tổng: <x%> (≤ 60%).
 | <giả định nguy hiểm nhất> | <spike/phỏng vấn/dữ liệu> | <ngày> | RK-001 |
 - Ràng buộc cứng: <ngân sách, nền tảng bắt buộc, tích hợp bắt buộc>
 - Hạn thật (có hậu quả ngoài): <ngày — hậu quả> · Hạn mong muốn: <ngày>
+- Duyệt thiết kế: <không | khách> — `khách` khi hợp đồng đòi khách duyệt bản thiết kế trước khi code UI (`UX-DS-023`; máy chặn task `(ui: yes)` tới khi người ghi duyệt)
 
 ## 9. Các bên
 | Vai trò | Tên | Quyết định gì | Kênh | Người thay thế |
