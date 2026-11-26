@@ -458,6 +458,29 @@ test('hidden descendants are not measured and an assigned slot hides its fallbac
   assert.ok(contrastLine(darkResult.stdout, 'state=default'), darkResult.stdout);
 });
 
+test('right-to-left text overflowing to the left is cut, and a long page cannot hide a cut line past the scan cap', async (t) => {
+  const rtl = await fixture(t, page({ markup: '<p id="rtl" dir="rtl" style="overflow:hidden;width:200px;white-space:nowrap">' + 'abcdefghij '.repeat(12) + '</p>' }));
+  const rtlResult = await rtl.run(['--strict', '--widths', '320']);
+  status(rtlResult, 1);
+  assert.match(rtlResult.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#rtl" — chữ bị cắt/m);
+  const paragraphs = Array.from({ length: 260 }, (_, index) => `<p>Para ${index}</p>`).join('\n');
+  const long = await fixture(t, page({ markup: `<div style="overflow-x:hidden;width:120px">${paragraphs}<p style="white-space:nowrap">Total due today: 42 EUR</p></div>` }));
+  const longResult = await long.run(['--widths', '320']);
+  assert.doesNotMatch(longResult.stdout, /^✓/m);
+  assert.match(longResult.stdout + longResult.stderr, /^(?:✗|UNMEASURED) .*check=reflow/m);
+});
+
+test('text inside a display:contents wrapper is measured, and a page-level `parent` global does not fake a frame', async (t) => {
+  const contents = await fixture(t, page({ markup: '<button id="dc"><span style="display:contents;color:#bbb">Quiet label</span></button>' }));
+  const contentsResult = await contents.run(['--strict', '--widths', '320']);
+  status(contentsResult, 1);
+  assert.ok(contrastLine(contentsResult.stdout, 'element="#dc"'), contentsResult.stdout);
+  const shadowed = await fixture(t, page({ css: 'html, body { background: transparent; }', markup: '<script>var parent = null;</script>' }));
+  const shadowedResult = await shadowed.run(['--strict', '--widths', '320']);
+  status(shadowedResult, 0);
+  assert.doesNotMatch(shadowedResult.stdout, /khung con không có nền đục/);
+});
+
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
   const sample = await fixture(t, page());
   const result = await sample.run(['--strict'], { ...process.env, XT_CHROMIUM: '/missing/xt-chromium' });
