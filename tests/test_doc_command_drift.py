@@ -52,7 +52,10 @@ def resolve(
 
 def doc_files() -> list[Path]:
     files = [ROOT / "AGENTS.md", ROOT / "CLAUDE.md", ROOT / "README.md"]
-    return files + sorted((ROOT / ".claude").rglob("*.md")) + sorted((ROOT / "framework").rglob("*.md"))
+    claude = [
+        p for p in sorted((ROOT / ".claude").rglob("*.md")) if p.relative_to(ROOT).parts[:2] != (".claude", "worktrees")
+    ]
+    return files + claude + sorted((ROOT / "framework").rglob("*.md"))
 
 
 def drift(files: list[Path]) -> tuple[int, list[str]]:
