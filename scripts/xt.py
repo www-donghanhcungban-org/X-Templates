@@ -10921,7 +10921,8 @@ def _plan_waves(args: argparse.Namespace, base: Path) -> int:
             print(f"✗ {exc}", file=sys.stderr)
             return 2
         return 0
-    out = plan_waves(parse_plan(plan), _deferred(st or {}), args.max)
+    design, todo = design_module(), (parse_plan(plan), _deferred(st or {}), args.max)  # ADR-0106: giữ như --handoff
+    out = design.waves(sys.modules[__name__], base, *todo) if design else plan_waves(*todo)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
