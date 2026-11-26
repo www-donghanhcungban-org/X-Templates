@@ -99,6 +99,18 @@ class CheckLinksModuleTest(unittest.TestCase):
         names = [p.relative_to(self.repo).as_posix() for p in self.cl.iter_md(self.repo)]
         self.assertEqual(names, ["a.md", "docs/b.md"])
 
+    def test_iter_md_prunes_only_top_level_claude_worktrees(self):
+        broken = "[x](missing.md)\n"
+        for rel in (".claude/worktrees/x/README.md", ".claude/worktrees/x/.git/y.md"):
+            self.write(rel, broken)
+        for rel in (".claude/skills/s.md", "sub/.claude/worktrees/k.md", "worktrees/w.md", "notes.txt"):
+            self.write(rel, broken)
+        names = [p.relative_to(self.repo).as_posix() for p in self.cl.iter_md(self.repo)]
+        self.assertEqual(names, [".claude/skills/s.md", "sub/.claude/worktrees/k.md", "worktrees/w.md"])
+        errors = self.cl.check(self.repo)
+        self.assertEqual(len(errors), 3)
+        self.assertFalse(any(".claude/worktrees" in e and not e.startswith("sub/") for e in errors))
+
     def test_check_reports_broken_with_file_and_line(self):
         self.write("docs/ok.md", "# Neo\n")
         self.write("a.md", "dòng 1\n[tốt](docs/ok.md#neo) [hỏng](docs/mat.md)\n")
