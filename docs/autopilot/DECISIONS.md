@@ -1141,3 +1141,24 @@
 - Chọn: Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo trực tiếp: trước mắt tối ưu dự án khung, chưa nâng đích, loại X-Agents; giữ đường lùi vì không có thay đổi nào ở repo đích (canary dừng trước khi đẩy nhánh)
 - Đường lùi: Thêm lại dòng X-Agents vào registry và TARGETS; mở lại task canary T-5038 trong PLAN đợt sau
+
+### D-611 · 2026-11-26T06:15:16+00:00 · C12: mở rộng luật 'bản sửa xanh giả/âm tính giả kèm bộ sinh biến thể; lớp lỗi có ≥ 2 PR nối thì đổi sang danh sách đóng' từ guard sang mọi công cụ cổng
+
+- Phương án: (1) Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5 · (2) Giữ phạm vi guard như ghi nhớ hiện tại
+- Chọn: Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chuỗi #819→#820→#821 (verify-render) và #815→#818 (guard) cho thấy cùng mẫu vá lặp ở công cụ ngoài guard; luật chỉ đòi thêm test, không nới cổng
+- Đường lùi: Xoá vế (c) khỏi skill /complete, giữ hai vế đầu
+
+### D-612 · 2026-11-26T06:15:16+00:00 · C06: chặn tag phiên bản viết bằng glob ở vị trí tên tag thế nào để đóng cả lớp AUD-HAR-541 mà guard.py không tăng dòng
+
+- Phương án: (1) Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d · (2) Tiếp tục vá theo từng mẫu glob đã đo (như #815, #818) · (3) Chấp nhận lỗ, chờ ruleset tag phía máy chủ (T-4007)
+- Chọn: Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: 70/1 500 lệnh sinh ra vẫn lọt sau hai lần vá mẫu; danh sách đóng đóng cả lớp; tên tag có glob không nháy không có ca dùng hợp lệ khi tạo tag; giữ trần dòng (0 dòng ròng) nên không cần ADR nới trần; thay phần đã bác ở D-607
+- Đường lùi: Hoàn nguyên commit; quay lại luật _tag_glob của ADR-0104
+
+### D-613 · 2026-11-26T06:15:17+00:00 · C04: ngưỡng nén sớm phiên chính
+
+- Phương án: (1) autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích · (2) Giữ mặc định của Claude Code · (3) Đặt qua biến môi trường CLAUDE_CODE_AUTO_COMPACT_WINDOW
+- Chọn: autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích
+- Lý do (tiêu chí chất lượng cuối): Mô phỏng trên chuỗi lượt thật giảm 55 % cache-read phiên chính (cận trên); khoá settings là đường lùi rẻ nhất (xoá một khoá), biến môi trường thắng cả cờ CLI nên kém đường lùi; chưa xác minh thì không thêm khoá
+- Đường lùi: Xoá khoá autoCompactWindow khỏi .claude/settings.json
