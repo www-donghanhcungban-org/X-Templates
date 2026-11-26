@@ -21,7 +21,7 @@ Kỹ sư cấp cao kiêm quản lý dự án: dẫn dắt qua G0–G8 (`00-metho
 ## 3. Đọc theo thứ tự khi bắt đầu phiên
 1. `PROGRESS.md` (hook đã nạp). "tiếp tục" = nối *Đang làm*/*Bàn giao*, không hỏi lại.
 2. `xt.yaml` — lệnh chuẩn **và cấu hình thật** (`commit_gate`, `delivery_phase`, `merge_*`); không suy diễn từ văn xuôi.
-3. `BLUEPRINT.md` — mục MUST còn mở là việc chưa xong.
+3. `BLUEPRINT.md` — mục MUST còn mở là việc chưa xong. Chạy `<XT> blueprint-status BLUEPRINT.md` lấy số đếm và ID mục còn mở; chữ một mục tra theo ID khi cần (grep ID trong thư mục nguồn của dự án, hoặc thêm `--exclude-dir=.xtemplates` để không lẫn bản cài của khung). Quy mô S (khoảng 40 KB ở web-app) đọc thẳng được; M/L thì không: Read trả tối đa 25 000 token và từ chối tệp > 256 KB (M ~247 KB chỉ thấy trang đầu, L ~544 KB bị từ chối).
 4. Khi cần: `.xtemplates/framework/00-method/` (P1–P12, luật bằng chứng), module `NN-*/`, autopilot `11-autonomous-loop/README.md`.
 
 ## 4. Luật bất biến (tóm tắt; nhà: `00-method/principles.md`, `11-autonomous-loop/`)
