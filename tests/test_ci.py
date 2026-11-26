@@ -204,6 +204,21 @@ class GateFanOutTest(unittest.TestCase):
         self.assertLess(body.index("git checkout -q -B main"), body.index("scripts/dev-task.sh test-shard"))
         self.assertNotIn("XT_PY", body)
 
+    def test_test_main_exits_early_per_step_when_not_pr(self):
+        # T-5047: trên push/dispatch `main`, `test` đã chạy trên nhánh `main` → test-main bỏ qua ở CẤP BƯỚC.
+        body = self.jobs["test-main"]
+        self.assertEqual(job_key(body, "if"), "")  # không `if:` cấp job: skipped ≠ success cho `quality`
+        steps = re.split(r"^      - ", body.split("\n    steps:\n", 1)[1], flags=re.M)[1:]
+        self.assertGreaterEqual(len(steps), 4)
+        cond = "if: github.event_name == 'pull_request'"
+        for step in steps:
+            self.assertRegex(step, rf"(?m)^(?:        )?{re.escape(cond)}$")
+        self.assertTrue(steps[0].startswith(cond + "\n"))  # bước đầu: thoát khi không phải PR
+        self.assertIn("git checkout -q -B main", steps[-1])  # tổ hợp đặc thù của test-main còn nguyên ở PR
+
+    def test_quality_still_needs_test_main(self):
+        self.assertIn("test-main", flow_list(job_key(self.jobs["quality"], "needs")))
+
     def test_python_workflow_jobs_use_repo_pin(self):
         version = (ROOT / ".python-version").read_text(encoding="utf-8").strip()
         self.assertRegex(version, r"\A3\.15\.\d+\Z")

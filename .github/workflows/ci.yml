@@ -181,21 +181,28 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Thoát sớm ở CẤP BƯỚC (không `if:` cấp job: `quality` đòi mọi job con `success`, job bị skip thì không đạt). Trên
+      # push/dispatch vào `main`, job `test` đã checkout đúng nhánh `main` → test-main lặp nguyên cây (T-5047). Chỉ PR
+      # (checkout HEAD tách rời) mới cần kiểm nhánh tên `main`; mọi bước dưới đây mang cùng điều kiện.
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
           persist-credentials: false # job không push; token không nằm lại trong .git/config (AUD-CI-028)
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - if: github.event_name == 'pull_request'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.15.2"
           cache: pip # khoá = hash requirements-dev.txt (setup-python băm file khai ở dưới); đổi khoá → cài lại (AUD-CI-028)
           cache-dependency-path: requirements-dev.txt
       - name: Công cụ ghim kèm hash (requirements-dev.txt — khớp xt.yaml)
+        if: github.event_name == 'pull_request'
         run: pip install --quiet --require-hashes -r requirements-dev.txt
       # Job `test` chạy trên checkout của PR (HEAD tách rời); test lại trên nhánh tên `main` như CI sau merge — test phụ
       # thuộc nhánh (guard: `git push` không refspec trên `main`) từng xanh ở PR mà đỏ trên `main` (AUD-TEST-005, #124).
       # Coverage đã đo ở job `test`.
       - name: Test trên checkout mang tên nhánh `main`
+        if: github.event_name == 'pull_request'
         env:
           SHARD: ${{ matrix.shard }}
         run: |

@@ -5169,7 +5169,10 @@ class StewardDispatchCiTest(unittest.TestCase):
                 self.assertNotIn("inputs:", on)
                 self.assertIn("github.head_ref || github.run_id", text)  # dispatch: nhóm run_id riêng, không bị huỷ
                 self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", text)
-                self.assertNotRegex(text, r"if:[^\n]*github\.event_name")  # job/bước không lọc theo sự kiện
+                # job/bước không lọc theo sự kiện — trừ `test-main` (T-5047): trên push/dispatch `main`, job `test` đã chạy
+                # đúng nhánh `main` nên các bước của nó thoát sớm; mọi job khác vẫn chạy đủ như `push`
+                rest = re.sub(r"(?ms)^  test-main:\n.*?(?=^  \S|\Z)", "", text)
+                self.assertNotRegex(rest, r"if:[^\n]*github\.event_name")
                 self.assertEqual(xt.ci_check_text(text), [])
         steward = (ROOT / ".github/workflows/pr-steward.yml").read_text(encoding="utf-8")
         job = steward.split("\njobs:\n", 1)[1]
