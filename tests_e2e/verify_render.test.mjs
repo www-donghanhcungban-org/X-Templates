@@ -200,7 +200,7 @@ test('malformed or conflicting exceptions and invalid widths fail before browser
   const sample = await fixture(t, page());
   const invalid = [
     { expires: '2099-02-29' }, { expires: '2099-02-30' }, { evidence: ' ' }, { reason: '' },
-    { width: 320.5 }, { check: 'reflow' }, { element: '*' },
+    { width: 320.5 }, { check: 'layout' }, { element: '*' },
   ];
   for (const changes of invalid) {
     const file = await sample.exceptions([exception(sample.target, changes)]);
@@ -362,17 +362,100 @@ test('opacity and transparent text fill make a control UNMEASURED instead of a g
   assert.match(result.stdout, /^UNMEASURED .*check=contrast element="#ghost" — chữ trong suốt/m);
 });
 
-test('content clipped by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
-  const wide = '<div id="{id}" tabindex="0" role="region" aria-label="wide content" style="{style}"><div style="width:600px;height:10px;white-space:nowrap">content wider than its box</div></div>';
-  const clipped = await fixture(t, page({ markup: wide.replace('{id}', 'clip').replace('{style}', 'overflow:hidden;width:200px') }));
+const WIDE_TEXT = 'content that is far wider than its box and gets cut off';
+const wideBox = (id, style) => `<div id="${id}" tabindex="0" role="region" aria-label="wide content" style="${style}"><div style="width:900px;white-space:nowrap">${WIDE_TEXT}</div></div>`;
+
+test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
+  const clipped = await fixture(t, page({ markup: wideBox('clip', 'overflow:hidden;width:200px') }));
   const result = await clipped.run(['--strict', '--widths', '320']);
   status(result, 1);
-  assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — nội dung bị cắt/m);
+  assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — chữ bị cắt/m);
   assert.doesNotMatch(result.stdout, /^✗ .*viewport=1280x800 .*check=reflow/m);
-  const scrollable = await fixture(t, page({ markup: wide.replace('{id}', 'scroll').replace('{style}', 'overflow:auto;width:200px') }));
+  const scrollable = await fixture(t, page({ markup: wideBox('scroll', 'overflow:auto;width:200px') }));
   status(await scrollable.run(['--widths', '320']), 0);
   const ellipsis = await fixture(t, page({ markup: '<p id="e" style="overflow:hidden;width:200px;white-space:nowrap;text-overflow:ellipsis">a very long single line of text that will be cut with an ellipsis</p>' }));
   status(await ellipsis.run(['--widths', '320']), 0);
+});
+
+test('visually hidden text, form fields and empty decorations are not reflow failures; a carousel is UNMEASURED', async (t) => {
+  const css = '.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }' +
+    ' #rip { position: relative; overflow: hidden; } #rip::after { content: ""; position: absolute; top: 0; left: -50%; width: 200%; height: 100%; }';
+  const benign = await fixture(t, page({
+    css,
+    markup: '<p>Cart <span class="sr-only">(3 items, total 42 EUR)</span></p>' +
+      '<label>Email <input id="em" type="email" value="someone.with.a.long.address@example-company.example"></label>' +
+      '<div id="rip">Ripple</div>',
+  }));
+  const ok = await benign.run(['--widths', '320']);
+  status(ok, 0);
+  assert.doesNotMatch(ok.stdout, /check=reflow/);
+  const carousel = await fixture(t, page({
+    css: '.swiper { overflow: hidden; } .wrapper { display: flex; } .slide { flex: 0 0 100%; }',
+    markup: '<div class="swiper" id="car"><div class="wrapper"><div class="slide">First slide text</div><div class="slide">Second slide text</div><div class="slide">Third slide text</div></div></div>',
+  }));
+  const soft = await carousel.run(['--widths', '320']);
+  status(soft, 0);
+  assert.match(soft.stdout, /^UNMEASURED .*check=reflow element="#car" — chữ nằm ngoài khung cắt/m);
+  status(await carousel.run(['--strict', '--widths', '320']), 1);
+  const file = await carousel.exceptions([exception(carousel.target, { check: 'reflow', element: '#car' })]);
+  const exempt = await carousel.run(['--strict', '--widths', '320', '--exceptions', file]);
+  assert.match(exempt.stdout, /^EXEMPTED .*check=reflow element="#car"/m);
+});
+
+test('a measured violation is never hidden by an unmeasurable part of the same control', async (t) => {
+  const sample = await fixture(t, page({
+    css: '#hv:hover { background: #fff; color: #ccc; } [data-tip] { position: relative; }' +
+      ' [data-tip]::after { content: attr(data-tip); position: absolute; left: 0; top: 100%; background: #111; color: #fff; opacity: 0; }' +
+      ' [data-tip]:hover::after { opacity: 1; }',
+    markup: '<button id="hv" data-tip="Delete item">Delete</button>',
+  }));
+  const result = await sample.run(['--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'state=hover') && contrastLine(result.stdout, 'element="#hv"'), result.stdout);
+  assert.match(result.stdout, /^UNMEASURED .*element="#hv" — nội dung giả có nền hoặc định vị riêng/m);
+});
+
+test('an overlay pseudo-element with empty content, a filtered ancestor and a transparent iframe are UNMEASURED', async (t) => {
+  const overlay = await fixture(t, page({
+    css: '#ovh { position: relative; } #ovh:hover::before { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.9); }',
+    markup: '<button id="ovh">Overlay</button>',
+  }));
+  const overlayResult = await overlay.run(['--strict', '--widths', '320']);
+  status(overlayResult, 1);
+  assert.match(overlayResult.stdout, /^UNMEASURED .*state=hover check=contrast element="#ovh" — nội dung giả có nền hoặc định vị riêng/m);
+  const filtered = await fixture(t, page({ markup: '<div style="filter: contrast(.2)"><button id="flt">Filtered</button></div>' }));
+  const filteredResult = await filtered.run(['--strict', '--widths', '320']);
+  status(filteredResult, 1);
+  assert.match(filteredResult.stdout, /^UNMEASURED .*check=contrast element="#flt" — độ mờ, bộ lọc/m);
+  const inner = '<main><button style="background:transparent;color:#222;border:0">Pay</button></main>';
+  const frame = await fixture(t, page({ css: 'body { background: #111; }', markup: `<iframe title="pay" width="200" height="80" srcdoc="${inner.replaceAll('"', '&quot;')}"></iframe>` }));
+  const frameResult = await frame.run(['--strict', '--widths', '320']);
+  status(frameResult, 1);
+  assert.match(frameResult.stdout, /^UNMEASURED .*check=contrast element="frame\[1\] .*— khung con không có nền đục/m);
+});
+
+test('hidden descendants are not measured and an assigned slot hides its fallback content', async (t) => {
+  const hidden = await fixture(t, page({ markup: '<button id="hid">Save<span style="display:none;color:#ddd">Saving</span></button>' }));
+  const hiddenResult = await hidden.run(['--strict', '--widths', '320']);
+  status(hiddenResult, 0);
+  assert.doesNotMatch(hiddenResult.stdout, /^(?:✗|UNMEASURED) .*check=contrast/m);
+  const slot = await fixture(t, page({
+    markup: `<x-btn id="host">Buy now</x-btn><script>
+      const root = document.getElementById('host').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="background:#fff;color:#111;min-width:48px;min-height:44px"><slot><span style="color:#eee">Default</span></slot></button>';
+    </script>`,
+  }));
+  const slotResult = await slot.run(['--widths', '320']);
+  assert.doesNotMatch(slotResult.stdout, /^✗ .*check=contrast/m);
+  const dark = await fixture(t, page({
+    css: 'x-card { display: block; background: #111; padding: 8px; }',
+    markup: `<x-card id="card"><span id="label" style="color:#222">Slotted</span></x-card><script>
+      const root = document.getElementById('card').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="background:transparent;min-width:48px;min-height:44px"><slot></slot></button>';
+    </script>`,
+  }));
+  const darkResult = await dark.run(['--widths', '320']);
+  assert.ok(contrastLine(darkResult.stdout, 'state=default'), darkResult.stdout);
 });
 
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
