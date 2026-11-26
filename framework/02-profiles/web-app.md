@@ -4,7 +4,7 @@ kind: profile
 slug: web-app
 prefix: PRF-WEB
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 08-backend/*, 09-database/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-11-24
+updated: 2026-11-26
 ---
 
 # Hồ sơ: Ứng dụng web
@@ -79,6 +79,7 @@ Phiên bản lấy từ registry/endoflife.date ngày **2026-10-13** — **xác 
 - [ ] `PRF-WEB-017` **MAY** PWA (manifest, service worker, offline shell) chỉ khi có yêu cầu cài đặt/offline; service worker có chiến lược cache và cập nhật rõ. → Kiểm: Lighthouse PWA audit; test cập nhật SW không kẹt bản cũ.
 - [ ] `PRF-WEB-018` **MAY** Realtime (WebSocket/SSE) có reconnect với backoff, resume theo cursor, và fallback polling. → Kiểm: test ngắt mạng rồi nối lại không mất sự kiện. · Nguồn: [`../08-backend/realtime-and-streaming.md`](../08-backend/realtime-and-streaming.md)
 - [ ] `PRF-WEB-019` **SHOULD** Web app công khai gọi tới mạng nội bộ hoặc loopback (agent/app desktop trên localhost, thiết bị IoT/router trong LAN) thiết kế cho quyền **Local Network Access** (Chrome ≥ 142; từ Chrome 145 tách thành `loopback-network` cho localhost và `local-network` cho IP riêng; Firefox cũng áp dụng): chỉ gọi từ ngữ cảnh HTTPS; khai `fetch(…, {targetAddressSpace: 'loopback'})` cho localhost, `'local'` cho IP riêng, khớp địa chỉ thật (không dùng tên miền công khai trỏ về IP nội bộ); màn hình giải thích trước lời nhắc quyền; đường thay thế khi người dùng từ chối; WebSocket/WebRTC tới localhost tính tới việc sẽ bị gate (mốc Chrome chưa xác minh). → Kiểm: E2E trên Chrome ≥ 142 với quyền mạng nội bộ bị từ chối (tên quyền theo bản Chrome đang test) → UI hiện hướng dẫn/đường thay thế, không treo; cấp quyền → luồng chạy; grep mã gọi localhost/IP riêng đều nằm sau màn hình giải thích. · Nguồn: Chrome *Local Network Access*; MDN `Request.targetAddressSpace`
+- [ ] `PRF-WEB-020` **MUST@M** Tài khoản quản trị/đặc quyền (admin, biên tập viên, vận hành) dùng MFA ([`BE-AUTH-013`](../08-backend/authn-authz.md)) và phiên có hết hạn idle + tuyệt đối ở server ([`BE-AUTH-005`](../08-backend/authn-authz.md)) — ở M kể cả khi các mục đó còn là `MUST@L` trong module. → Kiểm: đăng nhập vai quản trị thiếu yếu tố thứ hai → từ chối; test vượt idle → 401. · Nguồn: OWASP ASVS 5.0.0 6.3.3, 7.3.1, 7.3.2 (L2); NIST SP 800-63B-4 AAL2 (đọc 2026-11-26)
 
 ## Cổng chất lượng tương đương
 
