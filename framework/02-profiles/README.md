@@ -1,7 +1,7 @@
 ---
 title: Hồ sơ loại phần mềm
 kind: index
-updated: 2026-10-13
+updated: 2026-11-26
 ---
 
 # 02 — Hồ sơ loại phần mềm
@@ -13,7 +13,7 @@ updated: 2026-10-13
 | `web-app` | [Ứng dụng web](web-app.md) | Có UI trong trình duyệt **và** trạng thái phía server (tài khoản, CRUD, thanh toán, realtime nhẹ). Mặc định khi phân vân. |
 | `mobile-app` | [Ứng dụng di động (iOS/Android, native & cross-platform)](mobile-app.md) | Phát hành qua App Store/Play; cần push, offline sâu, camera/sensor nền, biometrics; ký store, OTA có ký, a11y theo nền tảng. |
 | `desktop-app` | [Ứng dụng desktop (Electron/Tauri/native)](desktop-app.md) | Cài trên Windows/macOS/Linux, truy cập tệp/phần cứng/OS; cần ký mã (Authenticode/notarize), auto-update có ký, sandbox IPC. |
-| `static-site` | [Site nội dung tĩnh / tài liệu / landing](static-site.md) | Nội dung theo chu kỳ biên tập, không đăng nhập; build ra file tĩnh lên CDN; cổng là link check, CWV, SEO, CSP qua header hosting. |
+| `static-site` | [Site nội dung tĩnh / tài liệu / landing](static-site.md) | Nội dung theo chu kỳ biên tập, người đọc không đăng nhập (biên tập viên dùng CMS vẫn thuộc đây, `PRF-STATIC-018`); build ra file tĩnh lên CDN; cổng là link check, CWV, SEO, CSP qua header hosting. |
 | `api-service` | [Backend / API / dịch vụ](api-service.md) | REST/GraphQL/gRPC, job nền, microservice, BFF — không UI hoặc UI tách riêng; cổng = OpenAPI + RFC 9457 + p95 + contract test + container |
 | `cli-tool` | [Công cụ dòng lệnh](cli-tool.md) | Chạy trong terminal bởi người, script, CI hay AI agent; hợp đồng là argv/stdin/stdout/exit code; cài qua checksum/chữ ký. |
 | `library-sdk` | [Thư viện / SDK / package](library-sdk.md) | Mã được người khác `import` (npm/PyPI/crates/nội bộ); sản phẩm là API surface + types + semver; publish qua OIDC có provenance. |

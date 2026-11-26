@@ -53,15 +53,18 @@ class NetworkShimTest(unittest.TestCase):
         self.assertEqual(nonet.calls(log), [])
 
 
-class GuardLayersNoNetworkTest(unittest.TestCase):
-    """Sáu lớp từng gọi `gh api repos/{owner}/{repo}/pulls/N` thật chạy xanh dưới shim lỗi và 0 lời gọi mạng."""
+class _GuardLayerNoNetwork:
+    """Mixin, không phải TestCase: mỗi lớp con chạy MỘT lớp của `NET_CLASSES` (D-608) để CI không dồn vào một shard."""
 
-    def test_six_classes_make_no_network_calls(self) -> None:
+    index: int
+
+    def test_class_makes_no_network_calls(self) -> None:
+        """Lớp từng gọi `gh api repos/{owner}/{repo}/pulls/N` thật chạy xanh dưới shim lỗi và 0 lời gọi mạng."""
         with tempfile.TemporaryDirectory() as td:
             log = nonet.make_shims(Path(td))
             env = {**os.environ, "PATH": f"{td}{os.pathsep}{os.environ['PATH']}", "NET_SHIM_LOG": str(log)}
             r = subprocess.run(
-                [sys.executable, "-m", "unittest", *NET_CLASSES],
+                [sys.executable, "-m", "unittest", NET_CLASSES[self.index]],
                 cwd=ROOT,
                 env=env,
                 capture_output=True,
@@ -71,6 +74,43 @@ class GuardLayersNoNetworkTest(unittest.TestCase):
             )
             self.assertEqual(r.returncode, 0, r.stderr[-2000:])
             self.assertEqual(nonet.calls(log), [])
+
+
+class GuardLayersAdapterHostNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 0
+
+
+class GuardLayersPreBashGuardNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 1
+
+
+class GuardLayersGuardMatrixNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 2
+
+
+class GuardLayersDeltaAuditNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 3
+
+
+class GuardLayersEgressAuditNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 4
+
+
+class GuardLayersReasonCodeLockNoNetworkTest(_GuardLayerNoNetwork, unittest.TestCase):
+    index = 5
+
+
+class GuardLayersPartitionTest(unittest.TestCase):
+    def test_one_test_class_per_net_class(self) -> None:
+        owners = [
+            cls
+            for cls in globals().values()
+            if isinstance(cls, type) and issubclass(cls, _GuardLayerNoNetwork) and issubclass(cls, unittest.TestCase)
+        ]
+        self.assertEqual(sorted(cls.index for cls in owners), list(range(len(NET_CLASSES))))
+        self.assertEqual(len(set(NET_CLASSES)), len(NET_CLASSES))
+        for cls in owners:
+            self.assertEqual(unittest.defaultTestLoader.loadTestsFromTestCase(cls).countTestCases(), 1)
 
 
 @unittest.skipIf(shutil.which("bash") is None or shutil.which("find") is None, "cần bash + find")
