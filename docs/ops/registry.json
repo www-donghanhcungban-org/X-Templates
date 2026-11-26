@@ -71,19 +71,13 @@
       "environments": [],
       "slo": "",
       "release": null,
-      "exceptions": []
-    },
-    {
-      "repo": "www-donghanhcungban-org/X-Agents",
-      "owner": "www-donghanhcungban-org",
-      "type": null,
-      "risk": null,
-      "core": "2.0.0",
-      "pack": null,
-      "environments": [],
-      "slo": "",
-      "release": null,
-      "exceptions": []
+      "exceptions": [
+        {
+          "id": "D-609-scanner-core",
+          "until": "2027-01-21",
+          "why": "Giữ lõi 3.29.0 (D-609): cổng scripts/_commit-guard.sh của đích đặt trần 1 048 576 B mỗi tệp, còn xt.py 1 259 177 B và guard.py 1 384 897 B ở 3.36.0. Xét lại khi đích tự miễn hai đường dẫn công cụ, khung đưa hai tệp dưới 1 MiB qua tách module, hoặc artefact .pyz nén."
+        }
+      ]
     }
   ]
 }
