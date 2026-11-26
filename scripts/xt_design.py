@@ -25,7 +25,8 @@ PROJECT_FILE = "PROJECT.md"
 # Dòng khai nhận theo NHÃN trên dòng đã chuẩn hoá (`_clean`): đầu dòng bỏ dấu markdown (danh sách `-*+`/`1.`/`1)`,
 # trích dẫn `>`, bảng `|`, tiêu đề `#`, ô `[x]`, nhấn `*`/`_`/`~`, `[` của link, dấu backtick, mở comment `<!--`); nhóm 1
 # = phần sau nhãn. Nhánh `[x]` đứng trước `[` đơn và vòng lặp possessive (`*+`): hai nhánh chồng nhau từng quay lui mũ
-# (`[[]` lặp, CodeQL py/redos); không token nào chứa `d` ở giữa nên không nhả lại không làm mất lần khớp nào.
+# (`[[]` lặp, CodeQL py/redos); `d` chỉ có trong token `[d]` và luôn đứng trước `]` (không trước `u`), nên không
+# nhả lại cũng không làm mất lần khớp nào.
 # SEP_RE: phần sau nhãn phải là `:` (hoặc `|` của bảng), chỉ cách bởi dấu nhấn; nhóm 1 = giá trị. Sau `:` không bỏ `~`
 # (gạch bỏ): `~~không~~ …` ra giá trị rỗng → khách.
 LABEL_RE = re.compile(r"(?:\s|\[[^\]]?\]|[-+*>|#_`~\[]|\d+[.)]|<!--)*+duyệt\s*thiết\s*kế(.*)")
@@ -34,7 +35,7 @@ VALUE_RE = re.compile(r"[^\W_]+")  # giá trị = chữ đầu tiên (cắt ở 
 CLIENT_WORD_RE = re.compile(
     r"(?<![^\W_])khach(?![^\W_])"
 )  # trên chữ đã bỏ dấu (`_plain`); `_` là dấu nhấn, không là chữ
-LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")  # ngắt dòng của markdown; U+2028, NEL, VT, FF… không ngắt
+LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")  # ngắt dòng của markdown; đoạn sau U+2028, NEL, VT, FF…: `_line_entries`
 FENCE_OPEN_RE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")  # CommonMark: thụt ≤ 3 cách (tab = thụt 4 → không phải rào)
 FENCE_CLOSE_RE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t]*")
 HUMAN = "không"
@@ -216,17 +217,17 @@ def _closes(line: str, fence: str) -> bool:
 
 
 def _lines(text: str) -> list[tuple[str, bool]]:
-    """(dòng đã `_clean`, nằm trong code fence ``` / ~~~ kể cả dòng rào). Rào nhận trên dòng gốc như CommonMark (ký tự
+    """(dòng markdown gốc, nằm trong code fence ``` / ~~~ kể cả dòng rào). Rào nhận trên dòng gốc như CommonMark (ký tự
     vô hình trước ``` → không phải rào); rào không đóng thì kéo tới hết tệp."""
     out: list[tuple[str, bool]] = []
     fence = ""
     for raw in LINE_BREAK_RE.split(text):
         if fence:
             fence = "" if _closes(raw, fence) else fence
-            out.append((_clean(raw), True))
+            out.append((raw, True))
         else:
             fence = _fence_open(raw)
-            out.append((_clean(raw), bool(fence)))
+            out.append((raw, bool(fence)))
     return out
 
 
@@ -251,19 +252,28 @@ def _entry(rest: str) -> tuple[str, str]:
     return value, "" if value in (CLIENT, HUMAN) else f"giá trị lạ `{value}`"
 
 
+def _declares(raw: str) -> list[tuple[str, str]]:
+    """[(giá trị, ghi chú)] nếu dòng `raw` (đã `_clean`) mở đầu bằng nhãn, không thì []."""
+    m = LABEL_RE.match(_clean(raw))
+    return [_entry(m[1])] if m else []
+
+
+def _line_entries(raw: str, fenced: bool) -> list[tuple[str, str]]:
+    """Dòng khai của một dòng markdown: chính dòng đó, GỘP HỢP mỗi đoạn `raw.splitlines()` có giá trị khác `không`
+    (U+2028/2029, VT, FF, NEL, FS/GS/RS: markdown không ngắt, `splitlines()` ngắt — đoạn nào là dòng khai vẫn tính).
+    Đoạn `không` bỏ qua vì không đổi kết quả: thêm dòng khai không bao giờ mở khoá. Code fence chỉ GIẤU dòng giá trị
+    `không` (ví dụ như mẫu `PROJECT.md`)."""
+    pieces = raw.splitlines()
+    found = _declares(raw) + [e for p in pieces if len(pieces) > 1 for e in _declares(p) if e[0] != HUMAN]
+    where = f"dòng `{_clean(raw)}` trong code fence vẫn tính" if fenced else ""
+    return [(value, note or where) for value, note in found if not (fenced and value == HUMAN)]
+
+
 def _entries(text: str) -> list[tuple[str, str]]:
-    """(giá trị, ghi chú) mọi dòng khai. Code fence chỉ GIẤU dòng giá trị `không` (ví dụ như mẫu `PROJECT.md`); dòng
-    trong rào có giá trị khác vẫn tính kèm ghi chú (fail-closed: rào quên đóng hay rào trong comment HTML/`<pre>` không
-    giấu được dòng khai thật). Nhờ vậy đọc rào sai chỉ đổi ghi chú, không bao giờ nới khoá."""
-    out: list[tuple[str, str]] = []
-    for line, fenced in _lines(text):
-        m = LABEL_RE.match(line)
-        if not m:
-            continue
-        value, note = _entry(m[1])
-        if not (fenced and value == HUMAN):
-            out.append((value, note or (f"dòng `{line}` trong code fence vẫn tính" if fenced else "")))
-    return out
+    """(giá trị, ghi chú) mọi dòng khai. Dòng trong rào có giá trị khác `không` vẫn tính kèm ghi chú (fail-closed: rào
+    quên đóng hay rào trong comment HTML/`<pre>` không giấu được dòng khai thật). Nhờ vậy đọc rào sai chỉ đổi ghi chú,
+    không bao giờ nới khoá."""
+    return [e for raw, fenced in _lines(text) for e in _line_entries(raw, fenced)]
 
 
 def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
