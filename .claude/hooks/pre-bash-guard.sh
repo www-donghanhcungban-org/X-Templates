@@ -65,6 +65,44 @@ gate_config_changed() { # $1=gốc repo → 0 nếu file đổi so với HEAD (�
   return 1
 }
 
+# Tóm tắt log cổng ĐỎ (T-5039, LOOP-CTX-004): stderr của hook exit 2 vào NGUYÊN VĂN ngữ cảnh agent (không qua trần của
+# Bash) — từng tới 626 781 ký tự một lần, hàng chục MB ở ca xấu nhất. In: dòng bước đỏ của dev-task; khối lỗi trích được
+# (FAIL/ERROR của unittest tới dải `====`/`Ran N tests`, traceback tới dòng ngoại lệ) rồi dòng lẻ có FAIL/ERROR/error/
+# `tệp:dòng:cột:`; các dòng cuối (≤ 40). Lỗi thường nằm GIỮA output nhiều shard, đuôi chỉ còn `OK` → không đủ chỉ in đuôi.
+# Đếm BYTE dưới LC_ALL=C (≥ số ký tự) nên tổng stderr ≤ 8 000 ký tự; dòng dài cắt ở 300 byte rồi bỏ chữ cuối nếu là
+# UTF-8 nhiều byte (byte nối 0x80–0xBF + byte đầu ≥ 0xC0) để không xé đôi chữ. Chỉ dùng awk POSIX (mawk/BSD awk: không `{n,}`). XG_LOG/XG_ROOT = đường dẫn log và gốc cổng
+# mà hai dòng cuối của hook in ra — trừ vào ngân sách đuôi.
+gate_red_summary() { # $1=tệp log → stdout
+  LC_ALL=C awk '
+  function cut(s) {
+    if (length(s) <= 300) return s
+    s = substr(s, 1, 300)
+    while (s != "" && substr(s, length(s)) >= "\200" && substr(s, length(s)) < "\300") s = substr(s, 1, length(s) - 1)
+    if (substr(s, length(s)) >= "\300") s = substr(s, 1, length(s) - 1)
+    return s " [...]"
+  }
+  function add(s) { if (length(blk) + length(s) < 3000) blk = blk s "\n"; else more = 1 }
+  { l = cut($0); t[NR % 40] = l }
+  m == 1 && (/^=====+$/ || /^Ran [0-9]+ test/) { m = 0 }
+  m == 1 { if (++k <= 40) add(l); next }
+  m == 2 { if (++k <= 40) add(l); if (!/^[ \t]/) m = 0; next }
+  /^\[dev-task\].*ĐỎ/ { if (ns < 5) step = step l "\n"; ns++; next }
+  /^(FAIL|ERROR): / { m = 1; k = 1; add(l); next }
+  /^Traceback \(most recent call last\)/ { m = 2; k = 1; add(l); next }
+  /FAIL|ERROR|[Ee]rror|panic:|ĐỎ|:[0-9]+:[0-9]+: / { if (length(one) + length(l) < 1000) one = one l "\n"; else more = 1 }
+  END {
+    out = step
+    if (blk one != "") out = out "── Khối lỗi trích được:\n" blk one (more ? "[...] (còn nữa, xem log)\n" : "")
+    room = 6000 - length(ENVIRON["XG_LOG"] ENVIRON["XG_ROOT"]) - length(out)
+    tl = ""; n = 0
+    for (i = NR; i > NR - 40 && i > 0; i--) {
+      if (length(tl) + length(t[i % 40]) + 1 > room) break
+      tl = t[i % 40] "\n" tl; n++
+    }
+    printf "%s── %d dòng cuối của log:\n%s", out, n, tl
+  }' "$1"
+}
+
 # Thư mục git của toplevel $1 (`--git-dir`|`--git-common-dir`), đường dẫn vật lý. Chạy được ở mọi git có worktree
 # (2.5+): không dùng `--path-format` (2.31) hay `--absolute-git-dir` (2.13) — git cũ in nguyên cờ lạ ra stdout thành
 # "đường dẫn" rác; đường tương đối git in ra tính theo thư mục chạy ($1). Không đọc được → 1, không in gì.
@@ -189,9 +227,30 @@ if [ "$XG_COMMIT" = "true" ] && { [ "$XG_NO_VERIFY" != "true" ] || [ "${XT_GUARD
     # T-4013 (AUD-HAR-443, D-518): guard khẳng định cả lệnh là `git commit` đứng một mình → tệp chưa track không vào được
     # commit, bỏ khỏi tập tệp đổi của gate-fast. Mọi ca khác (`git add -A && git commit`…) giữ cách thận trọng cũ.
     if [ "$XG_COMMIT_ALONE" = "true" ]; then export XT_CHANGED_TRACKED_ONLY=1; else unset XT_CHANGED_TRACKED_ONLY; fi
-    # stdout của cổng sang stderr: stdout của hook chỉ được chứa JSON quyết định.
-    if ! CLAUDE_PROJECT_DIR="$groot" "$gate" "$task" >&2; then
+    # stdout của cổng không ra stdout của hook: stdout của hook chỉ được chứa JSON quyết định. T-5039 (LOOP-CTX-004): gom
+    # stdout+stderr của cổng (đúng thứ tự) vào log trong THƯ MỤC GIT của repo nhận commit — không bao giờ bị commit, không
+    # phụ thuộc .gitignore của đích; log thô chưa che bí mật nên không đặt ở cây làm việc. mktemp (quyền 600) mỗi lần chạy
+    # rồi đổi tên thành `xt-commit-gate.log`: hai commit đồng thời không đọc lẫn log của nhau. Exit code lấy NGAY sau cổng,
+    # trước mọi bước tóm tắt/đổi tên. Xanh: in lại cả log như cũ (stderr của exit 0 không vào ngữ cảnh). Đỏ: chỉ tóm tắt
+    # (gate_red_summary) + đường dẫn log. Không tạo được log (không phải repo git, thư mục git chỉ đọc, đĩa đầy): hành vi cũ
+    # — cả output ra stderr — và vẫn chặn khi đỏ (fail-closed, ADR-0002).
+    glog="" gtmp=""
+    gd="$(git_dir_of "$groot" --git-dir)" && gtmp="$(mktemp "$gd/xt-commit-gate.XXXXXX" 2>/dev/null)" || gtmp=""
+    if [ -z "$gtmp" ]; then
+      CLAUDE_PROJECT_DIR="$groot" "$gate" "$task" >&2
+      grc=$?
+    else
+      # `>>` (O_APPEND), không `>`: tiến trình con mở lại luồng thành mô tả tệp riêng (offset riêng) thì `>` ghi đè lên
+      # nhau — đo 2/20 lần mất ~60 KB stdout của dev-task; O_APPEND luôn ghi vào cuối (0/20).
+      CLAUDE_PROJECT_DIR="$groot" "$gate" "$task" >>"$gtmp" 2>&1
+      grc=$?
+      glog="$gd/xt-commit-gate.log"
+      if [ "$grc" = 0 ]; then cat -- "$gtmp" >&2; else XG_LOG="$glog" XG_ROOT="$groot" gate_red_summary "$gtmp" >&2; fi
+      { [ ! -d "$glog" ] && mv -f -- "$gtmp" "$glog"; } 2>/dev/null || glog="$gtmp"
+    fi
+    if [ "$grc" != 0 ]; then
       echo "❌ Cổng trước commit ĐỎ ($task: build/typecheck/lint/test) ở $groot. CẢ lệnh chưa chạy (kể cả phần trước \`git commit\`). Sửa rồi commit lại." >&2
+      [ -n "$glog" ] && echo "📄 Log đầy đủ của cổng (stdout+stderr, chưa cắt): $glog — đọc có chọn lọc (grep/sed -n), không đổ cả tệp." >&2
       exit 2
     fi
   fi
