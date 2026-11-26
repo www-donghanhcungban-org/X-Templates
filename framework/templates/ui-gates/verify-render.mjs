@@ -103,7 +103,7 @@ async function readExceptions(file, today) {
 // phần tử con và nội dung ::before/::after (mỗi phần có màu riêng), trả kết quả đo được tệ nhất; đi theo cây phẳng (slot,
 // shadow host). Độ mờ, bộ lọc, hoà trộn ở bất kỳ tổ tiên nào, chữ trong suốt, pseudo có nền hay định vị riêng, khung con
 // không có nền đục làm màu thật không tính được: phần đó thành `unmeasured`, nhưng vi phạm đã đo ở phần khác vẫn được trả.
-const measure = (el) => {
+const measure = (el, nested) => {
   const ctx = Object.assign(document.createElement('canvas'), { width: 1, height: 1 }).getContext('2d', { willReadFrequently: true });
   if (!ctx) return { unmeasured: 'không đọc được màu qua canvas' };
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
@@ -112,7 +112,8 @@ const measure = (el) => {
   // Slot đã có nội dung gán thì phần dự phòng (con của slot) không được vẽ.
   const kids = (n) => n.localName === 'slot' && n.assignedElements().length ? n.assignedElements() : [...(n.shadowRoot ? n.shadowRoot.children : n.children)];
   const hasText = (n) => [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
-  const shown = (n) => n === el || n.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+  // `display: contents` (kể cả slot mặc định) không có hộp nên checkVisibility trả false: xét theo cha trong cây phẳng.
+  const shown = (n) => n === el || (getComputedStyle(n).display === 'contents' ? shown(up(n)) : n.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
   const nodes = [el];
   for (let i = 0; i < nodes.length && nodes.length < 200; i++) nodes.push(...kids(nodes[i]).slice(0, 200 - nodes.length));
   const visible = nodes.filter(shown);
@@ -136,7 +137,7 @@ const measure = (el) => {
       if (bg[3] > 0) layers.push(bg);
       if (bg[3] === 1) break;
     }
-    if (layers.at(-1)?.[3] !== 1 && window.parent !== window) return { unmeasured: 'khung con không có nền đục (nền thật là trang ngoài)' };
+    if (layers.at(-1)?.[3] !== 1 && nested) return { unmeasured: 'khung con không có nền đục (nền thật là trang ngoài)' };
     if (layers.at(-1)?.[3] !== 1) {
       // Canvas của trang dùng color-scheme thực tế của root, kể cả khi root và body trong suốt.
       const root = node.ownerDocument.documentElement;
@@ -320,7 +321,8 @@ const settle = (el) => {
 // Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và `text-overflow: ellipsis`.
 const findClipped = (path) => {
   const found = [];
-  const visible = (n) => n.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+  const visible = (n) => getComputedStyle(n).display === 'contents' && n.parentElement ? visible(n.parentElement)
+    : n.checkVisibility({ opacityProperty: true, visibilityProperty: true });
   for (const el of document.querySelectorAll('*')) {
     const s = getComputedStyle(el);
     if (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis') continue;
@@ -329,12 +331,20 @@ const findClipped = (path) => {
     const box = el.getBoundingClientRect();
     let kind = null;
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    for (let node = walker.nextNode(), seen = 0; node && kind !== 'cut' && seen < 500; node = walker.nextNode(), seen++) {
-      if (!node.textContent.trim() || !visible(node.parentElement)) continue;
+    let seen = 0;
+    for (let node = walker.nextNode(); node && kind !== 'cut'; node = walker.nextNode()) {
+      if (!node.textContent.trim()) continue;
+      if (++seen > 500) { // quét chưa hết: không im lặng cho qua
+        kind ??= 'hidden';
+        break;
+      }
+      if (!visible(node.parentElement)) continue;
       const range = document.createRange();
       range.selectNodeContents(node);
       for (const rect of range.getClientRects()) {
-        if (rect.width > 0 && rect.right > box.right + 1) kind = rect.left < box.right - 1 ? 'cut' : (kind ?? 'hidden');
+        // Cả mép phải lẫn mép trái (chữ RTL tràn sang trái): vắt qua mép là `cut`, nằm hẳn ngoài là `hidden`.
+        if (rect.width <= 0 || (rect.right <= box.right + 1 && rect.left >= box.left - 1)) continue;
+        kind = rect.left < box.right - 1 && rect.right > box.left + 1 ? 'cut' : (kind ?? 'hidden');
       }
     }
     if (kind) found.push({ element: path(el) ?? el.localName, kind });
@@ -372,7 +382,7 @@ async function auditContrast(page, scope, results, limit) {
         recordUnknown(results, row, check, 'hoạt ảnh vô hạn đang chạy trên điều khiển');
         continue;
       }
-      const reading = await control.evaluate(measure);
+      const reading = await control.evaluate(measure, frame > 0);
       // Vi phạm đã đo luôn được báo, kể cả khi một phần khác của điều khiển không đo được (không để UNMEASURED che vi phạm).
       if (reading.ratio !== undefined) {
         row.measured++;
@@ -408,7 +418,7 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
       for (const { element, kind } of await page.evaluate(`(${findClipped})(${elementPath})`)) {
         const clipped = { ...scope, state: 'default', check: 'reflow', element };
         if (kind === 'cut') recordViolation(results, clipped, 'chữ bị cắt ngang bởi overflow:hidden');
-        else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt (carousel hay nội dung ẩn có chủ ý?), cần người xem');
+        else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ), cần người xem');
       }
     }
     await auditContrast(page, scope, results, settings.limit);
