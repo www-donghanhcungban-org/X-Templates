@@ -1120,3 +1120,45 @@
 - Chọn: Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104)
 - Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chặn các dạng bash bung ra vX.Y.Z đã đo, không chặn oan refspec dùng chung _tag_glob; giữ đường lùi
 - Đường lùi: Hoàn nguyên commit; trần guard về 24664
+
+### D-608 · 2026-11-26T05:20:03+00:00 · Duyệt PLAN tối ưu khung đợt 1 (PLAN-optimize-2026-11-26): làm lát nào trước trong 31 lát nghiên cứu đề xuất
+
+- Phương án: (1) Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau · (2) Làm thẳng ba đòn bẩy lớn nhất trước (nén sớm 400K, trần thông báo cổng đỏ, tách guard) dù chạm hàng rào đang kẹt trần dòng · (3) Chỉ ghi nghiên cứu, không sửa gì đợt này
+- Chọn: Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn trước: lát đợt 1 chỉ thêm test hoặc sửa công cụ ngoài hàng rào, parity đã đo; giữ đường lùi bằng PR nhỏ; lát chạm hàng rào cần ADR và số đo sau khi đợt 1 nhả trần trọng số
+- Đường lùi: Hoàn nguyên từng PR squash; PLAN đợt sau chưa mở nên không có gì phải gỡ
+
+### D-609 · 2026-11-26T05:20:04+00:00 · X-Scanner (lõi 3.29.0) và X-Agents (lõi 2.0.0) có nâng lên 3.36.0 trong đợt này không
+
+- Phương án: (1) Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở · (2) Nâng cả hai cùng đợt với năm repo ở 3.34.0
+- Chọn: Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở
+- Lý do (tiêu chí chất lượng cuối): X-Scanner có cổng trần 1 048 576 B mỗi tệp trong khi xt.py 1 259 177 B và guard.py 1 384 897 B nên PR nâng chắc chắn đỏ; X-Agents từ 2.0.0 đổi 283 tệp, 3 hook tự sửa phải gộp tay, guard đổi từ hỏi người sang không hỏi nên cần PLAN di trú riêng tại repo đó
+- Đường lùi: Xoá ngoại lệ trong registry và mở PR nâng khi một trong ba điều kiện mở đạt
+
+### D-610 · 2026-11-26T05:34:13+00:00 · Phạm vi đợt tối ưu và danh sách dự án đích sau chỉ đạo của chủ dự án 2026-11-26
+
+- Phương án: (1) Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609 · (2) Giữ canary X-Company và ngoại lệ X-Agents như D-608/D-609
+- Chọn: Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo trực tiếp: trước mắt tối ưu dự án khung, chưa nâng đích, loại X-Agents; giữ đường lùi vì không có thay đổi nào ở repo đích (canary dừng trước khi đẩy nhánh)
+- Đường lùi: Thêm lại dòng X-Agents vào registry và TARGETS; mở lại task canary T-5038 trong PLAN đợt sau
+
+### D-611 · 2026-11-26T06:15:16+00:00 · C12: mở rộng luật 'bản sửa xanh giả/âm tính giả kèm bộ sinh biến thể; lớp lỗi có ≥ 2 PR nối thì đổi sang danh sách đóng' từ guard sang mọi công cụ cổng
+
+- Phương án: (1) Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5 · (2) Giữ phạm vi guard như ghi nhớ hiện tại
+- Chọn: Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chuỗi #819→#820→#821 (verify-render) và #815→#818 (guard) cho thấy cùng mẫu vá lặp ở công cụ ngoài guard; luật chỉ đòi thêm test, không nới cổng
+- Đường lùi: Xoá vế (c) khỏi skill /complete, giữ hai vế đầu
+
+### D-612 · 2026-11-26T06:15:16+00:00 · C06: chặn tag phiên bản viết bằng glob ở vị trí tên tag thế nào để đóng cả lớp AUD-HAR-541 mà guard.py không tăng dòng
+
+- Phương án: (1) Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d · (2) Tiếp tục vá theo từng mẫu glob đã đo (như #815, #818) · (3) Chấp nhận lỗ, chờ ruleset tag phía máy chủ (T-4007)
+- Chọn: Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: 70/1 500 lệnh sinh ra vẫn lọt sau hai lần vá mẫu; danh sách đóng đóng cả lớp; tên tag có glob không nháy không có ca dùng hợp lệ khi tạo tag; giữ trần dòng (0 dòng ròng) nên không cần ADR nới trần; thay phần đã bác ở D-607
+- Đường lùi: Hoàn nguyên commit; quay lại luật _tag_glob của ADR-0104
+
+### D-613 · 2026-11-26T06:15:17+00:00 · C04: ngưỡng nén sớm phiên chính
+
+- Phương án: (1) autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích · (2) Giữ mặc định của Claude Code · (3) Đặt qua biến môi trường CLAUDE_CODE_AUTO_COMPACT_WINDOW
+- Chọn: autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích
+- Lý do (tiêu chí chất lượng cuối): Mô phỏng trên chuỗi lượt thật giảm 55 % cache-read phiên chính (cận trên); khoá settings là đường lùi rẻ nhất (xoá một khoá), biến môi trường thắng cả cờ CLI nên kém đường lùi; chưa xác minh thì không thêm khoá
+- Đường lùi: Xoá khoá autoCompactWindow khỏi .claude/settings.json
