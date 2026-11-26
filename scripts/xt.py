@@ -2289,7 +2289,8 @@ def _verdict_blueprint(base: Path, st: Dict[str, Any]) -> Dict[str, Any]:
 def loop_verdict(base: Optional[Path] = None) -> Dict[str, Any]:
     """Tính verdict CHỈ từ artifact trên đĩa. Model không tự khai 'xong'."""
     base = base or project_dir()
-    st = read_state(base) or {}  # không có state ≡ chưa bật: `_verdict_loop_state` trả inactive
+    st, design = read_state(base) or {}, design_module()  # không state ≡ chưa bật: `_verdict_loop_state` trả inactive
+    st = design.defer_held(sys.modules[__name__], base, st) if design else st  # ADR-0106: task bị giữ ≡ chờ người
     v = _verdict_loop_state(st, base) or _verdict_plan(base, st) or _verdict_blueprint(base, st)
     return _with_pending_human(v, base, st) if v["verdict"] == "done" else v
 
@@ -3357,9 +3358,8 @@ def loop_record(
             file=sys.stderr,
         )
         return 2
-    locked = stage_plan_problem(base, str(st.get("plan"))) if st.get("plan") else ""
-    design = design_module()  # task `ui: yes` khi khách chưa duyệt thiết kế (ADR-0106)
-    locked = locked or (design.record_problem(sys.modules[__name__], base, st, task) if design else "")
+    locked, design = stage_plan_problem(base, str(st.get("plan"))) if st.get("plan") else "", design_module()
+    locked = locked or (design.record_problem(sys.modules[__name__], base, st, task) if design else "")  # ADR-0106
     if locked:  # không nhận bằng chứng cho task của giai đoạn khoá (ADR-0058)
         print(f"✗ {locked}", file=sys.stderr)
         return 2

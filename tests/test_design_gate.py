@@ -115,6 +115,20 @@ class DesignDeclareTest(TmpRepoCase):
             "Duyệt thiết kế: khách\n",  # dấu tách rời (NFD) vẫn khớp sau NFC
             "Duyệt thiết kế: khách\nDuyệt thiết kế: khách\n",  # trùng cùng giá trị
             "```\nDuyệt thiết kế: không\n```\nDuyệt thiết kế: khách\n",
+            "Duyệt thiết kế: khách hàng\n",  # từ đầu bắt đầu bằng `khách`
+            # dòng mẫu PROJECT.md (lát A) đã điền, nhiều dạng
+            "- Duyệt thiết kế: khách — `khách` khi hợp đồng đòi khách duyệt bản thiết kế trước khi code UI (`UX-DS-023`)\n",
+            "- Duyệt thiết kế: `khách`\n",
+            "- Duyệt thiết kế: khách.\n",
+            "- Duyệt thiết kế: Khách (hợp đồng 2026-11)\n",
+            "## Duyệt thiết kế: khách\n",
+            "> Duyệt thiết kế: khách\n",
+            "| Duyệt thiết kế | khách |\n",
+            "| **Duyệt thiết kế** | Khách hàng ký |\n",
+            "**Duyệt thiết kế**: khách\n",
+            "- `Duyệt thiết kế`: khách\n",
+            "_Duyệt thiết kế:_ khách\n",
+            "- Duyệt thiết kế: <không | khách>\n- Duyệt thiết kế: khách\n",  # mẫu chưa xoá + dòng đã điền
         ]
         for text in client:
             with self.subTest(text=text):
@@ -123,13 +137,34 @@ class DesignDeclareTest(TmpRepoCase):
             "Duyệt thiết kế: không\n",
             "- **Duyệt thiết kế:** không\n",
             "# Dự án\n",
-            "Duyệt thiết kế: khách hàng\n",  # giá trị lạ: không phải dòng khai
             "```\nDuyệt thiết kế: khách\n```\n",
             "~~~\n```\nDuyệt thiết kế: khách\n~~~\n",  # fence khác loại bên trong không đóng fence ngoài
+            "- Duyệt thiết kế: không — `khách` khi hợp đồng đòi khách duyệt bản thiết kế\n",
+            "- Duyệt thiết kế: `không`.\n",
+            "| Duyệt thiết kế | không |\n",
+            "## Duyệt thiết kế của khách\n",  # không có `:`/`|` sau khoá: không phải dòng khai
+            "Khi nào cần Duyệt thiết kế: khách\n",  # khoá giữa câu: không phải dòng khai
+            "- Duyệt thiết kế: <không | khách>\n- Duyệt thiết kế: không\n",
         ]
         for text in human:
             with self.subTest(text=text):
                 self.assertEqual(self.declare(text), (False, ""))
+
+    def test_unfilled_template_is_no_with_note(self):
+        line = (
+            "- Duyệt thiết kế: <không | khách> — `khách` khi hợp đồng đòi khách duyệt bản thiết kế trước khi code UI"
+            " (`UX-DS-023`; máy chặn task `(ui: yes)` tới khi người ghi duyệt)\n"
+        )
+        client, note = self.declare(line)
+        self.assertFalse(client)
+        self.assertIn("chưa điền", note)
+
+    def test_unreadable_value_means_client(self):
+        for text in ("Duyệt thiết kế: có\n", "Duyệt thiết kế:\n", "- Duyệt thiết kế: yes\n", "Duyệt thiết kế: ?\n"):
+            with self.subTest(text=text):
+                client, note = self.declare(text)
+                self.assertTrue(client)
+                self.assertIn("không đọc được (cần `khách`/`không`)", note)
 
     def test_conflict_and_unreadable_mean_client(self):
         client, note = self.declare("Duyệt thiết kế: không\n- Duyệt thiết kế: khách\n")
@@ -139,6 +174,8 @@ class DesignDeclareTest(TmpRepoCase):
         client, note = d.declared(xt, self.repo)
         self.assertTrue(client)
         self.assertIn("không đọc được PROJECT.md", note)
+        with unittest.mock.patch.object(Path, "read_text", side_effect=PermissionError("cấm đọc")):
+            self.assertEqual(d.declared(xt, self.repo)[0], True)  # lỗi I/O: chặt hơn
         self.declare("Duyệt thiết kế: không\nDuyệt thiết kế: khách\n")
         self.assertIn("mâu thuẫn", d.lock_reason(xt, self.repo))  # ghi chú đi kèm lý do khoá
 
@@ -153,10 +190,18 @@ class DesignUiTagTest(unittest.TestCase):
             "- [ ] `T-001` Trang chủ (sau: T-000; ui: yes; files: a.html) — Gate: `true`",
             "- [ ] `T-001` Trang chủ (UI: Yes)",
             "- [ ] `T-001` Trang chủ (topo: self, ui: yes",  # ngoặc chưa đóng vẫn tính (chặt hơn)
+            "- [ ] `T-001` Trang chủ (ui: có) — Gate: `true`",  # giá trị gần đúng: khác `no` là UI
+            "- [ ] `T-001` Trang chủ (ui: true)",
+            "- [ ] `T-001` Trang chủ (ui = yes)",
+            "- [ ] `T-001` Trang chủ (ui:)",
+            "- [ ] `T-001` Trang chủ (ui: none)",
         ]
         no = [
             "- [ ] `T-001` Trang chủ — Gate: `true`",
             "- [ ] `T-001` Trang chủ (ui: no) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (ui:no; files: a.py)",
+            "- [ ] `T-001` Trang chủ (UI : No)",
+            "- [ ] `T-001` Trang chủ (gui: yes)",  # khoá khác chứa `ui`
             "- [ ] `T-001` Trang chủ ui: yes — Gate: `true`",  # ngoài nhóm ngoặc
             "- [ ] `T-001` Trang chủ `(ui: yes)` — Gate: `true`",  # chữ trích
             "- [ ] `T-001` Trang chủ — Gate: `echo '(ui: yes)'`",  # trong lệnh Gate
@@ -422,6 +467,118 @@ class DesignLoopTest(DesignRepoCase):
         self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
         self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))
         self.assertEqual(self.record("T-001")[0], 0)
+        self.commit("sổ duyệt")
+        self.write("a.html", "<p>trang chủ</p>")
+        self.commit("mã UI sau duyệt")  # đổi tệp khác bằng chứng: lời duyệt còn hiệu lực
+        self.assertEqual(self.record("T-001")[0], 0)
+
+    def submit_v1(self):
+        """Khai khách, trình bản 1 (agent), commit sổ; trả SHA bản trình."""
+        self.write("PROJECT.md", "- Duyệt thiết kế: khách\n")
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1")
+        sha = self.commit("bản 1")
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/design/DESIGN-REVIEW.md", agent=True)[0], 0)
+        self.commit("trình bản 1")
+        return sha
+
+    def test_lock_messages_tell_agent_to_defer(self):
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        hint = "loop defer --task T-001 --reason"
+        self.assertIn(hint, self.next_ids()[1]["T-001"])
+        rc, _, err = self.record("T-001")
+        self.assertEqual(rc, 2)
+        self.assertIn(hint, err)
+        self.assertIn("không chạy `stage approve --design`", err)
+
+    def test_verdict_skips_held_task_then_pending_human(self):
+        self.assertEqual(xt.loop_verdict(self.repo)["task"], "T-001")  # không khai: như cũ
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        v = xt.loop_verdict(self.repo)
+        self.assertEqual((v["verdict"], v["task"]), ("continue", "T-002"))  # không dẫn vào task bị giữ
+        self.assertNotIn("deferred", xt.read_state(self.repo))  # chỉ là cách nhìn của verdict, không ghi state
+        self.assertEqual(run_main("loop", "record", "--task", "T-002", "--", "true")[0], 0)
+        v = xt.loop_verdict(self.repo)
+        self.assertEqual(v["verdict"], xt.PENDING_HUMAN)
+        self.assertIn("T-001 (task giao diện (`ui: yes`) chờ khách duyệt thiết kế", v["reason"])
+        self.assertEqual(run_main("loop", "defer", "--task", "T-001", "--reason", "chờ khách")[0], 0)
+        self.assertIn(
+            "T-001 (chờ khách)", xt.loop_verdict(self.repo)["reason"]
+        )  # `loop defer` thật giữ lý do của agent
+
+    def test_flipping_or_deleting_project_does_not_unlock(self):
+        """🟠-1: sổ đã có lịch sử trình → khoá giữ dù PROJECT.md đổi `không` hay bị xoá; chỉ người xoá sổ mới tắt."""
+        self.submit_v1()
+        for change in (
+            lambda: self.write("PROJECT.md", "- Duyệt thiết kế: không\n"),
+            (self.repo / "PROJECT.md").unlink,
+        ):
+            change()
+            rc, _, err = self.record("T-001")
+            self.assertEqual(rc, 2)
+            self.assertIn("đã có lịch sử trình", err)
+            self.assertIn("T-001", self.next_ids()[1])
+            rc, out, _ = self.stage("design-check")
+            self.assertEqual(rc, 1)
+            self.assertIn("Duyệt thiết kế: khách", out)
+        self.assertEqual(self.stage("design-reopen", "--reason", "khách đổi ý")[0], 0)
+        self.assertEqual(self.record("T-001")[0], 2)  # `none` sau reopen: lịch sử vẫn còn
+        (self.repo / d.LEDGER).unlink()  # người xoá sổ (guard chặn agent)
+        self.assertEqual(self.record("T-001")[0], 0)
+
+    def test_revert_to_old_approval_relocks(self):
+        """🟠-2: duyệt v1, trình v2, `git revert` commit trình → sổ về `approved` v1 nhưng bằng chứng ở HEAD là v2."""
+        sha = self.submit_v1()
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "khách đồng ý v1")[0], 0)
+        self.commit("duyệt bản 1")
+        self.assertEqual(self.record("T-001")[0], 0)
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 2")
+        self.commit("bản 2")
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/design/DESIGN-REVIEW.md", agent=True)[0], 0)
+        self.commit("trình bản 2")
+        self.git("revert", "--no-edit", "HEAD")
+        self.assertEqual(self.ledger()["status"], "approved")
+        rc, _, err = self.record("T-001")
+        self.assertEqual(rc, 2)
+        self.assertIn("đã đổi sau khi duyệt", err)
+        self.assertEqual(self.stage("design-check")[0], 1)
+
+    def test_evidence_edited_after_approval_relocks(self):
+        sha = self.submit_v1()
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
+        self.commit("duyệt")
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1 sửa lén")
+        self.commit("sửa mockup")
+        rc, _, err = self.record("T-001")
+        self.assertEqual(rc, 2)
+        self.assertIn(f"bản đã duyệt {sha[:12]} không còn khớp HEAD", err)
+        self.assertIn("stage design-submit", err)
+
+    def test_approved_sha_not_ancestor_or_git_fails_relocks(self):
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        self.write("docs/m.png", "png")
+        self.commit()
+        foreign = led([submit(), ev("approve", sha=SHA, by="p")], "approved")  # SHA không có trong repo
+        self.write(d.LEDGER, json.dumps(foreign))
+        self.assertIn("không còn khớp HEAD", d.lock_reason(xt, self.repo))
+        sha = self.commit("sổ lạ")
+        self.write(d.LEDGER, json.dumps(led([submit(sha), ev("approve", sha=sha, by="p")], "approved")))
+        self.assertEqual(d.lock_reason(xt, self.repo), "")  # đối chứng: SHA thật, bằng chứng không đổi
+        for err in (OSError("không có git"), xt.StageError("`git merge-base` quá 30 s")):
+            with self.subTest(err=err), unittest.mock.patch.object(xt, "_stage_git", side_effect=err):
+                self.assertIn("không còn khớp HEAD", d.lock_reason(xt, self.repo))
+
+    def test_broken_ledger_locks_even_without_declaration(self):
+        self.write(d.LEDGER, "{")
+        self.assertIn("không đọc được", d.lock_reason(xt, self.repo))
+        self.assertEqual(self.record("T-001")[0], 2)
+        self.assertEqual(self.record("T-002")[0], 0)  # task không thẻ không đọc sổ
+
+    def test_unfilled_template_note_in_check(self):
+        self.write("PROJECT.md", "- Duyệt thiết kế: <không | khách> — chú thích\n")
+        rc, out, _ = self.stage("design-check")
+        self.assertEqual(rc, 0)
+        self.assertIn("Duyệt thiết kế: không", out)
+        self.assertIn("chưa điền", out)
 
     def test_minimal_install_without_module(self):
         """Bộ cài tối giản (không có xt_design.py): không có lệnh con, vòng như cũ."""
@@ -477,12 +634,9 @@ class DesignGuardTest(TmpRepoCase):
         ):
             with self.subTest(cmd=cmd):
                 self.assertEqual(self.decide(proj, cmd), "deny")
-        self.assertEqual(
-            dict(guard.apply_policy(guard.bash_decision(cmd, str(proj), str(proj))))
-            .get("reason", "")
-            .count("duyệt giai đoạn sản phẩm"),
-            1,
-        )
+        reason = dict(guard.apply_policy(guard.bash_decision(cmd, str(proj), str(proj)))).get("reason", "")
+        self.assertEqual(reason.count("duyệt giai đoạn sản phẩm"), 1)
+        self.assertIn("chữ rõ (trừ `--design`, ADR-0106)", reason)  # lý do không nói sai là agent chạy được
         for cmd in (
             "python3 scripts/xt.py stage design-submit --evidence docs/m.png",
             "python3 scripts/xt.py stage design-check",
