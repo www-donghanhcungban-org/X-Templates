@@ -329,7 +329,12 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
    | `executor-deep` (opus, `effort: high`) | cùng họ, high = high | **Bị từ chối clean** |
    | Phiên chính viết code (opus, effort tới `xhigh` — D-558/D-559) | cùng họ, high ≤ tác giả | **Bị từ chối clean**, trừ khi phiên chính chạy ≤ `medium` |
 
-   Bốn lối ra, xếp theo tiêu chí AGENTS §4: (a) reviewer bậc `top` ở effort ≤ `high` cho diff của `executor-deep`/phiên chính — giữ đúng "năng lực cao hơn", nhưng bậc `top` hiện chỉ bật khi chủ dự án cho phép (`LOOP-ORCH-019`, D-605) và giá gấp đôi theo `model-tiers.json`; (b) reviewer khác nhà cung cấp — bảng bậc ngoài Anthropic còn `verified: false`; (c) hạ effort thật của người viết xuống `medium` — hợp lệ về máy nhưng làm yếu tầng sâu, chỉ nên dùng khi có số đo G10; (d) không có reviewer hợp lệ → `pr reviewed --inconclusive` và ghi nợ. **Khuyến nghị:** (a) nếu chủ dự án bật, không thì (d); không dùng (c) để "làm cặp hợp lệ". Đây là quyết định phải ghi bằng `loop decide` cùng ADR thay phần effort của ADR-0098.
+   **Chủ dự án chốt (2026-11-26): `reviewer-alt` chỉ dùng opus trở xuống** — không dùng bậc `top` cho review, kể cả ở effort ≤ `high`. Cùng với trần `high`, cấu hình cao nhất của reviewer là opus/`high`. Hệ quả: người viết opus muốn có review sạch cùng họ thì phải chạy effort ≤ `medium`. Ba lối còn lại cho diff của `executor-deep` và của phiên chính viết code:
+   - **(d) Mặc định: không ghi clean.** Reviewer opus/`high` vẫn rà và báo phát hiện (🔴 sửa ngay), nhưng lượt đó ghi `pr reviewed --inconclusive`, phần còn lại thành nợ review trả theo lô ở pha harden (ADR-0062). Giữ nguyên năng lực tầng sâu, không nới luật; giá là nợ review tăng đều theo số diff tầng sâu.
+   - **(c) Hạ effort thật của người viết xuống `medium`** (`executor-deep`, hoặc phiên chính khi tự viết code): cặp medium/high hợp lệ về máy. Chỉ chuyển sang lối này khi bộ đánh giá G10 cho thấy tầng sâu ở `medium` không tụt chất lượng trên cùng tác vụ; không làm chỉ để cặp hợp lệ.
+   - **(b) Reviewer khác nhà cung cấp:** để sau, vì bảng bậc ngoài Anthropic còn `verified: false`.
+
+   Không sửa lời khai tác giả, không tự nâng reviewer. Khi lập PLAN, ghi quyết định này bằng `loop decide` (D-NNN) cùng ADR thay phần effort của ADR-0098; D-558/D-559 ("reviewer giới hạn Opus") giữ nguyên, khớp với quyết định.
 3. **Frontmatter không đủ để cưỡng chế trần.** Tài liệu Claude Code: `effort` của subagent "Overrides the session effort level, but not the CLAUDE_CODE_EFFORT_LEVEL environment variable"; tham số `effort` theo lần gọi lại đè frontmatter và giữ khi resume. Thứ tự từ cao xuống: biến môi trường → tham số lần gọi → frontmatter → effort phiên. Vậy "chặn trước launch" của §4 phải kiểm ba điểm: biến môi trường của phiên, `tool_input.effort` của lời gọi Agent cho hai vai reviewer (hook `PreToolUse`), và `--reviewer-effort` khi `pr reviewed` ghi sổ. Docs nhắc một trần `maxEffortLevel` trong settings; phạm vi theo vai của nó **chưa xác minh**.
 4. **`maxTurns`: hành vi hết lượt khớp PDF, mặc định không có trong docs.** "returns its output marked as partial, and Claude can resume it" (resume bằng SendMessage, giữ nguyên lịch sử). `agent_toml` (install.py:1512–1529) chỉ ghi `name`, `description`, `model` (khi bật), `model_reasoning_effort`, `developer_instructions` — xác nhận Codex không nhận `maxTurns`; bản Codex của `reviewer-alt` đang là `max`.
 5. **Sàn Python:** theo devguide, 3.13 đã sang giai đoạn chỉ sửa bảo mật (EOL dự kiến 2029-10); 3.14 và 3.15 đang bugfix. Sàn ≥ 3.13 của ADR-0094 còn hợp lệ nhưng lỗi thường của 3.13 không còn được sửa — ghi vào lần xét sàn kế. `-I` kéo theo `-E -P -s`, **không** kèm `-S`, nên site-packages hệ thống vẫn vào `sys.path`: khớp AUD-HAR-572 (còn mở). Thêm `-S` phải thử cùng bộ đo coverage, vì PROGRESS ghi coverage cần nằm trong site-packages của `python3`.
@@ -355,7 +360,7 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
 |---|---|---|---|---|
 | 1 | Hoàn tất ghi nguyên tử bộ cài | `scripts/install.py` | `T-5043`, PR #840 | Đã mở; chỉ cần rà và merge |
 | 2 | Lát tách giải phóng trần `xt.py` (shard/weights → `xt_shard`) | `scripts/xt.py`, module mới, `xt.yaml` (typecheck), `install.py`/`xt_pack.py` (danh sách cài), tests | ADR-0090; G12.2 | Manifest symbol, chuyển patch tới nơi lookup, kiểm bản cài; hạ trần sau khi merge |
-| 3 | Chính sách reviewer `high`/120 | `.claude/agents/reviewer*.md`, `.claude/skills/review/SKILL.md`, `.codex/agents/*` (sinh lại), `tests/test_model_tiers.py`, `test_codex_harness.py`, ADR mới | G01; C12 | Cần quyết định §12.4 mục 2 trước; kiểm ba điểm của mục 3 |
+| 3 | Chính sách reviewer `high`/120 | `.claude/agents/reviewer*.md`, `.claude/skills/review/SKILL.md`, `.codex/agents/*` (sinh lại), `tests/test_model_tiers.py`, `test_codex_harness.py`, ADR mới | G01; C12 | Theo quyết định §12.4 mục 2: diff tầng sâu mặc định ghi inconclusive + nợ; kiểm ba điểm của mục 3 |
 | 4 | `executor-mech` qua CLI và chuyển cấp đỏ một lần | module vai (anh em của `xt.py`), `EXEC_TIER_RE`, `EXECUTOR_AGENTS`, PLAN parser, tests | G01; D-605 | Sau PR 2 (cần dư địa dòng) |
 | 5 | Sửa `core` fallback của Guard | `.claude/hooks/guard.py`, `tests/`, sổ audit | Chưa có ID — đăng ký bằng `xt.py audit` trước | 0 dòng ròng hoặc ADR nới trần; có ca tốt đối chứng; chụp baseline parity sau PR này |
 | 6 | `release-tag` gặp tag có sẵn | `.github/workflows/release-tag.yml`, test workflow | G03 | Đối chiếu commit của tag và trạng thái release; không báo thành công giả |
@@ -364,7 +369,7 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
 
 PR 1, 3, 6, 7 không chạm `xt.py`/`guard.py` nên làm song song được; PR 2 chặn PR 4 và 8; PR 5 chặn baseline parity của G12.4.
 
-**Cần chủ dự án:** có bật bậc `top` cho `reviewer-alt` hay không (§12.4 mục 2); `T-4007` kèm bật release immutability; `T-5020`. **Chưa làm trong lượt này:** tiêm lỗi lại năm ca (đã đọc mã thay thế), full CI trên nhánh thay đổi mã, benchmark hook đầu–cuối.
+**Đã chốt:** `reviewer-alt` chỉ opus trở xuống (§12.4 mục 2). **Cần chủ dự án:** `T-4007` kèm bật release immutability; `T-5020`. **Chưa làm trong lượt này:** tiêm lỗi lại năm ca (đã đọc mã thay thế), full CI trên nhánh thay đổi mã, benchmark hook đầu–cuối.
 
 ## 13. Nguồn
 Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a3253f0ad188f1`.
