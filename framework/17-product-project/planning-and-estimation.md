@@ -3,7 +3,7 @@ title: Kế hoạch & ước lượng: chia nhỏ, cổng, WIP, deadline thật
 kind: module
 prefix: PM-PLAN
 applies_to: [all]
-updated: 2026-11-21
+updated: 2026-11-26
 ---
 
 # Kế hoạch & ước lượng: chia nhỏ, cổng, WIP, deadline thật
@@ -57,6 +57,7 @@ updated: 2026-11-21
 - [ ] `PM-PLAN-016` **SHOULD** Mỗi task kết thúc bằng commit nhỏ + cập nhật `PROGRESS.md` trong cùng PR, để đứt phiên vẫn tiếp tục được. → Kiểm: PR có diff `PROGRESS.md`; hook SessionStart đọc được mục "Đang làm".
 - [ ] `PM-PLAN-017` **MAY** Dự báo xác suất kịp hạn bằng Monte Carlo từ throughput lịch sử (script đơn giản, không cần công cụ trả phí). → Kiểm: `docs/metrics/forecast.md` có P50/P85/P95 và ngày chạy.
 - [ ] `PM-PLAN-018` **MAY** Nhãn `route:` cho task (độ phức tạp × độ đóng của spec) để điều phối worker/agent phù hợp; chi tiết ở [`../11-autonomous-loop/orchestration-and-subagents.md`](../11-autonomous-loop/orchestration-and-subagents.md). → Kiểm: task có `route:` hợp lệ theo bảng của module đó.
+- [ ] `PM-PLAN-019` **SHOULD** Dự án làm cho khách (lời mời, hồ sơ yêu cầu) có `PROPOSAL.md` theo mẫu [`../templates/PROPOSAL.md`](../templates/PROPOSAL.md) trước G0: bảng yêu cầu → cách đáp ứng → ID kiểm, phạm vi và ngoài phạm vi, công nghệ từ `compose` ghép thử, tiến độ theo cổng G có điểm khách duyệt, ước lượng P50–P90; không thiết kế/code trước khi khách chấp nhận (ghi ngày, kênh). → Kiểm: tệp có đủ 8 mục của mẫu; mỗi yêu cầu của lời mời có một dòng trong bảng đối chiếu; commit đầu tiên có mã sau ngày chấp nhận ghi trong tệp. · Nguồn: ADR-0106
 
 ## Bẫy thường gặp
 
