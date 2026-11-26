@@ -150,9 +150,8 @@ class DesignDeclareTest(TmpRepoCase):
             "> 1. _Duyệt thiết kế:_ **không** (HĐ 12)\n",
             "| Duyệt thiết kế | không |\n",
             "Ghi chú: Duyệt thiết kế: khách\n",  # nhãn không ở đầu dòng: không phải dòng khai
-            "```\nDuyệt thiết kế: khách\n```\n",
-            "~~~\n```\nDuyệt thiết kế: khách\n~~~\n",  # fence khác loại bên trong không đóng fence ngoài
-            "﻿```\nDuyệt thiết kế: khách\n```\n",  # BOM trước fence: vẫn là fence
+            "```\nDuyệt thiết kế: không\n```\n",  # rào giấu dòng `không` (dòng khác trong rào: `test_fences_…`)
+            "~~~\n```\nDuyệt thiết kế: không\n~~~\n",  # fence khác loại bên trong không đóng fence ngoài
         ]
         for text in human:
             with self.subTest(text=text):
@@ -164,6 +163,10 @@ class DesignDeclareTest(TmpRepoCase):
             ("- Duyệt thiết kế: <không | khách>\n", "``"),  # mẫu chưa điền
             ("- Duyệt thiết kế: khong\n", "`khong`"),
             ("- Duyệt thiết kế: có\n", "`có`"),
+            # Review PR #845: `~` sau `:` không còn là dấu nhấn bỏ qua — giá trị gạch bỏ là rỗng (khách).
+            ("- Duyệt thiết kế: ~~không~~ khách\n", "``"),
+            ("- Duyệt thiết kế: ~~không~~ _khách_\n", "``"),
+            ("- Duyệt thiết kế: ~~không~~ có\n", "``"),
         ):
             with self.subTest(text=text):
                 client, note = self.declare(text)
@@ -203,7 +206,6 @@ class DesignDeclareTest(TmpRepoCase):
     def test_no_with_client_word_means_client(self):
         """Nợ review PR #844: giá trị mở đầu `không` mà có chữ `khách` (không phân biệt hoa thường/dấu) → `khách`."""
         for value in (
-            "~~không~~ khách",
             "không → khách",
             "không|khách",
             "không | khách",
@@ -219,9 +221,53 @@ class DesignDeclareTest(TmpRepoCase):
                 self.assertTrue(client)
                 self.assertIn("có chữ `khách`", note)
 
+    def test_client_word_bounded_by_underscore(self):
+        """Review PR #845: `_` là dấu nhấn, không phải chữ — `_khách_`, `không_khách` vẫn có chữ `khách`."""
+        for value in (
+            "không _khách_",
+            "không __khách__",
+            "không (_khách_)",
+            "không, _khách hàng_ duyệt",
+            "không_khách",
+            "không *khách*",
+        ):
+            with self.subTest(value=value):
+                client, note = self.declare(f"- Duyệt thiết kế: {value}\n")
+                self.assertTrue(client)
+                self.assertIn("có chữ `khách`", note)
+        for value in ("không — dự án nội bộ", "không (_nội bộ_)", "không — kháchsạn"):  # `khách` phải là chữ riêng
+            with self.subTest(value=value):
+                self.assertEqual(self.declare(f"- Duyệt thiết kế: {value}\n"), (False, ""))
+
+    def test_lines_split_only_at_newlines(self):
+        """Review PR #845: dòng chỉ tách ở `\\r\\n`/`\\r`/`\\n` (như markdown), không ở U+2028, NEL, VT, FF, RS… —
+        `không<U+2028>khách` là một dòng có chữ `khách`; rào nhận trên dòng gốc (ký tự vô hình trước ``` → không là
+        rào)."""
+        for sep in (" ", " ", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"):
+            with self.subTest(sep=repr(sep)):
+                client, note = self.declare(f"- Duyệt thiết kế: không{sep}khách\n")
+                self.assertTrue(client)
+                self.assertIn("có chữ `khách`", note)
+        for text in ("a\r\nb\r- Duyệt thiết kế: khách\rc\n", "a\r- Duyệt thiết kế: không\r\n"):
+            with self.subTest(text=text):
+                self.assertEqual(self.declare(text)[0], "khách\r" in text)
+        line = "- Duyệt thiết kế: khách\n"
+        for text in ("​```\n" + line + "​```\n", "x ```\n" + line + "x ```\n"):
+            with self.subTest(text=text):
+                self.assertEqual(self.declare(text), (True, ""))  # không phải rào → dòng thường, không ghi chú
+
+    def test_pathological_prefix_is_linear(self):
+        """Review PR #845 (CodeQL py/redos): `[[]` lặp trước chữ thường từng làm `LABEL_RE` quay lui mũ (82 ký tự đã
+        treo > 100 s). Ví dụ lớn tự bắt hồi quy: bản lỗi treo thay vì trả kết quả."""
+        n = 5000
+        text = "[[]" * n + "x\n" + "- Duyệt thiết kế: khách\n" + "[[]" * n + " Duyệt thiết kế: khách\n"
+        self.assertEqual(self.declare(text), (True, ""))
+        self.assertEqual(self.declare("1" * n + "x\n" + "[ ]" * n + "- " * n + "\n"), (False, ""))
+
     def test_fences_follow_commonmark(self):
-        """Nợ review PR #844: rào đóng cùng ký tự, dài ≥ rào mở, không info string; thụt ≥ 4 cách không phải rào;
-        rào không đóng tới hết tệp → đọc lại phần bị giấu (fail-closed)."""
+        """Nợ review PR #844: rào đóng cùng ký tự, dài ≥ rào mở, không info string; thụt ≥ 4 cách không phải rào.
+        Review PR #845 (fail-closed): rào chỉ GIẤU dòng giá trị `không` (ví dụ như mẫu); dòng trong rào có giá trị khác
+        vẫn tính, kèm ghi chú — rào quên đóng, rào trong comment HTML hay `<pre>` không còn giấu được dòng khai thật."""
         line = "- Duyệt thiết kế: khách\n"
         for text in (
             "````md\n```\n````\n" + line,
@@ -229,18 +275,38 @@ class DesignDeclareTest(TmpRepoCase):
             "```x``` là cú pháp rào\n" + line,
             "    ```\n" + line + "    ```\n",
             "\t```\n" + line + "\t```\n",
-            "```\n" + line,
-            "```\n- Duyệt thiết kế: không\n```\n~~~\n" + line,
+            "```\n- Duyệt thiết kế: không\n```\n" + line,  # ví dụ `không` trong rào không gây mâu thuẫn
             "<!-- Duyệt thiết kế: khách -->\n",
             "<!--\n" + line + "-->\n",
         ):
             with self.subTest(text=text):
                 self.assertEqual(self.declare(text), (True, ""))
-        for text in (
+        fenced = (
+            "```\n" + line,
+            "```\n- Duyệt thiết kế: không\n```\n~~~\n" + line,
             "````\n```\n" + line + "```\n````\n",
             "~~~~\n~~~\n" + line + "~~~~\n",
             "   ```\n" + line + "``` \t\n",
-            "```js\n" + line + "   ```\n- Duyệt thiết kế: không\n",
+            "```\n" + line + "```\n",
+            "~~~\n```\n" + line + "~~~\n",
+            "﻿```\n" + line + "```\n",
+            "```Duyệt thiết kế: khách\n```\n",  # info string của rào mở cũng trong rào
+            # (a) rào mở trong mục danh sách quên đóng, cuối tệp có code block bình thường
+            "- Build:\n  ```bash\n  npm run build\n" + line + "\n## Lệnh\n```bash\nnpm test\n```\n",
+            # (b) comment HTML cắt đôi một rào, rồi dòng khai, rồi code block
+            "<!-- ví dụ cũ:\n```bash\nnpm run old\n-->\n" + line + "\n## Lệnh\n```bash\nnpm test\n```\n",
+            # (c) `<pre>` chứa ``` — CommonMark hiển thị dòng khai phía sau
+            "<pre>\n```\n</pre>\n" + line + "\n```\nx\n```\n",
+        )
+        for text in fenced:
+            with self.subTest(text=text):
+                client, note = self.declare(text)
+                self.assertTrue(client)
+                self.assertIn("trong code fence vẫn tính", note)
+        for text in (
+            "```js\n" + line.replace("khách", "không") + "   ```\n- Duyệt thiết kế: không\n",
+            "```\n- Duyệt thiết kế: không\n",  # rào quên đóng chỉ giấu `không`
+            "~~~\n- **Duyệt thiết kế:** Không.\n~~~\n",
             "<!-- Duyệt thiết kế: không -->\n",
         ):
             with self.subTest(text=text):

@@ -24,11 +24,17 @@ STATUSES = ("none", "awaiting_approval", "approved")
 PROJECT_FILE = "PROJECT.md"
 # Dòng khai nhận theo NHÃN trên dòng đã chuẩn hoá (`_clean`): đầu dòng bỏ dấu markdown (danh sách `-*+`/`1.`/`1)`,
 # trích dẫn `>`, bảng `|`, tiêu đề `#`, ô `[x]`, nhấn `*`/`_`/`~`, `[` của link, dấu backtick, mở comment `<!--`); nhóm 1
-# = phần sau nhãn. SEP_RE: phần sau nhãn phải là `:` (hoặc `|` của bảng), chỉ cách bởi dấu nhấn; nhóm 1 = giá trị.
-LABEL_RE = re.compile(r"(?:\s|[-+*>|#_`~\[]|\d+[.)]|\[[^\]]?\]|<!--)*duyệt\s*thiết\s*kế(.*)")
-SEP_RE = re.compile(r"[\s*_`~]*[:|][\s*_`~]*(.*)")
+# = phần sau nhãn. Nhánh `[x]` đứng trước `[` đơn và vòng lặp possessive (`*+`): hai nhánh chồng nhau từng quay lui mũ
+# (`[[]` lặp, CodeQL py/redos); không token nào chứa `d` ở giữa nên không nhả lại không làm mất lần khớp nào.
+# SEP_RE: phần sau nhãn phải là `:` (hoặc `|` của bảng), chỉ cách bởi dấu nhấn; nhóm 1 = giá trị. Sau `:` không bỏ `~`
+# (gạch bỏ): `~~không~~ …` ra giá trị rỗng → khách.
+LABEL_RE = re.compile(r"(?:\s|\[[^\]]?\]|[-+*>|#_`~\[]|\d+[.)]|<!--)*+duyệt\s*thiết\s*kế(.*)")
+SEP_RE = re.compile(r"[\s*_`~]*[:|][\s*_`]*(.*)")
 VALUE_RE = re.compile(r"[^\W_]+")  # giá trị = chữ đầu tiên (cắt ở khoảng trắng, dấu câu, `—`)
-CLIENT_WORD_RE = re.compile(r"\bkhach\b")  # trên chữ đã bỏ dấu (`_plain`)
+CLIENT_WORD_RE = re.compile(
+    r"(?<![^\W_])khach(?![^\W_])"
+)  # trên chữ đã bỏ dấu (`_plain`); `_` là dấu nhấn, không là chữ
+LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")  # ngắt dòng của markdown; U+2028, NEL, VT, FF… không ngắt
 FENCE_OPEN_RE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")  # CommonMark: thụt ≤ 3 cách (tab = thụt 4 → không phải rào)
 FENCE_CLOSE_RE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t]*")
 HUMAN = "không"
@@ -209,22 +215,19 @@ def _closes(line: str, fence: str) -> bool:
     return m is not None and m[1][0] == fence[0] and len(m[1]) >= len(fence)
 
 
-def _unfenced(text: str) -> list[str]:
-    """Dòng (đã `_clean`) ngoài code fence ``` / ~~~ (ví dụ trong tài liệu không phải khai báo). Rào nhận trên dòng chỉ
-    bỏ ký tự định dạng vô hình (giữ thụt đầu dòng); rào không đóng tới hết tệp → phần bị giấu đọc lại (fail-closed)."""
-    kept: list[str] = []
-    hidden: list[str] = []
+def _lines(text: str) -> list[tuple[str, bool]]:
+    """(dòng đã `_clean`, nằm trong code fence ``` / ~~~ kể cả dòng rào). Rào nhận trên dòng gốc như CommonMark (ký tự
+    vô hình trước ``` → không phải rào); rào không đóng thì kéo tới hết tệp."""
+    out: list[tuple[str, bool]] = []
     fence = ""
-    for raw in text.splitlines():
-        line = "".join(c for c in raw if unicodedata.category(c) != "Cf")
-        if not fence:
-            fence = _fence_open(line)
-            (hidden if fence else kept).append(_clean(raw))
-        elif _closes(line, fence):
-            fence, hidden = "", []
+    for raw in LINE_BREAK_RE.split(text):
+        if fence:
+            fence = "" if _closes(raw, fence) else fence
+            out.append((_clean(raw), True))
         else:
-            hidden.append(_clean(raw))
-    return kept + hidden
+            fence = _fence_open(raw)
+            out.append((_clean(raw), bool(fence)))
+    return out
 
 
 def _value(rest: str) -> str:
@@ -248,18 +251,34 @@ def _entry(rest: str) -> tuple[str, str]:
     return value, "" if value in (CLIENT, HUMAN) else f"giá trị lạ `{value}`"
 
 
+def _entries(text: str) -> list[tuple[str, str]]:
+    """(giá trị, ghi chú) mọi dòng khai. Code fence chỉ GIẤU dòng giá trị `không` (ví dụ như mẫu `PROJECT.md`); dòng
+    trong rào có giá trị khác vẫn tính kèm ghi chú (fail-closed: rào quên đóng hay rào trong comment HTML/`<pre>` không
+    giấu được dòng khai thật). Nhờ vậy đọc rào sai chỉ đổi ghi chú, không bao giờ nới khoá."""
+    out: list[tuple[str, str]] = []
+    for line, fenced in _lines(text):
+        m = LABEL_RE.match(line)
+        if not m:
+            continue
+        value, note = _entry(m[1])
+        if not (fenced and value == HUMAN):
+            out.append((value, note or (f"dòng `{line}` trong code fence vẫn tính" if fenced else "")))
+    return out
+
+
 def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
     """(dự án khai khách duyệt thiết kế, ghi chú). Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không.
-    Giá trị khác (`khách hàng` → `khách`; rỗng/lạ, `không` kèm chữ `khách`, nhãn không tách bằng `:`/`|` → kèm ghi
-    chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment HTML vẫn tính."""
+    Giá trị khác (`khách hàng` → `khách`; rỗng/lạ, `không` kèm chữ `khách`, nhãn không tách bằng `:`/`|`, dòng khác
+    `không` trong code fence → kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment
+    HTML đọc như dòng thường."""
     p = base / PROJECT_FILE
     if not p.exists():
         return False, ""
     try:
-        text = p.read_text(encoding="utf-8")
+        text = p.read_text(encoding="utf-8-sig")  # BOM đầu tệp không phải nội dung (rào ngay sau BOM vẫn là rào)
     except (OSError, UnicodeDecodeError) as exc:
         return True, f"không đọc được {PROJECT_FILE} ({exc}) — coi như khai `Duyệt thiết kế: {CLIENT}`"
-    entries = [_entry(m[1]) for line in _unfenced(text) if (m := LABEL_RE.match(line))]
+    entries = _entries(text)
     why = next((f" ({n})" for _, n in entries if n), "")
     if len({v for v, _ in entries}) > 1:
         return True, f"{PROJECT_FILE} khai `Duyệt thiết kế` mâu thuẫn{why} — coi như `{CLIENT}`; sửa còn một dòng"
