@@ -15,8 +15,7 @@
 - www-donghanhcungban-org/xboss — có `.xtemplates/` (3.34.0), PR #752. 4 tệp phản hồi ngày 2026-10-23.
 - www-donghanhcungban-org/dhcb — có `.xtemplates/` (3.34.0), PR #1508. Chưa có phản hồi ở lần gộp 2026-10-23.
 - www-donghanhcungban-org/x-shop — có `.xtemplates/` (3.34.0), PR #53. Nhánh chính là `master`.
-- www-donghanhcungban-org/X-Scanner — có `.xtemplates/` (3.29.0), PR #85. Giữ lõi đã cài. Backport nhóm Gate, xếp test và vòng lặp Flutter.
-- www-donghanhcungban-org/X-Agents — có `.xtemplates/` (2.0.0), PR #584. Hook dùng lõi 2.0.0, `/factory` dùng `.xtemplates/factory` ghim `3a1cd54`.
+- www-donghanhcungban-org/X-Scanner — có `.xtemplates/` (3.29.0), PR #85. Giữ lõi đã cài (ngoại lệ đến 2027-01-21, D-609): cổng đích cấm tệp trên 1 MiB, xt.py và guard.py ở 3.36.0 vượt trần. Backport nhóm Gate, xếp test và vòng lặp Flutter. Điều kiện mở: đích tự miễn hai đường dẫn công cụ; khung đưa hai tệp dưới 1 MiB qua tách module; artefact .pyz nén.
 
 Lần gộp 2026-10-23 (T-2410, `feedback aggregate --from` bản clone nông cả 4 repo public, exit 0): đủ ngưỡng 63 nhóm —
 `mien-tru` 47, `cong-cu` 10, `hook-chan-nham` 5, `hook-lot` 1; dưới ngưỡng 61. Mười nhóm `cong-cu` đã được [đối chiếu với phiên bản và commit](FEEDBACK-ROUTINE-CHECK.md): `merge-check` (phân trang `/repositories/{id}` bị proxy 403), `blueprint-status`, `doctor`,
@@ -32,3 +31,4 @@ danh sách kéo phản hồi. X-Office giữ mã khung ở gốc: [bản ghi](..
 ## Đã xét, không đưa vào
 
 - seeker19110/x-hotel-manager — 2026-10-15 `main` là bản sao lịch sử của chính repo khung (trùng commit `0d1b62c`), chưa cài khung dạng `.xtemplates/`.
+- www-donghanhcungban-org/X-Agents — loại khỏi danh sách đích 2026-11-26 theo chủ dự án (D-610); lõi 2.0.0 không theo dõi nâng.
