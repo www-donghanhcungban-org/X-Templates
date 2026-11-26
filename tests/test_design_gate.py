@@ -5,6 +5,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import unittest
 import unittest.mock
@@ -791,6 +792,23 @@ class DesignLoopTest(DesignRepoCase):
         self.write(d.LEDGER, "{")
         with unittest.mock.patch.object(xt, "SCRIPT_DIR", self.tmp):  # bộ cài tối giản: không có module, như cũ
             self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))
+
+    def test_in_process_forge_is_real_and_guard_denies(self):
+        """Review PR #849: script nạp `xt_design` không chữ rủi ro ngoài tên mô-đun ghi được lời duyệt trong phiên
+        agent (chạy thật dưới đây) — guard phải chặn chính script này (ADR-0108)."""
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        self.write("docs/m.png", "png")
+        self.commit()
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/m.png", agent=True)[0], 0)
+        script = saa.XtInProcessGuardTest.DESIGN_FORGE
+        out = dict(guard.apply_policy(guard.bash_decision(f"python3 - <<'PY'\n{script}PY", str(ROOT), str(ROOT))))
+        self.assertEqual((out.get("decision"), out.get("code")), ("deny", "STAGE_APPROVE"))
+        env = {**os.environ, "PYTHONPATH": str(ROOT / "scripts"), "CLAUDE_CODE_SESSION_ID": "s-1"}
+        run = subprocess.run(
+            [sys.executable, "-"], input=script, text=True, capture_output=True, cwd=self.repo, env=env
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.ledger()["status"], "approved")  # lớp chặn là guard, không phải xt_design
 
     def test_minimal_install_without_module(self):
         """Bộ cài tối giản (không có xt_design.py): không có lệnh con, vòng như cũ."""

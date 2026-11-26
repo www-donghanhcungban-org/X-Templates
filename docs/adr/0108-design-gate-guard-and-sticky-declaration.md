@@ -13,20 +13,25 @@ Reviewer vòng 2 của PR #844 (ADR-0106) tái hiện hai lỗ, đã ghi ở ADR
 
 ## Quyết định
 
-1. **Guard nhận `xt_design` như `xt`** (luật AUD-SEC-498, sửa tại chỗ, `guard.py` giữ nguyên số dòng, không đổi `LINE_CAPS`):
-   - `import xt_design`, `import scripts.xt_design`, `from xt_design import …`, `from scripts import xt_design` tính là nạp mô-đun; đi cùng tên/chữ rủi ro (`approve`, `main`, `stage`, biến môi trường, truy cập động…) → chặn (`STAGE_APPROVE`).
+1. **Guard nhận `xt_design`, chặn mọi lần nạp nó trong tiến trình** (luật AUD-SEC-498, sửa tại chỗ, `guard.py` giữ nguyên số dòng, không đổi `LINE_CAPS`):
+   - `import xt_design`, `import scripts.xt_design`, `from xt_design import …`, `from scripts import xt_design` tính là nạp mô-đun. Tên `xt_design` chứa chữ rủi ro `sign`, và tên mô-đun nguồn của `from … import` nay cũng được xét như một tên. Vì vậy **mọi lần nạp `xt_design` trong tiến trình trình thông dịch đều bị chặn** (`STAGE_APPROVE`), kể cả script chỉ đọc. Đọc sổ thì dùng `xt.py stage design-check --json`; câu lý do của guard nêu lệnh này.
    - Tên/đường `xt_design`, `scripts.xt_design`, `scripts/xt_design.py` cho `run_path`, `import_module`, `spec_from_file_location`, `-m runpy` → chặn.
    - Luật chữ (script không phải Python hợp lệ) nhận `import … xt_design`; câu lý do nhắc cả hai mô-đun.
-   - Chữ `sign` trong danh sách tên rủi ro không còn khớp khi là phần của chính tên `xt_design`: script chỉ đọc (`import xt, xt_design as d; print(d.problem(xt, …))`) vẫn qua, cùng tinh thần thư viện đọc `xt.parse_plan`. Đây là chỗ duy nhất luật hẹp hơn luật cũ: script vừa `import xt` vừa nhắc tên `xt_design` mà không có tên rủi ro nào khác, trước bị chặn, nay qua.
-2. **Dòng khai một chiều khi sổ đã có:** `docs/autopilot/DESIGN.json` tồn tại (kể cả hỏng, rỗng, không đọc được hay symlink gãy) → dự án là khách bất kể `PROJECT.md` (dòng `không`, không có dòng khai, tệp bị xoá), kèm ghi chú "sổ `DESIGN.json` đã có — dòng khai không nới được" trong lý do khoá và `design-check`. Sổ chưa có → hành vi cũ nguyên vẹn. Đã `approved` thì task giao diện vẫn mở như cũ (khoá chỉ giữ khi `status` khác `approved`). D-622 ghi "sổ có lịch sử hay hỏng"; mã dùng "sổ tồn tại" vì sổ do `xt.py stage` tạo luôn có lịch sử, và sổ rỗng tạo tay là cách hiểu chặt hơn.
+   - Không có ngoại lệ cho script đọc `xt_design`. Lý do: hàm ghi `update` và các hằng `STATUSES`/`REPLAY`/`LEDGER` không chứa chữ rủi ro. Review PR #849 đã tái hiện chuyện này: nếu cho qua script đọc thì `d.update(xt, Path('.'), lambda l: {**l, 'status': d.STATUSES[2], …})` ghi được lời duyệt trong phiên agent (rc 0, sổ thành `approved`). So vi sai với guard trước PR (corpus `guard.json`, mọi chuỗi nhắc `xt`/`sign` trong `tests/`, chế độ mặc định và `XT_GUARD_POLICY=strict`) cho thấy không có dạng nào bị nới. Thư viện đọc của `xt` (`xt.parse_plan`, `from xt import parse_plan`) vẫn qua như trước.
+2. **Dòng khai một chiều khi sổ đã có:** `docs/autopilot/DESIGN.json` tồn tại (kể cả hỏng, rỗng, không đọc được hay symlink gãy) → dự án là khách bất kể `PROJECT.md` (dòng `không`, không có dòng khai, tệp bị xoá), kèm ghi chú "sổ `DESIGN.json` đã có — dòng khai không nới được" trong lý do khoá và `design-check`. Sổ chưa có → hành vi cũ nguyên vẹn. Đã `approved` thì task giao diện vẫn mở như cũ (khoá chỉ giữ khi `status` khác `approved`). Mã làm đúng như D-622 ghi: "sổ tồn tại, kể cả hỏng, rỗng".
 
 ## Phương án đã xét
 
 - **Đòi `PROJECT.md` ở nhánh chính của remote cũng khai `khách`** (đọc `git show origin/main:PROJECT.md`, như khoá ADR-0069): mạnh hơn nhưng phụ thuộc remote, tăng bề mặt lỗi (offline, clone nông, worktree) và phải hoà hai nguồn. Loại; xét lại khi có số liệu.
+- **Cho qua script chỉ đọc `xt_design` (bỏ khớp `sign` trong tên mô-đun), như thư viện đọc `xt.parse_plan`:** bản đầu của PR #849 làm vậy. Loại vì phân tích tĩnh không tách được đọc với ghi khi hàm ghi và hằng trạng thái không có chữ rủi ro (Quyết định 1).
 - **Không sửa mã, giữ giới hạn đã ghi ở ADR-0106:** để hở hai lỗ đã tái hiện. Loại.
 
 ## Hệ quả
 
 - Tốt: dòng khai nay một chiều sau khi đã trình bản thiết kế; guard nhận cả `xt` lẫn `xt_design`. Dự án không khai và chưa từng trình không đổi gì.
-- Xấu: dự án lỡ trình rồi muốn bỏ cổng phải xoá sổ `DESIGN.json` — việc của người, như mọi sửa tay sổ bằng chứng. Luật guard hẹp hơn luật cũ ở đúng một dạng nêu ở Quyết định 1.
-- Giới hạn có từ trước (phạm vi D-015, không phải của ADR này): guard là lớp chặn nhầm cho agent làm đúng quy trình, không cách ly agent cố ý vượt rào — script ghi ra tệp rồi chạy và bỏ biến môi trường agent, đường dẫn hay tên ghép lúc chạy (AUD-SEC-161), `find -exec`, tên viết thường, worktree vẫn là giới hạn đã biết.
+- Xấu: dự án lỡ trình rồi muốn bỏ cổng phải xoá sổ `DESIGN.json` — việc của người, như mọi sửa tay sổ bằng chứng. Script chỉ đọc sổ bằng thư viện `xt_design` cũng bị chặn; dùng `xt.py stage design-check --json`.
+
+### Giới hạn đã biết
+
+- **Trình nhầm ở dự án khai `không` thì khoá vĩnh viễn:** `design-submit` ở dự án khai `không` mà chưa có sổ sẽ tạo sổ. Sau đó `design-reopen` không gỡ được, vì sổ đã tồn tại nên dự án coi là `khách`. Agent không gỡ được, chỉ người (xoá sổ). Việc sau: từ chối `design-submit` khi dự án chưa khai `khách` và chưa có sổ.
+- **Giới hạn guard có từ trước** (phạm vi D-015; AUD-SEC-090/161/988; không phải của ADR này): guard là lớp chặn nhầm cho agent làm đúng quy trình, không cách ly được agent cố ý vượt rào. Các dạng vẫn lọt: script ghi ra tệp rồi chạy, bỏ biến môi trường agent, đường dẫn hay tên ghép lúc chạy (AUD-SEC-161), `find -exec`, alias hàm nạp (`from runpy import run_path as rp`), tệp `.pyc` thật trong `__pycache__`, `import XT` viết hoa, `git stash push -u -- <sổ>`, `ln -sfn`, `shutil.rmtree('docs/autopilot')`, và worktree mới khi sổ chưa commit.
