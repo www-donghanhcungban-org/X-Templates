@@ -911,6 +911,21 @@
    ]
   },
   {
+   "reason": "Rà lô 5 (`verify-render` đo iframe, shadow DOM, chữ con, lớp giả và nội dung bị cắt, sửa ở #819–#821): cần Chromium thật, nằm ngoài sáu adapter của corpus. Ca hồi quy: `node --test tests_e2e/verify_render.test.mjs` (CI chạy Chromium).",
+   "ids": [
+    "AUD-HAR-558",
+    "AUD-HAR-559",
+    "AUD-HAR-560",
+    "AUD-HAR-561"
+   ]
+  },
+  {
+   "reason": "Rà #822 (sổ audit đóng AUD-HAR-541 sai): lỗi nằm ở nội dung sổ, không ở quyết định của sáu adapter của corpus. Phép kiểm: `python3 scripts/xt.py audit check docs/ops/AUDIT-STATUS.md` và ca guard `guard-har566-*` trong `guard.json`.",
+   "ids": [
+    "AUD-HAR-569"
+   ]
+  },
+  {
    "reason": "Rà lô 6 (`acceptance-author` thiếu `maxTurns`): tệp định nghĩa agent nằm ngoài sáu adapter của corpus. Ca hồi quy: `python3 -m unittest tests.test_model_tiers tests.test_codex_harness`.",
    "ids": [
     "AUD-HAR-563"

@@ -10503,7 +10503,7 @@ HOST_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 REPO_COMPONENT = r"[a-zA-Z0-9_-][a-zA-Z0-9_.-]*"
 MERGE_FIELDS = {
     "host": rf"{HOST_LABEL}(?:\.{HOST_LABEL})*",
-    "repo": rf"{REPO_COMPONENT}/(?!\.{1, 2}\Z)[a-zA-Z0-9_.-]+",
+    "repo": rf"{REPO_COMPONENT}/(?!\.{{1,2}}\Z)[a-zA-Z0-9_.-]+",
     "head": "[a-f0-9]{40}",
 }
 REST_MERGE_PATH_RE = re.compile(r"repos/\{owner\}/\{repo\}/pulls/(\d+)/merge")
