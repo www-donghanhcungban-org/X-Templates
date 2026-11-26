@@ -1,6 +1,6 @@
 # ADR-0106: Chào giá trước G0 và cổng khách duyệt thiết kế do máy khoá
 
-- **Trạng thái:** Đã chấp nhận ngày 2026-11-26 (D-619; chủ dự án duyệt quy trình "chào giá → G0–G3 → G4 thiết kế → khách duyệt (bắt buộc dừng) → G5–G8 → bàn giao").
+- **Trạng thái:** Đã chấp nhận; thay một phần bởi [ADR-0108](0108-design-gate-guard-and-sticky-declaration.md). Chấp nhận ngày 2026-11-26 (D-619; chủ dự án duyệt quy trình "chào giá → G0–G3 → G4 thiết kế → khách duyệt (bắt buộc dừng) → G5–G8 → bàn giao").
 - **Trạng thái triển khai:** đã triển khai cùng PR với ADR này — tài liệu (`PM-PLAN-019`, `UX-DS-023/024`, mẫu `PROPOSAL.md`/`DESIGN-REVIEW.md`) và máy khoá (`scripts/xt_design.py`, `xt.py stage design-*`, khoá `loop next/record` và `plan waves`, test `tests/test_design_gate.py`).
 - **Liên quan:** [ADR-0058](0058-product-stages-machine-lock.md) (sổ giai đoạn, hai lớp chặn nhầm), [ADR-0069](0069-agent-stage-approval.md), [ADR-0092](0092-raise-caps-10x.md) (nới trần chỉ bằng ADR); [PLAN-site-cms](../autopilot/PLAN-site-cms-2026-11-26.md) lát 2; [nghiên cứu](../../research/2026-11-26-design-handoff.md).
 
@@ -36,7 +36,7 @@ Dữ kiện (đọc 2026-11-26, chi tiết ở nghiên cứu): Figma REST không
 
 ### Giới hạn đã biết (việc sau, chưa có mã)
 
-- **Guard chưa nhận `import xt_design`:** luật chặn script trình thông dịch nạp `xt` trong tiến trình (AUD-SEC-498) bắt `import xt`, chưa bắt script `import xt_design` rồi gọi `update`/`approve` — mở rộng luật guard ở việc riêng.
-- **Dòng khai chỉ đọc ở cây làm việc:** sửa `PROJECT.md` thành `không` sau khi đã trình bản thiết kế là nới khoá được. Khuyến nghị cho việc sau: coi như `khách` khi `DESIGN.json` đã có lịch sử (dự án từng trình thì không tự rút khai báo).
+- ~~**Guard chưa nhận `import xt_design`:** luật chặn script trình thông dịch nạp `xt` trong tiến trình (AUD-SEC-498) bắt `import xt`, chưa bắt script `import xt_design` rồi gọi `update`/`approve` — mở rộng luật guard ở việc riêng.~~ Đã xử lý ở ADR-0108.
+- ~~**Dòng khai chỉ đọc ở cây làm việc:** sửa `PROJECT.md` thành `không` sau khi đã trình bản thiết kế là nới khoá được. Khuyến nghị cho việc sau: coi như `khách` khi `DESIGN.json` đã có lịch sử (dự án từng trình thì không tự rút khai báo).~~ Đã xử lý ở ADR-0108.
 - **Dòng khai đọc theo nhãn có dấu, neo đầu dòng:** các dạng sau đang ra `không` (không khoá) — nhãn bỏ dấu (`- Duyet thiet ke: khach`), nhãn không mở đầu dòng (`- Khách duyệt thiết kế: có`, `- G4 — Duyệt thiết kế: khách`, `<!-- x --> Duyệt thiết kế: khách`), bảng nhiều cột có nhãn ở cột sau (`| G4 | Duyệt thiết kế | khách |`), `không` kèm giá trị thay thế không phải chữ `khách` (`không → có`, `không / có`), và `không` kèm từ đồng nghĩa thay chữ `khách` (`không — đối tác duyệt`, `không — client duyệt`). Bắt các dạng này cần tìm nhãn trên chữ bỏ dấu ở mọi vị trí, dễ chặn oan dòng giải thích — thiết kế ở việc riêng.
 - **"Luôn chỉ người" trong phạm vi D-015:** guard và từ chối phiên agent ở `xt.py` là lớp chặn nhầm của agent làm đúng quy trình, không phải cách ly agent cố ý vượt rào — cùng phạm vi với sổ giai đoạn (ADR-0058).

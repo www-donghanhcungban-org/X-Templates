@@ -350,6 +350,25 @@ class DesignDeclareTest(TmpRepoCase):
         self.declare("Duyệt thiết kế: không\nDuyệt thiết kế: khách\n")
         self.assertIn("mâu thuẫn", d.lock_reason(xt, self.repo))  # ghi chú đi kèm lý do khoá
 
+    def test_existing_ledger_makes_declaration_sticky(self):
+        """ADR-0108 (D-622): sổ DESIGN.json đã có (kể cả hỏng, rỗng, symlink gãy) → khách bất kể dòng khai."""
+        ledger = self.repo / d.LEDGER
+        ledger.parent.mkdir(parents=True)
+        for body in (json.dumps(awaiting([submit()])), "", "{"):
+            ledger.write_text(body, encoding="utf-8")
+            for text in ("Duyệt thiết kế: không\n", "# Dự án\n", None):
+                with self.subTest(body=body, text=text):
+                    (self.repo / "PROJECT.md").unlink(missing_ok=True)
+                    client, note = self.declare(text) if text else d.declared(xt, self.repo)
+                    self.assertEqual((client, note), (True, d.STICKY))
+        self.assertEqual(self.declare("Duyệt thiết kế: khách hàng\n"), (True, ""))  # khai khách: không cần ghi chú
+        self.assertIn("giá trị lạ", self.declare("Duyệt thiết kế: có\n")[1])  # ghi chú của dòng khai được giữ
+        ledger.unlink()
+        ledger.symlink_to(self.repo / "khong-co.json")
+        self.assertEqual(self.declare("Duyệt thiết kế: không\n"), (True, d.STICKY))
+        ledger.unlink()
+        self.assertEqual(self.declare("Duyệt thiết kế: không\n"), (False, ""))  # chưa có sổ: như cũ
+
 
 class DesignUiTagTest(unittest.TestCase):
     def ui(self, line):
@@ -736,6 +755,42 @@ class DesignLoopTest(DesignRepoCase):
         self.assertIn("không đọc được", d.record_problem(xt, self.repo, {"plan": self.PLAN}, "T-002"))
         self.write("PROJECT.md", "Duyệt thiết kế: không\n")
         self.assertEqual(d.record_problem(xt, self.repo, {"plan": self.PLAN}, "T-002"), "")  # không khai khách: như cũ
+
+    def test_declaration_cannot_loosen_after_submit(self):
+        """Review vòng 2 PR #844 (ADR-0108, D-622): đã trình bản thiết kế thì sửa/xoá dòng khai không mở khoá."""
+        self.write("PROJECT.md", "Duyệt thiết kế: không\n")
+        self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))  # chưa có sổ + `không`: như cũ
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        self.write("docs/m.png", "png")
+        sha = self.commit()
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/m.png", agent=True)[0], 0)
+        self.write("PROJECT.md", "Duyệt thiết kế: không\n")  # chưa commit
+        for loosen in ("không", "xoá"):
+            with self.subTest(loosen=loosen):
+                ready, held = self.next_ids()
+                self.assertEqual(ready, ["T-002"])
+                self.assertIn(d.STICKY, held["T-001"])
+                rc, out, _ = self.stage("design-check")
+                self.assertEqual(rc, 1)
+                self.assertIn("Duyệt thiết kế: khách", out)
+                self.assertIn(d.STICKY, out)
+                self.assertEqual(self.record("T-001")[0], 2)
+                (self.repo / "PROJECT.md").unlink(missing_ok=True)
+        good = (self.repo / d.LEDGER).read_text(encoding="utf-8")
+        self.write("PROJECT.md", "Duyệt thiết kế: không\n")
+        self.write(d.LEDGER, "{")
+        self.assertEqual(self.stage("design-check")[0], 2)
+        ready, held = self.next_ids()
+        self.assertEqual(ready, ["T-002"])
+        self.assertIn(d.STICKY, held["T-001"])
+        self.write(d.LEDGER, good)
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
+        self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))  # đã duyệt + `không`: mở như cũ
+        self.assertEqual(self.stage("design-check")[0], 0)
+        self.assertEqual(self.record("T-001")[0], 0)
+        self.write(d.LEDGER, "{")
+        with unittest.mock.patch.object(xt, "SCRIPT_DIR", self.tmp):  # bộ cài tối giản: không có module, như cũ
+            self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))
 
     def test_minimal_install_without_module(self):
         """Bộ cài tối giản (không có xt_design.py): không có lệnh con, vòng như cũ."""

@@ -11739,9 +11739,9 @@ def _approves_literal(n: List[str]) -> bool:
 # (`xt.parse_plan`, `xt.review_debt` — Kiểm PM-PLAN-001, Gate audit) vẫn qua khi script không có tên/chữ rủi ro.
 # Phân tích tĩnh chữ nguyên văn: tên dựng lúc chạy qua đường guard không thấy vẫn lọt (AUD-SEC-161).
 XT_INPROC_WHY = (
-    "duyệt giai đoạn sản phẩm (AUD-SEC-498) có thể chạy trong tiến trình: script trình thông dịch nạp `xt` (`import xt`"
-    " kèm `main`/`stage`/`approve`/`adopt`/biến môi trường/truy cập động; `runpy`, `import_module`, `exec`/`eval` chữ"
-    " không rõ; `-m runpy xt`) — guard không thấy lệnh con; gọi `python3 scripts/xt.py <lệnh>`"
+    "duyệt giai đoạn sản phẩm/thiết kế (AUD-SEC-498) có thể chạy trong tiến trình: script trình thông dịch nạp `xt`/"
+    "`xt_design` (`import` kèm `main`/`stage`/`approve`/`adopt`/biến môi trường/truy cập động; `runpy`, `import_module`,"
+    " `exec`/`eval` chữ không rõ; `-m runpy xt`) — guard không thấy lệnh con; gọi `python3 scripts/xt.py <lệnh>`"
 )
 XT_INPROC_DEPTH = 3  # số tầng `exec('…')` lồng đọc lại; sâu hơn → chặt
 # Hàm nạp/chạy mã theo tên hay đường (gọi theo tên hay thuộc tính: `runpy.run_path`, `from runpy import run_path`)
@@ -11751,18 +11751,18 @@ XT_INPROC_LOADERS = frozenset(
 )
 XT_INPROC_BUILTINS = frozenset({"exec", "eval", "compile", "execfile", "__import__"})  # chỉ khi gọi như builtin
 XT_INPROC_BUILTIN_MODS = frozenset({"builtins", "__builtins__"})  # `builtins.exec(…)`
-XT_INPROC_NAME_RE = re.compile(r"(?:.*[/\\.])?xt(?:\.pyc?)?", re.S)  # `xt`, `scripts.xt`, `scripts/xt.py`
+XT_INPROC_NAME_RE = re.compile(r"(?:.*[/\\.])?xt(?:_design)?(?:\.pyc?)?", re.S)  # `xt`, `scripts.xt_design`, `…/xt.py`
 # Tên/chữ thư viện đọc của xt không cần — đi cùng `import xt` thì chặn (gọi CLI, sửa biến agent, truy cập động)
 XT_INPROC_RISKY_RE = re.compile(
-    r"main|stage|approv|adopt|sign|release|decide|prod|environ|putenv|unsetenv|CLAUDE|AI_AGENT|agent_session|[gsd]etattr"
-    r"|^vars$|^dir$|globals|locals"
+    r"main|stage|approv|adopt|(?<!xt_de)sign|environ|putenv|unsetenv|CLAUDE|AI_AGENT|agent_session|[gsd]etattr"
+    r"|release|decide|prod|^vars$|^dir$|globals|locals"
     r"|__dict__|__getattribute__|attrgetter|methodcaller|getmembers|^exec|^eval$|^compile$|__import__|import_module"
     r"|builtins|modules|__loader__|__spec__",
     re.I,
 )
 # Script không phải Python hợp lệ: luật chữ (`import … xt`, tên hàm nạp)
 XT_INPROC_TEXT_RE = re.compile(
-    r"\b(?:import|from)\b[^;\n]*\bxt\b(?![\w-])|\b(?:runpy|run_path|run_module|spec_from_file_location"
+    r"\b(?:import|from)\b[^;\n]*\bxt(?:_design)?\b(?![\w-])|\b(?:runpy|run_path|run_module|spec_from_file_location"
     r"|Source(?:less)?FileLoader|load_source|import_module|__import__|execfile)\b"
 )
 RUNPY_OPT_RE = re.compile(r"-[A-Za-z]*m(runpy)?")  # `-m runpy`, `-mrunpy`, `-Bm runpy`
@@ -11812,13 +11812,13 @@ def _xt_loader_call(call: Any, depth: int) -> bool:
 
 
 def _xt_imports(node: Any) -> bool:
-    """`import xt`, `import scripts.xt`, `from xt import …`, `from scripts import xt`."""
+    """`import xt`, `import scripts.xt`, `from xt import …`, `from scripts import xt` — cả `xt_design` (ADR-0108)."""
     import ast
 
     if isinstance(node, ast.Import):
-        return any("xt" in a.name.split(".") for a in node.names)
+        return any({"xt", "xt_design"} & set(a.name.split(".")) for a in node.names)
     if isinstance(node, ast.ImportFrom):
-        return "xt" in (node.module or "").split(".") or any(a.name == "xt" for a in node.names)
+        return bool({"xt", "xt_design"} & {*(node.module or "").split("."), *(a.name for a in node.names)})
     return False
 
 
