@@ -3,7 +3,7 @@ title: Điều phối: subagent, worktree, song song, không lồng
 kind: module
 prefix: LOOP-ORCH
 applies_to: [all]
-updated: 2026-11-24
+updated: 2026-11-26
 ---
 
 # Điều phối: subagent, worktree, song song, không lồng
@@ -81,7 +81,7 @@ Tầng mặc định đỏ 2 lần vẫn chuyển cấp `executor-deep` (ADR-002
 
 Xếp đợt bằng máy: `xt.py plan waves [--plan P] [--max N] [--json]` chia task mở của PLAN thành đợt — trong một đợt mọi
 `sau:` đã thoả, `files:` đôi một không giao (cùng phép so của `loop next`), ≤ N task (mặc định 4, ADR-0061; trần cứng 5 — `LOOP-ORCH-008`), task thiếu `files:`
-đứng riêng; task trên chu trình, ghi chú hỏng hoặc đã defer vào mục bị chặn kèm lý do. Không cần vòng đang chạy; đợt
+đứng riêng; task trên chu trình, ghi chú hỏng, đã defer hoặc `(ui: yes)` chờ khách duyệt thiết kế (ADR-0106) vào mục bị chặn kèm lý do. Không cần vòng đang chạy; đợt
 nhiều task chạy theo mô hình B, đợt một task theo mô hình A.
 
 Khi chuẩn bị viết mã, thêm `--handoff` để lấy một JSON gồm ngữ cảnh từng task của đợt đầu (spec, Gate, file, topology, tier),
