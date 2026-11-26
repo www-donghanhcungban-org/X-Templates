@@ -34,6 +34,19 @@ def submit(sha=SHA, evidence="docs/m.png"):
     return ev("submit", sha=sha, evidence=evidence)
 
 
+# Review vòng 2 PR #845: ký tự mà `str.splitlines()` coi là ngắt dòng còn markdown thì không (U+2028/2029, VT, FF, NEL)
+# từng giấu dòng khai thứ hai trong cùng dòng markdown — bản trước (tách bằng `splitlines()`) khoá, bản tách markdown mở.
+SPLIT_DECLARATIONS = (
+    "# Site - Duyệt thiết kế: khách\n",
+    "Stack: Node\x0b- Duyệt thiết kế: khách\n",
+    "Stack: Node\x0c- Duyệt thiết kế: khách\n",
+    "Stack: Node\x85- Duyệt thiết kế: khách\n",
+    "Stack: Node - Duyệt thiết kế: khách\n",
+    "- Duyệt thiết kế: không - Duyệt thiết kế: có\n",
+    "- Duyệt thiết kế: không\x0b- Duyệt thiết kế:\n",
+)
+
+
 def led(history, status, submitted=None):
     return {"schema": 1, "status": status, "submitted": submitted, "history": history}
 
@@ -239,10 +252,24 @@ class DesignDeclareTest(TmpRepoCase):
             with self.subTest(value=value):
                 self.assertEqual(self.declare(f"- Duyệt thiết kế: {value}\n"), (False, ""))
 
-    def test_lines_split_only_at_newlines(self):
-        """Review PR #845: dòng chỉ tách ở `\\r\\n`/`\\r`/`\\n` (như markdown), không ở U+2028, NEL, VT, FF, RS… —
-        `không<U+2028>khách` là một dòng có chữ `khách`; rào nhận trên dòng gốc (ký tự vô hình trước ``` → không là
-        rào)."""
+    def test_unicode_line_break_cannot_hide_declaration(self):
+        """Review vòng 2 PR #845: dòng khai lấy theo CẢ tách markdown lẫn mỗi đoạn `str.splitlines()`, gộp hợp — đoạn
+        sau U+2028/2029, VT, FF, NEL là dòng khai thì vẫn tính (thêm dòng khai không bao giờ mở khoá)."""
+        for text in SPLIT_DECLARATIONS:
+            with self.subTest(text=text):
+                self.assertTrue(self.declare(text)[0])
+        for sep in (" ", " ", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"):
+            with self.subTest(sep=repr(sep)):
+                self.assertEqual(self.declare(f"- Duyệt thiết kế:{sep}không\n")[0], True)  # đoạn đầu: giá trị rỗng
+                self.assertEqual(self.declare(f"- Duyệt thiết kế: không{sep}- Duyệt thiết kế: không\n"), (False, ""))
+                self.assertEqual(self.declare(f"Stack{sep}- Duyệt thiết kế: không\n"), (False, ""))
+        client, note = self.declare("```\nx - Duyệt thiết kế: khách\n```\n")
+        self.assertEqual((client, "trong code fence vẫn tính" in note), (True, True))
+        self.assertEqual(self.declare("```\nx - Duyệt thiết kế: không\n```\n"), (False, ""))  # rào giấu `không`
+
+    def test_lines_split_at_newlines(self):
+        """Review PR #845: dòng markdown tách ở `\\r\\n`/`\\r`/`\\n` — `không<U+2028>khách` cũng là một dòng có chữ
+        `khách`; rào nhận trên dòng gốc (ký tự vô hình trước ``` → không là rào)."""
         for sep in (" ", " ", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"):
             with self.subTest(sep=repr(sep)):
                 client, note = self.declare(f"- Duyệt thiết kế: không{sep}khách\n")
@@ -603,6 +630,17 @@ class DesignLoopTest(DesignRepoCase):
         self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
         self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))
         self.assertEqual(self.record("T-001")[0], 0)
+
+    def test_unicode_line_break_declaration_locks_loop(self):
+        """Review vòng 2 PR #845 qua CLI: dòng khai sau ngắt dòng Unicode vẫn khoá `design-check`, `loop next`, `record`."""
+        for text in SPLIT_DECLARATIONS:
+            with self.subTest(text=text):
+                self.write("PROJECT.md", text)
+                self.assertEqual(self.stage("design-check")[0], 1)
+                ready, held = self.next_ids()
+                self.assertEqual((ready, list(held)), (["T-002"], ["T-001"]))
+                self.assertEqual(self.record("T-001")[0], 2)
+        self.assertFalse((self.repo / ".autopilot" / "evidence" / "T-001.json").exists())
 
     def test_lock_reason_names_defer_exit(self):
         self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
