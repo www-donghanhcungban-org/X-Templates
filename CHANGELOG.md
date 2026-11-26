@@ -6,7 +6,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
-- Guard: lookahead chặn `.`/`..` ở trường `repo` của lệnh merge ghim hoạt động thật (AUD-HAR-542, f-string viết `{1, 2}` thành `(1, 2)`); sổ audit đóng AUD-HAR-541/542/558…561/566 theo #815, #818–#821.
+- Guard: lookahead chặn `.`/`..` ở trường `repo` của lệnh merge ghim hoạt động thật (AUD-HAR-542, f-string viết `{1, 2}` thành `(1, 2)`); sổ audit đóng AUD-HAR-542/558…561/566 theo #822, #815, #818–#821; AUD-HAR-541 còn mở (`[[=v=]]`, `??????+b`, `?*` vẫn lọt).
 
 - `verify-render` sửa nốt hai âm tính giả của kiểm cắt chữ khi reflow (rà #820, AUD-HAR-561): chữ RTL tràn sang trái không còn lọt (xét cả mép trái); trang dài quá 500 nút chữ không còn im lặng cho qua (hết trần thì báo `UNMEASURED`, nút trắng không tính). Chữ trong `display: contents` (kể cả slot mặc định) được đo, và khung con nhận từ phía Node thay vì `window.parent` (trang ghi đè `parent` không làm điều khiển cấp cao thành UNMEASURED). Hai ca Chromium mới đỏ khi thiếu bản sửa; còn nợ 🟠 ghi ở sổ audit (pseudo `content: ""` không tô gì, chữ trong shadow DOM/ảnh bị cắt, cuộn lồng).
 

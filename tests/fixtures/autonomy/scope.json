@@ -911,13 +911,6 @@
    ]
   },
   {
-   "reason": "Rà lô 2 và rà lại #815 (luật tag phiên bản viết bằng glob, sửa ở #815 và #818): oracle `RELEASE_TAG_DENY` và `_tag_glob` kiểm bằng bash thật ở lớp riêng, ngoài schema quyết định đơn của corpus. Ca hồi quy: `python3 -m unittest tests.test_guard_release_oracle tests.test_hooks`.",
-   "ids": [
-    "AUD-HAR-541",
-    "AUD-HAR-566"
-   ]
-  },
-  {
    "reason": "Rà lô 5 (`verify-render` đo iframe, shadow DOM, chữ con, lớp giả và nội dung bị cắt, sửa ở #819–#821): cần Chromium thật, nằm ngoài sáu adapter của corpus. Ca hồi quy: `node --test tests_e2e/verify_render.test.mjs` (CI chạy Chromium).",
    "ids": [
     "AUD-HAR-558",
