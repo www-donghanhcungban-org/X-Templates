@@ -19,6 +19,7 @@ framework/11-autonomous-loop/self-healing-ci.md, mục "Kiểm liên kết ngoà
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import time
@@ -64,10 +65,15 @@ Fetcher = Callable[[str, float], int]
 
 
 def iter_md(root: Path) -> Iterator[Path]:
-    for p in sorted(root.rglob("*.md")):
-        if any(part in SKIP_DIRS for part in p.relative_to(root).parts):
-            continue
-        yield p
+    """Mọi `*.md` dưới `root`, đã sắp xếp. Tỉa `SKIP_DIRS` và `.claude/worktrees` (bản sao repo của subagent) tại chỗ."""
+    found: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        here = Path(dirpath)
+        dirnames[:] = [
+            d for d in dirnames if d not in SKIP_DIRS and not (d == "worktrees" and here == root / ".claude")
+        ]
+        found.extend(here / f for f in filenames if f.endswith(".md"))
+    yield from sorted(found)
 
 
 def _closing_run(text: str, start: int, run: int) -> int:
