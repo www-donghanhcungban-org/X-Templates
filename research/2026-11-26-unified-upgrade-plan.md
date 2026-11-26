@@ -8,7 +8,7 @@ updated: 2026-11-26
 
 > **Trạng thái: đề xuất, chưa phải PLAN.** Bản chuyển từ PDF "Kế hoạch nâng cấp hợp nhất" (40 trang, đối chiếu mã ở commit `02480424`). Chưa có task ID đăng ký, chưa sửa mã. Khi triển khai phải ánh xạ vào PLAN đang có (không lập kế hoạch cạnh tranh), giữ task đã xong, và ghi rõ ADR bị thay thế. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
 >
-> Bản chuyển này gồm: tổng quan, hiện trạng, lỗi đã tái hiện, chính sách reviewer, backlog G01–G12, thứ tự/Cửa A–E, đo hiệu quả, ánh xạ 31 lát, phương pháp và nguồn. Các mục giữa PDF (kiến trúc XT/Guard, hiệu năng/packaging, hợp đồng dữ liệu, UI/UX, agent, chi phí/pilot — trang 7–26) **chưa được chuyển vào đây**; đối chiếu bản PDF gốc khi triển khai.
+> Bản chuyển này gồm đủ 40 trang PDF (cô đọng; số đo giữ nguyên) và §11: kiểm chứng một bài đăng mạng xã hội về harness ba agent của Anthropic, đối chiếu với khung, kèm các bổ sung đưa vào G01–G12.
 
 ## 1. Ba quyết định chính
 1. **Tách theo trách nhiệm và phụ thuộc.** Một chương trình thống nhất, chia module có hợp đồng rõ; kế thừa ADR-0090/0091/0093, registry, cơ chế quyết định; bảo toàn loader, CLI, bản cài, bộ kiểm.
@@ -52,6 +52,88 @@ Phạm vi phát hiện Guard: payload `gh pr merge 17` chỉ vào bộ đánh gi
 | Không có reviewer hợp lệ | INCONCLUSIVE hoặc thiếu reviewer; defer phần cần review, làm tiếp việc độc lập |
 
 Mỗi lượt review ghi repo, head, phạm vi diff, tác giả, reviewer, effort requested/effective, revision chính sách và nguồn setting (mặc định/host/override); không rõ → `unknown`. Kiểm cặp hợp lệ trước khi giao review. Ma trận nghiệm thu: tên model và đường tier-only; default giải quyết tường minh; override XHIGH/MAX bị từ chối trước launch; HIGH/HIGH và HIGH/XHIGH bị từ chối clean; không route nào ghi INCONCLUSIVE được; event noncompliant không mở gate sạch. Đo chất lượng sau thay đổi bằng cùng bộ diff có lỗi gieo + đối chứng (lỗi bỏ sót, chặn oan, thời gian, chi phí, chuyển tuyến); chưa có số thì chưa kết luận tiết kiệm hay chất lượng tương đương.
+
+### 4.1 `maxTurns` 80 → 120: giữ từng loại ngân sách riêng
+`maxTurns: 120` là trần lượt agent trong **một lần chạy**, không phải 120 lần review mỗi PR; agent được kết thúc sớm khi xong phạm vi.
+| Giới hạn | Thay đổi |
+|---|---|
+| `maxTurns` hai reviewer | 80 → 120; kiểm giá trị nguồn, cấu hình hiệu lực, hành vi dừng của host |
+| `REVIEW_ROUNDS = 1` | Giữ; `review_window`, luồng debt/rethink không đổi |
+| `max_rethink` mặc định 1 | Độc lập với lượt agent; không tăng, không bỏ trần |
+| Poll, timeout, retry, song song | Không lấy 120 làm số poll/retry/reviewer đồng thời |
+
+Nguồn chung chưa bảo đảm các host giống nhau: `agent_toml` hiện chỉ đưa name, description, effort hợp lệ và thân hướng dẫn sang Codex (thêm model khi bật), **không map `maxTurns`**. Test frontmatter chứa `maxTurns: 120` chỉ chứng minh đọc được nguồn. Xác minh schema từng host trước khi map; không tự thêm khoá TOML chưa xác nhận; chưa có trần tương đương thì báo khoảng trống trong bằng chứng cài. Hết lượt → kết quả có thể chưa đủ; ghi định danh lần chạy, head, phần đã rà/chưa rà, dấu tiếp tục; chưa đủ bằng chứng → INCONCLUSIVE. Nghiệm thu: assertion hai vai `maxTurns = 120`, `effort = high`; giữ trần `executor-mech` riêng; kiểm dừng sớm và biên 119/120/121, hết lượt có partial, resume.
+
+## 4A. Tách lõi an toàn (trang 8–16 của PDF)
+
+**Kiến trúc đích: modular monolith.** XT là CLI điều phối, Guard là lớp đánh giá/bảo vệ; tách miền trong cùng bundle để đổi từng lát và quay lại được. Chưa có bằng chứng cần microservice, plugin tải động, ngôn ngữ policy mới hay vector DB. Bốn khối trách nhiệm: XT entrypoint/đăng ký command → miền XT (loop, PR, doctor, scan, release) → hợp đồng và dữ kiện (kiểu, policy, state, evidence) ↔ ports/adapter (Git, file, clock, process, events) ← miền Guard (Edit, MCP, commit, Bash/SCC) ← Guard đầu vào theo mode (loader nguồn tin cậy). Đây là quan hệ trách nhiệm đích, không phải sơ đồ import đã có. Sáu lớp logic của bản gốc (dữ kiện → năng lực → quyết định → thực thi → kiểm chứng → phát hành/phản hồi) là trách nhiệm, không phải sáu service; module `xt_decision`/`xt_design`/`xt_agent_roles`/`xt_evidence`/`xt_metrics` chỉ tạo khi có lát dùng thật. **Chống chia file hình thức:** không chuyển nguyên khối sang `legacy_core.py`, `guard_core.py`, `common.py`.
+
+**Tách `xt.py` (kế thừa ADR-0090; `build_parser` 641 dòng):**
+| Lát ứng viên | Số đo tĩnh và hướng |
+|---|---|
+| Shard/weights | 7 hàm, 121 dòng, 3 tham chiếu ngoài → `xt_shard` |
+| Chọn test | 21 hàm, 241 dòng, 1 phụ thuộc ngoài; giữ fallback chạy toàn suite |
+| CSS contrast | 24 hàm, 269 dòng, không gọi ra ngoài cụm; giữ CLI |
+| Doctor | tách checker runtime/cấu hình/bản cài/tổng hợp từng lát |
+| Loop và PR | PLAN, state, evidence, ledger, runner; PR: dữ liệu, quyết định merge, review ledger, handlers |
+| Release/compose | đưa vào module có sẵn; giữ contract phát hành, carry-forward |
+
+Giữ Core(Protocol) làm cầu; bắt đầu từ cụm thấp coupling; `LOOP_HANDLERS` tĩnh đã có, chưa cần plugin discovery; parser register theo miền ở giai đoạn sau, giữ `main(argv)`. Autonomy benchmark và perf trial là miền riêng (blob XT theo ADR-0091). Một chủ sở hữu tích hợp `xt.py`; entrypoint < 150 dòng là đích dài hạn.
+
+**Hợp đồng lõi khi di chuyển:** state/quyền sở hữu (lock, revision/CAS, atomic write, một nơi chuyển trạng thái) · PLAN/evidence (dependency, Gate, task, head, digest liên kết đúng) · ledger/attempt (schema, chống đếm trùng; G02 thêm attempt identity, nối T-5010) · CLI/caller (flags, defaults, JSON, mã thoát, stdout/stderr, import). Patch phải chuyển tới **nơi lookup thật** (407 dòng patch XT/55 file): re-export giữ tên import nhưng thân hàm đã chuyển đọc globals ở module mới → test xanh giả. `SCRIPT_DIR`, cache, dispatch dict, `PR_READ_HOST` ContextVar, `sys.path`, `sys.modules` cần chủ sở hữu. PR extraction không trộn sửa hành vi; characterization test ghi hành vi hiện có nhưng không coi lỗi cũ là đặc tả.
+
+**Tách Guard theo bao đóng phụ thuộc** (Decision, CodedReason, `reason_code`, `policy_action`, `apply_policy`, POLICY đã có; chuyển luật sang YAML chưa đáng chi phí kiểm lại shell parser). Đo tại `02480424`:
+| Hạt giống | Định nghĩa | Span dòng |
+|---|---|---|
+| `edit_decision` | 61 | 629 |
+| `mcp_decision` | 34 | 330 |
+| `commit_msg_problem` | 5 | 45 |
+| `decide` + `apply_policy` | 6 | 58 |
+| Nhóm git/gh/push | 534 | 6.061 |
+| `bash_decision` | 1.402 | 15.714 |
+
+Các cụm chồng lấn, không cộng thành số dòng xoá được. Công cụ repo cho nhóm từ xa 498 định nghĩa (thấp hơn 36 do chưa lần qua bảng như `GIT_RULES`, `FILE_WRITERS`); 13 nhóm phụ thuộc vòng, lớn nhất 21 định nghĩa quanh `bash_decision` và vòng scan — giữ cụm này trong lượt đầu. Lát ưu tiên: shared helpers + Edit/Write (bao đóng nhỏ; helper dùng chung với Bash một nơi định nghĩa; giữ identity class và ContextVar mỗi bundle), rồi MCP, commit-msg, cuối cùng Bash. T-3995 xong; T-3996, T-3987…3990 tiếp tục. C14 cần ADR bổ sung sửa ADR-0090 §2, ADR-0093 §1-2 và D-542. Mức 376 → 54 ms của C14 là nguyên mẫu lịch sử, chưa benchmark lại.
+
+**Nạp Guard và bảo vệ gói cài.** Companion đọc từ source bytes, tên trong allowlist cố định, đường dẫn tính từ bundle đã chọn; không dò plugin qua cwd/PYTHONPATH; mỗi instance một namespace riêng. Kiểm năm tuyến (`_lib.sh::py_run`, `PY_LOADER`, `xt_adapter.load_guard`, `xt._load_guard`, `BenchEnv.module`) với thiếu file, lỗi cú pháp, nạp dở, pyc đặt sẵn, hai phiên bản cùng tiến trình. Ma trận lỗi hiện hữu:
+| Tình huống | Hành vi hiện tại |
+|---|---|
+| Bash lỗi runtime thường | Fallback rỗng: fail-open (ADR-0002) |
+| Bash lỗi runtime khi kiểm merge/gh api | UNPARSED: mặc định deny; strict giữ ask |
+| Pre-bash không nạp được Guard | Mặc định deny; strict ask; có ngoại lệ xem/khôi phục |
+| Pre-edit không nạp được Guard | Shell thoát 0: fail-open |
+| Adapter nạp Guard ném lỗi | Trả BROKEN_GUARD theo giao thức host |
+
+Đổi pre-edit sang chặn khi hỏng là **đề xuất tăng bảo vệ**, cần quyết định và đường khôi phục riêng. Theo CPython: `-B` tắt ghi pyc, `-I` không loại toàn bộ site-packages, `-S` tắt site; hoàn tất AUD-HAR-572/573 bằng chính sách nạp thống nhất, kiểm `-I -S -B` trên runtime hỗ trợ và bộ đo coverage. Companion là một phần hàng rào: manifest khai dependency và phiên bản; doctor phát hiện thiếu/rỗng/cụt/trộn phiên bản.
+
+**Chứng minh tương thích:** so raw decision và kết quả sau policy ở cả mặc định lẫn strict trên bốn nhóm — quyết định (decision, reason, code, confidence, missing, thứ tự ưu tiên), cổng thực thi (`commit`, `no_verify`, `push_no_verify`, `commit_dir`, `commit_alone`), giao thức (thứ tự NUL, JSON, exit code, stdout/stderr), tác động (IO, log, số sự kiện, hành động chỉ một lần). Corpus Guard 4.106 ca là nền so hai phiên bản, không phải bằng chứng phủ mọi hành vi; giữ `autonomy-bench`, `guard_fuzz`, `green_shell`, `green_gh`, `signoff2_scripts`, `audit_dot4_har`. Shadow dùng snapshot filesystem/Git/cấu hình, namespace/cache/ContextVar tách, recorder/replayer IO; không chạy lại action. Rà 112 `patch.object(guard, …)`/36 file; kiểm reset ContextVar trong `finally`. Không hạ coverage về 90 % để dễ tách.
+
+**Hiệu năng gắn đường chạy.** Đo compile nguồn (CPython 3.13.5, Linux x86_64): XT trung vị 358,79 ms (334,11–450,79), Guard 259,00 ms (236,35–282,53) — không gồm khởi động process, đọc file, Git hay quyết định policy; không suy ra p95 hook. Bộ benchmark trước mỗi lát: CLI phổ biến (help, validate, doctor, test-select, loop/pr đọc; cold/warm) · Guard theo mode (Bash đơn/đệ quy, merge/API, Edit/Write, MCP, commit-msg) · tích hợp đã cài (checkout, `.xtemplates`, artifact; số module/byte nạp) · CI và agent (critical path, runner-minutes, time-to-green, token mọi attempt). p50/p95 đủ mẫu, so A/B xen kẽ cùng fixture; ngưỡng regression khoá sau baseline.
+
+**Bản cài và phục hồi là một phần lát tách.** `registered_hooks()` suy companion từ settings và chuỗi shell, không tự tìm mọi dependency Python mới; mỗi lát cập nhật manifest, hash, version, typecheck, coverage, test-select. Ca bắt buộc: checkout/`.xtemplates` (fresh install, upgrade, downgrade, CWD khác, path có dấu/khoảng trắng, thiếu module) · artifact `.pyz`/tarball (chạy entry point thật, không dựa `sys.path` checkout) · perf trial một blob · tệp người dùng đã sửa (owned/customized/deleted, `.xtemplates-new`) · gián đoạn/cạnh tranh (mid-write, thiếu companion, mixed version, hai tiến trình). C05: file tạm cùng filesystem, đủ nội dung và quyền rồi `os.replace`; fsync chỉ khi cần bảo đảm qua mất điện; replace không phải giao dịch cả bundle. Nghiên cứu trước ghi 15/15 gián đoạn hội tụ khi chạy lại nhưng còn ca ghi cụt → atomic từng file + kiểm toàn vẹn + repair; không dựng transaction framework khi chưa có bằng chứng.
+
+**Giảm ngữ cảnh đi cùng độ mới.** Module map và symbol index từ AST (gắn SHA, owner, entry point, callers, tests); BLUEPRINT/SPEC projection phát hiện drift theo dependency; gói giao việc (mục tiêu, constraint, file owner, base/head, decision revision, ca nghiệm thu, unknown); handoff sau compaction (việc xong, diff dở, test đã/chưa chạy, lỗi mở, việc kế, link log); đầu ra lỗi ≤ 8.000 ký tự + full log (C02). C04 cửa sổ 400K là thí nghiệm theo host/model. Nghiệm thu: cùng task/head/fixture, context giảm mà tỷ lệ hoàn thành không giảm, không tăng lượt sửa.
+
+## 4B. Sản phẩm, agent và giao hàng (trang 17–26 của PDF)
+
+**Bối cảnh trước giải pháp.** Mỗi fact có ID, giá trị, phạm vi, nguồn, thời điểm, trạng thái `confirmed`/`observed`/`assumed`/`unknown`; mâu thuẫn lưu thành conflict có tham chiếu. Sáu trục: software profile · kiến trúc và dữ liệu · pack triển khai · design profile · vai agent và model · chính sách thực thi. Sản phẩm đang chạy ưu tiên tận dụng stack/design system; không suy "có AI" thành agentic-system hay "có màn hình điện thoại" thành mobile-app. Chỉ hỏi người khi đáp án đổi lựa chọn đáng kể hoặc dữ kiện chỉ chủ sản phẩm có.
+
+**Chọn phương án có đủ bằng chứng.** Mỗi candidate một hàng cho từng hard constraint: pass/fail/unknown + nguồn + bằng chứng đúng phiên bản; điểm thẩm mỹ/tốc độ/chi phí không bù được vi phạm bắt buộc. Trạng thái: `needs_resolution` · `needs_evidence` · `no_fit` · `selected_provisional` · `validated_for_scope` · `superseded`. Lỗi đọc registry hay danh mục chưa phủ không được gọi là `no_fit`. Đề xuất kiểm độ nhạy trọng số và lưu điều kiện xét lại (phản chứng).
+
+**Bảy hợp đồng dữ liệu logic** (đề xuất, chưa phải bảy file): CONTEXT · PRODUCT-SPEC · CAPABILITY-REGISTRY · DECISION · DECISION.lock · VALIDATION · RUN-EVENTS. JSON Schema kiểm cấu trúc; validator ngữ nghĩa kiểm tham chiếu chéo; giữ DESIGN-EVIDENCE schema 1; VALIDATION nối quyết định với build. Digest trên biểu diễn chuẩn hoá; đổi nghiệp vụ/quyền/candidate làm mất hiệu lực đúng phần phụ thuộc. Schema và policy cho hook đóng gói cùng phiên bản, không tải từ mạng.
+
+**UI/UX theo tác vụ.** Design profile sáu trục (họ trải nghiệm, kiến trúc thông tin, kiểu tương tác, mật độ, ngôn ngữ hình ảnh, chuyển động). Sáu họ trải nghiệm (danh mục để thử, không phải pack có sẵn): vận hành nghiệp vụ · hiện trường · khám phá dữ liệu · nội dung/chuyển đổi · mua hàng/giao dịch · workspace có agent. Quyết định lớn dựng 2–3 phương án trên cùng tác vụ và dữ liệu; review trên UI render với tên dài, số tiền, chữ có dấu, dữ liệu thật. UI sinh động chỉ dựng từ catalog component và action contract đã kiểm.
+
+**Kiểm UI, a11y và outcome** — năm lớp kết luận khác nhau: hồ sơ · candidate · kỹ thuật UI · thử tác vụ · theo dõi tại đích. WCAG 2.2 AA là mục tiêu cho web pilot: reflow 320 CSS px, phóng chữ 200 %, focus không bị che, kéo có cách thay thế, target 24×24 CSS px tối thiểu có ngoại lệ (44×44 không phải yêu cầu AA). DTCG 2025.10 là định dạng của Community Group, không phải W3C Recommendation. Catalog component cần trạng thái empty, loading, lỗi, mất quyền, thành công, gián đoạn, tiếp tục; tôn trọng giảm chuyển động. Web Vitals tham chiếu LCP ≤ 2,5 s, INP ≤ 200 ms, CLS ≤ 0,1 tại p75; báo lab và field riêng; thiếu dữ liệu → `not_measured`. Mọi báo cáo dùng `pass`/`fail`/`not_tested`/`not_applicable` có lý do.
+
+**Điều phối agent.** Registry vai nối tên agent, loại việc, năng lực, quyền, CLI và dữ liệu thực thi; vai công bố phải chạy được qua CLI thực. Sáu trách nhiệm logic (điều phối · phân tích/thiết kế · tác giả nghiệm thu · thực thi · review/kiểm chứng · giao hàng/vận hành) có thể cùng một agent đảm nhiệm, nhưng nghiệm thu và review giữ độc lập. `executor-mech` đỏ một lần phải chuyển cấp đúng quy định. **Bộ đánh giá agent thật:** 24–36 tình huống đã review có đáp án, một phần holdout không dùng để chỉnh prompt (brief mơ hồ, dữ kiện tra được trong repo, pack không hỗ trợ, nguồn mâu thuẫn, SPEC đổi giữa chừng, compaction, nối phiên, hành động vượt quyền); chạy lặp, báo thành công trên tổng trials; phân biệt "ít nhất một lần" với "nhất quán"; code grader cho điều kiện tất định, model grader cho phần mở cần hiệu chuẩn với người.
+
+**Nghiệm thu độc lập và ca sai critical.** Giữ tác giả nghiệm thu độc lập, khoá digest, đỏ trước code ứng viên. Mỗi quy tắc critical nối nguồn yêu cầu → SPEC → test hành vi → ca sai cố ý đã review → kết quả trên artifact; quyền, tenant, gửi lại an toàn, đồng thời, biên thời gian, tiền kiểm khi liên quan. Bộ thử phải bắt toàn bộ tập sai critical đã chốt — không bảo đảm phát hiện mọi lỗi.
+
+**Sổ sự kiện và chi phí.** Producer: requirement, task_green, pr, review, merged, artefact, deployed, incident, cost; gắn ID lát/run/attempt/event. Lần thành công, thất bại, huỷ, review bị bác, retry đều ghi khi có usage; thiếu usage giữ `unknown`, không thành 0. Chỉ số: hoàn thành đúng tác vụ · lead time (tách làm và chờ) · chi phí hoàn thành · sửa lại và lỗi lọt · chất lượng lựa chọn · phục hồi. Ingestion idempotent. OpenTelemetry GenAI conventions còn Development → ghim phiên bản; không capture prompt/output mặc định; ledger cost cần đường ghi đầy đủ riêng vì sampling bỏ dữ liệu.
+
+**Cài đặt và phát hành chịu gián đoạn.** Release có trạng thái rõ (tag đã tạo, asset đã tải và xác minh, đã công bố); chạy lại gặp tag có sẵn phải đối chiếu commit và trạng thái. Chuỗi bằng chứng: source → build (receipt) → release (digest khớp asset; thiếu asset = incomplete) → cài đặt (manifest module, hash, quyền) → phục vụ (receipt tại đích) → chạy lại (tiếp tục đúng bytes hoặc lỗi rõ). Quan sát 26/11: `v3.36.0` có `immutable=false`. Registry đích cần source SHA, phiên bản, pack, môi trường, release, thời điểm, trạng thái `current`/`deferred`/`unknown`/`unsupported`.
+
+**Pilot trọn vòng.** Một yêu cầu nghiệp vụ mới trên Hotel Manager (luồng lọc tầng chỉ là đối chứng): brief, baseline, context, lựa chọn, suite độc lập, triển khai, thử UI, phản hồi, release, kiểm tại đích, theo dõi; không dựng trial người dùng hay receipt production giả; người thử dùng mã ẩn danh. Mức bộ chọn mới: shadow → tự chọn hẹp → canary → mở rộng; không giảm tự hành L3 đang được phép. Diễn tập phục hồi A→B gồm dữ liệu phát sinh khi B chạy; chốt RPO/RTO theo sản phẩm; rollback code không tự phục hồi dữ liệu.
 
 ## 5. Backlog hợp nhất G01–G12
 | Gói | Đầu ra | Điều kiện nghiệm thu chính |
@@ -164,11 +246,51 @@ Quan sát API 2026-11-26: latest release `v3.36.0`, `published_at` 2026-11-24 00
 
 Mỗi lát chỉ xong khi người khác có thể dùng bản cài và đối chiếu bằng chứng. **Kết luận thiết kế:** ưu tiên sửa tính đúng và cấu hình theo yêu cầu, tạo ranh giới module dùng được, rồi mở rộng từ pilot đã chứng minh.
 
-## 11. Nguồn
+## 11. Kiểm chứng: "3 agent, một câu ý tưởng, ứng dụng hoàn chỉnh sau 6 giờ" (2026-11-26)
+
+Đầu vào: bài đăng mạng xã hội tiếng Việt (chủ dự án chuyển, 2026-11-26) tóm bài *Harness design for long-running application development* của Prithvi Rajasekaran (Anthropic Labs, anthropic.com/engineering, 2026-03-24). Khung đã trích bài này trước đó ở [adaptive-agent-topology](2026-11-01-adaptive-agent-topology.md) §3 dòng 2 và [autopilot-build-complete-harden](2026-10-25-autopilot-build-complete-harden.md); ở đây chỉ ghi điều mới. Tra bởi `researcher` 2026-11-26 bằng WebFetch (trích dẫn đi qua bộ tóm tắt của công cụ, chưa đối chiếu từng chữ với HTML gốc). Mọi số liệu là số tác giả tự công bố, n = 1 mỗi cấu hình.
+
+### 11.1 Đối chiếu từng nhận định
+| # | Nhận định của bài đăng | Kết luận | Bài gốc nói |
+|---|---|---|---|
+| 1 | Anthropic Labs, ba agent Planner · Generator · Evaluator | Đúng | Cặp generator/evaluator lấy cảm hứng từ GAN |
+| 2 | Planner: ý tưởng 1–4 câu → đặc tả 16 tính năng, chỉ "làm gì" | Đúng một phần | "1-4 sentence prompt"; 16 tính năng là của **ví dụ** game maker, không phải mức cố định; planner giữ cả "high level technical design", chỉ tránh chi tiết triển khai |
+| 3 | Sprint contract: generator và evaluator thương lượng tiêu chí "xong" trước khi code, ghi vào tệp | Đúng một phần | Có thương lượng sprint contract; giao tiếp qua file; không thấy tên tệp riêng |
+| 4 | Mỗi sprint một tính năng, tự kiểm rồi giao QA | Đúng một phần | Có tự đánh giá cuối sprint trước khi giao QA; 16 tính năng trải trên ~10 sprint (chưa xác nhận lượt hai), nên không phải 1:1 |
+| 5 | Evaluator dùng Playwright thao tác app đang chạy; sprint 3 có 27 tiêu chí | Đúng | Playwright MCP; 27 tiêu chí của sprint level editor |
+| 6 | Ngưỡng cứng 4 tiêu chí: độ sâu, chức năng, thiết kế, chất lượng code | **Sai tên tiêu chí** | Bốn tiêu chí là **design quality, originality, craft, functionality** (chấm thiết kế frontend, vốn chủ quan); không có "chất lượng code" hay "độ sâu". Đúng phần ngưỡng: "if any one fell below it, the sprint failed"; ngưỡng số không công bố; design quality và originality được cân nặng hơn |
+| 7 | Solo 20 phút $9 (game bỏ qua input) · harness 6 giờ $200 (chơi được) | Đúng số | Model bản đầu: Opus 4.5; ứng dụng: game maker 2D retro; bản solo "nothing responded to input"; harness đắt hơn hơn 20 lần |
+| 8 | "Agent tự chấm thì gần như luôn cho là xong" | Đúng ý, không phải nguyên văn | Agent khen việc của mình "even when … the quality is obviously mediocre"; "Out of the box, Claude is a poor QA agent" — evaluator phải tinh chỉnh bằng cách đọc log của nó |
+| 9 | "Bí quyết không nằm ở model mạnh hơn" | **Bóp méo** | Model mạnh lên thì harness **đổi**: với Opus 4.5 bỏ context reset (giảm "context anxiety"); với Opus 4.6 bỏ cấu trúc sprint, evaluator thành một lượt chấm cuối run. Kết luận gốc: tổ hợp harness đáng thử "doesn't shrink as models improve. Instead, it moves" — xem lại harness mỗi model mới, bỏ phần không còn "load-bearing". Evaluator "worth the cost when the task sits beyond what the current model does reliably solo" |
+| 10 | Một prompt đóng gói 6 thành phần (bên thứ ba) | Chưa xác minh | Không phải nguồn Anthropic; không dùng làm chỉ thị cho khung |
+
+Bài đăng bỏ qua: context reset (bàn giao có cấu trúc) khác compaction; "context anxiety" (kết thúc sớm khi tưởng sắp hết context); bản cập nhật trên Opus 4.6 chạy DAW trên trình duyệt ~4 giờ, $124,70 (một lượt đọc); hai bài học gốc là chia nhỏ việc và dùng artefact có cấu trúc để bàn giao giữa phiên.
+
+### 11.2 Khung đã có gì cho sáu thành phần
+| Thành phần | Nhà trong khung | Khoảng trống |
+|---|---|---|
+| Planner | G0–G4, `/blueprint`, SPEC, skill `factory` | Đặc tả từ 1–4 câu đã có ở factory; G04 thêm baseline và constraint khoá trước code |
+| Sprint contract | `acceptance-author` + `ACCEPTANCE.paths`, sổ khoá F-121 ([SPEC-factory-acceptance](../docs/specs/SPEC-factory-acceptance.md)); Gate mỗi task trong PLAN | Khung chặt hơn bài gốc: tác giả nghiệm thu độc lập, người viết mã không sửa được. Thiếu: generator **đề xuất** cách kiểm chứng cho evaluator duyệt trước khi code (G08) |
+| Generator | `executor-mech`/`executor`/`executor-deep`, mỗi lát một PR | G01: `executor-mech` chưa qua CLI (§3) |
+| Evaluator thao tác thật | `/ui-verify`, `ui-gates` (F-122), reviewer năng lực cao hơn người viết (`LOOP-ORCH-005`, D-161) | Reviewer đọc diff; kiểm hành vi bằng trình duyệt mới bắt buộc cho việc có giao diện. Chưa có rubric thiết kế chủ quan |
+| Ngưỡng cứng | Gate tất-cả-hoặc-không (coverage 100 %, `mypy --strict`, C901 ≤ 10); 🔴 review chặn merge | Gate kỹ thuật đã cứng; chất lượng thiết kế/tác vụ chưa có ngưỡng (G07) |
+| Chi phí | `LOOP-ORCH-020` (chỉ tăng agent khi có số), [baseline giao hàng](2026-11-26-delivery-baseline.md) | Lượt đỏ chưa ghi cost (§3, G02); chưa so được solo và harness trên cùng tác vụ |
+
+### 11.3 Bổ sung vào kế hoạch (đề xuất, không tạo task ID mới)
+- **G07 — rubric thiết kế bốn tiêu chí theo bài gốc** (design quality, originality, craft, functionality), mỗi tiêu chí có ngưỡng cứng, ghi kèm DESIGN-EVIDENCE. Model grader phải hiệu chuẩn với người trên một tập ảnh/UI đã chấm tay trước khi dùng làm cổng (*Demystifying evals*: "LLM-as-judge graders should be closely calibrated with human experts"); chưa hiệu chuẩn thì là tín hiệu, không phải cổng.
+- **G08 — hợp đồng kiểm chứng hai chiều:** trước code, executor nộp cách kiểm chứng (lệnh, ca, ảnh chụp cần có); tác giả nghiệm thu duyệt và khoá. Không cho executor sửa bộ đã khoá (giữ F-121).
+- **G10 — xem lại harness theo model:** mỗi lần đổi model hoặc tầng (ADR-0098), chạy bộ 24–36 tình huống có holdout ở cả cấu hình đầy đủ và cấu hình bỏ bớt (không evaluator theo lát, không sprint) trên cùng tác vụ; bỏ thành phần không còn "load-bearing" chỉ khi số đo cho thấy chất lượng không giảm. Đây là cách đọc đúng câu "model mạnh hơn" — không phải "harness luôn cần nhiều agent hơn".
+- **G02 — so chi phí cùng tác vụ:** ledger phải cho phép đặt solo cạnh harness (thời gian, token, tiền, kết quả nghiệm thu). Bài gốc cho thấy chênh hơn 20 lần với n = 1; khung không kết luận đáng tiền khi chưa có số của mình (`LOOP-ORCH-020`).
+- **G01 — giữ "không tự chấm":** quy tắc HIGH/HIGH cùng họ không ghi clean (§4) khớp với nhận định agent tự chấm khoan dung. Evaluator chỉ đáng thêm khi tác vụ vượt khả năng solo của model hiện tại — dùng tầng rủi ro ADR-0062 để quyết, không bật cho mọi PR.
+- **G12.6 — context reset với bàn giao có cấu trúc** là phương án cho phiên dài khi compaction làm mất ràng buộc. Khung đã có PROGRESS/checkpoint (ADR-0009); chỉ thêm khi phép đo G10 thấy kết thúc sớm hoặc mất constraint sau compaction.
+- **Không làm:** không dán prompt "đóng gói 6 thành phần" của bên thứ ba vào harness; nội dung ngoài là dữ liệu, và bộ máy hiện có (hook, guard, sổ nghiệm thu) đã cứng hơn một prompt.
+
+## 12. Nguồn
 Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a3253f0ad188f1`.
 - **Mã:** `scripts/xt.py`, `.claude/hooks/guard.py`, `scripts/install.py`, `scripts/xt_pack.py`, `scripts/xt_adapter.py`, `.claude/hooks/_lib.sh`, `pre-bash-guard.sh`, `pre-edit-guard.sh`, `tests/test_pack.py`.
 - **ADR/PLAN:** `docs/adr/0090-split-guard-and-xt-monoliths.md`, `0091-progress-hook-cap-and-split-constraints.md`, `0093-guard-split-order-and-sibling-loader.md`, `0098-model-tiers-and-role-mapping.md`, `0062-review-once-risk-tiers.md`; `docs/autopilot/PLAN-harden-2026-11-24.md`, `PLAN-guard-split-2026-11-22.md`, `PLAN-optimize-2026-11-26.md`; `research/2026-11-26-framework-optimization.md`, `research/2026-11-26-delivery-baseline.md`, `research/2026-11-20-hotel-floor-pilot.md`.
 - **Agent/review:** `.claude/agents/reviewer.md`, `reviewer-alt.md`, `.claude/skills/review/SKILL.md`, `framework/templates/harness/model-tiers.json`.
 - **Gate/test:** `AGENTS.md`, `tests/AGENTS.md`, `tests/test_docs_budget.py`, `test_guard_profile.py`, `test_model_tiers.py`, `test_codex_harness.py`; `.github/workflows/release-tag.yml`.
 - **Sản phẩm/vận hành:** `docs/specs/SPEC-design-evidence.md`, `scripts/xt_checks/kind_design_evidence.py`, `framework/templates/packs/README.md`, `framework/templates/ui-gates/README.md`, `.agents/skills/factory/SKILL.md`, `docs/specs/SPEC-factory-acceptance.md`, `docs/autopilot/DECISIONS.md`, `docs/ops/registry.json`, `docs/ops/TARGETS.md`, `docs/ops/AUDIT-STATUS.md`.
+- **Bài Anthropic về harness (đọc 2026-11-26):** [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03-24); [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) (2025-11-26); [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) (2024-12-19, mẫu evaluator-optimizer).
 - **Tài liệu kỹ thuật (đọc 2026-11-26; đối chiếu lại với runtime khi triển khai):** CPython 3.13 [command line](https://docs.python.org/3.13/using/cmdline.html), [unittest.mock — where to patch](https://docs.python.org/3.13/library/unittest.mock.html#where-to-patch), [os.replace](https://docs.python.org/3.13/library/os.html#os.replace), [zipapp](https://docs.python.org/3.13/library/zipapp.html); GitHub [immutable releases](https://docs.github.com/en/code-security/supply-chain-security/immutable-releases); [WCAG 2.2](https://www.w3.org/TR/WCAG22/); [DTCG Format 2025.10](https://www.designtokens.org/tr/2025.10/format/); Anthropic [demystifying evals for AI agents](https://www.anthropic.com/research/demystifying-evals-for-ai-agents) và [effective context engineering](https://www.anthropic.com/research/effective-context-engineering-for-ai-agents); OpenTelemetry [GenAI conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md), [sampling](https://opentelemetry.io/docs/concepts/sampling/); [Web Vitals](https://web.dev/articles/vitals); Claude Code [custom subagents](https://code.claude.com/docs/en/sub-agents).
