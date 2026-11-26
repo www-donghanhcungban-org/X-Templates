@@ -148,10 +148,11 @@ class InstallTest(unittest.TestCase):
                 self.subTest(new=new),
                 mock.patch.object(xt_distribution, "install_source", return_value=new),
                 mock.patch.object(install, "install_framework", side_effect=OSError("interrupted")),
-                redirect_stderr(io.StringIO()),
-                self.assertRaises(OSError),
+                redirect_stderr(io.StringIO()) as err,
             ):
-                self.run_install()
+                self.assertEqual(self.run_install(), 1)  # T-5043: main báo lỗi ghi và cách khôi phục, không traceback
+            self.assertIn("(không rõ tệp): interrupted", err.getvalue())
+            self.assertIn("chạy lại đúng lệnh install.py", err.getvalue())
             self.assertEqual(source(), kept)
         with mock.patch.object(xt_distribution, "install_source", return_value={"untagged": "unknown"}):
             with redirect_stderr(io.StringIO()):
@@ -2199,7 +2200,7 @@ class InstallUpgradeTest(unittest.TestCase):
             real(path, text)
 
         with mock.patch.object(install, "write_atomic", side_effect=fail_v2), redirect_stderr(io.StringIO()):
-            self.assertRaises(OSError, install.main, [str(self.target), "--label", "t"])
+            self.assertEqual(install.main([str(self.target), "--label", "t"]), 1)
         xt_dir = self.target / ".xtemplates"
         legacy = json.loads((xt_dir / "harness.sha256.json").read_text(encoding="utf-8"))
         v2 = json.loads((xt_dir / "manifest.json").read_text(encoding="utf-8"))["files"]
