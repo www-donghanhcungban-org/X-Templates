@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Guard: lookahead chặn `.`/`..` ở trường `repo` của lệnh merge ghim hoạt động thật (AUD-HAR-542, f-string viết `{1, 2}` thành `(1, 2)`); sổ audit đóng AUD-HAR-541/542/558…561/566 theo #815, #818–#821.
+
 - `verify-render` sửa nốt hai âm tính giả của kiểm cắt chữ khi reflow (rà #820, AUD-HAR-561): chữ RTL tràn sang trái không còn lọt (xét cả mép trái); trang dài quá 500 nút chữ không còn im lặng cho qua (hết trần thì báo `UNMEASURED`, nút trắng không tính). Chữ trong `display: contents` (kể cả slot mặc định) được đo, và khung con nhận từ phía Node thay vì `window.parent` (trang ghi đè `parent` không làm điều khiển cấp cao thành UNMEASURED). Hai ca Chromium mới đỏ khi thiếu bản sửa; còn nợ 🟠 ghi ở sổ audit (pseudo `content: ""` không tô gì, chữ trong shadow DOM/ảnh bị cắt, cuộn lồng).
 
 - `verify-render` sửa các lỗi rà #819 (AUD-HAR-558…561): vi phạm đã đo không còn bị UNMEASURED của phần khác trong cùng điều khiển che mất; `::before`/`::after` có nền, định vị tuyệt đối hay độ mờ riêng (kể cả `content: ""`) báo `UNMEASURED`; độ mờ, bộ lọc, hoà trộn kiểm ở mọi tổ tiên; khung con không có nền đục báo `UNMEASURED`; phần tử con ẩn không bị đo và slot đã gán bỏ phần dự phòng; đường dẫn `null` của shadow root giữ `null` trong iframe nên không khai ngoại lệ chùm được. Kiểm reflow chỉ báo vi phạm khi chữ bị cắt giữa dòng, chữ nằm hẳn ngoài khung (carousel) thành `UNMEASURED` khai ngoại lệ được bằng `check: reflow`, bỏ qua điều khiển form, chữ ẩn thị giác và ellipsis. Năm ca Chromium mới đỏ khi thiếu bản sửa.

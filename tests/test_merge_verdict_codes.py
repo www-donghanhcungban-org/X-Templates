@@ -104,6 +104,18 @@ class MergeVerdictCodesTest(unittest.TestCase):
                     with self.subTest(verdict=verdict, entry=entry, policy=policy):
                         self.check(entry, merge_result(verdict), policy, "MERGE_INELIGIBLE")
 
+    def test_repo_field_rejects_dot_components_only(self):
+        """AUD-HAR-542: lookahead chặn `.`/`..` phải là `{1,2}` thật, không phải `(1, 2)` của f-string."""
+        import re
+
+        pattern = guard.MERGE_FIELDS["repo"]
+        for bad in ("o/.", "o/.."):
+            with self.subTest(bad=bad):
+                self.assertIsNone(re.fullmatch(pattern, bad))
+        for good in ("o/r", "o/.x", "o/a.b", "o/..x"):
+            with self.subTest(good=good):
+                self.assertIsNotNone(re.fullmatch(pattern, good))
+
     def test_valid_pinned_merge_still_allowed(self):
         for entry in BOUND_ENTRIES:
             for policy in POLICIES:
