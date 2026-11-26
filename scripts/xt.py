@@ -3325,6 +3325,16 @@ def acceptance_module() -> Any:
     return _acceptance_source(path) if sibling_exists("xt_acceptance.py") else None
 
 
+def design_module() -> Any:
+    """`xt_design` (ADR-0106: khách duyệt thiết kế); bộ cài tối giản không có → None, như `acceptance_module`."""
+    if not sibling_exists("xt_design.py"):
+        return None
+    _sibling_imports()
+    import xt_design
+
+    return xt_design
+
+
 def loop_record(
     task: str, cmd: List[str], base: Optional[Path] = None, executor: Optional[str] = None, tick: bool = True
 ) -> int:
@@ -3348,6 +3358,8 @@ def loop_record(
         )
         return 2
     locked = stage_plan_problem(base, str(st.get("plan"))) if st.get("plan") else ""
+    design = design_module()  # task `ui: yes` khi khách chưa duyệt thiết kế (ADR-0106)
+    locked = locked or (design.record_problem(sys.modules[__name__], base, st, task) if design else "")
     if locked:  # không nhận bằng chứng cho task của giai đoạn khoá (ADR-0058)
         print(f"✗ {locked}", file=sys.stderr)
         return 2
@@ -6264,7 +6276,7 @@ def _harness_guard(base: Path) -> str:
     if not path.is_file() or _syntax_error(path):
         return f"không có hoặc lỗi cú pháp: {GUARD_FILE}"
     with _env_patch("XT_GUARD_POLICY", ""):
-        missed = [c for c in HARNESS_DENY if not guard_block(c, base, [path])]
+        missed = [c for c, why in zip(HARNESS_DENY, guard_blocks(list(HARNESS_DENY), base, [path])) if not why]
     return "không chặn: " + ", ".join(missed) if missed else ""
 
 
@@ -8642,7 +8654,8 @@ def _loop_next(args: argparse.Namespace, base: Path) -> int:
     if locked:  # PLAN sửa sau `loop init` sang giai đoạn khoá → không giao task (ADR-0058)
         print(f"✗ {locked}", file=sys.stderr)
         return 2
-    ready = plan_ready(tasks, _deferred(st))
+    ready, design = plan_ready(tasks, _deferred(st)), design_module()
+    ready, held = design.hold(sys.modules[__name__], base, ready) if design else (ready, {})  # ADR-0106
     unknown = plan_unknown_after(tasks)
     bad = plan_bad_links(tasks)
     out = {
@@ -8652,12 +8665,13 @@ def _loop_next(args: argparse.Namespace, base: Path) -> int:
         "cycles": plan_cycle_nodes(tasks),
         "unknown_after": unknown,
         "bad_links": bad,
+        "design_hold": held,
     }
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
         return 0
     print("Sẵn sàng: " + (", ".join(r["id"] for r in out["ready"]) or "—"))
-    for note in _unknown_after_note(unknown) + _bad_links_note(bad):
+    for note in _unknown_after_note(unknown) + _bad_links_note(bad) + [f"⛔ {k} — {v}" for k, v in held.items()]:
         print(f"  {note}")
     for o in out["overlaps"]:
         print(f"  ⚠ {' ∩ '.join(o['tasks'])} cùng ghi {', '.join(o['files'])} — làm tuần tự")
@@ -10867,6 +10881,8 @@ def _wave_handoff(tasks: List[Dict[str, Any]], st: Dict[str, Any], limit: int, b
                     unverified[t["id"]] = problem["reason"]
     # Tiền nhiệm chưa được kiểm chứng vẫn là việc mở bị chặn. Dùng cùng quy tắc lan chặn như task defer.
     pending = [{**t, "state": " "} if t["id"] in unverified else t for t in tasks]
+    design = design_module()  # task `ui: yes` chờ khách duyệt thiết kế: chặn như task defer (ADR-0106)
+    unverified.update(design.hold(sys.modules[__name__], base, pending)[1] if design else {})
     schedule = plan_waves(pending, {**deferred, **unverified}, limit)
     waves = schedule["waves"]
     packets = []
@@ -10905,7 +10921,8 @@ def _plan_waves(args: argparse.Namespace, base: Path) -> int:
             print(f"✗ {exc}", file=sys.stderr)
             return 2
         return 0
-    out = plan_waves(parse_plan(plan), _deferred(st or {}), args.max)
+    design, todo = design_module(), (parse_plan(plan), _deferred(st or {}), args.max)  # ADR-0106: giữ như --handoff
+    out = design.waves(sys.modules[__name__], base, *todo) if design else plan_waves(*todo)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
@@ -14145,6 +14162,8 @@ def _stage_git(base: Path, *args: str) -> "subprocess.CompletedProcess[str]":
 
 def cmd_stage(args: argparse.Namespace) -> int:
     base = loop_root(project_dir())  # cùng gốc với `loop` (worktree đang sửa — review #327)
+    if args.stage_cmd.startswith("design") or getattr(args, "design", False):  # sổ DESIGN.json, không đụng STAGE.json
+        return int(design_module().cmd(sys.modules[__name__], args, base))
     try:
         fn = _stage_dispatch(args, base)
         led = read_stage(base) if fn is None else update_stage(base, fn)
@@ -19328,7 +19347,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     fixed: List[str] = []
     if args.fix and runtime is None:
         fixed, failed = doctor_fix(findings)
-        findings = doctor_findings(base, args.framework, offline=offline) + failed
+        findings = (doctor_findings(base, args.framework, offline=offline) if fixed or failed else findings) + failed
     errors = sum(f.level == "error" for f in findings)
     if args.json:  # hợp đồng máy đọc: {"ok", "base", "version", "fixed", "findings": [{code, level, msg, fixable}]}
         rows = [{"code": f.code, "level": f.level, "msg": f.msg, "fixable": f.fix is not None} for f in findings]
@@ -23443,6 +23462,12 @@ def build_parser() -> argparse.ArgumentParser:
     sap.add_argument("--note", required=True, help="phạm vi/điều kiện duyệt")
     snc = ssub.add_parser("new-cycle", allow_abbrev=False, help="chu kỳ mới (bài toán lớn) sau khi xong giai đoạn 3")
     snc.add_argument("--reason", required=True)
+    if sibling_exists("xt_design.py"):  # ADR-0106: khách duyệt thiết kế, sổ docs/autopilot/DESIGN.json
+        sap.add_argument("--design", action="store_true", help="duyệt bản thiết kế đã trình (chỉ người, ADR-0106)")
+        ssd = ssub.add_parser("design-submit", allow_abbrev=False, help="trình bản thiết kế ở HEAD sạch chờ duyệt")
+        ssd.add_argument("--evidence", required=True, help="tệp mockup/ảnh đã commit trong cây")
+        ssub.add_parser("design-reopen", allow_abbrev=False).add_argument("--reason", required=True)
+        ssub.add_parser("design-check", allow_abbrev=False).add_argument("--json", action="store_true")
     pstg.set_defaults(fn=cmd_stage)
     lst = lsub.add_parser("stop")
     lst.add_argument("--reason", default="dừng thủ công")

@@ -1,7 +1,7 @@
 ---
 title: Mẫu AGENTS.md cho dự án
 kind: template
-updated: 2026-11-21
+updated: 2026-11-26
 ---
 
 # AGENTS.md — luật vận hành cho AI agent trong dự án này
@@ -21,7 +21,7 @@ Kỹ sư cấp cao kiêm quản lý dự án: dẫn dắt qua G0–G8 (`00-metho
 ## 3. Đọc theo thứ tự khi bắt đầu phiên
 1. `PROGRESS.md` (hook đã nạp). "tiếp tục" = nối *Đang làm*/*Bàn giao*, không hỏi lại.
 2. `xt.yaml` — lệnh chuẩn **và cấu hình thật** (`commit_gate`, `delivery_phase`, `merge_*`); không suy diễn từ văn xuôi.
-3. `BLUEPRINT.md` — mục MUST còn mở là việc chưa xong.
+3. `BLUEPRINT.md` — mục MUST còn mở là việc chưa xong. Chạy `<XT> blueprint-status BLUEPRINT.md` lấy số đếm và ID mục còn mở; chữ một mục tra theo ID khi cần (grep ID trong thư mục nguồn của dự án, hoặc thêm `--exclude-dir=.xtemplates` để không lẫn bản cài của khung). Quy mô S (khoảng 40 KB ở web-app) đọc thẳng được; M/L thì không: Read trả tối đa 25 000 token và từ chối tệp > 256 KB (M ~247 KB chỉ thấy trang đầu, L ~544 KB bị từ chối).
 4. Khi cần: `.xtemplates/framework/00-method/` (P1–P12, luật bằng chứng), module `NN-*/`, autopilot `11-autonomous-loop/README.md`.
 
 ## 4. Luật bất biến (tóm tắt; nhà: `00-method/principles.md`, `11-autonomous-loop/`)
@@ -40,7 +40,7 @@ Kỹ sư cấp cao kiêm quản lý dự án: dẫn dắt qua G0–G8 (`00-metho
 Quyết định chuyên môn (spec hở, công nghệ/thiết kế, phạm vi, bảo mật/pháp lý mơ hồ, duyệt PLAN): **phiên chính tự duyệt, không chờ người**, theo tiêu chí chất lượng cuối (trên thắng dưới): (1) đúng và an toàn — cách hiểu chặt hơn · (2) giữ đường lùi · (3) bền, đơn giản, theo chuẩn, test được · (4) trải nghiệm cuối · (5) tốc độ/chi phí chỉ phá hoà. **Mặc định tự host** khi phương án cần tài khoản/khoá chỉ chủ dự án có (đề xuất dịch vụ thật bằng `--prod`). Dữ kiện trước, ≥ 2 phương án, ghi `<XT> loop decide …` (D-NNN; kiến trúc thêm ADR). Subagent không tự quyết. Chi tiết: `stop-points-and-escalation.md` §Điểm quyết định. [ĐIỀN loại quyết định cần người duyệt — mặc định: không.]
 
 ## 6. Điểm dừng bắt buộc về hành động (nhà: `stop-points-and-escalation.md` §Điểm dừng)
-Máy chia ba nhóm, không hỏi người: **máy chặn** (không đảo ngược, tắt hook, ghi tay `.autopilot/`/`STAGE.json`, merge chưa đủ điều kiện) · **cho chạy** (deploy/publish, sửa cổng/CI/hook kèm lý do, thêm phụ thuộc, ra ngoài máy dev) · **vẫn cần người** (tiền thật, dữ liệu người dùng thật, dịch vụ trả phí/khoá thật, bế tắc máy, duyệt giai đoạn trừ `stage_approval: agent`; ngoại lệ cứng khi `merge_hard_exceptions: human` — trừ việc trong mục Ủy quyền production của PLAN và `<XT> grant-check` exit 0). Autopilot: `<XT> loop defer --task <ID> --reason …` rồi làm tiếp; mọi việc còn lại phụ thuộc → `loop block`. Autopilot: `<XT> doctor --fix` đầu tiên, **một phiên đến khi xong**, quyền Auto. [ĐIỀN điểm dừng riêng của dự án — mặc định: không.]
+Máy chia ba nhóm, không hỏi người: **máy chặn** (không đảo ngược, tắt hook, ghi tay `.autopilot/`/`STAGE.json`, merge chưa đủ điều kiện) · **cho chạy** (deploy/publish, sửa cổng/CI/hook kèm lý do, thêm phụ thuộc, ra ngoài máy dev) · **vẫn cần người** (tiền thật, dữ liệu người dùng thật, dịch vụ trả phí/khoá thật, bế tắc máy, duyệt giai đoạn trừ `stage_approval: agent`, duyệt thiết kế của khách `stage approve --design`; ngoại lệ cứng khi `merge_hard_exceptions: human` — trừ việc trong mục Ủy quyền production của PLAN và `<XT> grant-check` exit 0). Autopilot: `<XT> loop defer --task <ID> --reason …` rồi làm tiếp; mọi việc còn lại phụ thuộc → `loop block`. Autopilot: `<XT> doctor --fix` đầu tiên, **một phiên đến khi xong**, quyền Auto. [ĐIỀN điểm dừng riêng của dự án — mặc định: không.]
 
 ## 7. Cổng (lệnh thật ở `xt.yaml`)
 - **Trước commit:** hook/git hook (sàn chung) chạy `dev-task.sh gate-fast` theo `commit_gate`; tự review diff; conventional commit.
