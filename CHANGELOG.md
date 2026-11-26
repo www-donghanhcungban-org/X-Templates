@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `xt.py` nhanh hơn, 0 dòng ròng (T-5048, AUD-PERF-028): `harness-check` nạp guard một lần cho cả `HARNESS_DENY` (`guard_blocks`; 9,2 → 2,1 s, min 4 lần) và `doctor --fix` chỉ chạy lại `doctor_findings` khi đã sửa hoặc có lỗi sửa.
+
 - `check-links.py` không còn quét `.claude/worktrees` (bản sao repo của subagent): `iter_md` duyệt bằng `os.walk` và tỉa `SKIP_DIRS` cùng thư mục đó tại chỗ thay vì `rglob` rồi lọc, nên checkout có 30 worktree giả từ ~35 s xuống ~0,8 s; dự án đích chạy subagent trong worktree không còn bị lint chậm hay đỏ giả vì link hỏng của bản sao (chỉ bỏ đúng tiền tố `.claude/worktrees` ở gốc, submodule vẫn được quét); `tests/test_doc_command_drift.py` loại cùng đường.
 
 - Guard: lookahead chặn `.`/`..` ở trường `repo` của lệnh merge ghim hoạt động thật (AUD-HAR-542, f-string viết `{1, 2}` thành `(1, 2)`); sổ audit đóng AUD-HAR-542/558…561/566 theo #822, #815, #818–#821; AUD-HAR-541 còn mở (`[[=v=]]`, `??????+b`, `?*` vẫn lọt).
