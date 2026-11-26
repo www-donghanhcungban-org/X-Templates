@@ -2190,7 +2190,7 @@ class BaseSec002SelfMatchTest(unittest.TestCase):
         self.assertIsNotNone(rx.search("-----BEGIN " + "RSA PRIVATE KEY-----"))
         hits = [
             f"{f.relative_to(ROOT)}:{n}"
-            for f in [ROOT / "BLUEPRINT.md", *sorted((ROOT / "framework").rglob("*.md"))]
+            for f in [ROOT / "BLUEPRINT.md", ROOT / "BLUEPRINT-BACKLOG.md", *sorted((ROOT / "framework").rglob("*.md"))]
             for n, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1)
             if rx.search(ln)
         ]

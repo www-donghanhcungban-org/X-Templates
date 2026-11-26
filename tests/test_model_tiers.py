@@ -87,6 +87,13 @@ class ModelTiersTest(unittest.TestCase):
             with self.subTest(agent=name):
                 self.assertRegex(frontmatter(text).get("maxTurns", ""), r"^[1-9][0-9]*$")
 
+    def test_four_agents_pin_the_two_prevention_lines(self):
+        # T-5045 (C11): guard chặn lệnh vừa ghi vừa đọc cùng một tệp; lệnh chạy dài chia lượt ≤ 4 phút (TTL cache 5 phút)
+        for name in ("executor", "executor-deep", "reviewer", "reviewer-alt"):
+            with self.subTest(agent=name):
+                self.assertIn("hai lệnh Bash riêng", AGENTS[name])
+                self.assertIn("lượt ≤ 4 phút", AGENTS[name])
+
     def test_codex_mirror_has_every_agent(self):
         mirror = {p.stem for p in (ROOT / ".codex" / "agents").glob("*.toml")}
         self.assertEqual(mirror, set(AGENTS))
