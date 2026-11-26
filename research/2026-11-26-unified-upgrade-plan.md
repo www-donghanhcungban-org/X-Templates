@@ -8,7 +8,7 @@ updated: 2026-11-26
 
 > **Trạng thái: đề xuất, chưa phải PLAN.** Bản chuyển từ PDF "Kế hoạch nâng cấp hợp nhất" (40 trang, đối chiếu mã ở commit `02480424`). Chưa có task ID đăng ký, chưa sửa mã. Khi triển khai phải ánh xạ vào PLAN đang có (không lập kế hoạch cạnh tranh), giữ task đã xong, và ghi rõ ADR bị thay thế. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
 >
-> Bản chuyển này gồm đủ 40 trang PDF (cô đọng; số đo giữ nguyên) và §11: kiểm chứng một bài đăng mạng xã hội về harness ba agent của Anthropic, đối chiếu với khung, kèm các bổ sung đưa vào G01–G12.
+> Bản chuyển này gồm đủ 40 trang PDF (cô đọng; số đo giữ nguyên), §11 kiểm chứng một bài đăng về harness ba agent của Anthropic, và **§12 nghiên cứu lại ở `main` `259ac21c`**: số đo mới, trạng thái năm lỗi và 31 lát, sáu hệ quả PDF chưa nêu, thứ tự Đợt 0 đề xuất. Số ở §2, §3, §8 là của PDF; chỗ nào lệch với `main` thì §12 thắng.
 
 ## 1. Ba quyết định chính
 1. **Tách theo trách nhiệm và phụ thuộc.** Một chương trình thống nhất, chia module có hợp đồng rõ; kế thừa ADR-0090/0091/0093, registry, cơ chế quyết định; bảo toàn loader, CLI, bản cài, bộ kiểm.
@@ -285,7 +285,88 @@ Bài đăng bỏ qua: context reset (bàn giao có cấu trúc) khác compaction
 - **G12.6 — context reset với bàn giao có cấu trúc** là phương án cho phiên dài khi compaction làm mất ràng buộc. Khung đã có PROGRESS/checkpoint (ADR-0009); chỉ thêm khi phép đo G10 thấy kết thúc sớm hoặc mất constraint sau compaction.
 - **Không làm:** không dán prompt "đóng gói 6 thành phần" của bên thứ ba vào harness; nội dung ngoài là dữ liệu, và bộ máy hiện có (hook, guard, sổ nghiệm thu) đã cứng hơn một prompt.
 
-## 12. Nguồn
+## 12. Nghiên cứu lại ở `main` và nguồn ngoài (2026-11-26)
+
+Mốc: `main` `259ac21c` (7 commit sau mốc `02480424` của PDF). Phần mã do phiên chính đo bằng lệnh chỉ đọc (`wc`, `grep`, `sed -n`, `scripts/xt_guard_profile.py`, `unittest`) trên worktree tách của `origin/main`; guard chặn script Python tự viết chạm `guard.py`, nên không tiêm lỗi lại — mục nào chỉ đọc mã thì ghi rõ. Nguồn ngoài do `researcher` đọc cùng ngày (WebFetch qua bộ tóm tắt; câu trích chưa đối chiếu từng chữ với HTML, trừ tên hook `PreSkillShellCommand` đã grep HTML thô).
+
+### 12.1 Số đo lại
+| Chỉ tiêu | PDF (`02480424`) | `main` `259ac21c` |
+|---|---|---|
+| `xt.py` dòng / trần | 23.643 / 23.644 | **23.668 / 23.668** — ADR-0106 nới trần 24 dòng và dùng hết; dư địa 0 |
+| `guard.py` dòng / trần | 24.689 / 24.689 | 24.689 / 24.689 — không đổi, dư địa 0 |
+| Byte | 1.268.478 · 1.390.801 | 1.270.482 · 1.390.831 |
+| `def` cấp tệp (`grep '^def '`) | 1.300 · 1.421 | 1.301 · 1.421 |
+| `patch.object(guard, …)` | 112 / 36 file | 112 / 36 file |
+| Patch trỏ `xt` | 407 dòng / 55 file | 404 / 52 theo regex của lượt này (heuristic khác, cùng cỡ) |
+| Corpus Guard (`tests/fixtures/autonomy/guard.json`) | 4.106 ca | 4.106 ca |
+| 47 test chọn lọc | exit 0 (3.13.5) | exit 0, 3,056 s (CPython 3.13.18) |
+| Compile trung vị, 20 lần | XT 358,79 ms · Guard 259,00 ms | XT 261,3 ms (252,1–297,8) · Guard 308,3 ms (282,0–407,0) bằng `xt_guard_profile.py` |
+
+Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận cảnh báo của PDF rằng số này không so được giữa môi trường và không suy ra p95 hook.
+
+### 12.2 Năm lỗi của §3: trạng thái ở `main`
+| Lỗi | Trạng thái | Bằng chứng |
+|---|---|---|
+| `executor-mech` chưa qua CLI | **Còn** (chạy lệnh) | `xt.py loop record --help` chỉ nhận `--executor {executor,executor-deep}`; `EXECUTOR_AGENTS` (xt.py:1580) có `default`/`deep`; `EXEC_TIER_RE` chỉ `default\|deep`; `executor-mech` nằm ở `DOCTOR_AGENTS_OPTIONAL` (xt.py:5103) |
+| Cost lượt Gate đỏ bị bỏ | **Còn** (đọc mã) | `_loop_record`: `if cost and rc == 0:` rồi mới `write_cost` (xt.py:9688–9692); đã thuộc phạm vi `T-5010` (chưa merge) |
+| Ghi tệp cài không nguyên tử | **Còn ở `main`, đang có PR** | `write_copy` gọi `dst.write_bytes` (install.py:410–425) trong khi `write_atomic` đã có (install.py:228); PR nháp #840 (`T-5043`) sửa — không mở việc trùng |
+| Release gặp tag có sẵn thoát sớm | **Còn** (đọc mã) | `release-tag.yml` dòng 60–63: `git show-ref … refs/tags/v$v` → `exit 0` trước khi ghi `GITHUB_OUTPUT`, không kiểm release đã công bố hay tag trỏ đúng commit |
+| Guard `core` mất ngữ cảnh khi lỗi | **Còn** (đọc mã, chưa tiêm lỗi lại) | `main()` gọi `_failure_decision(mode, payload, _payload_cmd(payload))` với `mode == "core"`; nhánh hỏi chỉ khớp `mode == "bash"`, và `_payload_cmd` đọc `tool_input.command` trong khi payload `core` đặt `command` ở cấp trên → trả `{"decision": ""}` → `_core_output` in `allow` (guard.py:24529–24542, 24602–24605, 24652–24672) |
+
+### 12.3 Trạng thái 31 lát (thay cột trạng thái ngầm của §8)
+- **Đã merge** (theo tiêu đề PR trên `main`; ô PLAN chưa tick nên `git log` là nguồn): L00 `T-5032` (#830), L01 `T-5033` (#829), L03 `T-5034` (#825), L04 `T-5035` (#828), L06 `T-5036` (#827), C01 `T-5037` (#826), C02 `T-5039` (#839), C07 `T-5049` (#836), C08 `T-5047` (#835), C09 `T-5042` (#832), C10 `T-5048` (#838), C11 `T-5045` (#831), C12 `T-5046` (#833), C13 `T-5044` (#834). Ánh xạ C↔T suy từ mô tả task của PLAN-optimize-b.
+- **Đang mở:** C05 `T-5043` (PR nháp #840).
+- **Chưa làm:** C03/C04 `T-5040` (settings chưa có `PreSkillShellCommand` hay `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`), C06 `T-5041` (AUD-HAR-541 còn **mở** trong sổ), L02, L05, C14–C24; `T-5009`/`T-5010`/`T-5011`, `T-3996`, `T-3987`…`T-3990`, `T-5019`.
+- Trùng phạm vi cần gộp khi lập PLAN: PR nháp #810 (nghiên cứu giảm token) đã đề xuất `omitClaudeMd` cho `explore`/`executor-mech`, đặt độ sâu và số subagent đồng thời bằng biến môi trường, và rà chi phí `reviewer-alt` ở `max` — G01 dùng lại, không viết lần hai.
+
+### 12.4 Sáu hệ quả mà PDF chưa nêu hoặc cần sửa
+1. **Cả hai tệp lớn không còn dòng nào trong ngân sách.** Mọi sửa G01/G02 chạm `xt.py` và bản sửa lỗi `core` của Guard phải 0 dòng ròng, đặt logic ở module anh em (cách ADR-0106 làm với `xt_design.py`), hoặc kèm ADR nới trần (ADR-0092). Đề xuất đảo thứ tự Đợt 0: **một lát tách giải phóng trần đi trước các bản sửa trong `xt.py`**. Ứng viên theo số đo của PDF: shard/weights (`xt.py` 2914–3017, 121 dòng, 3 tham chiếu ngoài, đã có tên đích `xt_shard` ở ADR-0090) hoặc CSS contrast (269 dòng, không gọi ra ngoài cụm).
+2. **Trần `high` đụng thật vào luật "reviewer cao hơn người viết".** `review_capability_error` (xt.py:17945): khác họ cùng nhà cung cấp → so bậc, effort không bù; cùng họ → effort reviewer phải cao hơn hẳn. Với frontmatter hiện tại:
+
+   | Người viết | Reviewer opus/`high` | Kết quả |
+   |---|---|---|
+   | `explore`, `executor-mech` (haiku) · `executor`, `researcher`, `acceptance-author` (sonnet) | bậc cao hơn | Nhận, không phụ thuộc effort |
+   | `executor-deep` (opus, `effort: high`) | cùng họ, high = high | **Bị từ chối clean** |
+   | Phiên chính viết code (opus, effort tới `xhigh` — D-558/D-559) | cùng họ, high ≤ tác giả | **Bị từ chối clean**, trừ khi phiên chính chạy ≤ `medium` |
+
+   Bốn lối ra, xếp theo tiêu chí AGENTS §4: (a) reviewer bậc `top` ở effort ≤ `high` cho diff của `executor-deep`/phiên chính — giữ đúng "năng lực cao hơn", nhưng bậc `top` hiện chỉ bật khi chủ dự án cho phép (`LOOP-ORCH-019`, D-605) và giá gấp đôi theo `model-tiers.json`; (b) reviewer khác nhà cung cấp — bảng bậc ngoài Anthropic còn `verified: false`; (c) hạ effort thật của người viết xuống `medium` — hợp lệ về máy nhưng làm yếu tầng sâu, chỉ nên dùng khi có số đo G10; (d) không có reviewer hợp lệ → `pr reviewed --inconclusive` và ghi nợ. **Khuyến nghị:** (a) nếu chủ dự án bật, không thì (d); không dùng (c) để "làm cặp hợp lệ". Đây là quyết định phải ghi bằng `loop decide` cùng ADR thay phần effort của ADR-0098.
+3. **Frontmatter không đủ để cưỡng chế trần.** Tài liệu Claude Code: `effort` của subagent "Overrides the session effort level, but not the CLAUDE_CODE_EFFORT_LEVEL environment variable"; tham số `effort` theo lần gọi lại đè frontmatter và giữ khi resume. Thứ tự từ cao xuống: biến môi trường → tham số lần gọi → frontmatter → effort phiên. Vậy "chặn trước launch" của §4 phải kiểm ba điểm: biến môi trường của phiên, `tool_input.effort` của lời gọi Agent cho hai vai reviewer (hook `PreToolUse`), và `--reviewer-effort` khi `pr reviewed` ghi sổ. Docs nhắc một trần `maxEffortLevel` trong settings; phạm vi theo vai của nó **chưa xác minh**.
+4. **`maxTurns`: hành vi hết lượt khớp PDF, mặc định không có trong docs.** "returns its output marked as partial, and Claude can resume it" (resume bằng SendMessage, giữ nguyên lịch sử). `agent_toml` (install.py:1512–1529) chỉ ghi `name`, `description`, `model` (khi bật), `model_reasoning_effort`, `developer_instructions` — xác nhận Codex không nhận `maxTurns`; bản Codex của `reviewer-alt` đang là `max`.
+5. **Sàn Python:** theo devguide, 3.13 đã sang giai đoạn chỉ sửa bảo mật (EOL dự kiến 2029-10); 3.14 và 3.15 đang bugfix. Sàn ≥ 3.13 của ADR-0094 còn hợp lệ nhưng lỗi thường của 3.13 không còn được sửa — ghi vào lần xét sàn kế. `-I` kéo theo `-E -P -s`, **không** kèm `-S`, nên site-packages hệ thống vẫn vào `sys.path`: khớp AUD-HAR-572 (còn mở). Thêm `-S` phải thử cùng bộ đo coverage, vì PROGRESS ghi coverage cần nằm trong site-packages của `python3`.
+6. **Immutable releases đã GA** (changelog GitHub 2025-10-28): bật ở Settings của repo hoặc tổ chức, chỉ áp cho release tạo sau đó; publish xong thì tag khoá vào commit, asset không sửa/xoá được, tên tag không tái dùng, và GitHub tự sinh release attestation. `v3.36.0` đang `immutable=false` → thêm "bật release immutability" vào việc admin của `T-4007`; quy trình nháp → gắn đủ asset → publish của khung đã đúng khuyến nghị.
+
+### 12.5 Nguồn ngoài: đối chiếu các nhận định của PDF
+| Nhận định | Kết quả đọc 2026-11-26 |
+|---|---|
+| `PreSkillShellCommand` có thật; chặn bằng exit 2 | Đúng; phiên bản bắt đầu chưa xác minh |
+| `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` | Mặc định 3 (từ v2.1.219); đặt 1 để tắt lồng |
+| `os.replace` nguyên tử | Đúng trên POSIX khi thành công; có thể lỗi nếu khác filesystem |
+| "Patch nơi lookup" | Đúng: "you patch where an object is looked up" |
+| `zipapp` | Gói có extension C không chạy được từ zip; `__main__.py` ở gốc |
+| WCAG 2.2 AA: 1.4.4 (200 %), 2.4.11, 2.5.7, 2.5.8 (24×24 có 5 ngoại lệ); 2.5.5 (44×44) là AAA | Đúng. Errata chỉ sửa biên tập (mới nhất 2026-08-17). WCAG 3 là Working Draft 2026-09-10, không thay WCAG 2. Con số 320 CSS px của 1.4.10 không nằm trong đoạn đọc lượt này (chưa xác minh lại; khung đã dẫn ở `ui-gates/README.md`) |
+| DTCG 2025.10 không phải W3C Recommendation | Đúng: "Final Community Group Report" 2025-10-28, "not a W3C Standard nor is it on the W3C Standards Track" |
+| OTel GenAI còn Development; không capture nội dung mặc định | Đúng; conventions đã chuyển sang repo `semantic-conventions-genai`; mặc định `NO_CONTENT`, bật bằng `OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT`. Sampling bỏ trace không được chọn → ledger cost cần đường ghi riêng |
+| Web Vitals LCP 2,5 s · INP 200 ms · CLS 0,1 ở p75 | Đúng, tách mobile và desktop |
+| Bộ eval 24–36 tình huống | Nằm trong khuyến nghị "20-50 simple tasks drawn from real failures" (*Demystifying evals*, 2026-01-09). Bổ sung: lấy tình huống từ lỗi thật (sổ AUD, review 🔴), và báo `pass^k` (cả k lần đều đạt) cho ca critical thay vì `pass@k` |
+| Bài harness (§11) | Lượt hai xác nhận: "a 16-feature spec spread across ten sprints"; bản Opus 4.6 bỏ sprint, evaluator một lượt cuối; DAW 3 giờ 50 phút, $124,70; không có tên tệp cho sprint contract |
+
+### 12.6 Đợt 0 sau khi đo lại (đề xuất thứ tự PR; chưa đăng ký task mới)
+| # | PR | Tệp chính | Việc đã có nhà | Ràng buộc |
+|---|---|---|---|---|
+| 1 | Hoàn tất ghi nguyên tử bộ cài | `scripts/install.py` | `T-5043`, PR #840 | Đã mở; chỉ cần rà và merge |
+| 2 | Lát tách giải phóng trần `xt.py` (shard/weights → `xt_shard`) | `scripts/xt.py`, module mới, `xt.yaml` (typecheck), `install.py`/`xt_pack.py` (danh sách cài), tests | ADR-0090; G12.2 | Manifest symbol, chuyển patch tới nơi lookup, kiểm bản cài; hạ trần sau khi merge |
+| 3 | Chính sách reviewer `high`/120 | `.claude/agents/reviewer*.md`, `.claude/skills/review/SKILL.md`, `.codex/agents/*` (sinh lại), `tests/test_model_tiers.py`, `test_codex_harness.py`, ADR mới | G01; C12 | Cần quyết định §12.4 mục 2 trước; kiểm ba điểm của mục 3 |
+| 4 | `executor-mech` qua CLI và chuyển cấp đỏ một lần | module vai (anh em của `xt.py`), `EXEC_TIER_RE`, `EXECUTOR_AGENTS`, PLAN parser, tests | G01; D-605 | Sau PR 2 (cần dư địa dòng) |
+| 5 | Sửa `core` fallback của Guard | `.claude/hooks/guard.py`, `tests/`, sổ audit | Chưa có ID — đăng ký bằng `xt.py audit` trước | 0 dòng ròng hoặc ADR nới trần; có ca tốt đối chứng; chụp baseline parity sau PR này |
+| 6 | `release-tag` gặp tag có sẵn | `.github/workflows/release-tag.yml`, test workflow | G03 | Đối chiếu commit của tag và trạng thái release; không báo thành công giả |
+| 7 | Settings: `PreSkillShellCommand`, độ sâu subagent | `.claude/settings.json`, hooks, docs | `T-5040` (C03) | Kiểm biến có hiệu lực khi đặt ở settings dự án |
+| 8 | Cost lượt đỏ và độ phủ sổ lát | `scripts/xt.py`, `xt_flow.py` | `T-5009` → `T-5010` → `T-5011` | Sau PR 2 |
+
+PR 1, 3, 6, 7 không chạm `xt.py`/`guard.py` nên làm song song được; PR 2 chặn PR 4 và 8; PR 5 chặn baseline parity của G12.4.
+
+**Cần chủ dự án:** có bật bậc `top` cho `reviewer-alt` hay không (§12.4 mục 2); `T-4007` kèm bật release immutability; `T-5020`. **Chưa làm trong lượt này:** tiêm lỗi lại năm ca (đã đọc mã thay thế), full CI trên nhánh thay đổi mã, benchmark hook đầu–cuối.
+
+## 13. Nguồn
 Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a3253f0ad188f1`.
 - **Mã:** `scripts/xt.py`, `.claude/hooks/guard.py`, `scripts/install.py`, `scripts/xt_pack.py`, `scripts/xt_adapter.py`, `.claude/hooks/_lib.sh`, `pre-bash-guard.sh`, `pre-edit-guard.sh`, `tests/test_pack.py`.
 - **ADR/PLAN:** `docs/adr/0090-split-guard-and-xt-monoliths.md`, `0091-progress-hook-cap-and-split-constraints.md`, `0093-guard-split-order-and-sibling-loader.md`, `0098-model-tiers-and-role-mapping.md`, `0062-review-once-risk-tiers.md`; `docs/autopilot/PLAN-harden-2026-11-24.md`, `PLAN-guard-split-2026-11-22.md`, `PLAN-optimize-2026-11-26.md`; `research/2026-11-26-framework-optimization.md`, `research/2026-11-26-delivery-baseline.md`, `research/2026-11-20-hotel-floor-pilot.md`.
@@ -293,4 +374,5 @@ Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a32
 - **Gate/test:** `AGENTS.md`, `tests/AGENTS.md`, `tests/test_docs_budget.py`, `test_guard_profile.py`, `test_model_tiers.py`, `test_codex_harness.py`; `.github/workflows/release-tag.yml`.
 - **Sản phẩm/vận hành:** `docs/specs/SPEC-design-evidence.md`, `scripts/xt_checks/kind_design_evidence.py`, `framework/templates/packs/README.md`, `framework/templates/ui-gates/README.md`, `.agents/skills/factory/SKILL.md`, `docs/specs/SPEC-factory-acceptance.md`, `docs/autopilot/DECISIONS.md`, `docs/ops/registry.json`, `docs/ops/TARGETS.md`, `docs/ops/AUDIT-STATUS.md`.
 - **Bài Anthropic về harness (đọc 2026-11-26):** [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03-24); [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) (2025-11-26); [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) (2024-12-19, mẫu evaluator-optimizer).
+- **Đọc thêm ở §12 (2026-11-26):** Claude Code [sub-agents](https://code.claude.com/docs/en/sub-agents), [env-vars](https://code.claude.com/docs/en/env-vars), [hooks](https://code.claude.com/docs/en/hooks); [Python versions](https://devguide.python.org/versions/); GitHub [immutable releases GA](https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/); [WCAG 2.2 errata](https://www.w3.org/WAI/WCAG22/errata/), [WCAG 3.0 Working Draft](https://www.w3.org/TR/wcag-3.0/).
 - **Tài liệu kỹ thuật (đọc 2026-11-26; đối chiếu lại với runtime khi triển khai):** CPython 3.13 [command line](https://docs.python.org/3.13/using/cmdline.html), [unittest.mock — where to patch](https://docs.python.org/3.13/library/unittest.mock.html#where-to-patch), [os.replace](https://docs.python.org/3.13/library/os.html#os.replace), [zipapp](https://docs.python.org/3.13/library/zipapp.html); GitHub [immutable releases](https://docs.github.com/en/code-security/supply-chain-security/immutable-releases); [WCAG 2.2](https://www.w3.org/TR/WCAG22/); [DTCG Format 2025.10](https://www.designtokens.org/tr/2025.10/format/); Anthropic [demystifying evals for AI agents](https://www.anthropic.com/research/demystifying-evals-for-ai-agents) và [effective context engineering](https://www.anthropic.com/research/effective-context-engineering-for-ai-agents); OpenTelemetry [GenAI conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md), [sampling](https://opentelemetry.io/docs/concepts/sampling/); [Web Vitals](https://web.dev/articles/vitals); Claude Code [custom subagents](https://code.claude.com/docs/en/sub-agents).
