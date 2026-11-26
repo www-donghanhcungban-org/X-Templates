@@ -1120,3 +1120,24 @@
 - Chọn: Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104)
 - Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chặn các dạng bash bung ra vX.Y.Z đã đo, không chặn oan refspec dùng chung _tag_glob; giữ đường lùi
 - Đường lùi: Hoàn nguyên commit; trần guard về 24664
+
+### D-608 · 2026-11-26T05:20:03+00:00 · Duyệt PLAN tối ưu khung đợt 1 (PLAN-optimize-2026-11-26): làm lát nào trước trong 31 lát nghiên cứu đề xuất
+
+- Phương án: (1) Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau · (2) Làm thẳng ba đòn bẩy lớn nhất trước (nén sớm 400K, trần thông báo cổng đỏ, tách guard) dù chạm hàng rào đang kẹt trần dòng · (3) Chỉ ghi nghiên cứu, không sửa gì đợt này
+- Chọn: Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn trước: lát đợt 1 chỉ thêm test hoặc sửa công cụ ngoài hàng rào, parity đã đo; giữ đường lùi bằng PR nhỏ; lát chạm hàng rào cần ADR và số đo sau khi đợt 1 nhả trần trọng số
+- Đường lùi: Hoàn nguyên từng PR squash; PLAN đợt sau chưa mở nên không có gì phải gỡ
+
+### D-609 · 2026-11-26T05:20:04+00:00 · X-Scanner (lõi 3.29.0) và X-Agents (lõi 2.0.0) có nâng lên 3.36.0 trong đợt này không
+
+- Phương án: (1) Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở · (2) Nâng cả hai cùng đợt với năm repo ở 3.34.0
+- Chọn: Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở
+- Lý do (tiêu chí chất lượng cuối): X-Scanner có cổng trần 1 048 576 B mỗi tệp trong khi xt.py 1 259 177 B và guard.py 1 384 897 B nên PR nâng chắc chắn đỏ; X-Agents từ 2.0.0 đổi 283 tệp, 3 hook tự sửa phải gộp tay, guard đổi từ hỏi người sang không hỏi nên cần PLAN di trú riêng tại repo đó
+- Đường lùi: Xoá ngoại lệ trong registry và mở PR nâng khi một trong ba điều kiện mở đạt
+
+### D-610 · 2026-11-26T05:34:13+00:00 · Phạm vi đợt tối ưu và danh sách dự án đích sau chỉ đạo của chủ dự án 2026-11-26
+
+- Phương án: (1) Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609 · (2) Giữ canary X-Company và ngoại lệ X-Agents như D-608/D-609
+- Chọn: Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo trực tiếp: trước mắt tối ưu dự án khung, chưa nâng đích, loại X-Agents; giữ đường lùi vì không có thay đổi nào ở repo đích (canary dừng trước khi đẩy nhánh)
+- Đường lùi: Thêm lại dòng X-Agents vào registry và TARGETS; mở lại task canary T-5038 trong PLAN đợt sau
