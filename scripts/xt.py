@@ -10881,6 +10881,8 @@ def _wave_handoff(tasks: List[Dict[str, Any]], st: Dict[str, Any], limit: int, b
                     unverified[t["id"]] = problem["reason"]
     # Tiền nhiệm chưa được kiểm chứng vẫn là việc mở bị chặn. Dùng cùng quy tắc lan chặn như task defer.
     pending = [{**t, "state": " "} if t["id"] in unverified else t for t in tasks]
+    design = design_module()  # task `ui: yes` chờ khách duyệt thiết kế: chặn như task defer (ADR-0106)
+    unverified.update(design.hold(sys.modules[__name__], base, pending)[1] if design else {})
     schedule = plan_waves(pending, {**deferred, **unverified}, limit)
     waves = schedule["waves"]
     packets = []

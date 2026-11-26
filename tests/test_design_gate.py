@@ -51,10 +51,11 @@ class DesignLedgerProblemTest(unittest.TestCase):
             led([submit(), ev("approve", sha=SHA, by="chu@x")], "approved"),
             awaiting([submit(), ev("approve", sha=SHA, by="chu@x"), submit(SHA2)], SHA2),  # trình lại = khoá lại
             led([submit(), ev("approve", sha=SHA, by="p"), submit(SHA2), ev("approve", sha=SHA2, by="p")], "approved"),
+            awaiting([submit("c" * 64)], "c" * 64),  # repo `--object-format=sha256` (COMMIT_SHA_RE của xt)
         ]
         for case in ok:
             with self.subTest(case=case["history"][-1:] or "rỗng"):
-                self.assertEqual(d.problem(case), "")
+                self.assertEqual(d.problem(xt, case), "")
 
     def test_shape_and_order_errors(self):
         bad = [
@@ -67,8 +68,8 @@ class DesignLedgerProblemTest(unittest.TestCase):
             (led([{"event": "submit", "at": ""}], "none"), "object có `at`"),
             (led([ev("tick")], "none"), "`event` lạ"),
             (awaiting([submit(), submit()]), "khi đang chờ duyệt"),
-            (awaiting([submit(sha="abc")]), "40 hex"),
-            (awaiting([submit(sha="c" * 64)]), "40 hex"),
+            (awaiting([submit(sha="abc")]), "SHA commit đầy đủ"),
+            (awaiting([submit(sha="c" * 63)]), "SHA commit đầy đủ"),
             (awaiting([submit(evidence="/etc/x")]), "đường tương đối"),
             (awaiting([submit(evidence="../x")]), "đường tương đối"),
             (awaiting([submit(evidence="")]), "đường tương đối"),
@@ -92,7 +93,7 @@ class DesignLedgerProblemTest(unittest.TestCase):
         ]
         for case, why in bad:
             with self.subTest(why=why, case=case):
-                self.assertIn(why, d.problem(case))
+                self.assertIn(why, d.problem(xt, case))
 
 
 class DesignDeclareTest(TmpRepoCase):
@@ -115,6 +116,27 @@ class DesignDeclareTest(TmpRepoCase):
             "Duyệt thiết kế: khách\n",  # dấu tách rời (NFD) vẫn khớp sau NFC
             "Duyệt thiết kế: khách\nDuyệt thiết kế: khách\n",  # trùng cùng giá trị
             "```\nDuyệt thiết kế: không\n```\nDuyệt thiết kế: khách\n",
+            # Review PR #844: nhận dòng theo NHÃN, giá trị = chữ đầu sau `:` — các dạng điền tự nhiên không được nới khoá.
+            "- Duyệt thiết kế: khách — `khách` khi hợp đồng đòi khách duyệt bản thiết kế\n",
+            "- Duyệt thiết kế: khách hàng\n",
+            "- Duyệt thiết kế: khách.\n",
+            "- Duyệt thiết kế: khách (HĐ 12)\n",
+            "> Duyệt thiết kế: khách\n",
+            "> - **Duyệt thiết kế:** khách\n",
+            "1. Duyệt thiết kế: khách\n",
+            "2) Duyệt thiết kế: khách\n",
+            "+ Duyệt thiết kế: khách\n",
+            "| Duyệt thiết kế: khách |\n",
+            "| Duyệt thiết kế | khách |\n",
+            "- Duyệt thiết kế: khách\n",  # NBSP trong nhãn
+            "﻿Duyệt thiết kế: khách\n",  # BOM đầu tệp
+            "​- Duyệt thiết kế: khách\n",  # ZWSP
+            "- Duyệt thiết​kế: khách\n",
+            "_Duyệt thiết kế:_ khách\n",
+            "## Duyệt thiết kế: khách\n",
+            "- [x] Duyệt thiết kế: khách\n",
+            "- Duyệt  thiết   kế\t: khách\n",  # nhiều khoảng trắng trong nhãn
+            "- DUYỆT THIẾT KẾ：`khách`\n",  # dấu hai chấm toàn khổ (NFKC), giá trị trong backtick
         ]
         for text in client:
             with self.subTest(text=text):
@@ -123,13 +145,40 @@ class DesignDeclareTest(TmpRepoCase):
             "Duyệt thiết kế: không\n",
             "- **Duyệt thiết kế:** không\n",
             "# Dự án\n",
-            "Duyệt thiết kế: khách hàng\n",  # giá trị lạ: không phải dòng khai
+            "- Duyệt thiết kế: không — dự án nội bộ\n",
+            "- Duyệt thiết kế: Không.\n",
+            "> 1. _Duyệt thiết kế:_ **không** (HĐ 12)\n",
+            "| Duyệt thiết kế | không |\n",
+            "Ghi chú: Duyệt thiết kế: khách\n",  # nhãn không ở đầu dòng: không phải dòng khai
             "```\nDuyệt thiết kế: khách\n```\n",
             "~~~\n```\nDuyệt thiết kế: khách\n~~~\n",  # fence khác loại bên trong không đóng fence ngoài
+            "﻿```\nDuyệt thiết kế: khách\n```\n",  # BOM trước fence: vẫn là fence
         ]
         for text in human:
             with self.subTest(text=text):
                 self.assertEqual(self.declare(text), (False, ""))
+
+    def test_odd_value_means_client_with_note(self):
+        for text, shown in (
+            ("- Duyệt thiết kế:\n", "``"),
+            ("- Duyệt thiết kế: <không | khách>\n", "``"),  # mẫu chưa điền
+            ("- Duyệt thiết kế: khong\n", "`khong`"),
+            ("- Duyệt thiết kế: có\n", "`có`"),
+        ):
+            with self.subTest(text=text):
+                client, note = self.declare(text)
+                self.assertTrue(client)
+                self.assertIn(f"giá trị lạ {shown}", note)
+        client, note = self.declare("- Duyệt thiết kế: không\n- Duyệt thiết kế: khách hàng\n")
+        self.assertEqual((client, "mâu thuẫn" in note), (True, True))
+
+    def test_template_line_parses(self):
+        """Mẫu `PROJECT.md`: dòng khai chỉ còn `không`; đổi thành `khách` là khoá (giải thích ở dòng riêng)."""
+        whole = (ROOT / "framework/templates/PROJECT.md").read_text(encoding="utf-8")
+        text = whole.split("```markdown\n", 1)[1].rsplit("```", 1)[0]  # thân mẫu người chép (trong fence của tệp mẫu)
+        self.assertIn("\n- Duyệt thiết kế: không\n", text)
+        self.assertEqual(self.declare(text), (False, ""))
+        self.assertEqual(self.declare(text.replace("Duyệt thiết kế: không", "Duyệt thiết kế: khách")), (True, ""))
 
     def test_conflict_and_unreadable_mean_client(self):
         client, note = self.declare("Duyệt thiết kế: không\n- Duyệt thiết kế: khách\n")
@@ -256,7 +305,7 @@ class DesignCliTest(DesignRepoCase):
         rc, _, err = self.stage("design-reopen", "--reason", "lần hai")
         self.assertEqual(rc, 2)
         self.assertIn("chỉ mở lại", err)
-        self.assertEqual(d.problem(self.ledger()), "")
+        self.assertEqual(d.problem(xt, self.ledger()), "")
 
     def test_check_without_client_and_broken_ledger(self):
         rc, out, _ = self.stage("design-check")
@@ -422,6 +471,58 @@ class DesignLoopTest(DesignRepoCase):
         self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
         self.assertEqual(self.next_ids(), (["T-001", "T-002"], {}))
         self.assertEqual(self.record("T-001")[0], 0)
+
+    def test_lock_reason_names_defer_exit(self):
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        self.assertIn("loop defer --task <ID> --reason", self.next_ids()[1]["T-001"])
+        self.write("docs/m.png", "png")
+        self.commit()
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/m.png", agent=True)[0], 0)
+        self.assertIn("loop defer --task <ID> --reason", self.record("T-001")[2])
+
+    def handoff(self):
+        rc, out, err = run_main("plan", "waves", "--handoff")
+        self.assertEqual(rc, 0, err)
+        info = json.loads(out)
+        return [t["task"] for t in info["tasks"]], {b["id"]: b["reason"] for b in info["blocked"]}
+
+    def test_handoff_holds_ui_tasks_like_defer(self):
+        """Review PR #844: `plan waves --handoff` (đường của /factory) không giao task `ui: yes` khi khách chưa duyệt."""
+        self.write(
+            self.PLAN,
+            "# PLAN\n\n- [ ] `T-001` Trang chủ (ui: yes; files: a.html) — Gate: `true`\n"
+            "- [ ] `T-002` API (files: b.py) — Gate: `true`\n"
+            "- [ ] `T-003` Trang con (sau: T-001; files: c.html) — Gate: `true`\n",
+        )
+        self.assertEqual(self.handoff(), (["T-001", "T-002"], {}))  # không khai khách: như cũ
+        self.write("PROJECT.md", "- Duyệt thiết kế: khách\n")
+        tasks, blocked = self.handoff()
+        self.assertEqual((tasks, list(blocked)), (["T-002"], ["T-001", "T-003"]))
+        self.assertIn("stage design-submit", blocked["T-001"])
+        self.assertIn("chờ T-001 bị chặn", blocked["T-003"])  # lan chặn như task defer
+        self.write("docs/m.png", "png")
+        sha = self.commit()
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/m.png", agent=True)[0], 0)
+        self.assertIn(f"--sha {sha[:12]}", self.handoff()[1]["T-001"])
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
+        self.assertEqual(self.handoff(), (["T-001", "T-002"], {}))
+        with unittest.mock.patch.object(xt, "SCRIPT_DIR", self.tmp):  # bộ cài tối giản: không có module, như cũ
+            self.write("PROJECT.md", "- Duyệt thiết kế: khách\n- Duyệt thiết kế: không\n")
+            self.assertEqual(self.handoff(), (["T-001", "T-002"], {}))
+
+    def test_record_refuses_when_plan_unreadable(self):
+        """Review PR #844: khai khách, chưa duyệt, PLAN không đọc được → không biết task có `ui: yes` → chặn."""
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        (self.repo / self.PLAN).write_bytes(b"\xff\xfe- [ ] `T-002` API\n")
+        rc, _, err = self.record("T-002")
+        self.assertEqual(rc, 2)
+        self.assertIn("PLAN của vòng không đọc được", err)
+        self.assertFalse((self.repo / ".autopilot" / "evidence" / "T-002.json").exists())
+        self.assertIn("không đọc được", d.record_problem(xt, self.repo, {}, "T-002"))  # vòng không khai PLAN
+        (self.repo / self.PLAN).unlink()
+        self.assertIn("không đọc được", d.record_problem(xt, self.repo, {"plan": self.PLAN}, "T-002"))
+        self.write("PROJECT.md", "Duyệt thiết kế: không\n")
+        self.assertEqual(d.record_problem(xt, self.repo, {"plan": self.PLAN}, "T-002"), "")  # không khai khách: như cũ
 
     def test_minimal_install_without_module(self):
         """Bộ cài tối giản (không có xt_design.py): không có lệnh con, vòng như cũ."""

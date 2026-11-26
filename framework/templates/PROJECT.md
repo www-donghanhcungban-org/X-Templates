@@ -75,7 +75,8 @@ Tổng nỗ lực Must / tổng: <x%> (≤ 60%).
 | <giả định nguy hiểm nhất> | <spike/phỏng vấn/dữ liệu> | <ngày> | RK-001 |
 - Ràng buộc cứng: <ngân sách, nền tảng bắt buộc, tích hợp bắt buộc>
 - Hạn thật (có hậu quả ngoài): <ngày — hậu quả> · Hạn mong muốn: <ngày>
-- Duyệt thiết kế: <không | khách> — `khách` khi hợp đồng đòi khách duyệt bản thiết kế trước khi code UI (`UX-DS-023`; máy chặn task `(ui: yes)` tới khi người ghi duyệt)
+- Duyệt thiết kế: không
+  - Đổi thành `khách` khi hợp đồng đòi khách duyệt bản thiết kế trước khi code UI (`UX-DS-023`; máy chặn task `(ui: yes)` tới khi người ghi duyệt). Dòng trên chỉ ghi một chữ `không` hoặc `khách`; giá trị khác máy coi là `khách`.
 
 ## 9. Các bên
 | Vai trò | Tên | Quyết định gì | Kênh | Người thay thế |

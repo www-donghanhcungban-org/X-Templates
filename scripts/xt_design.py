@@ -1,7 +1,7 @@
 """Khách duyệt thiết kế (ADR-0106, D-619): sổ `docs/autopilot/DESIGN.json` và khoá task giao diện của vòng.
 
-Dự án khai `Duyệt thiết kế: khách` ở `PROJECT.md` → task PLAN có thẻ `ui: yes` không được giao (`loop next`) hay nhận bằng
-chứng (`loop record`) tới khi người duyệt đúng bản thiết kế đã trình (`stage approve --design`). Agent trình bản
+Dự án khai `Duyệt thiết kế: khách` ở `PROJECT.md` → task PLAN có thẻ `ui: yes` không được giao (`loop next`, `plan waves
+--handoff`) hay nhận bằng chứng (`loop record`) tới khi người duyệt đúng bản thiết kế đã trình (`stage approve --design`). Agent trình bản
 (`stage design-submit`), không bao giờ tự duyệt — kể cả khi `stage_approval: agent`. Sổ chỉ `xt.py stage …` ghi (guard:
 evidence); sổ hỏng → mọi lệnh đọc nó chặn. `core` là module `xt` (helper khoá, git, giờ), truyền vào để không import vòng.
 """
@@ -21,10 +21,13 @@ Doc = dict[str, Any]
 LEDGER = "docs/autopilot/DESIGN.json"
 SCHEMA = 1
 STATUSES = ("none", "awaiting_approval", "approved")
-SHA_RE = re.compile(r"[0-9a-f]{40}")
 PROJECT_FILE = "PROJECT.md"
-# `Duyệt thiết kế: khách|không` — gạch đầu dòng `-`/`*` và in đậm/nghiêng tuỳ ý, không phân biệt hoa thường.
-DECLARE_RE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*duyệt thiết kế\s*\**\s*:\s*\**\s*(khách|không)\s*\**\s*$", re.I)
+# Dòng khai nhận theo NHÃN trên dòng đã chuẩn hoá (`_clean`): đầu dòng bỏ dấu markdown (danh sách `-*+`/`1.`/`1)`,
+# trích dẫn `>`, bảng `|`, tiêu đề `#`, ô `[x]`, nhấn `*`/`_`/`~`, dấu backtick); nhãn rồi `:` (hoặc `|` của bảng); nhóm 1 = phần sau.
+DECLARE_RE = re.compile(r"(?:\s|[-+*>|#_`~]|\d+[.)]|\[[^\]]?\])*duyệt\s*thiết\s*kế[\s*_`~]*[:|][\s*_`~]*(.*)")
+VALUE_RE = re.compile(r"[^\W_]+")  # giá trị = chữ đầu tiên (cắt ở khoảng trắng, dấu câu, `—`)
+HUMAN = "không"
+DEFER = " · việc khác trong lúc chờ: `xt.py loop defer --task <ID> --reason …` rồi làm tiếp"
 UI_TAG_RE = re.compile(r"\bui\s*:\s*yes\b", re.I)  # trong nhóm ngoặc của dòng task; hoa thường lệch vẫn khoá (chặt hơn)
 CLIENT = "khách"
 HUMAN_ONLY = "chỉ người — chủ dự án chạy ở terminal riêng, ngoài phiên agent; agent không tự duyệt thiết kế (ADR-0106)"
@@ -43,24 +46,24 @@ def _evidence_ok(value: Any) -> bool:
     return isinstance(value, str) and bool(value) and not path.is_absolute() and ".." not in path.parts
 
 
-def _submit(ev: Doc, r: Doc) -> str:
+def _submit(core: ModuleType, ev: Doc, r: Doc) -> str:
     if r["status"] == "awaiting_approval":
         return "`submit` khi đang chờ duyệt — `reopen` trước"
     sha, evidence = ev.get("sha"), ev.get("evidence")
-    if not SHA_RE.fullmatch(str(sha)) or not _evidence_ok(evidence):
-        return "`submit` cần `sha` 40 hex và `evidence` là đường tương đối"
+    if not core.COMMIT_SHA_RE.fullmatch(str(sha)) or not _evidence_ok(evidence):
+        return "`submit` cần `sha` là SHA commit đầy đủ (40 hoặc 64 hex) và `evidence` là đường tương đối"
     r.update(status="awaiting_approval", submitted={"sha": sha, "evidence": evidence})
     return ""
 
 
-def _reopen(ev: Doc, r: Doc) -> str:
+def _reopen(core: ModuleType, ev: Doc, r: Doc) -> str:
     if r["status"] != "awaiting_approval" or not isinstance(ev.get("reason"), str) or not ev["reason"]:
         return "`reopen` chỉ khi đang chờ duyệt, cần `reason`"
     r.update(status="none", submitted=None)
     return ""
 
 
-def _approve(ev: Doc, r: Doc) -> str:
+def _approve(core: ModuleType, ev: Doc, r: Doc) -> str:
     by = ev.get("by")
     if r["status"] != "awaiting_approval" or ev.get("sha") != r["submitted"]["sha"]:
         return "`approve` chỉ ngay khi đang chờ duyệt, đúng `sha` đã trình"
@@ -70,17 +73,17 @@ def _approve(ev: Doc, r: Doc) -> str:
     return ""
 
 
-REPLAY: dict[str, Callable[[Doc, Doc], str]] = {"submit": _submit, "reopen": _reopen, "approve": _approve}
+REPLAY: dict[str, Callable[[ModuleType, Doc, Doc], str]] = {"submit": _submit, "reopen": _reopen, "approve": _approve}
 
 
-def _replay(ev: Any, r: Doc) -> str:
+def _replay(core: ModuleType, ev: Any, r: Doc) -> str:
     if not isinstance(ev, dict) or not isinstance(ev.get("at"), str) or not ev["at"]:
         return "sự kiện phải là object có `at`"
     step = REPLAY.get(str(ev.get("event")))
-    return step(ev, r) if step else f"`event` lạ: {ev.get('event')!r}"
+    return step(core, ev, r) if step else f"`event` lạ: {ev.get('event')!r}"
 
 
-def problem(led: Any) -> str:
+def problem(core: ModuleType, led: Any) -> str:
     """Lý do sổ không hợp lệ; '' = hợp lệ. Phát lại `history` theo thứ tự phải ra đúng `status`/`submitted`."""
     if not isinstance(led, dict) or led.get("schema") != SCHEMA:
         return f"không phải object `schema: {SCHEMA}`"
@@ -88,7 +91,7 @@ def problem(led: Any) -> str:
         return "`status` phải " + "|".join(STATUSES) + ", `history` phải là list"
     r: Doc = {"status": "none", "submitted": None}
     for i, ev in enumerate(led["history"]):
-        why = _replay(ev, r)
+        why = _replay(core, ev, r)
         if why:
             return f"history[{i}]: {why}"
     if (r["status"], r["submitted"]) != (led["status"], led.get("submitted")):
@@ -96,7 +99,7 @@ def problem(led: Any) -> str:
     return ""
 
 
-def read(base: Path) -> Doc:
+def read(core: ModuleType, base: Path) -> Doc:
     """Sổ thiết kế; vắng → `none` (xoá sổ chỉ khoá lại, không mở khoá). Hỏng → DesignError (fail-closed)."""
     p = base / LEDGER
     if not p.exists():
@@ -105,7 +108,7 @@ def read(base: Path) -> Doc:
         led = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError, RecursionError) as exc:
         raise DesignError(f"{LEDGER} không đọc được: {exc} — người sửa hoặc khôi phục từ git") from None
-    why = problem(led)
+    why = problem(core, led)
     if why:
         raise DesignError(f"{LEDGER} hỏng: {why} — người sửa hoặc khôi phục từ git (ADR-0106)")
     return dict(led)
@@ -117,8 +120,8 @@ def update(core: ModuleType, base: Path, fn: Callable[[Doc], Doc]) -> Doc:
     if links:
         raise DesignError(f"{links[-1]} là symlink — không ghi sổ thiết kế xuyên liên kết ra ngoài dự án")
     with core._state_lock(base):
-        new = fn(read(base))
-        why = problem(new)
+        new = fn(read(core, base))
+        why = problem(core, new)
         if why:  # lỗi lập trình: chặn trước khi ghi sổ sai
             raise DesignError(f"chuyển trạng thái thiết kế tạo sổ sai: {why}")
         p = base / LEDGER
@@ -181,11 +184,18 @@ def evidence_path(core: ModuleType, base: Path, raw: str) -> str:
     return rel
 
 
+def _clean(line: str) -> str:
+    """Dòng như người đọc thấy: bỏ ký tự định dạng vô hình (ZW, BOM), ký tự điều khiển thành cách, chữ thường, NFKC
+    (NBSP, `：` toàn khổ), gộp khoảng trắng."""
+    shown = "".join(" " if unicodedata.category(c) == "Cc" else c for c in line if unicodedata.category(c) != "Cf")
+    return " ".join(unicodedata.normalize("NFKC", shown.casefold()).split())
+
+
 def _unfenced(core: ModuleType, text: str) -> list[str]:
-    """Dòng ngoài code fence ``` / ~~~ (ví dụ trong tài liệu không phải khai báo), chuẩn hoá NFC."""
+    """Dòng (đã `_clean`) ngoài code fence ``` / ~~~ (ví dụ trong tài liệu không phải khai báo)."""
     kept: list[str] = []
     fence: str | None = None
-    for line in unicodedata.normalize("NFC", text).splitlines():
+    for line in map(_clean, text.splitlines()):
         m = core.FENCE_RE.match(line)
         if m and (fence is None or m.group(1) == fence):
             fence = None if fence else str(m.group(1))
@@ -194,9 +204,14 @@ def _unfenced(core: ModuleType, text: str) -> list[str]:
     return kept
 
 
+def _value(rest: str) -> str:
+    word = VALUE_RE.match(rest)
+    return word[0] if word else ""
+
+
 def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
-    """(dự án khai khách duyệt thiết kế, ghi chú). Vắng `PROJECT.md`/dòng khai → không. Không đọc được hay khai mâu
-    thuẫn → coi là khách (cách hiểu chặt hơn) kèm ghi chú."""
+    """(dự án khai khách duyệt thiết kế, ghi chú). Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không.
+    Giá trị khác (`khách hàng` → `khách`; rỗng/lạ kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn)."""
     p = base / PROJECT_FILE
     if not p.exists():
         return False, ""
@@ -204,10 +219,15 @@ def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
         text = p.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         return True, f"không đọc được {PROJECT_FILE} ({exc}) — coi như khai `Duyệt thiết kế: {CLIENT}`"
-    values = {m[1].casefold() for line in _unfenced(core, text) if (m := DECLARE_RE.match(line))}
-    if len(values) > 1:
+    values = [_value(m[1]) for line in _unfenced(core, text) if (m := DECLARE_RE.match(line))]
+    if len(set(values)) > 1:
         return True, f"{PROJECT_FILE} khai `Duyệt thiết kế` mâu thuẫn — coi như `{CLIENT}`; sửa còn một dòng"
-    return values == {CLIENT}, ""
+    if not values or values[0] == HUMAN:
+        return False, ""
+    odd = (
+        f"{PROJECT_FILE} khai `Duyệt thiết kế` giá trị lạ `{values[0]}` — coi như `{CLIENT}`; ghi `{CLIENT}`/`{HUMAN}`"
+    )
+    return True, "" if values[0] == CLIENT else odd
 
 
 def lock_reason(core: ModuleType, base: Path) -> str:
@@ -217,7 +237,7 @@ def lock_reason(core: ModuleType, base: Path) -> str:
         return ""
     tail = f" ({note})" if note else ""
     try:
-        led = read(base)
+        led = read(core, base)
     except DesignError as exc:
         return f"{exc}{tail}"
     if led["status"] == "approved":
@@ -225,8 +245,13 @@ def lock_reason(core: ModuleType, base: Path) -> str:
     head = f"task giao diện (`ui: yes`) chờ khách duyệt thiết kế{tail} — "
     if led["status"] == "awaiting_approval":
         sha = led["submitted"]["sha"][:12]
-        return head + f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106)"
-    return head + "trình mockup: `xt.py stage design-submit --evidence <tệp>` rồi chờ người `stage approve --design`"
+        return (
+            head + f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106){DEFER}"
+        )
+    return (
+        head
+        + f"trình mockup: `xt.py stage design-submit --evidence <tệp>` rồi chờ người `stage approve --design`{DEFER}"
+    )
 
 
 def is_ui(core: ModuleType, task: Doc) -> bool:
@@ -239,7 +264,7 @@ def is_ui(core: ModuleType, task: Doc) -> bool:
 
 
 def hold(core: ModuleType, base: Path, ready: list[Doc]) -> tuple[list[Doc], dict[str, str]]:
-    """(task sẵn sàng còn giao được, {task giao diện bị giữ: lý do}) cho `loop next`."""
+    """(task còn giao được, {task giao diện bị giữ: lý do}) cho `loop next` và `plan waves --handoff` (chặn như defer)."""
     ui = [t for t in ready if is_ui(core, t)]
     why = lock_reason(core, base) if ui else ""
     if not why:
@@ -248,14 +273,24 @@ def hold(core: ModuleType, base: Path, ready: list[Doc]) -> tuple[list[Doc], dic
 
 
 def record_problem(core: ModuleType, base: Path, st: Doc, task: str) -> str:
-    """Lý do `loop record` từ chối `task`; '' = nhận."""
-    found = [t for t in core._plan_tasks(base, st) if t["id"] == task and is_ui(core, t)]
-    return lock_reason(core, base) if found else ""
+    """Lý do `loop record` từ chối `task`; '' = nhận. Đang khoá mà PLAN của vòng không đọc được → từ chối (không biết
+    `task` có thẻ `ui: yes` hay không — fail-closed)."""
+    why = lock_reason(core, base)
+    if not why:
+        return ""
+    plan = base / str(st.get("plan") or "")
+    try:
+        tasks = core.parse_plan(plan) if st.get("plan") and plan.is_file() else None
+    except UnicodeDecodeError:
+        tasks = None
+    if tasks is None:
+        return f"PLAN của vòng không đọc được — không biết {task} có thẻ `ui: yes` hay không; {why}"
+    return why if any(t["id"] == task and is_ui(core, t) for t in tasks) else ""
 
 
 def _check(core: ModuleType, base: Path, as_json: bool) -> int:
     try:
-        led = read(base)
+        led = read(core, base)
     except DesignError as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 2

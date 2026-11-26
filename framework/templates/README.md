@@ -1,7 +1,7 @@
 ---
 title: Mẫu tài liệu
 kind: index
-updated: 2026-11-25
+updated: 2026-11-26
 ---
 
 # Mẫu tài liệu

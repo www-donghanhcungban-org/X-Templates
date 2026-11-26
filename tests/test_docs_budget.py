@@ -19,7 +19,7 @@ CAPS = {  # byte; nhà của từng trần: PLAN-3.12-lean T-1701…T-1704; ADR-
     "framework/11-autonomous-loop/README.md": 12288 * 50,
 }
 LINE_CAPS = {  # T-5016: trần dòng theo số đo tại lúc đặt trần, nới trần cần ADR.
-    "scripts/xt.py": 23665,  # ADR-0106: +21 dòng nối khoá khách duyệt thiết kế (logic ở xt_design.py)
+    "scripts/xt.py": 23667,  # ADR-0106: +23 dòng nối khoá khách duyệt thiết kế (logic ở xt_design.py)
     ".claude/hooks/guard.py": 24689,  # ADR-0104: +25 dòng cho tag glob chỉ gồm glob (AUD-HAR-541/566; trước đó ADR-0103)
 }
 # Trần TỔNG byte theo thư mục (ADR-0043, T-2407; ADR-0050/ADR-0088: +1 MiB; ADR-0089: ×5 trần hiện tại).
