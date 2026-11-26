@@ -881,7 +881,7 @@ class DoctorOfflineTest(unittest.TestCase):
     def test_offline_cli_propagates_to_fix_and_rejects_drift(self) -> None:
         with (
             mock.patch.object(xt, "doctor_findings", return_value=[]) as findings,
-            mock.patch.object(xt, "doctor_fix", return_value=([], [])),
+            mock.patch.object(xt, "doctor_fix", return_value=(["đã sửa"], [])),
             redirect_stdout(io.StringIO()),
             redirect_stderr(io.StringIO()),
         ):
@@ -889,6 +889,25 @@ class DoctorOfflineTest(unittest.TestCase):
             self.assertEqual(findings.call_count, 2)
             self.assertTrue(all(call.kwargs["offline"] for call in findings.call_args_list))
             self.assertEqual(xt.main(["doctor", "--offline", "--drift"]), 2)
+            self.assertEqual(findings.call_count, 2)
+
+    def test_fix_without_changes_does_not_rescan(self) -> None:
+        with (
+            mock.patch.object(xt, "doctor_findings", return_value=[]) as findings,
+            mock.patch.object(xt, "doctor_fix", return_value=([], [])),
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(xt.main(["doctor", "--offline", "--fix", "--json"]), 0)
+            self.assertEqual(findings.call_count, 1)
+
+    def test_fix_failure_rescans(self) -> None:
+        bad = xt.Finding("x", "error", "không sửa được")
+        with (
+            mock.patch.object(xt, "doctor_findings", return_value=[]) as findings,
+            mock.patch.object(xt, "doctor_fix", return_value=([], [bad])),
+            redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(xt.main(["doctor", "--offline", "--fix", "--json"]), 1)
             self.assertEqual(findings.call_count, 2)
 
 
