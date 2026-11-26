@@ -44,6 +44,7 @@ CORPUS = ROOT / "tests" / "fixtures" / "autonomy"
 PENDING = CORPUS / "pending" / "guard.json"
 SEED = 1811
 ROUNDS = int(os.environ.get("XT_FUZZ_ROUNDS") or "150")
+FUZZ_PARTS = 4  # D-608: lưới fuzz thường chia `variants[p::4]` để CI không dồn vào một shard.
 MUTATION_PARTS = 4  # D-548: toàn bộ lưới đột biến chia theo lớp để CI không dồn vào một shard.
 
 # Từ đầu lệnh làm bộ bọc kiểu exec (`nice`/`timeout`/`command`/gán env) đổi nghĩa: builtin đổi trạng thái shell, từ khoá,
@@ -422,10 +423,24 @@ def _strict_merge_control(case: Dict[str, Any]) -> bool:
     )
 
 
-def fuzz(rounds: int = ROUNDS, seed: int = SEED, cases: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """Chạy lưới bậc 1 + `rounds` biến thể ghép; trả số biến thể và các biến thể vi phạm bất biến."""
+def _all_variants() -> List[Tuple[Dict[str, Any], str, str]]:
+    """Toàn bộ biến thể của lưới fuzz thường (trước khi chia phần)."""
+    cases = _cases()
+    return _grid(cases) + _random(cases, ROUNDS, SEED)
+
+
+def fuzz(
+    rounds: int = ROUNDS,
+    seed: int = SEED,
+    cases: Optional[List[Dict[str, Any]]] = None,
+    part: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Chạy lưới bậc 1 + `rounds` biến thể ghép (hoặc phần `part`: `variants[part::FUZZ_PARTS]`); trả số biến thể, vid
+    đã chạy và các biến thể vi phạm bất biến."""
     cases = _cases() if cases is None else cases
     variants = _grid(cases) + _random(cases, rounds, seed)
+    if part is not None:
+        variants = variants[part::FUZZ_PARTS]
     red: Dict[str, Dict[str, Any]] = {}
     with tempfile.TemporaryDirectory(prefix="xt-fuzz-") as tmp:
         runner = _Runner(xt.BenchEnv(Path(tmp).resolve()))
@@ -442,7 +457,7 @@ def fuzz(rounds: int = ROUNDS, seed: int = SEED, cases: Optional[List[Dict[str, 
                 why = "strict-merge-ask" if strict_merge else ("deny-monotone" if not want else "allow-kept")
                 why = "exception" if err else why
                 red[vid] = {"case": case, "command": cmd, "invariant": why, "error": err, "allowed": allowed}
-    return {"variants": len(variants), "red": red}
+    return {"variants": len(variants), "vids": [vid for _, vid, _ in variants], "red": red}
 
 
 def pending_cases() -> List[Dict[str, Any]]:
@@ -452,18 +467,22 @@ def pending_cases() -> List[Dict[str, Any]]:
     return list(data["cases"])
 
 
-class GuardFuzzTest(unittest.TestCase):
-    """Ba bất biến trên lưới bậc 1 + biến thể ghép tất định."""
+class _GuardFuzzGrid:
+    """Mixin, không phải TestCase: mỗi lớp con chạy một phần rời nhau `variants[part::FUZZ_PARTS]` của lưới fuzz thường
+    (D-608); ba bất biến trên lưới bậc 1 + biến thể ghép tất định."""
 
+    part: int
     result: Dict[str, Any]
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.result = fuzz()
+        cls.result = fuzz(part=cls.part)
 
     def test_guard_fuzz_variants_generated(self) -> None:
         cases = _cases()
-        self.assertGreater(self.result["variants"], len(cases) * 3)
+        self.assertGreater(self.result["variants"], 0)
+        self.assertEqual(self.result["variants"], len(self.result["vids"]))
+        self.assertEqual(self.result["vids"], [vid for _, vid, _ in _all_variants()][self.part :: FUZZ_PARTS])
         self.assertTrue(any(not c["expect"]["allowed"] for c in cases))
         self.assertTrue(any(c["expect"]["allowed"] for c in cases))
 
@@ -482,6 +501,8 @@ class GuardFuzzTest(unittest.TestCase):
         pend = {c["id"]: c for c in pending_cases()}
         self.assertEqual(sorted(pend), sorted(KNOWN_RED))
         for vid, why in KNOWN_RED.items():
+            if vid not in self.result["vids"]:  # biến thể thuộc phần khác: phần đó kiểm
+                continue
             with self.subTest(vid):
                 self.assertIn(vid, self.result["red"])
                 got = self.result["red"][vid]
@@ -493,12 +514,29 @@ class GuardFuzzTest(unittest.TestCase):
         """Loại trừ `CWD_RELATIVE` còn đúng: mỗi ca vẫn đỏ ở lưới `cd-tmp` (guard đổi thì gỡ khỏi danh sách) và ca gốc
         (không bọc) vẫn bị chặn."""
         red = self.result["red"]
-        self.assertEqual(sorted(i for i in CWD_RELATIVE if f"fuzz-{i}--cd-tmp" in red), sorted(CWD_RELATIVE))
+        mine = [i for i in CWD_RELATIVE if f"fuzz-{i}--cd-tmp" in self.result["vids"]]  # phần khác kiểm phần còn lại
+        self.assertEqual(sorted(i for i in mine if f"fuzz-{i}--cd-tmp" in red), sorted(mine))
         cases = {c["id"]: c for c in _cases()}
         self.assertTrue(all(cases[i]["expect"]["allowed"] is False for i in CWD_RELATIVE))
         self.assertFalse(
             excused("fuzz-x--seq", {"invariant": "deny-monotone", "case": {"id": next(iter(CWD_RELATIVE))}})
         )
+
+
+class GuardFuzzTest(_GuardFuzzGrid, unittest.TestCase):
+    part = 0
+
+
+class GuardFuzzPart2Test(_GuardFuzzGrid, unittest.TestCase):
+    part = 1
+
+
+class GuardFuzzPart3Test(_GuardFuzzGrid, unittest.TestCase):
+    part = 2
+
+
+class GuardFuzzPart4Test(_GuardFuzzGrid, unittest.TestCase):
+    part = 3
 
 
 class GuardFuzzWrapTest(unittest.TestCase):
@@ -560,6 +598,28 @@ class GuardFuzzWrapTest(unittest.TestCase):
         self.assertTrue(all(parts))
         self.assertCountEqual([case["id"] for part in parts for case in part], [case["id"] for case in cases])
         self.assertCountEqual([vid for part in parts for _, vid, _ in _grid(part)], [vid for _, vid, _ in _grid(cases)])
+
+    def test_fuzz_partitions_keep_every_variant_once(self) -> None:
+        """Chia phần chỉ đổi nơi chạy: hợp các phần đúng bằng tập biến thể gốc, không trùng, không rỗng; vid của
+        `CWD_RELATIVE`/`KNOWN_RED` đều có trong lưới (mỗi phần kiểm phần của mình)."""
+        full = _all_variants()
+        owners = [
+            cls
+            for cls in globals().values()
+            if isinstance(cls, type) and issubclass(cls, _GuardFuzzGrid) and issubclass(cls, unittest.TestCase)
+        ]
+        self.assertEqual(sorted(cls.part for cls in owners), list(range(FUZZ_PARTS)))
+        parts = [full[part::FUZZ_PARTS] for part in range(FUZZ_PARTS)]
+        self.assertTrue(all(parts))
+        flat = [(vid, cmd) for part in parts for _, vid, cmd in part]
+        self.assertEqual(len(flat), len(full))
+        self.assertCountEqual(flat, [(vid, cmd) for _, vid, cmd in full])
+        self.assertEqual(len({vid for vid, _ in flat}), len(flat))
+        self.assertGreater(len(full), len(_cases()) * 3)
+        vids = {vid for vid, _ in flat}
+        for i in CWD_RELATIVE:
+            self.assertIn(f"fuzz-{i}--cd-tmp", vids)
+        self.assertLessEqual(set(KNOWN_RED), vids)
 
     def test_guard_fuzz_runner_records_exception(self) -> None:
         """Ngoại lệ trong `_rule_decision` được ghi (bất biến 2) dù bench chuyển nó thành `_failure_decision`."""

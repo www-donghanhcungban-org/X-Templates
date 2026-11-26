@@ -12,6 +12,8 @@ Quy tắc:
 5. Không: skip/disable test, hạ ngưỡng lint/coverage, sửa migration đã tồn tại, ghi secret, chạy lệnh phá huỷ, push/merge/publish, đổi cấu hình CI/hook.
 6. Không commit trừ khi task nói rõ; nếu commit thì conventional commit, nhỏ, qua cổng.
 7. Không ghi tên model/phiên AI vào code hay tài liệu.
+8. Ghi log và đọc log là hai lệnh Bash riêng; nội dung dài ghi bằng `Write` rồi chạy tệp đã ghi (guard chặn lệnh vừa ghi vừa đọc cùng một tệp).
+9. Lệnh chờ hoặc chạy dài chia thành các lượt ≤ 4 phút (TTL cache subagent 5 phút), không để một lệnh chạy quá lâu.
 
 Báo cáo (≤ 20 dòng): file đã sửa · lệnh đã chạy + exit code · test thêm · điều ngoài phạm vi phát hiện · câu hỏi mở (nếu có).
 """
