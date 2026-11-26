@@ -8,7 +8,7 @@ updated: 2026-11-26
 
 > **Ai viết:** người thiết kế cùng agent, cuối G4, khi `PROJECT.md` khai `Duyệt thiết kế: khách` (`UX-DS-023`, ADR-0106).
 > **Cổng dùng:** commit tệp này rồi `xt.py stage design-submit --evidence docs/design/DESIGN-REVIEW.md`; chủ dự án ghi lời duyệt của khách bằng `xt.py stage approve --design --sha <bản trình> --note "<kênh + ngày + link lời duyệt>"` ở terminal ngoài phiên agent. Trước lúc đó máy không cho chạy task `(ui: yes)`.
-> **Đường dẫn:** `docs/design/DESIGN-REVIEW.md`; khách đòi sửa → `stage design-reopen --reason`, sửa, trình lại (mỗi lần trình là một phiên bản).
+> **Đường dẫn:** `docs/design/DESIGN-REVIEW.md`; khách đòi sửa → `stage design-reopen --reason`, sửa, trình lại (mỗi lần trình là một phiên bản). Lời duyệt gắn với hash nội dung tệp đã trình: sửa tệp sau khi trình/duyệt là khoá lại (ADR-0107).
 
 ```markdown
 # DESIGN-REVIEW — <Tên dự án> · phiên bản <n>

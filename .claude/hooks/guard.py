@@ -11447,8 +11447,8 @@ REVIEW_FORGE_WHY = (
 STAGE_APPROVE_WHY = (
     # vế lệnh-con-từ-biến đứng đầu: lý do bị cắt ở trần độ dài khi có lý do chặn khác (AUD-HAR-313)
     "duyệt giai đoạn sản phẩm (`xt.py stage approve`/`init --adopt`; lệnh con lấy từ biến `xt.py $c` cũng tính — viết"
-    " rõ từng lệnh, AUD-HAR-307) — chỉ người, ngoài phiên agent (ADR-0058); `stage approve` dạng chữ rõ được khi"
-    " xt.yaml ở cây VÀ bản đã commit ở nhánh chính khai `stage_approval: agent` (ADR-0069); cũng `loop decide-prod`"
+    " rõ, AUD-HAR-307) — chỉ người, ngoài phiên agent (ADR-0058); `stage approve` chữ rõ (trừ `--design`, ADR-0106)"
+    " được khi xt.yaml ở cây VÀ nhánh chính khai `stage_approval: agent` (ADR-0069); cũng `loop decide-prod`"
     " (AUD-SEC-541)"
 )
 
