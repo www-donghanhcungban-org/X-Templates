@@ -1106,3 +1106,17 @@
 - Chọn: Phiên chính lập PLAN/SPEC và việc phức tạp ở Opus 5.5 (top-1), việc đơn giản ở Sonnet 5.5, việc cơ học có Gate ở Haiku 5.5 qua agent executor-mech; Fable chỉ khi chủ dự án bật
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án yêu cầu (2026-11-24): kế hoạch và việc phức tạp Opus 5.5, việc đơn giản Sonnet 5.5, việc cơ học Haiku 5.5. Phiên chính ở Opus bỏ hẳn ca Fable viết code mà reviewer Opus không cao hơn (LOOP-ORCH-005 vẫn giữ: người viết Opus effort ≤ xhigh, reviewer-alt Opus max). Haiku chỉ nhận việc cơ học có lệnh Gate kiểm máy, đỏ một lần chuyển executor (Sonnet), không quyết định, không bảo mật/license, không test mới; giữ cổng, không nới. Giảm chi phí: Opus bằng nửa giá Fable.
 - Đường lùi: Đặt lại main_session.plan_spec_decision = top ở model-tiers.json, xoá executor-mech.md và gương Codex, khôi phục câu Fable → Opus → Sonnet ở LOOP-ORCH-019
+
+### D-606 · 2026-11-25T14:30:33+00:00 · Nới trần dòng .claude/hooks/guard.py thêm 10 dòng để sửa AUD-HAR-541 (luật tag bỏ sót glob chỉ gồm ? và lớp ký tự)?
+
+- Phương án: (1) Nới trần 24645 lên 24664 bằng ADR-0103, giữ guard là tệp một khối · (2) Nén hoặc gộp dòng ở chỗ khác của guard.py để giữ nguyên trần · (3) Chấp nhận rủi ro và chờ tách guard theo PLAN-guard-split
+- Chọn: Nới trần 24645 lên 24664 bằng ADR-0103, giữ guard là tệp một khối
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí 1: ruleset tag phía máy chủ chưa chạy thật (T-4007 cần admin) nên guard là hàng rào duy nhất cho tag phiên bản; lỗ hổng đã tái hiện bằng bộ phân tích guard. Tách module là việc lớn và guard nạp như một khối nên chưa làm trong lát này; nén dòng ở chỗ khác rủi ro làm lệch luật bảo vệ không liên quan. Trần mới bằng đúng số đo, không dư.
+- Đường lùi: Hoàn nguyên commit; trần về 24645 và AUD-HAR-541 quay lại trạng thái mở
+
+### D-607 · 2026-11-25T16:40:58+00:00 · Cách đóng nốt AUD-HAR-541/566 trong luật tag glob của guard
+
+- Phương án: (1) Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104) · (2) Coi mọi glob ở vị trí tên tag là tag phiên bản · (3) Chấp nhận lỗ hổng, chờ ruleset tag phía máy chủ
+- Chọn: Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104)
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chặn các dạng bash bung ra vX.Y.Z đã đo, không chặn oan refspec dùng chung _tag_glob; giữ đường lùi
+- Đường lùi: Hoàn nguyên commit; trần guard về 24664

@@ -41,6 +41,14 @@ class CreditsTest(unittest.TestCase):
         self.assertTrue(kind_credits.HELP)
         self.assertIn(".woff2", kind_credits.SUFFIXES)
 
+    def test_table_without_a_source_column_reports_missing_source(self) -> None:
+        # Rà lô 3 🔴: không có cột nguồn thì từng rơi về cột 1 (License), "MIT" đọc thành có nguồn (xanh giả).
+        files = self.media("logo.png")
+        table = "| File | License |\n|---|---|\n| logo.png | MIT |\n"
+        self.assertEqual(self.codes(self.run_check(table, files)), [("CRD002", 3)])
+        with_source = "| File | License | Source |\n|---|---|---|\n| logo.png | MIT | https://example.invalid/logo |\n"
+        self.assertEqual(self.run_check(with_source, files), [])
+
     def test_good_table_is_clean(self) -> None:
         files = self.media("a.png", "img/b.JPG")
         table = HEAD + "| a.png | https://example.org/a | CC0-1.0 |\n| `./img/b.JPG` | Nguyễn An | mit |\n"

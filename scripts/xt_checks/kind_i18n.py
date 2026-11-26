@@ -37,14 +37,22 @@ def sniff(text: str) -> bool:
 SNIFF = sniff
 
 
-def _flatten(root: dict[str, object]) -> Flat:
-    """Làm phẳng object lồng bằng dấu chấm; lặp bằng ngăn xếp tường minh. Mảng và giá trị khác là lá."""
+MAX_PATH_CHARS = 32_000_000  # tổng độ dài khoá đã làm phẳng: tiền tố dài lặp ở mỗi lá làm bộ nhớ bậc hai theo cỡ tệp
+
+
+def _flatten(root: dict[str, object]) -> Flat | None:
+    """Làm phẳng object lồng bằng dấu chấm; lặp bằng ngăn xếp tường minh. Mảng và giá trị khác là lá. Tổng độ dài khoá vượt
+    `MAX_PATH_CHARS` → None (đóng an toàn thay vì cạn bộ nhớ, rà lô 3 AUD-HAR-547)."""
     out: Flat = {}
+    total = 0
     stack: list[tuple[str | None, dict[str, object]]] = [(None, root)]
     while stack:
         prefix, node = stack.pop()
         for key, value in node.items():
             path = key if prefix is None else f"{prefix}.{key}"
+            total += len(path)
+            if total > MAX_PATH_CHARS:
+                return None
             if isinstance(value, dict):
                 stack.append((path, value))
             else:
@@ -65,7 +73,10 @@ def _load(path: Path) -> tuple[Flat | None, str]:
         return None, "không phải JSON hợp lệ"
     if not isinstance(data, dict):
         return None, "gốc JSON không phải object"
-    return _flatten(data), ""
+    flat = _flatten(data)
+    if flat is None:
+        return None, "khoá lồng quá dài hoặc quá rộng (tổng độ dài đường dẫn vượt trần)"
+    return flat, ""
 
 
 def _close_quote(text: str, start: int) -> int:

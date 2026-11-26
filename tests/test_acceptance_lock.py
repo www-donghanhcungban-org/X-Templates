@@ -83,6 +83,25 @@ class AcceptanceLockTest(unittest.TestCase):
     def ledger(self):
         return json.loads((self.base / lock.LEDGER).read_bytes())
 
+    def test_symlinked_docs_do_not_enable_acceptance_for_a_project_without_it(self):
+        # AUD-HAR-552: docs/ là symlink làm mọi `loop record` đỏ giả dù dự án không khai nghiệm thu
+        root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
+        repo = root / "proj"
+        repo.mkdir()
+        subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True)
+        (repo / "xt.yaml").write_text("test: true\n", encoding="utf-8")
+        shared = root / "shared"
+        (shared / "autopilot").mkdir(parents=True)
+        (repo / "docs").symlink_to(shared, target_is_directory=True)
+        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(repo)}):
+            out = lock.verify(xt, repo)
+            self.assertEqual((out["enabled"], out["ok"], out["problems"]), (False, True, []))
+            # Sổ có thật nằm sau symlink vẫn bị từ chối: đường dẫn phải là đường thật
+            (shared / "autopilot" / "ACCEPTANCE.json").write_text("{}", encoding="utf-8")
+            out = lock.verify(xt, repo)
+        self.assertEqual((out["enabled"], out["ok"]), (True, False))
+        self.assertIn("symlink", " ".join(out["problems"]))
+
     def merge_decision_for(self, path):
         pr = {
             "number": 7,

@@ -43,13 +43,15 @@ Exit 0 khi không có vi phạm đã đo và điều kiện nghiêm ngặt đã 
 `--strict` còn `UNMEASURED` chưa miễn. Exit 2 khi cấu hình sai hoặc cổng không chạy hết, ví dụ thiếu Chromium, thiếu
 phụ thuộc, lỗi tải trang hoặc phản hồi HTTP không phải 2xx. Điều khiển vô hiệu (`:disabled`, kể cả trong `fieldset`
 vô hiệu) nằm ngoài phạm vi đo. Báo cáo vẫn ghi `UNMEASURED` khi ngoại lệ được áp dụng. Định danh `target` trong báo cáo
-bỏ userinfo, query và fragment (đánh dấu `[đã che]`); ngoại lệ vẫn khớp theo URL đầy đủ.
+bỏ userinfo, query và fragment (đánh dấu `[đã che]`), cả trong thông điệp lỗi của trình duyệt; ngoại lệ vẫn khớp theo URL
+đầy đủ. Transition và animation hữu hạn được kết thúc trước khi đọc màu; hoạt ảnh vô hạn chạm tới điều khiển thì báo
+`UNMEASURED`.
 
 ## Ngoại lệ có bằng chứng
 
 Sao chép đúng phạm vi từ dòng `UNMEASURED` vào tệp JSON. `target` là URL hoặc đường dẫn dùng khi gọi lệnh, chuẩn hoá từ
 thư mục chạy lệnh. `width` là số nguyên dương, `theme` là `light` hoặc `dark`, `state` là `default`, `hover` hoặc
-`focus` (focus-visible). `element` khớp định danh in trong báo cáo. `check` là `contrast` hoặc `axe:<rule>` ở
+`focus` (focus-visible). `element` khớp định danh in trong báo cáo. `check` là `contrast`, `reflow` hoặc `axe:<rule>` ở
 `default`. Mỗi phạm vi cần một lý do và đường dẫn hoặc URL tới bằng chứng đo tay. Hạn `expires` là ngày UTC có thật
 dạng YYYY-MM-DD, còn hiệu lực hết ngày đó.
 
@@ -79,6 +81,17 @@ chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương ph
 
 - Đo chữ của `a[href]`, `button`, `input`, `select`, `textarea`, `[role=button]`, `[tabindex]`. Trạng thái
   `disabled` được miễn theo WCAG 1.4.3. Dùng phép kiểm bổ sung cho viền/icon, `active` và `selected`.
-- Phần tử chưa đo gồm nền ảnh/gradient, trạng thái không kích hoạt được và trường hợp axe yêu cầu xem lại bằng tay.
-- 320 CSS px là ngưỡng reflow WCAG 2.2 SC 1.4.10. 280 CSS px là phép thử căng của khung.
+- Phần tử chưa đo gồm nền ảnh/gradient, độ mờ/bộ lọc/hoà trộn ở bất kỳ tổ tiên nào, chữ trong suốt
+  (`-webkit-text-fill-color`, `color: transparent`), `::before`/`::after` có nền, định vị tuyệt đối hay độ mờ riêng, khung
+  con không có nền đục, trạng thái không kích hoạt được và trường hợp axe yêu cầu xem lại bằng tay.
+- Mỗi điều khiển được đo theo chữ của chính nó, của phần tử con đang hiển thị có chữ và của `::before`/`::after` có chữ;
+  kết quả đo được tệ nhất quyết định, và một phần chưa đo không che vi phạm đã đo ở phần khác. Cổng đi theo cây phẳng
+  (slot đã có nội dung gán thì bỏ phần dự phòng; shadow `closed` không đọc được nên điều khiển trong đó không được duyệt) và
+  duyệt từng iframe (định danh `frame[N] …`, N là thứ tự khung theo Playwright, có thể đổi khi khung chèn động). Điều khiển
+  trong shadow root báo `element=null` nên chưa khai ngoại lệ được.
+- 320 CSS px là ngưỡng reflow WCAG 2.2 SC 1.4.10. 280 CSS px là phép thử căng của khung. Ở khổ ≤ 400 px, vùng
+  `overflow:hidden|clip` cắt chữ giữa dòng là vi phạm `reflow`; chữ nằm hẳn ngoài khung cắt (carousel hay nội dung ẩn có
+  chủ ý) báo `UNMEASURED` để người xem và khai ngoại lệ (`check: reflow`). Bỏ qua điều khiển form, chữ ẩn thị giác (`clip`,
+  hộp ≤ 1 px) và `text-overflow: ellipsis`. Chỉ xét chữ theo chiều ngang trong tài liệu chính: cắt theo chiều dọc, ảnh
+  bị cắt, nội dung trong iframe hay shadow root chưa được kiểm.
 - Ý tưởng cổng đo trên bản render tham khảo `plugin87/ux-ui-agent-skills` (MIT) qua stored 06 §7d. Mã viết cho khung.

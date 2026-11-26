@@ -138,7 +138,9 @@ def retain_artifacts(base: Path, state: Path, digest: str, arts: list[Doc]) -> N
 
 def clean_adapter_checkout(core: Core, base: Path, destination: Path, head: str) -> Path:
     """Run promoted commands from the reviewed Git tree. Ignored files in the build checkout are not executable inputs."""
-    tree = destination / "source"
+    tree = (
+        destination.resolve() / "source"
+    )  # TMPDIR có thể là symlink (macOS /var → /private/var): kiểm đường dẫn cần bản đã resolve
     core._go_git(
         destination,
         "không tạo được checkout của adapter",

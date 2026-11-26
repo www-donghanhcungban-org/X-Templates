@@ -40,7 +40,7 @@ OPTS = ("credits", "allow")
 SRC_WORDS = ("nguồn", "source", "tác giả", "author")
 LIC_WORDS = ("license", "licence", "giấy phép")
 EMPTY = frozenset({"", "-", "?", "tbd", "todo", "n/a"})
-RuleRow = tuple[int, list[str], int, int]
+RuleRow = tuple[int, list[str], int | None, int]  # cột nguồn None: tiêu đề không có cột nguồn
 
 
 def _cells(line: str) -> list[str]:
@@ -51,20 +51,26 @@ def _is_sep(cells: list[str]) -> bool:
     return all(set(c) <= set("-: ") for c in cells) and "-" in "".join(cells)
 
 
-def _col(header: list[str], words: tuple[str, ...], default: int) -> int:
-    return next((i for i, c in enumerate(header) if any(w in c.lower() for w in words)), default)
+def _find(header: list[str], words: tuple[str, ...]) -> int | None:
+    return next((i for i, c in enumerate(header) if any(w in c.lower() for w in words)), None)
 
 
 def _rows(text: str) -> list[RuleRow]:
     """Dòng dữ liệu của các bảng: (số dòng, ô, cột nguồn, cột license); tiêu đề và dòng kẻ bị bỏ."""
     table = [(n, _cells(s)) for n, s in enumerate(text.split("\n"), 1) if s.lstrip().startswith("|")]
     out: list[RuleRow] = []
-    src, lic = 1, 2
+    src: int | None = 1
+    lic = 2
     for i, (number, cells) in enumerate(table):
         if _is_sep(cells):
             continue
         if i + 1 < len(table) and _is_sep(table[i + 1][1]):
-            src, lic = _col(cells, SRC_WORDS, 1), _col(cells, LIC_WORDS, 2)
+            source_at, license_at = _find(cells, SRC_WORDS), _find(cells, LIC_WORDS)
+            if source_at is None and license_at is None:
+                src, lic = 1, 2  # tiêu đề không có chữ nhận dạng: theo thứ tự mặc định Tệp | Nguồn | License
+            else:
+                # Có cột License mà thiếu cột nguồn: không rơi về cột 1 ("MIT" đọc thành có nguồn) — CRD002.
+                src, lic = source_at, 2 if license_at is None else license_at
             continue
         out.append((number, cells, src, lic))
     return out
@@ -83,9 +89,12 @@ def _hits(path: Path, key: str) -> bool:
     return posix == key or posix.endswith("/" + key)
 
 
-def _is_missing(key: str, credits: Path, files: list[Path]) -> bool:
-    """Tệp `key` không còn mà vị trí dự kiến nằm cùng cây với các tệp được kiểm."""
-    root = Path(os.path.commonpath([str(p.resolve().parent) for p in files]))
+def _common_root(files: list[Path]) -> Path:
+    return Path(os.path.commonpath([str(p.resolve().parent) for p in files]))
+
+
+def _is_missing(key: str, credits: Path, root: Path) -> bool:
+    """Tệp `key` không còn mà vị trí dự kiến nằm cùng cây với các tệp được kiểm (gốc chung tính một lần, AUD-HAR-549)."""
     bases = (credits.parent, credits.parent.parent, Path("."))
     try:
         spots = [(base / key).resolve() for base in bases]
@@ -110,12 +119,15 @@ def check(files: list[Path], opts: dict[str, str]) -> list[Finding]:
     for path in media:
         if not any(_hits(path, k) for k in keys):
             found.append(Finding(str(path), 0, "CRD001", "tệp media chưa có dòng trong bảng credits"))
+    root: Path | None = None
     for number, cells, src, lic in rows:
         name = str(credits)
-        if _at(cells, src).lower() in EMPTY:
+        if src is None or _at(cells, src).lower() in EMPTY:
             found.append(Finding(name, number, "CRD002", f"{_key(cells)}: thiếu nguồn (URL hoặc tác giả)"))
         if _at(cells, lic).lower() not in allow:
             found.append(Finding(name, number, "CRD003", f"{_key(cells)}: license không thuộc danh sách cho phép"))
-        if not any(_hits(p, _key(cells)) for p in media) and _is_missing(_key(cells), credits, media):
-            found.append(Finding(name, number, "CRD004", f"{_key(cells)}: tệp không còn tồn tại"))
+        if not any(_hits(p, _key(cells)) for p in media):
+            root = root or _common_root(media)
+            if _is_missing(_key(cells), credits, root):
+                found.append(Finding(name, number, "CRD004", f"{_key(cells)}: tệp không còn tồn tại"))
     return found

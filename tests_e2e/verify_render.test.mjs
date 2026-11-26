@@ -200,7 +200,7 @@ test('malformed or conflicting exceptions and invalid widths fail before browser
   const sample = await fixture(t, page());
   const invalid = [
     { expires: '2099-02-29' }, { expires: '2099-02-30' }, { evidence: ' ' }, { reason: '' },
-    { width: 320.5 }, { check: 'reflow' }, { element: '*' },
+    { width: 320.5 }, { check: 'layout' }, { element: '*' },
   ];
   for (const changes of invalid) {
     const file = await sample.exceptions([exception(sample.target, changes)]);
@@ -267,6 +267,218 @@ test('an HTTP error page is UNMEASURED instead of passing', async (t) => {
   assert.doesNotMatch(result.stdout + result.stderr, /query-secret|^✓/m);
   const ok = await sample.run(['--strict', '--widths', '320'], process.env, [`http://127.0.0.1:${port}/ok.html`]);
   status(ok, 0);
+});
+
+async function closedPort() {
+  const server = createServer();
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const { port } = server.address();
+  await new Promise((done) => server.close(done));
+  return port;
+}
+
+test('a navigation failure does not echo userinfo, query or fragment of the target', async (t) => {
+  const sample = await fixture(t, page());
+  const target = `http://user:pw-secret@127.0.0.1:${await closedPort()}/p.html?token=query-secret#frag-secret`;
+  const result = await sample.run(['--strict', '--widths', '320'], process.env, [target]);
+  status(result, 2);
+  assert.match(result.stderr, /UNMEASURED.*không chạy hết cổng/);
+  assert.doesNotMatch(result.stdout + result.stderr, /pw-secret|query-secret|frag-secret/);
+});
+
+test('a hover colour reached through a transition is measured at its final value', async (t) => {
+  const sample = await fixture(t, page({ css: `
+    #sample { transition: color 2s linear; }
+    #sample:hover, #sample:focus-visible { background: #fff; color: #d0d0d0; }
+  ` }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  const failures = result.stdout.split('\n').filter((line) => line.startsWith('✗ '));
+  for (const width of [1280, 320]) {
+    for (const state of ['hover', 'focus']) {
+      assert.ok(failures.some((line) => line.includes(scoped(width, 'light', state)) &&
+        line.includes('check=contrast element="#sample"')), result.stdout);
+    }
+  }
+  assert.ok(!failures.some((line) => line.includes('state=default')), result.stdout);
+});
+
+test('an infinite animation on the control is UNMEASURED instead of a guess', async (t) => {
+  const sample = await fixture(t, page({ css: `
+    @keyframes pulse { from { color: #111; } to { color: #fff; } }
+    #sample { animation: pulse 1s infinite alternate; }
+  ` }));
+  const strict = await sample.run(['--strict', '--widths', '320']);
+  status(strict, 1);
+  assert.match(strict.stdout, /^UNMEASURED .*check=contrast element="#sample" — hoạt ảnh vô hạn/m);
+  for (const state of STATES) count(strict.stdout, 'CONTRAST', 320, 'light', state, 'measured=0 unmeasured=1 exempted=0');
+  const advisory = await sample.run(['--widths', '320']);
+  status(advisory, 0);
+  assert.doesNotMatch(advisory.stdout, /^✓/m);
+});
+
+const contrastLine = (stdout, needle) => stdout.split('\n').find((line) => line.startsWith('✗ ') && line.includes('check=contrast') && line.includes(needle));
+
+test('controls inside an iframe are measured, not skipped', async (t) => {
+  const inner = '<button style="color:#ddd;background:#fff;min-width:48px;min-height:44px">Pay</button>';
+  const sample = await fixture(t, page({ markup: `<iframe title="payment" width="200" height="80" srcdoc="${inner.replaceAll('"', '&quot;')}"></iframe>` }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'element="frame[1] '), result.stdout);
+});
+
+test('a control inside a shadow root is measured against the host background', async (t) => {
+  const sample = await fixture(t, page({
+    css: 'x-card { display: block; background: #111; padding: 8px; }',
+    markup: `<x-card id="card"></x-card><script>
+      const root = document.getElementById('card').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="color:#222;background:transparent;min-width:48px;min-height:44px">Shadow</button>';
+    </script>`,
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'state=default'), result.stdout);
+});
+
+test('text colour of a child element and of ::before is measured, not only the control colour', async (t) => {
+  const child = await fixture(t, page({ markup: '<button id="child"><span style="color:#ddd">Quiet label</span></button>' }));
+  const childResult = await child.run(['--strict', '--widths', '320']);
+  status(childResult, 1);
+  assert.ok(contrastLine(childResult.stdout, 'element="#child"'), childResult.stdout);
+  const pseudo = await fixture(t, page({ css: '#icon::before { content: "!"; color: #ddd; }', markup: '<button id="icon">Alert</button>' }));
+  const pseudoResult = await pseudo.run(['--strict', '--widths', '320']);
+  status(pseudoResult, 1);
+  assert.ok(contrastLine(pseudoResult.stdout, 'element="#icon"'), pseudoResult.stdout);
+});
+
+test('opacity and transparent text fill make a control UNMEASURED instead of a guess', async (t) => {
+  const sample = await fixture(t, page({
+    css: '#faded { opacity: .3; } #ghost { -webkit-text-fill-color: transparent; }',
+    markup: '<button id="faded">Faded</button><button id="ghost">Ghost</button>',
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^UNMEASURED .*check=contrast element="#faded" — độ mờ/m);
+  assert.match(result.stdout, /^UNMEASURED .*check=contrast element="#ghost" — chữ trong suốt/m);
+});
+
+const WIDE_TEXT = 'content that is far wider than its box and gets cut off';
+const wideBox = (id, style) => `<div id="${id}" tabindex="0" role="region" aria-label="wide content" style="${style}"><div style="width:900px;white-space:nowrap">${WIDE_TEXT}</div></div>`;
+
+test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
+  const clipped = await fixture(t, page({ markup: wideBox('clip', 'overflow:hidden;width:200px') }));
+  const result = await clipped.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — chữ bị cắt/m);
+  assert.doesNotMatch(result.stdout, /^✗ .*viewport=1280x800 .*check=reflow/m);
+  const scrollable = await fixture(t, page({ markup: wideBox('scroll', 'overflow:auto;width:200px') }));
+  status(await scrollable.run(['--widths', '320']), 0);
+  const ellipsis = await fixture(t, page({ markup: '<p id="e" style="overflow:hidden;width:200px;white-space:nowrap;text-overflow:ellipsis">a very long single line of text that will be cut with an ellipsis</p>' }));
+  status(await ellipsis.run(['--widths', '320']), 0);
+});
+
+test('visually hidden text, form fields and empty decorations are not reflow failures; a carousel is UNMEASURED', async (t) => {
+  const css = '.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }' +
+    ' #rip { position: relative; overflow: hidden; } #rip::after { content: ""; position: absolute; top: 0; left: -50%; width: 200%; height: 100%; }';
+  const benign = await fixture(t, page({
+    css,
+    markup: '<p>Cart <span class="sr-only">(3 items, total 42 EUR)</span></p>' +
+      '<label>Email <input id="em" type="email" value="someone.with.a.long.address@example-company.example"></label>' +
+      '<div id="rip">Ripple</div>',
+  }));
+  const ok = await benign.run(['--widths', '320']);
+  status(ok, 0);
+  assert.doesNotMatch(ok.stdout, /check=reflow/);
+  const carousel = await fixture(t, page({
+    css: '.swiper { overflow: hidden; } .wrapper { display: flex; } .slide { flex: 0 0 100%; }',
+    markup: '<div class="swiper" id="car"><div class="wrapper"><div class="slide">First slide text</div><div class="slide">Second slide text</div><div class="slide">Third slide text</div></div></div>',
+  }));
+  const soft = await carousel.run(['--widths', '320']);
+  status(soft, 0);
+  assert.match(soft.stdout, /^UNMEASURED .*check=reflow element="#car" — chữ nằm ngoài khung cắt/m);
+  status(await carousel.run(['--strict', '--widths', '320']), 1);
+  const file = await carousel.exceptions([exception(carousel.target, { check: 'reflow', element: '#car' })]);
+  const exempt = await carousel.run(['--strict', '--widths', '320', '--exceptions', file]);
+  assert.match(exempt.stdout, /^EXEMPTED .*check=reflow element="#car"/m);
+});
+
+test('a measured violation is never hidden by an unmeasurable part of the same control', async (t) => {
+  const sample = await fixture(t, page({
+    css: '#hv:hover { background: #fff; color: #ccc; } [data-tip] { position: relative; }' +
+      ' [data-tip]::after { content: attr(data-tip); position: absolute; left: 0; top: 100%; background: #111; color: #fff; opacity: 0; }' +
+      ' [data-tip]:hover::after { opacity: 1; }',
+    markup: '<button id="hv" data-tip="Delete item">Delete</button>',
+  }));
+  const result = await sample.run(['--widths', '320']);
+  status(result, 1);
+  assert.ok(contrastLine(result.stdout, 'state=hover') && contrastLine(result.stdout, 'element="#hv"'), result.stdout);
+  assert.match(result.stdout, /^UNMEASURED .*element="#hv" — nội dung giả có nền hoặc định vị riêng/m);
+});
+
+test('an overlay pseudo-element with empty content, a filtered ancestor and a transparent iframe are UNMEASURED', async (t) => {
+  const overlay = await fixture(t, page({
+    css: '#ovh { position: relative; } #ovh:hover::before { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.9); }',
+    markup: '<button id="ovh">Overlay</button>',
+  }));
+  const overlayResult = await overlay.run(['--strict', '--widths', '320']);
+  status(overlayResult, 1);
+  assert.match(overlayResult.stdout, /^UNMEASURED .*state=hover check=contrast element="#ovh" — nội dung giả có nền hoặc định vị riêng/m);
+  const filtered = await fixture(t, page({ markup: '<div style="filter: contrast(.2)"><button id="flt">Filtered</button></div>' }));
+  const filteredResult = await filtered.run(['--strict', '--widths', '320']);
+  status(filteredResult, 1);
+  assert.match(filteredResult.stdout, /^UNMEASURED .*check=contrast element="#flt" — độ mờ, bộ lọc/m);
+  const inner = '<main><button style="background:transparent;color:#222;border:0">Pay</button></main>';
+  const frame = await fixture(t, page({ css: 'body { background: #111; }', markup: `<iframe title="pay" width="200" height="80" srcdoc="${inner.replaceAll('"', '&quot;')}"></iframe>` }));
+  const frameResult = await frame.run(['--strict', '--widths', '320']);
+  status(frameResult, 1);
+  assert.match(frameResult.stdout, /^UNMEASURED .*check=contrast element="frame\[1\] .*— khung con không có nền đục/m);
+});
+
+test('hidden descendants are not measured and an assigned slot hides its fallback content', async (t) => {
+  const hidden = await fixture(t, page({ markup: '<button id="hid">Save<span style="display:none;color:#ddd">Saving</span></button>' }));
+  const hiddenResult = await hidden.run(['--strict', '--widths', '320']);
+  status(hiddenResult, 0);
+  assert.doesNotMatch(hiddenResult.stdout, /^(?:✗|UNMEASURED) .*check=contrast/m);
+  const slot = await fixture(t, page({
+    markup: `<x-btn id="host">Buy now</x-btn><script>
+      const root = document.getElementById('host').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="background:#fff;color:#111;min-width:48px;min-height:44px"><slot><span style="color:#eee">Default</span></slot></button>';
+    </script>`,
+  }));
+  const slotResult = await slot.run(['--widths', '320']);
+  assert.doesNotMatch(slotResult.stdout, /^✗ .*check=contrast/m);
+  const dark = await fixture(t, page({
+    css: 'x-card { display: block; background: #111; padding: 8px; }',
+    markup: `<x-card id="card"><span id="label" style="color:#222">Slotted</span></x-card><script>
+      const root = document.getElementById('card').attachShadow({ mode: 'open' });
+      root.innerHTML = '<button style="background:transparent;min-width:48px;min-height:44px"><slot></slot></button>';
+    </script>`,
+  }));
+  const darkResult = await dark.run(['--widths', '320']);
+  assert.ok(contrastLine(darkResult.stdout, 'state=default'), darkResult.stdout);
+});
+
+test('right-to-left text overflowing to the left is cut, and a long page cannot hide a cut line past the scan cap', async (t) => {
+  const rtl = await fixture(t, page({ markup: '<p id="rtl" dir="rtl" style="overflow:hidden;width:200px;white-space:nowrap">' + 'abcdefghij '.repeat(12) + '</p>' }));
+  const rtlResult = await rtl.run(['--strict', '--widths', '320']);
+  status(rtlResult, 1);
+  assert.match(rtlResult.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#rtl" — chữ bị cắt/m);
+  const paragraphs = Array.from({ length: 260 }, (_, index) => `<p>Para ${index}</p>`).join('\n');
+  const long = await fixture(t, page({ markup: `<div style="overflow-x:hidden;width:120px">${paragraphs}<p style="white-space:nowrap">Total due today: 42 EUR</p></div>` }));
+  const longResult = await long.run(['--widths', '320']);
+  assert.doesNotMatch(longResult.stdout, /^✓/m);
+  assert.match(longResult.stdout + longResult.stderr, /^(?:✗|UNMEASURED) .*check=reflow/m);
+});
+
+test('text inside a display:contents wrapper is measured, and a page-level `parent` global does not fake a frame', async (t) => {
+  const contents = await fixture(t, page({ markup: '<button id="dc"><span style="display:contents;color:#bbb">Quiet label</span></button>' }));
+  const contentsResult = await contents.run(['--strict', '--widths', '320']);
+  status(contentsResult, 1);
+  assert.ok(contrastLine(contentsResult.stdout, 'element="#dc"'), contentsResult.stdout);
+  const shadowed = await fixture(t, page({ css: 'html, body { background: transparent; }', markup: '<script>var parent = null;</script>' }));
+  const shadowedResult = await shadowed.run(['--strict', '--widths', '320']);
+  status(shadowedResult, 0);
+  assert.doesNotMatch(shadowedResult.stdout, /khung con không có nền đục/);
 });
 
 test('a missing Chromium executable makes the real gate fail UNMEASURED', async (t) => {
