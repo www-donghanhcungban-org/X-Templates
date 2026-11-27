@@ -1204,3 +1204,10 @@
 - Chọn: (a) nhận cả xt_design ở _xt_imports và XT_INPROC_NAME_RE bằng sửa tại chỗ (không thêm dòng guard.py, không nới trần); (b) khi docs/autopilot/DESIGN.json tồn tại (kể cả hỏng, rỗng) thì dự án coi là khách bất kể PROJECT.md; ghi ADR-0108 thay các giới hạn tương ứng của ADR-0106
 - Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: (a) cùng hiệu ứng duyệt thay khách mà guard đã chặn cho import xt; sửa tại chỗ giữ trần dòng guard.py; (b) đóng đúng lỗ reviewer tái hiện (sửa PROJECT.md chưa commit thành không khi đang chờ duyệt) mà không phụ thuộc mạng hay remote. Phương án 2 mạnh hơn nhưng phụ thuộc git remote, tăng bề mặt lỗi (offline, clone nông, worktree) — để sau nếu có số liệu; phương án 3 để hở lỗ đã tái hiện. (2) đường lùi: hai sửa nhỏ độc lập, revert một PR; không đổi ID. (3) kiểm được bằng test; không thêm phụ thuộc.
 - Đường lùi: Revert PR; luật guard và declared() về như ADR-0106; ADR-0108 đổi trạng thái thành Bị thay.
+
+### D-624 · 2026-11-27T00:46:02+00:00 · Gói site-cms-ts: dùng stack nào cho site giới thiệu công ty có admin tin tức, SEO, bảo mật?
+
+- Phương án: (1) Astro (tĩnh) + Decap CMS (lưu vào git, đăng nhập OAuth của git host) · (2) Payload CMS + Next.js (một ứng dụng, Postgres) · (3) Astro + admin tự viết (Node + Postgres)
+- Chọn: Astro (tĩnh) + Decap CMS (lưu vào git, đăng nhập OAuth của git host)
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: site tĩnh không có CSDL/phiên người dùng, bề mặt tấn công nhỏ nhất, CSP bằng hash không buộc render động; Payload có 8 advisory critical từ 2025 (SQLi, RCE) và MFA lõi chưa xác minh, Next.js CSP nonce tắt SSG/ISR; admin tự viết tự gánh CSRF/MFA/XSS rich text. (2) đường lùi: nội dung là tệp trong git nên chuyển sang Payload/Ghost sau không mất dữ liệu. (3) MFA admin (ASVS 6.3.3) giao cho git host (bắt buộc 2FA ở tổ chức) — không ứng viên CMS nào có TOTP gốc đã xác minh. Cái giá: người soạn tin cần tài khoản git host và proxy OAuth tự host; ghi ở ADR-0109.
+- Đường lùi: Đổi sang Payload (Postgres, MFA bằng plugin hoặc proxy xác thực) bằng ADR mới; nội dung Markdown/JSON trong git nhập lại được.
