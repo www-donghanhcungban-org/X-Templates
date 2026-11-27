@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm hai lệnh CLI từ chối chi phí rỗng trước khi có tác dụng phụ nằm ngoài adapter quyết định của corpus. Gate: `python3 -m unittest tests.test_cost_flag`.",
+   "ids": [
+    "AUD-CODE-069"
+   ]
+  },
+  {
    "reason": "Truy vết AC đo tệp Markdown, mẫu SPEC và mã test. Ca lỗi cùng các biến thể Markdown: `python3 -m unittest tests.test_check_ac_trace tests.test_static_check`.",
    "ids": [
     "AUD-XFEAT-062"
