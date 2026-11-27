@@ -114,6 +114,8 @@ The table below introduces the main commands; the [full Vietnamese command refer
 
 ## Design decisions
 
+[Upgrade proposal by project size and admin workflow](docs/autopilot/PLAN-integrated-upgrade-2026-11-27.md) (Vietnamese).
+
 The framework records architectural choices and their history in [design decisions (ADRs)](docs/adr/). The [Vietnamese decision index](#quyết-định-thiết-kế) provides summaries and links; individual ADRs explain their scope and any later superseding decisions.
 
 ## Practical boundaries
@@ -400,6 +402,8 @@ python3 -m unittest discover -s tests    # chỉ test (cổng test còn đòi co
 ```
 
 ## Quyết định thiết kế
+
+[Đề xuất nâng cấp theo quy mô dự án và tác vụ quản trị](docs/autopilot/PLAN-integrated-upgrade-2026-11-27.md).
 
 - [ADR-0001](docs/adr/0001-framework-as-id-library-with-machine-composition.md): khung là thư viện ID, máy ghép và máy kiểm "xong".
 - [ADR-0002](docs/adr/0002-harness-stop-points-and-evidence-hooks.md): hook chặn hành động nguy hiểm, Stop hook đọc bằng chứng.

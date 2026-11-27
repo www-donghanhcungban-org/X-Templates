@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Tài liệu đề xuất [nâng cấp theo quy mô](docs/autopilot/PLAN-integrated-upgrade-2026-11-27.md) liên kết đặc tả kỹ thuật với các luồng quản trị, ma trận quyền và ca nghiệm thu.
+
 - Harness Codex (ADR-0114, D-634) sinh model theo bậc vai Claude Code trong gương của khung. Reviewer luôn `high`, executor thường và executor sâu dùng `medium`. Cổng review nhận diện các ID Codex đã đối chiếu và so bậc trước effort. Dự án đích chọn ghim model bằng `--codex-models`.
 
 - T-5082: khay Linux chuyển tín hiệu huỷ tới nhóm lệnh và giữ lease tới khi nhóm dừng (ADR-0115, AUD-HAR-580). D-636 giữ trần số việc hiện tại (AUD-HAR-581).
