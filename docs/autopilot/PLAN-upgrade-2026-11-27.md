@@ -1,12 +1,12 @@
 # PLAN X-Templates 2026-11-27 — nâng cấp hợp nhất: việc chưa có nhà (Revision 4)
 
-> Duyệt: D-626 (phiên chính tự duyệt; chủ dự án yêu cầu "nghiên cứu lại rồi chỉnh kế hoạch" và triển khai sau khi merge), D-625 (tuyến review dưới trần `high`), D-623 (reviewer opus trở xuống), D-610 (không nâng dự án đích) · Căn cứ: [kế hoạch nâng cấp hợp nhất](../../research/2026-11-26-unified-upgrade-plan.md) §0 (bản hợp nhất hiện hành, lịch duy nhất ở §0.5).
+> Duyệt: D-626 (phiên chính tự duyệt; chủ dự án yêu cầu "nghiên cứu lại rồi chỉnh kế hoạch" và triển khai sau khi merge), D-625 (tuyến review dưới trần `high`), D-627 (`executor-deep` opus effort `medium`), D-623 (reviewer opus trở xuống), D-610 (không nâng dự án đích) · Căn cứ: [kế hoạch nâng cấp hợp nhất](../../research/2026-11-26-unified-upgrade-plan.md) §0 (bản hợp nhất hiện hành, lịch duy nhất ở §0.5).
 
 ## Tóm tắt
 - PLAN này **chỉ đăng ký việc chưa có task**. Việc đã có nhà giữ ở PLAN gốc và chạy theo cùng lịch §0.5: `T-5040`, `T-5041` ([PLAN-optimize đợt 2](PLAN-optimize-2026-11-26-b.md)); `T-5009`…`T-5013`, `T-5024` ([PLAN-harden](PLAN-harden-2026-11-24.md)); `T-3996`, `T-3987`…`T-3990` ([PLAN-guard-split](PLAN-guard-split-2026-11-22.md)); `T-5057`…`T-5060` ([PLAN-site-cms](PLAN-site-cms-2026-11-26.md)).
 - `scripts/xt.py` (23.668/23.668 dòng) và `.claude/hooks/guard.py` (24.689/24.689) hết ngân sách dòng: mọi lát chạm hai tệp này phải 0 dòng ròng cho tới khi `T-5069` (xt) và lát tách đầu của guard hạ trần. Không nới trần.
 - Mỗi tệp nóng một chủ, các lát cùng tệp đi nối tiếp; mỗi lát một nhánh từ `origin/main`, một PR.
-- Người viết theo D-625: diff lớp bắt buộc review (guard, hook, workflow, ngoại lệ cứng) do `executor` viết, việc khó gọi `executor-deep` với effort `medium`; phiên chính viết đặc tả và ca kiểm, không tự viết diff lớp đó.
+- Người viết theo D-625: diff lớp bắt buộc review (guard, hook, workflow, ngoại lệ cứng) do `executor` viết, việc khó giao `executor-deep` (opus, effort `medium` — mặc định của vai, D-627); phiên chính viết đặc tả và ca kiểm, không tự viết diff lớp đó.
 - Không nới cổng: coverage dòng + nhánh 100 %, `mypy --strict`, C901 ≤ 10, trần byte và dòng (`tests/test_docs_budget.py`).
 
 ## Ngân sách

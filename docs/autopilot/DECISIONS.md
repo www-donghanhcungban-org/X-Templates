@@ -1232,3 +1232,10 @@
 - Chọn: Một lịch duy nhất ở §0.5 thay §6/§12.6/§23/§35; thu hẹp Code Intelligence thành mở rộng xt_guard_profile và xt.py context, không cache bền, so A/B/C có ngưỡng dừng; đăng ký task mới cho việc chưa có nhà; đợt 0 sổ + chính sách review + hạn 02/12, rồi guard, rồi giải phóng trần xt.py
 - Lý do (tiêu chí chất lượng cuối): Ba reviewer độc lập đối chiếu main be1bf6b4 tìm 4 lỗi chặn: bốn bảng lịch mâu thuẫn và ba câu cùng tự nhận thắng; xt_code_index trùng xt_guard_profile --closure, xt.py context, test-select và trái chính §30.1; lối ghi nợ review không trả được dưới trần high; nhiều việc thiếu ID và lệnh kiểm. Phương án 2 để nguyên các lỗi đó; phương án 3 mất số đo và nguồn đã kiểm, rủi ro sai mới cao. Tiêu chí (3) bền, đơn giản, theo chuẩn một chủ đề một nhà.
 - Đường lùi: Revert PR; các bảng lịch cũ còn nguyên trong tài liệu làm lịch sử.
+
+### D-627 · 2026-11-27T02:29:44+00:00 · executor-deep (opus) chạy effort nào để diff việc khó có review sạch hợp lệ dưới trần reviewer opus/high (D-623, D-625)?
+
+- Phương án: (1) Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà · (2) Giữ frontmatter effort high, hạ xuống medium bằng tham số từng lần gọi · (3) Giữ effort high; diff tầng sâu luôn inconclusive
+- Chọn: Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo 2026-11-27: việc khó gọi executor-deep opus ở effort medium. Đặt ở frontmatter vì đó là mặc định máy kiểm được bằng test và doctor, không phụ thuộc người gọi nhớ truyền tham số; cặp opus/medium viết, opus/high rà hợp lệ theo luật reviewer cao hơn người viết (D-161) mà không nới cổng. Phương án 2 dễ quên và lời khai author-effort lệch thực tế; phương án 3 làm lớp bắt buộc review không merge được.
+- Đường lùi: Đổi frontmatter về high bằng D-NNN mới khi trần effort reviewer được nâng hoặc bộ đánh giá G10 cho thấy medium tụt chất lượng.

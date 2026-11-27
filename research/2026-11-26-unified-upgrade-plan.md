@@ -43,11 +43,12 @@ Lập sau khi ba reviewer độc lập (chỉ đọc) đối chiếu §1–§13,
   | Người viết | Reviewer opus/`high` | Tuyến |
   |---|---|---|
   | `executor-mech` (haiku), `executor`, `researcher`, `acceptance-author` (sonnet) | bậc cao hơn → nhận | **Mặc định cho diff lớp bắt buộc review** |
-  | `executor-deep` gọi với effort `medium` (tham số lần gọi), khai đúng `--author-effort medium` | cùng họ, `high` > `medium` → nhận | Việc khó của lớp bắt buộc review |
-  | `executor-deep` ở `high`; phiên chính opus tới `xhigh`; phiên chính bậc top | không cao hơn → **từ chối clean** | Vẫn rà để tìm 🔴, ghi `--inconclusive`. Lớp bắt buộc review thì PR đứng ở `missing` và **không merge được** — không gọi là "nợ trả sau" |
+  | `executor-deep` ở opus/`medium` — **mặc định của vai từ D-627** (frontmatter và gương Codex), khai `--author-effort medium` | cùng họ, `high` > `medium` → nhận | **Việc khó**, kể cả diff lớp bắt buộc review |
+  | `executor-deep` bị đè effort lên ≥ `high` (tham số lần gọi, biến môi trường); phiên chính opus tới `xhigh`; phiên chính bậc top | không cao hơn → **từ chối clean** | Vẫn rà để tìm 🔴, ghi `--inconclusive`. Lớp bắt buộc review thì PR đứng ở `missing` và **không merge được** — không gọi là "nợ trả sau" |
 
   Hệ quả: diff chạm guard, hook, workflow, ngoại lệ cứng do bậc thấp hơn reviewer viết; phiên chính viết đặc tả và ca kiểm trước, không tự viết diff lớp đó. Không sửa lời khai tác giả, không tự nâng reviewer. Lối "(d) ghi nợ rồi trả theo lô" của §12.4 chỉ còn đúng khi `review_deferrable` đúng (pha build, không ngoại lệ cứng); repo khung đang `harden`. Dự án đích đặt `merge_review: required` mà không theo tuyến này sẽ kẹt. Reviewer khác nhà cung cấp để sau, khi bảng bậc ngoài Anthropic hết `verified: false`. Đo lại chất lượng người viết bậc thấp/effort thấp bằng bộ đánh giá G10.
 - **Cần ADR mới (ADR-0110, `T-5063`):** thay phần effort của ADR-0098 §2 **và** câu "reviewer-alt Opus max" của D-605; `maxTurns` 80 → 120 ghi cùng ADR. Cho tới khi ADR-0110 merge, cấu hình hiện hành (`reviewer-alt` effort `max`) còn hiệu lực.
+- **D-627** (chủ dự án chỉ đạo 2026-11-27): việc khó giao `executor-deep` opus ở effort `medium`, đặt làm mặc định của vai ở cả Claude Code và Codex; mã hoá cùng ADR-0110 (`T-5063`).
 - **D-624 / ADR-0109:** gói `site-cms-ts` = Astro tĩnh + Decap CMS; việc ở `T-5057…T-5060`.
 - **D-626:** duyệt Revision 4 và PLAN-upgrade.
 
