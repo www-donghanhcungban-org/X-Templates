@@ -50,7 +50,7 @@ Nhiều phiên hoặc agent cùng chạy cổng commit, cổng đầy đủ và 
    - `test_jobs()` lấy phần của khay khi `XT_JOBS` không đặt.
    - `test_fast` của `xt.yaml` lấy `-P` từ `jobs --fallback ceil(nproc/2)`.
    - Lệnh `test` dùng `nproc`, nên tự thấy số nhân đã ghim.
-9. **Fail-open về luồng, không về kết quả.** `XT_CPU_SHARE=off` (hoặc CI không bật lại), mô-đun vắng, python không chạy được, thư mục cache không ghi được, hoặc thiếu `fcntl`: lệnh chạy như trước khi có khay (`exec`). Khay không bao giờ đổi mã thoát của lệnh được bọc.
+9. **Fail-open về luồng, không về kết quả.** `XT_CPU_SHARE=off` (hoặc CI không bật lại), mô-đun vắng, python không chạy được, thư mục cache không ghi được, hoặc thiếu `fcntl`: lệnh chạy như trước khi có khay, môi trường nguyên vẹn. Khay không bao giờ đổi mã thoát của lệnh được bọc. Mọi đường đều chạy lệnh con bằng `subprocess.Popen` không qua shell (không `exec` thay tiến trình — BASE-SEC-007): đầu vào/ra kế thừa thẳng; SIGINT/SIGTERM/SIGHUP gửi tới `run` được chuyển cho lệnh con, kể cả khi tới trước lúc lệnh con khởi động; lệnh con chết vì tín hiệu thì `run` chết theo cùng tín hiệu (không được thì trả 128+n); lệnh không có trả 127, không thực thi được trả 126.
 
 ## Hiệu chỉnh (máy 14 nhân, WSL2, 2026-11-27)
 
@@ -92,7 +92,7 @@ Kết luận đo: trên máy này, cả khi `loadavg`/`n` ≈ 1 (mọi nhân đ�
 - `CI` được người dùng đặt ở máy dev (hiếm) thì khay tắt ở máy đó.
 - Khay chỉ ràng buộc lệnh khởi chạy qua mô-đun. Phần chia theo số việc, không theo lượng việc thực sự cần.
 - Việc đến sau nhận phần nhỏ hơn, nhưng việc đang chạy không bị co lại. Vì vậy tổng số tiến trình có thể vượt `usable` (8 + 6 trên 12 nhân), dù nhân bị ghim vẫn nằm trong phần dùng được.
-- Việc bị `SIGKILL` thì lệnh con mồ côi vẫn chạy mà không còn được đếm.
+- `run` bị `SIGKILL` (không bắt được để chuyển tiếp) thì lệnh con mồ côi vẫn chạy mà không còn được đếm; điều này đúng cả ở đường khay tắt, khác với `exec` trước đây.
 - Chờ khay không có hạn trong mã, nhưng hook commit có hạn riêng (1200 s ở settings của khung): chờ quá hạn đó thì hook đỏ.
 - Không có `/proc` (macOS) thì chỉ nhận ra việc lồng qua biến môi trường.
 - Chưa có cách tự xác định PR đầu hàng: người gọi phải đặt `XT_CPU_HEAD=1`.

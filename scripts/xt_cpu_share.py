@@ -383,14 +383,9 @@ def admit(
         wait = min(wait * 2, MAX_WAIT)
 
 
-def exec_plain(cmd: Sequence[str]) -> int:
-    """Chạy lệnh như không có khay: thay tiến trình (mã thoát và tín hiệu là của lệnh)."""
-    sys.stdout.flush()
-    try:
-        os.execvp(cmd[0], list(cmd))
-    except OSError as e:
-        log(f"không chạy được {cmd[0]!r}: {e}")
-        return 127 if isinstance(e, FileNotFoundError) else 126
+def plain(cmd: Sequence[str], env: Mapping[str, str]) -> int:
+    """Chạy lệnh như không có khay (môi trường nguyên vẹn): cùng mã thoát và tín hiệu như chạy thẳng."""
+    return exit_code(spawn(cmd, env))
 
 
 def limit(job: Job, sh: Shape, head: bool) -> None:
@@ -415,19 +410,29 @@ def child_env(env: Mapping[str, str], job: Job) -> dict[str, str]:
 
 
 def spawn(cmd: Sequence[str], env: Mapping[str, str]) -> int:
-    """Chạy lệnh con, chuyển SIGINT/SIGTERM/SIGHUP cho nó, trả returncode (âm = chết vì tín hiệu)."""
-    try:
-        child = subprocess.Popen(list(cmd), env=dict(env))
-    except OSError as e:
-        log(f"không chạy được {cmd[0]!r}: {e}")
-        return 127 if isinstance(e, FileNotFoundError) else 126
+    """Chạy lệnh con (không shell; stdin/stdout/stderr kế thừa, không qua bộ đệm), chuyển SIGINT/SIGTERM/SIGHUP gửi tới
+    tiến trình này cho nó — kể cả tín hiệu tới trước khi lệnh con kịp khởi động —, trả returncode (âm = chết vì tín
+    hiệu); lệnh không có → 127, không thực thi được → 126."""
+    children: list[subprocess.Popen[bytes]] = []
+    pending: list[int] = []
 
     def forward(sig: int, _frame: FrameType | None) -> None:
-        child.send_signal(sig)
+        for child in children:
+            child.send_signal(sig)
+        if not children:
+            pending.append(sig)
 
     old = {s: signal.signal(s, forward) for s in signal.Signals if s.name in FORWARD}
     try:
-        return child.wait()
+        sys.stdout.flush()
+        try:
+            children.append(subprocess.Popen(list(cmd), env=dict(env)))
+        except OSError as e:
+            log(f"không chạy được {cmd[0]!r}: {e}")
+            return 127 if isinstance(e, FileNotFoundError) else 126
+        for sig in pending:
+            children[0].send_signal(sig)
+        return children[0].wait()
     finally:
         for s, handler in old.items():
             signal.signal(s, handler)
@@ -447,16 +452,16 @@ def exit_code(rc: int, kill: Callable[[int, int], None] = os.kill) -> int:
 
 def run(cmd: Sequence[str], env: Mapping[str, str], head: bool) -> int:
     if off(env) or env.get("XT_CPU_SHARE_ID"):
-        return exec_plain(cmd)
+        return plain(cmd, env)
     try:
         sh = shape(env, cores=quota())
         tray = tray_dir(env)
         job = admit(env, sh, head, tray)
     except Exception as e:  # khay hỏng không được chặn việc (fail-open về luồng)
         log(f"khay CPU không dùng được ({type(e).__name__}: {e}) — chạy như cũ")
-        return exec_plain(cmd)
+        return plain(cmd, env)
     if job.nested:
-        return exec_plain(cmd)
+        return plain(cmd, env)
     limit(job, sh, head)
     try:
         rc = spawn(cmd, child_env(env, job))

@@ -446,24 +446,38 @@ class RunTest(unittest.TestCase):
         self.nice = self.enterContext(mock.patch.object(cs.os, "nice", return_value=0))
         self.aff = self.enterContext(mock.patch.object(cs.os, "sched_setaffinity", create=True))
 
-    def exec_mock(self) -> mock.MagicMock:
-        return self.enterContext(mock.patch.object(cs.os, "execvp", side_effect=SystemExit("exec")))
-
-    def test_off_nested_and_broken_tray_exec_plainly(self):
-        ex = self.exec_mock()
-        for env in ({"XT_CPU_SHARE": "OFF "}, {"XT_CPU_SHARE_ID": "9"}, {"XDG_CACHE_HOME": str(SCRIPT)}):
-            with self.subTest(env=env), self.assertRaises(SystemExit):
-                cs.run(["true", "a"], env, False)
-        self.assertEqual(ex.call_args_list, [mock.call("true", ["true", "a"])] * 3)
+    def test_off_nested_and_broken_tray_run_plainly(self):
+        spawn = self.enterContext(mock.patch.object(cs, "spawn", return_value=9))
+        envs = ({"XT_CPU_SHARE": "OFF "}, {"XT_CPU_SHARE_ID": "9"}, {"XDG_CACHE_HOME": str(SCRIPT)}, {"CI": "true"})
+        for env in envs:
+            with self.subTest(env=env):
+                self.assertEqual(cs.run(["true", "a"], env, False), 9)
+        self.assertEqual(spawn.call_args_list, [mock.call(["true", "a"], env) for env in envs])  # môi trường nguyên vẹn
         self.assertIn("khay CPU không dùng được (NotADirectoryError", self.err.getvalue())
-        with mock.patch.object(cs, "admit", return_value=cs.Job((), 0, nested=True)), self.assertRaises(SystemExit):
-            cs.run(["true"], self.env, False)
+        with mock.patch.object(cs, "admit", return_value=cs.Job((), 0, nested=True)):
+            self.assertEqual(cs.run(["true"], self.env, False), 9)
         self.nice.assert_not_called()
+        self.aff.assert_not_called()
 
-    def test_exec_plain_errors(self):
-        self.assertEqual(cs.exec_plain(["khong-co-lenh-nay-xt"]), 127)
-        with mock.patch.object(cs.os, "execvp", side_effect=PermissionError("denied")):
-            self.assertEqual(cs.exec_plain(["x"]), 126)
+    def test_plain_keeps_exit_codes(self):
+        self.assertEqual(cs.plain([sys.executable, "-c", "raise SystemExit(5)"], dict(os.environ)), 5)
+        self.assertEqual(cs.plain(["khong-co-lenh-nay-xt"], {}), 127)
+        with mock.patch.object(cs, "exit_code", return_value=143) as code:
+            cs.plain(
+                [sys.executable, "-c", "import os, signal; os.kill(os.getpid(), signal.SIGTERM)"], dict(os.environ)
+            )
+        code.assert_called_once_with(-signal.SIGTERM)
+
+    def test_signal_before_child_starts_is_forwarded(self):
+        child = mock.Mock(wait=mock.Mock(return_value=-signal.SIGINT))
+
+        def popen(*_a: object, **_k: object) -> mock.Mock:
+            os.kill(os.getpid(), signal.SIGINT)  # tới giữa lúc cài bộ chuyển và lúc lệnh con khởi động
+            return child
+
+        with mock.patch.object(cs.subprocess, "Popen", side_effect=popen):
+            self.assertEqual(cs.spawn(["x"], {}), -signal.SIGINT)
+        child.send_signal.assert_called_once_with(signal.SIGINT)
 
     def test_run_registers_limits_and_returns_child_code(self):
         sh = cs.shape({}, ids=range(14))
@@ -821,6 +835,32 @@ class LiveCliTest(unittest.TestCase):
         self.assertEqual(r.returncode, -signal.SIGTERM, r.stderr)
         r = cli("run", "--", "khong-co-lenh-nay-xt", env=self.env)
         self.assertEqual(r.returncode, 127, r.stderr)
+
+    def test_sigterm_to_run_is_forwarded_and_tray_cleaned(self):
+        """SIGTERM gửi tới `run` tới được lệnh con (lệnh con bắt, ghi dấu, thoát 42); `run` trả 42; khay được dọn."""
+        ready, mark = self.tmp / "ready", self.tmp / "mark"
+        child = (
+            "import signal, sys, time\nfrom pathlib import Path\n"
+            f"def bye(*_):\n    Path({str(mark)!r}).write_text('term')\n    sys.exit(42)\n"
+            f"signal.signal(signal.SIGTERM, bye)\nPath({str(ready)!r}).touch()\ntime.sleep(60)\n"
+        )
+        for extra in ({}, {"XT_CPU_SHARE": "off"}):
+            with self.subTest(extra=extra):
+                ready.unlink(missing_ok=True)
+                mark.unlink(missing_ok=True)
+                p = subprocess.Popen(
+                    [sys.executable, str(SCRIPT), "run", "--", sys.executable, "-c", child],
+                    env={**self.env, **extra},
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                LiveCliTest.poll_until(lambda: ready.exists() or p.poll() is not None)
+                self.assertTrue(ready.exists())
+                p.send_signal(signal.SIGTERM)
+                _, err = p.communicate(timeout=120)
+                self.assertEqual(p.returncode, 42, err)
+                self.assertEqual(mark.read_text(), "term")
+                self.assertEqual(list((self.tmp / "xt-cpu").glob("job-*.json")), [])
 
     def test_unwritable_cache_runs_as_before(self):
         blocker = self.tmp / "file"
