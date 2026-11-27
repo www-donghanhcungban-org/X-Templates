@@ -55,16 +55,34 @@ class ReleaseAssetsTest(unittest.TestCase):
         for bad in ("--clobber", "gh release delete", "gh release upload", "gh api -X DELETE", "--latest=false"):
             self.assertNotIn(bad, self.text)
 
-    def test_existing_tag_reports_release_state_without_failing_old_tags(self):
+    def test_existing_tag_requires_published_release_with_both_assets(self):
+        """AUD-CI-042: chỉ `released` mới xanh; nháp, thiếu tệp, chưa có release đều đỏ; không còn câu "xoá bản nháp"."""
         block = self.blocks[find(self.blocks, "gh release view")]
         self.assertIn("steps.tag.outputs.archive == ''", block)
-        self.assertIn("::warning::", block)
-        # tag cũ trước T-4017 chưa có release (`missing`): chỉ cảnh báo, không chặn chạy lại; nháp mồ côi (`true`) thì đỏ
-        draft = block.split("true)", 1)[1].split(";;", 1)[0]
-        self.assertIn("exit 1", draft)
+        self.assertNotIn("::warning::", block)
+        self.assertNotIn("xoá bản nháp", self.text)
+        self.assertIn('test "$state" != released', block)
         self.assertEqual(block.count("exit 1"), 1)
-        missing = block.split("*)", 1)[1]
-        self.assertNotIn("exit 1", missing)
+        self.assertIn(".promotion.json", block)
+
+    def test_approve_checks_tag_sha_kind_and_release_before_early_exit(self):
+        approve = self.text.split("\n  tag:\n", 1)[0]
+        branch = approve.split('if git show-ref --verify --quiet "refs/tags/v$v"; then', 1)[1].split(
+            "\n          fi\n", 1
+        )[0]
+        exit0 = branch.index("exit 0")
+        for needle in (
+            'git merge-base --is-ancestor "$tag_commit" "$target"',
+            'git cat-file -t "refs/tags/v$v"',
+            "gh release view",
+        ):
+            self.assertLess(branch.index(needle), exit0, needle)
+        self.assertIn('echo "state=released"', branch[:exit0])
+        # mọi `exit 0` của bước ứng viên đều có ghi `state=` ngay trước đó
+        step = approve.split("id: candidate", 1)[1].split("- uses: actions/setup-python", 1)[0]
+        for m in re.finditer(r"exit 0", step):
+            self.assertIn('echo "state=', "\n".join(step[: m.start()].splitlines()[-3:]))
+        self.assertNotIn("continue-on-error", self.text)
 
     def test_published_receipt_is_compared_byte_for_byte(self):
         block = self.blocks[find(self.blocks, "gh release create")]
