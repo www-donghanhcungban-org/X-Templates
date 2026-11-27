@@ -4,11 +4,14 @@ Dự án khai `Duyệt thiết kế: khách` ở `PROJECT.md` → task PLAN có 
 waves` có hay không `--handoff`) hay nhận bằng chứng (`loop record`) tới khi người duyệt đúng bản thiết kế đã trình (`stage approve --design`). Agent trình bản
 (`stage design-submit`), không bao giờ tự duyệt — kể cả khi `stage_approval: agent`. Sổ chỉ `xt.py stage …` ghi (guard:
 evidence); sổ hỏng → mọi lệnh đọc nó chặn. `core` là module `xt` (helper khoá, git, giờ), truyền vào để không import vòng.
+ADR-0107: lời duyệt gắn với hash nội dung tệp bằng chứng (`evidence_sha256`). ADR-0108: sổ đã có (kể cả hỏng) thì dự
+án là khách, dòng khai ở `PROJECT.md` không nới được khoá.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -41,7 +44,9 @@ FENCE_CLOSE_RE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t]*")
 HUMAN = "không"
 DEFER = " · việc khác trong lúc chờ: `xt.py loop defer --task <ID> --reason …` rồi làm tiếp"
 INIT = " · chưa có vòng để hoãn task: `xt.py loop init --plan <PLAN>` trước, rồi làm việc khác trong lúc chờ"
-UI_TAG_RE = re.compile(r"\bui\s*:\s*yes\b", re.I)  # trong nhóm ngoặc của dòng task; hoa thường lệch vẫn khoá (chặt hơn)
+# Thẻ `ui:` trong nhóm ngoặc của dòng task: mọi giá trị khác `no` (kể cả rỗng, `true`, `có`) là giao diện (chặt hơn)
+UI_TAG_RE = re.compile(r"\bui\s*:(?!\s*no\b)", re.I)
+HASH_RE = re.compile(r"[0-9a-f]{64}")  # `evidence_sha256`: sha256 nội dung tệp bằng chứng lúc trình (ADR-0107)
 CLIENT = "khách"
 HUMAN_ONLY = "chỉ người — chủ dự án chạy ở terminal riêng, ngoài phiên agent; agent không tự duyệt thiết kế (ADR-0106)"
 STICKY = f"sổ {LEDGER} đã có — dòng khai không nới được (ADR-0108)"
@@ -63,10 +68,12 @@ def _evidence_ok(value: Any) -> bool:
 def _submit(core: ModuleType, ev: Doc, r: Doc) -> str:
     if r["status"] == "awaiting_approval":
         return "`submit` khi đang chờ duyệt — `reopen` trước"
-    sha, evidence = ev.get("sha"), ev.get("evidence")
+    sha, evidence, digest = ev.get("sha"), ev.get("evidence"), ev.get("evidence_sha256")
     if not core.COMMIT_SHA_RE.fullmatch(str(sha)) or not _evidence_ok(evidence):
         return "`submit` cần `sha` là SHA commit đầy đủ (40 hoặc 64 hex) và `evidence` là đường tương đối"
-    r.update(status="awaiting_approval", submitted={"sha": sha, "evidence": evidence})
+    if not HASH_RE.fullmatch(str(digest)):
+        return "`submit` cần `evidence_sha256` 64 hex (ADR-0107; sổ trước ADR-0107 → người xoá sổ, agent trình lại)"
+    r.update(status="awaiting_approval", submitted={"sha": sha, "evidence": evidence, "evidence_sha256": digest})
     return ""
 
 
@@ -155,12 +162,13 @@ def _event(core: ModuleType, led: Doc, kind: str, **extra: Any) -> None:
     led["history"].append({"event": kind, **extra, "at": str(core.now_iso())})
 
 
-def submit(core: ModuleType, led: Doc, sha: str, evidence: str) -> Doc:
+def submit(core: ModuleType, led: Doc, sha: str, evidence: str, digest: str) -> Doc:
     if led["status"] == "awaiting_approval":
         pending = led["submitted"]["sha"][:12]
         raise DesignError(f"đã trình bản {pending}, đang chờ người duyệt — sửa: `stage design-reopen --reason …` trước")
-    led.update(status="awaiting_approval", submitted={"sha": sha, "evidence": evidence})
-    _event(core, led, "submit", sha=sha, evidence=evidence)
+    sub = {"sha": sha, "evidence": evidence, "evidence_sha256": digest}
+    led.update(status="awaiting_approval", submitted=sub)
+    _event(core, led, "submit", **sub)
     return led
 
 
@@ -172,12 +180,15 @@ def reopen(core: ModuleType, led: Doc, reason: str) -> Doc:
     return led
 
 
-def approve(core: ModuleType, led: Doc, sha: str, by: str, note: str) -> Doc:
+def approve(core: ModuleType, base: Path, led: Doc, sha: str, by: str, note: str) -> Doc:
     if led["status"] != "awaiting_approval":
         raise DesignError("không có bản thiết kế chờ duyệt — agent trình bằng `stage design-submit` trước")
     want = str(led["submitted"]["sha"])
     if len(sha) < 7 or not want.startswith(sha.lower()):
         raise DesignError(f"--sha {sha!r} không phải ≥ 7 ký tự đầu của bản đã trình ({want[:12]})")
+    drift = _drift(base, led["submitted"])  # trong khoá: người duyệt đúng nội dung đã trình, không phải bản sửa sau đó
+    if drift:
+        raise DesignError(drift)
     led.update(status="approved", submitted=None)
     _event(core, led, "approve", sha=want, by=by, note=note)
     return led
@@ -309,8 +320,34 @@ def _declared_line(base: Path) -> tuple[bool, str]:
     return True, f"{PROJECT_FILE} khai `Duyệt thiết kế`{why}{fix}" if why else ""
 
 
+def file_sha256(base: Path, rel: str) -> str:
+    """sha256 nội dung tệp bằng chứng ở cây làm việc; vắng, symlink, không phải tệp thường hay không đọc được → ''."""
+    p = base / rel
+    if p.is_symlink() or not p.is_file():
+        return ""
+    try:
+        with open(p, "rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest()
+    except OSError:
+        return ""
+
+
+def _drift(base: Path, sub: Doc) -> str:
+    """'' khi tệp bằng chứng hiện tại đúng hash nội dung ghi lúc trình. Gắn với nội dung, không với lịch sử git: squash,
+    rebase, clone nông giữ hiệu lực; `git revert` sổ về lời duyệt cũ, sửa/xoá/thay symlink mockup → khoá (ADR-0107)."""
+    evidence = sub["evidence"]
+    if file_sha256(base, evidence) == sub["evidence_sha256"]:
+        return ""
+    return (
+        f"bản bằng chứng {evidence} đã đổi sau khi trình/duyệt (hash nội dung lệch hoặc tệp mất) — trả đúng nội dung,"
+        " hoặc trình lại: `xt.py stage design-reopen --reason …` (nếu đang chờ duyệt) rồi `stage design-submit`"
+    )
+
+
 def lock_reason(core: ModuleType, base: Path) -> str:
-    """Lý do task giao diện bị khoá; '' = không khoá (không khai khách, hoặc bản thiết kế đã được duyệt)."""
+    """Lý do task giao diện bị khoá; '' = không khoá (không khai khách, hoặc bản đã duyệt còn đúng hash nội dung). Sổ có
+    (kể cả hỏng) → khách theo `declared` (ADR-0108), sổ hỏng → khoá. Sổ `approved` hợp lệ: `history[-2]` là `submit`
+    của bản đã duyệt, khoá mở chỉ khi tệp bằng chứng còn đúng hash của lần trình đó (ADR-0107)."""
     client, note = declared(core, base)
     if not client:
         return ""
@@ -319,16 +356,15 @@ def lock_reason(core: ModuleType, base: Path) -> str:
         led = read(core, base)
     except DesignError as exc:
         return f"{exc}{tail}"
-    if led["status"] == "approved":
-        return ""
     head = f"task giao diện (`ui: yes`) chờ khách duyệt thiết kế{tail} — "
+    if led["status"] == "approved":
+        drift = _drift(base, led["history"][-2])
+        return head + drift if drift else ""
     exit_hint = DEFER if (core.read_state(base) or {}).get("plan") else INIT  # chưa `loop init`: `loop defer` cũng rc 2
     if led["status"] == "awaiting_approval":
         sha = led["submitted"]["sha"][:12]
-        return (
-            head
-            + f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106){exit_hint}"
-        )
+        wait = f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106){exit_hint}"
+        return head + (_drift(base, led["submitted"]) or wait)
     return (
         head
         + f"trình mockup: `xt.py stage design-submit --evidence <tệp>` rồi chờ người `stage approve --design`{exit_hint}"
@@ -336,7 +372,7 @@ def lock_reason(core: ModuleType, base: Path) -> str:
 
 
 def is_ui(core: ModuleType, task: Doc) -> bool:
-    """Thẻ `ui: yes` trong nhóm ngoặc của dòng task (trước `Gate:`, bỏ span backtick) như `topo:`/`files:`."""
+    """Thẻ `ui:` khác `no` trong nhóm ngoặc của dòng task (trước `Gate:`, bỏ span backtick) như `topo:`/`files:`."""
     rest = str(task.get("rest") or "")
     gate = core.GATE_RE.search(rest)
     head = core.PLAN_CODE_SPAN_RE.sub(" ", rest[: gate.start()] if gate else rest)
@@ -361,6 +397,17 @@ def waves(core: ModuleType, base: Path, tasks: list[Doc], deferred: Doc, limit: 
     for block in out["blocked"]:
         block["reason"] = held.get(block["id"], block["reason"])
     return out
+
+
+def defer_held(core: ModuleType, base: Path, st: Doc) -> Doc:
+    """Bản sao `st` cho verdict (không ghi đĩa): task giao diện mở đang bị giữ tính như `loop defer` — verdict không dẫn
+    agent vào task khoá rồi `loop record` exit 2; chỉ còn chúng → `done-pending-human` kèm lý do khoá."""
+    deferred = core._deferred(st)
+    tasks = [t for t in core._plan_tasks(base, st) if t["state"] == " " and t["id"] not in deferred]
+    held = hold(core, base, tasks)[1]
+    if not held:
+        return st
+    return {**st, "deferred": {**deferred, **{k: {"reason": why, "at": core.now_iso()} for k, why in held.items()}}}
 
 
 def record_problem(core: ModuleType, base: Path, st: Doc, task: str) -> str:
@@ -401,13 +448,14 @@ def _transition(core: ModuleType, args: argparse.Namespace, base: Path) -> Calla
     if args.stage_cmd == "design-submit":
         sha = str(core._stage_clean_head(base))
         rel = evidence_path(core, base, args.evidence)
-        return lambda led: submit(core, led, sha, rel)
+        digest = file_sha256(base, rel)  # cây sạch: = nội dung ở HEAD; '' (không đọc được) → sổ mới sai, không ghi
+        return lambda led: submit(core, led, sha, rel, digest)
     if args.stage_cmd == "design-reopen":
         return lambda led: reopen(core, led, args.reason)
     if core.agent_session():
         raise DesignError(f"`stage approve --design` {HUMAN_ONLY}")
     by = str(core._stage_by(base))
-    return lambda led: approve(core, led, args.sha, by, args.note)
+    return lambda led: approve(core, base, led, args.sha, by, args.note)
 
 
 def cmd(core: ModuleType, args: argparse.Namespace, base: Path) -> int:

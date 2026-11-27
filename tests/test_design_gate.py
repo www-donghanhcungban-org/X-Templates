@@ -2,6 +2,7 @@
 khoá task `ui: yes` ở `loop next`/`loop record`, guard chặn ghi tay sổ và duyệt bởi agent."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -24,6 +25,7 @@ from test_xt_cli import TmpRepoCase, run_main
 
 SHA = "a" * 40
 SHA2 = "b" * 40
+PNG = hashlib.sha256(b"png").hexdigest()  # nội dung "png" của docs/m.png trong các repo tạm (ADR-0107)
 AT = "2026-11-26T00:00:00+00:00"
 
 
@@ -31,8 +33,8 @@ def ev(kind, **extra):
     return {"event": kind, "at": AT, **extra}
 
 
-def submit(sha=SHA, evidence="docs/m.png"):
-    return ev("submit", sha=sha, evidence=evidence)
+def submit(sha=SHA, evidence="docs/m.png", digest=PNG):
+    return ev("submit", sha=sha, evidence=evidence, evidence_sha256=digest)
 
 
 # Review vòng 2 PR #845: ký tự mà `str.splitlines()` coi là ngắt dòng còn markdown thì không (U+2028/2029, VT, FF, NEL)
@@ -52,8 +54,8 @@ def led(history, status, submitted=None):
     return {"schema": 1, "status": status, "submitted": submitted, "history": history}
 
 
-def awaiting(history, sha=SHA, evidence="docs/m.png"):
-    return led(history, "awaiting_approval", {"sha": sha, "evidence": evidence})
+def awaiting(history, sha=SHA, evidence="docs/m.png", digest=PNG):
+    return led(history, "awaiting_approval", {"sha": sha, "evidence": evidence, "evidence_sha256": digest})
 
 
 class DesignLedgerProblemTest(unittest.TestCase):
@@ -88,6 +90,12 @@ class DesignLedgerProblemTest(unittest.TestCase):
             (awaiting([submit(evidence="../x")]), "đường tương đối"),
             (awaiting([submit(evidence="")]), "đường tương đối"),
             (awaiting([submit(evidence=3)]), "đường tương đối"),
+            # ADR-0107: `submit` thiếu hay sai dạng `evidence_sha256` → sổ hỏng (fail-closed)
+            (awaiting([ev("submit", sha=SHA, evidence="docs/m.png")]), "`evidence_sha256` 64 hex"),
+            (awaiting([submit(digest=None)]), "`evidence_sha256` 64 hex"),
+            (awaiting([submit(digest="c" * 40)]), "`evidence_sha256` 64 hex"),
+            (awaiting([submit(digest="C" * 64)]), "`evidence_sha256` 64 hex"),
+            (awaiting([submit()], digest="d" * 64), "lịch sử dựng ra"),  # sửa tay hash ở `submitted`
             (led([ev("reopen", reason="x")], "none"), "`reopen` chỉ"),
             (led([submit(), ev("reopen")], "none"), "`reopen` chỉ"),
             (led([submit(), ev("reopen", reason="")], "none"), "`reopen` chỉ"),
@@ -355,7 +363,8 @@ class DesignDeclareTest(TmpRepoCase):
         """ADR-0108 (D-622): sổ DESIGN.json đã có (kể cả hỏng, rỗng, symlink gãy) → khách bất kể dòng khai."""
         ledger = self.repo / d.LEDGER
         ledger.parent.mkdir(parents=True)
-        for body in (json.dumps(awaiting([submit()])), "", "{"):
+        # `d.empty()`: sổ hợp lệ chưa có `history` — chặt hơn bản đầu của ADR-0107 (chỉ tính sổ có `history`)
+        for body in (json.dumps(awaiting([submit()])), json.dumps(d.empty()), "", "{"):
             ledger.write_text(body, encoding="utf-8")
             for text in ("Duyệt thiết kế: không\n", "# Dự án\n", None):
                 with self.subTest(body=body, text=text):
@@ -381,10 +390,16 @@ class DesignUiTagTest(unittest.TestCase):
             "- [ ] `T-001` Trang chủ (sau: T-000; ui: yes; files: a.html) — Gate: `true`",
             "- [ ] `T-001` Trang chủ (UI: Yes)",
             "- [ ] `T-001` Trang chủ (topo: self, ui: yes",  # ngoặc chưa đóng vẫn tính (chặt hơn)
+            "- [ ] `T-001` Trang chủ (ui: true) — Gate: `true`",  # giá trị lạ: mọi giá trị khác `no` là giao diện
+            "- [ ] `T-001` Trang chủ (ui: có) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (ui:) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (ui: none) — Gate: `true`",
         ]
         no = [
             "- [ ] `T-001` Trang chủ — Gate: `true`",
             "- [ ] `T-001` Trang chủ (ui: no) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (UI : NO; files: a.html) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (files: gui: a.html) — Gate: `true`",  # `gui:` không phải thẻ `ui:`
             "- [ ] `T-001` Trang chủ ui: yes — Gate: `true`",  # ngoài nhóm ngoặc
             "- [ ] `T-001` Trang chủ `(ui: yes)` — Gate: `true`",  # chữ trích
             "- [ ] `T-001` Trang chủ — Gate: `echo '(ui: yes)'`",  # trong lệnh Gate
@@ -440,7 +455,10 @@ class DesignCliTest(DesignRepoCase):
         rc, out, err = self.stage("design-submit", "--evidence", "docs/design/home.png", agent=True)
         self.assertEqual(rc, 0, err)
         self.assertIn(f"bản {sha[:12]}: docs/design/home.png", out)
-        self.assertEqual(self.ledger()["submitted"], {"sha": sha, "evidence": "docs/design/home.png"})
+        self.assertEqual(
+            self.ledger()["submitted"], {"sha": sha, "evidence": "docs/design/home.png", "evidence_sha256": PNG}
+        )
+        self.assertEqual(self.ledger()["history"][-1]["evidence_sha256"], PNG)
         rc, _, err = self.stage("design-submit", "--evidence", "docs/design/home.png")
         self.assertEqual(rc, 2)  # sổ chưa commit: cây bẩn
         self.commit("sổ")
@@ -757,6 +775,161 @@ class DesignLoopTest(DesignRepoCase):
         self.write("PROJECT.md", "Duyệt thiết kế: không\n")
         self.assertEqual(d.record_problem(xt, self.repo, {"plan": self.PLAN}, "T-002"), "")  # không khai khách: như cũ
 
+    def submit_v1(self):
+        self.write("PROJECT.md", "- Duyệt thiết kế: khách\n")
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1")
+        sha = self.commit("bản 1")
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/design/DESIGN-REVIEW.md", agent=True)[0], 0)
+        self.commit("trình")
+        return sha
+
+    def approve_v1(self):
+        sha = self.submit_v1()
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
+        self.commit("duyệt")
+        self.assertEqual(self.record("T-001")[0], 0)
+        return sha
+
+    def test_revert_ledger_to_old_approval_relocks(self):
+        """ADR-0107 (lỗ A): trình bản 2 rồi `git revert` commit ghi sổ → sổ về `approved` của bản 1 trong khi mockup bản 2
+        vẫn ở cây — lời duyệt gắn với hash nội dung nên khoá lại."""
+        self.approve_v1()
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 2")
+        self.commit("bản 2")
+        self.assertEqual(self.stage("design-submit", "--evidence", "docs/design/DESIGN-REVIEW.md", agent=True)[0], 0)
+        self.commit("trình 2")
+        self.git("revert", "--no-edit", "HEAD")
+        self.assertEqual(self.ledger()["status"], "approved")
+        rc, _, err = self.record("T-001")
+        self.assertEqual(rc, 2)
+        self.assertIn("đã đổi sau khi trình/duyệt", err)
+        self.assertEqual(self.stage("design-check")[0], 1)
+
+    def test_evidence_edited_deleted_or_symlinked_after_approval_relocks(self):
+        self.approve_v1()
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1 sửa lén")
+        self.commit("sửa mockup")
+        rc, _, err = self.record("T-001")
+        self.assertEqual(rc, 2)
+        self.assertIn("bản bằng chứng docs/design/DESIGN-REVIEW.md đã đổi sau khi trình/duyệt", err)
+        self.assertIn("stage design-submit", err)
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1")  # trả đúng nội dung đã duyệt → mở lại
+        self.assertEqual(self.record("T-001")[0], 0)
+        (self.repo / "docs/design/DESIGN-REVIEW.md").unlink()
+        self.assertIn("tệp mất", self.record("T-001")[2])
+        target = self.repo / "docs/design/that.md"
+        target.write_text("bản 1", encoding="utf-8")
+        (self.repo / "docs/design/DESIGN-REVIEW.md").symlink_to(target)  # cùng nội dung qua symlink: không tính
+        self.assertEqual(self.record("T-001")[0], 2)
+
+    def test_squash_merge_keeps_approval(self):
+        """Hash nội dung chịu được squash: nhánh orphan cùng cây, SHA đã duyệt không còn là tổ tiên → vẫn `approved`."""
+        sha = self.approve_v1()
+        self.git("checkout", "-q", "--orphan", "main-squash")
+        squashed = self.commit("squash")
+        ancestor = subprocess.run(
+            ["git", "-C", str(self.repo), "merge-base", "--is-ancestor", sha, "HEAD"], check=False
+        )
+        self.assertEqual(ancestor.returncode, 1)
+        self.assertNotEqual(squashed, sha)
+        self.assertEqual(self.record("T-001")[0], 0)
+        self.assertEqual(self.stage("design-check")[0], 0)
+
+    def test_shallow_clone_sha_missing_keeps_approval(self):
+        """Clone nông giả: SHA trong sổ không có trong repo; hash khớp → mở, lệch → khoá; không gọi git."""
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        self.write("docs/m.png", "png")
+        self.write(d.LEDGER, json.dumps(led([submit(digest=PNG), ev("approve", sha=SHA, by="p")], "approved")))
+        with unittest.mock.patch.object(xt, "_stage_git", side_effect=AssertionError("không được gọi git")):
+            self.assertEqual(d.lock_reason(xt, self.repo), "")
+            self.write("docs/m.png", "png khác")
+            self.assertIn("hash nội dung lệch", d.lock_reason(xt, self.repo))
+
+    def test_approve_refuses_evidence_changed_after_submit(self):
+        sha = self.submit_v1()
+        self.write("docs/design/DESIGN-REVIEW.md", "bản 1 sửa sau khi trình")
+        self.commit("sửa sau trình")
+        rc, out, _ = self.stage("design-check")
+        self.assertEqual(rc, 1)
+        self.assertIn("design-reopen", out)
+        rc, _, err = self.stage("approve", "--design", "--sha", sha, "--note", "ok")
+        self.assertEqual(rc, 2)
+        self.assertIn("đã đổi sau khi trình/duyệt", err)
+        self.assertEqual(self.ledger()["status"], "awaiting_approval")
+
+    def test_concurrent_edit_inside_lock_refuses_approve(self):
+        """Bằng chứng đổi giữa kiểm trước khoá và lúc lấy khoá: `approve` kiểm hash TRONG khoá, không duyệt bản đã đổi."""
+        sha = self.submit_v1()
+        original = xt._state_lock
+
+        @contextlib.contextmanager
+        def competing(base):
+            with original(base):
+                self.write("docs/design/DESIGN-REVIEW.md", "bản 1 đổi lúc duyệt")
+                yield
+
+        with unittest.mock.patch.object(xt, "_state_lock", competing):
+            rc, _, err = self.stage("approve", "--design", "--sha", sha, "--note", "ok")
+        self.assertEqual(rc, 2)
+        self.assertIn("đã đổi sau khi trình/duyệt", err)
+        self.assertEqual(self.ledger()["status"], "awaiting_approval")
+
+    def test_file_sha256_unreadable_and_submit_without_hash_refused(self):
+        self.write("docs/m.png", "png")
+        self.assertEqual(d.file_sha256(self.repo, "docs/m.png"), PNG)
+        self.assertEqual(d.file_sha256(self.repo, "docs"), "")
+        self.commit()
+        with unittest.mock.patch("builtins.open", side_effect=PermissionError("cấm")):
+            self.assertEqual(d.file_sha256(self.repo, "docs/m.png"), "")
+        with unittest.mock.patch.object(d, "file_sha256", return_value=""):
+            rc, _, err = self.stage("design-submit", "--evidence", "docs/m.png")
+        self.assertEqual(rc, 2)
+        self.assertIn("tạo sổ sai", err)  # không ghi sổ thiếu hash
+        self.assertFalse((self.repo / d.LEDGER).exists())
+
+    def test_old_ledger_without_hash_locks(self):
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        old = led([ev("submit", sha=SHA, evidence="docs/m.png"), ev("approve", sha=SHA, by="p")], "approved")
+        self.write(d.LEDGER, json.dumps(old))
+        self.assertIn("evidence_sha256", d.lock_reason(xt, self.repo))
+        self.assertEqual(self.record("T-001")[0], 2)
+
+    def test_project_flip_or_delete_keeps_lock_once_submitted(self):
+        """ADR-0107 (lỗ B) qua cơ chế chung của ADR-0108: sổ đã có → đổi `PROJECT.md` sang `không` hay xoá nó không tắt
+        khoá; lý do khoá là ghi chú `STICKY` của `declared` (không còn ghi chú riêng "đã có lịch sử trình")."""
+        sha = self.submit_v1()
+        for text in ("- Duyệt thiết kế: không\n", None):
+            with self.subTest(project=text):
+                if text is None:
+                    (self.repo / "PROJECT.md").unlink()
+                else:
+                    self.write("PROJECT.md", text)
+                rc, _, err = self.record("T-001")
+                self.assertEqual(rc, 2)
+                self.assertIn(d.STICKY, err)
+                self.assertEqual(self.next_ids()[0], ["T-002"])
+        rc, out, _ = self.stage("design-check", "--json")
+        self.assertEqual((rc, json.loads(out)["client"]), (1, True))
+        self.assertEqual(self.stage("approve", "--design", "--sha", sha, "--note", "ok")[0], 0)
+        self.assertEqual(self.record("T-001")[0], 0)  # đã duyệt, hash khớp: mở như thường dù không còn PROJECT.md
+        (self.repo / d.LEDGER).unlink()  # chỉ người xoá sổ mới tắt khoá
+        self.assertEqual(d.lock_reason(xt, self.repo), "")
+
+    def test_verdict_skips_held_ui_task(self):
+        """Lỗ C: verdict không dẫn agent vào task giao diện đang bị giữ (rồi `loop record` exit 2); chỉ còn chúng →
+        `done-pending-human` kèm lý do khoá."""
+        self.write("PROJECT.md", "Duyệt thiết kế: khách\n")
+        v = xt.loop_verdict(self.repo)
+        self.assertEqual((v["verdict"], v.get("task")), ("continue", "T-002"))
+        self.assertEqual(run_main("loop", "record", "--task", "T-002", "--", "true")[0], 0)
+        v = xt.loop_verdict(self.repo)
+        self.assertEqual(v["verdict"], xt.PENDING_HUMAN)
+        self.assertEqual([p["id"] for p in v["pending_human"]], ["T-001"])
+        self.assertIn("stage design-submit", v["pending_human"][0]["reason"])
+        self.write("PROJECT.md", "Duyệt thiết kế: không\n")
+        self.assertEqual(xt.loop_verdict(self.repo).get("task"), "T-001")  # không khai khách: như cũ
+        self.assertNotIn("deferred", xt.read_state(self.repo) or {})  # chỉ trong bộ nhớ, không ghi state
+
     def test_declaration_cannot_loosen_after_submit(self):
         """Review vòng 2 PR #844 (ADR-0108, D-622): đã trình bản thiết kế thì sửa/xoá dòng khai không mở khoá."""
         self.write("PROJECT.md", "Duyệt thiết kế: không\n")
@@ -870,6 +1043,8 @@ class DesignGuardTest(TmpRepoCase):
             .count("duyệt giai đoạn sản phẩm"),
             1,
         )
+        reason = str(dict(guard.apply_policy(guard.bash_decision(cmd, str(proj), str(proj)))).get("reason", ""))
+        self.assertIn("trừ `--design`", reason)  # lỗ D: lý do không hứa `--design` chạy được khi khoá agent bật
         for cmd in (
             "python3 scripts/xt.py stage design-submit --evidence docs/m.png",
             "python3 scripts/xt.py stage design-check",
