@@ -1309,3 +1309,24 @@
 - Chọn: Tách từng lỗi có ca tái hiện tiến hành song song cục bộ theo phạm vi; merge qua hàng đợi, làm lại audit và cổng ký
 - Lý do (tiêu chí chất lượng cuối): Mỗi sửa có Gate và đường lùi riêng; giữ quyền live và số đo môi trường ở các task phụ thuộc, không trộn chúng vào sửa mã
 - Đường lùi: Revert từng PR nếu hồi quy; mở lại đúng hàng audit và chạy lại Gate của lát đó
+
+### D-640 · 2026-11-27T18:35:52+00:00 · Khép hai phát hiện tái hiện độc lập trong audit bổ sung ở feb86abd thế nào?
+
+- Phương án: (1) Ghi hai mục mở. Sửa theo từng PR có ca hồi quy trong luồng CLI và API. · (2) Gộp hai sửa vào bản reflow đang kiểm.
+- Chọn: Ghi hai mục mở. Sửa theo từng PR có ca hồi quy trong luồng CLI và API.
+- Lý do (tiêu chí chất lượng cuối): Mỗi lỗi nằm ở một luồng riêng. Ca hồi quy chạy được trên Git scratch, không cần chạm GitHub thật, và có thể xác định chính xác thay đổi khi một cổng đỏ.
+- Đường lùi: Hoàn nguyên từng PR riêng và mở lại đúng hàng audit.
+
+### D-641 · 2026-11-27T20:08:01+00:00 · Xử lý cổng ac-trace xanh khi thiếu test cho AC trong Markdown thế nào?
+
+- Phương án: (1) Đăng ký lỗi chặn release và sửa parser cùng bảng AC–scenario trong mẫu SPEC · (2) Ghi nhận dạng Markdown ngoài phạm vi của cổng
+- Chọn: Đăng ký lỗi chặn release và sửa parser cùng bảng AC–scenario trong mẫu SPEC
+- Lý do (tiêu chí chất lượng cuối): Hai lần chạy độc lập trên 75eb07cd đều thấy cùng một tiêu chí thiếu test bị bỏ qua khi đặt trong code span hợp lệ. Bảng ánh xạ đáp ứng WF-SDD-002/003 và giữ mã kịch bản PM-SPEC-002/004.
+- Đường lùi: Hoàn tác PR sửa nếu gây hồi quy và mở lại hàng audit cho tới khi có Gate xanh trên cùng fixture.
+
+### D-642 · 2026-11-27T20:23:24+00:00 · Ghi nhận giấy phép các phụ thuộc verify-render ở mốc 75eb07cd thế nào?
+
+- Phương án: (1) Chấp thuận đúng hai gói MPL-2.0 4.13.0 cho CI và máy dev, lập bảng bốn gói ghim và kiểm bảng theo lockfile · (2) Đổi các gói kiểm tương phản sang thư viện có giấy phép khác
+- Chọn: Chấp thuận đúng hai gói MPL-2.0 4.13.0 cho CI và máy dev, lập bảng bốn gói ghim và kiểm bảng theo lockfile
+- Lý do (tiêu chí chất lượng cuối): Hai lượt đối chiếu registry và SHA-512 cho cùng metadata. Bốn gói nằm trong devDependencies của verify-render. Quyết định giới hạn phạm vi đó và đáp ứng BASE-DEP-005.
+- Đường lùi: Nếu thay phiên bản hoặc cách phân phối, rà lại metadata và ghi quyết định mới. Có thể gỡ gói và cập nhật Gate trước khi đổi phạm vi.

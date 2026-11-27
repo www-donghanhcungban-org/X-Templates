@@ -41,3 +41,40 @@ AUD-HAR-567 được kiểm riêng: shadow mở và shadow đóng cho kết qu�
 ## Kế hoạch sau audit
 
 [PLAN-harden đã duyệt theo D-638](../autopilot/PLAN-harden-2026-11-27-audit.md) chứa một Gate cho mỗi lát sửa. Sau khi merge, chạy lại audit theo nhóm, trả nợ review và kiểm G7. Cài đặt GitHub App, ruleset tag, release immutability và diễn tập T-4007/T-5020 vẫn cần quyền quản trị. Payload `PreSkillShellCommand` và số đo WSL2 vẫn cần các môi trường tương ứng.
+
+## Rà bổ sung ở `feb86abd`
+
+Reviewer kiến trúc chạy nạp 14 bộ kiểm tĩnh và bốn module đã chọn khi chưa nạp `xt`. Kiểm AST 19 module và đối chiếu danh sách mô-đun đi kèm của installer/pack đều qua. Bộ test cost, sổ lát, toolcfg, JSON shape qua 55 kiểm. Bộ API PR và kiểm liên kết qua 56 kiểm. Phạm vi ARCH, CODE và XFEAT còn rút gọn ở hook, nhánh ghi của steward, phê duyệt thiết kế, installer, CPU, deploy, release và thuật toán từng bộ kiểm tĩnh.
+
+Reviewer SEC, CI và DEP kiểm bốn workflow đổi, ruleset, cấu hình release/review và lock verify-render. `ci-check`, `license-check`, Zizmor ở ngưỡng cao và 17 kiểm tập trung đều đạt. Actionlint kèm ShellCheck báo `SC2129` trên cả mốc cũ và mốc mới. Zizmor ở ngưỡng trung bình báo hai checkout phát hành giữ credential để chạy Git. Hai job này chỉ xuất artifact đã chọn. GitHub trả 404 với environment `pr-review` và `xt-release`. Chưa diễn tập quyền của App hoặc phát hành thật. [Dependency audit](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46049830349)
+
+| Phát hiện | Xác minh đối kháng |
+|---|---|
+| AUD-CODE-069 🟠 | `loop record --task T-0010 --cost '' -- true` trả 0 và ghi bằng chứng. Reviewer khác dùng Gate tạo marker kiểm được lần chạy. `pr reviewed --no-publish` cũng ghi dấu cục bộ với cost rỗng. Cost sai có nội dung trả 2 trước khi ghi. |
+| AUD-XFEAT-061 🟠 | Trong hai Git scratch riêng với REST GET giả, `GH_REPO` khác origin làm API danh sách từ chối và API thống kê lấy số từ repo khác. Đối chứng cùng repo cho kết quả thống nhất. |
+
+D-640 duyệt hai lát riêng T-5092 và T-5093, giữ nguyên trạng thái mở đến khi qua Gate và vào `main`. SHA quét theo nhóm giữ ở mốc trước cho tới khi các đường dẫn còn lại được rà.
+
+## Kiểm lại `main` sau #873
+
+Ở `75eb07cd`, kết quả `loop verify --all` đạt 1 Gate Chromium và 69 lệnh Blueprint. `release-check` trả `NO-GO` với 17 lỗi audit strict và 147 tệp ngoài tài liệu còn nợ review. `audit plan` yêu cầu quét lại 11 nhóm và báo 68 bằng chứng cũ. Gitleaks quét 901 commit tổ tiên của SHA này và không phát hiện bí mật. `npm audit` trên lock của verify-render trả 0 cảnh báo. [CI của commit đã kiểm](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46057710185)
+
+## Truy vết tiêu chí trong Markdown ở `75eb07cd`
+
+Hai lượt độc lập xác nhận `ac-trace` báo đạt với code span ở đầu dòng chứa mã AC thiếu test. Dạng mã trực tiếp báo `ACT001`. Thêm đúng mã vào test thì dạng code span lại báo `ACT002`. Mẫu SPEC gốc có ba tiêu đề S-NNN và thiếu bảng mã AC, nên cùng cổng này trả 0 với thư mục test chưa có test tham chiếu. D-641 đăng ký AUD-XFEAT-062 mức 🔴 và giao T-5094 sửa parser, nối hai bộ mã trong mẫu. [WF-SDD-002/003](../../framework/10-workflow/spec-driven-development.md) · [PM-SPEC-002/004](../../framework/17-product-project/specification.md)
+
+## Delta A11Y và PERF trên Notes UI
+
+Đã rà hai tệp UI của delta nhóm 5/6 từ `008b03b` và đối chiếu thêm mã JS với danh sách cặp tương phản. `xt.py contrast` đạt 25/25 cặp. Mức thấp nhất là 6,22:1 cho chữ và 3,69:1 cho thành phần phi văn bản. Reflow và ma trận Notes UI 15 ô đạt ở #872, các tệp liên quan khớp byte với `75eb07cd`. Chromium ở 320×800 cho thấy focus về thân trang khi GET chờ và trở lại nút Tải lại khi nhận 503. AUD-A11Y-005 còn mở vì phản hồi nằm xa nút khi có 100 ghi chú. [CI #872](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46055219138)
+
+Ba tài sản Notes UI tăng từ 11.387 lên 12.980 byte. Gzip ngoại tuyến tăng từ 4.219 lên 4.600 byte. Trang dùng ba request cùng origin. PERF giữ mức rút gọn tới khi có số Core Web Vitals, Lighthouse và độ trễ đích.
+
+## Delta DEP và CI trên `75eb07cd`
+
+DEP rà hai tệp của verify-render. Bốn bản ghi registry khớp version, license, URL và SHA-512 trong lock, npm audit trả 0 advisory. Hai lượt kiểm độc lập xác định `@axe-core/playwright` và `axe-core` 4.13.0 thuộc MPL-2.0. D-133 áp cho nguồn axe vendored riêng. D-642 ghi phạm vi dev/CI và giao T-5095 bổ sung inventory. AUD-DEP-040 vẫn mở vì required audit và Dependabot chưa bao phủ lock này.
+
+CI rà bốn workflow đổi từ `78ad81dd`. `ci-check`, 68 test và zizmor ngưỡng high đạt. CI chính thức có đủ năm context bắt buộc. Run pack cùng byte workflow và lock đạt nghiệm thu Chromium. AUD-CI-049 giữ mở do bộ lọc còn nhận sai tên asset. `pr-review` dispatch và `tag-app` sau #868 còn chờ diễn tập live, giữ nhóm CI ở mức rút gọn. [CI exact](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46057710185) · [Pack](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46056231988)
+
+Đối chiếu chứng cứ Blueprint ở cùng SHA cho thấy 46 trong 68 mục bị đánh dấu cũ có lệnh `loop verify --all` đã chạy xanh. 22 mục còn lại gồm 19 tham chiếu và ba miễn trừ hoặc mục không áp dụng. Cập nhật mốc chứng cứ theo kết quả khi rà từng mục.
+
+Sau mốc trên, #874 đóng AUD-XFEAT-057 ở `fc18c250`. Cổng cục bộ của bản sửa và CI trên head đã đạt. [PR #874](https://github.com/www-donghanhcungban-org/X-Templates/pull/874)
