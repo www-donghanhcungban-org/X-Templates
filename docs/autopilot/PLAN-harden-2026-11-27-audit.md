@@ -19,7 +19,7 @@
 
 ### Lát 0 — Xác nhận truy vết tiêu chí
 
-- [ ] `T-5094` AUD-XFEAT-062: `ac-trace` nhận mã AC trong Markdown hợp lệ và mẫu SPEC nối mã AC với kịch bản S-NNN (nguồn: audit:AUD-XFEAT-062, D-641) (files: scripts/xt_checks/kind_ac_trace.py, framework/templates/SPEC.md, tests/test_check_ac_trace.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_check_ac_trace tests.test_static_check`
+- [x] `T-5094` AUD-XFEAT-062: `ac-trace` nhận mã AC trong Markdown hợp lệ và mẫu SPEC nối mã AC với kịch bản S-NNN (nguồn: audit:AUD-XFEAT-062, D-641) (files: scripts/xt_checks/kind_ac_trace.py, framework/templates/SPEC.md, tests/test_check_ac_trace.py, tests/fixtures/autonomy/scope.json, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_check_ac_trace tests.test_static_check`
 
 ### Lát 1 — Bảo toàn cấu hình và giới hạn tài nguyên
 

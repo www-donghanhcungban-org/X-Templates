@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5094 (AUD-XFEAT-062): `ac-trace` nhận mã tiêu chí trong code span Markdown ở đầu dòng. Bảng trong mẫu SPEC nối mã `AC-xxx` với kịch bản `S-NNN` và test.
+
 - Dự án đích nhận mẫu hồ sơ quy mô và nhu cầu quản trị trong `PROJECT.md`. Factory hướng dẫn xem trước chênh lệch blueprint theo ID trước khi đổi feature, gói ngành hoặc mức.
 
 - T-5083 (AUD-XFEAT-057): nâng khung giữ lựa chọn ghim model Codex. Bản cài cũ lấy lại lựa chọn từ agent hoặc bản đề xuất khớp hash quản lý. Dùng `--no-codex-models` để trở về thừa hưởng.

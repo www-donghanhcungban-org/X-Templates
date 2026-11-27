@@ -1,7 +1,7 @@
 """Loại `ac-trace` (WF-SDD-003, WF-SDD-008): mỗi tiêu chí chấp nhận `AC-<số>` định nghĩa trong spec phải được ít nhất một test nhắc
-(tên test, docstring, chú thích). Mã đứng đầu dòng spec (sau `-`, `*`, `#`, `|`, `**`, khoảng trắng) là định nghĩa; chỗ khác chỉ
-là nhắc. Báo: `ACT000` thư mục test không có/không đọc được, `ACT001` AC chưa test nào nhắc, `ACT002` test nhắc AC không spec nào
-định nghĩa, `ACT003` AC định nghĩa hai nơi. Khai `--opt tests=<thư mục>` (mặc định `tests`), `--opt test_suffixes=.py,.go,…`."""
+(tên test, docstring, chú thích). Mã trực tiếp hoặc trong dấu backtick ở đầu dòng spec là định nghĩa. Các dấu `-`, `*`, `#`,
+`|` và khoảng trắng có thể đứng trước mã. `ACT000` báo thư mục test không đọc được, `ACT001` báo AC thiếu test, `ACT002`
+báo test nhắc AC lạ và `ACT003` báo AC định nghĩa hai nơi. Tuỳ chọn gồm `--opt tests=<thư mục>` và `--opt test_suffixes=.py,.go,…`."""
 
 from __future__ import annotations
 
@@ -14,7 +14,11 @@ HELP = "tiêu chí AC-<số> trong spec chưa có test nhắc tới, test nhắc
 SUFFIXES = (".md",)
 OPTS = ("tests", "test_suffixes")
 TEST_SUFFIXES = ".py,.js,.jsx,.ts,.tsx,.go,.rs,.java,.rb,.feature"
-DEFINE = re.compile(r"^[\s\-*#|]*(AC-\d+)(?!\w|-\w)")
+DEFINE = re.compile(
+    r"^[\s\-*#|]*(?:"
+    r"(?P<quote>`+)[ \t]*(?P<inline>AC-\d+)[ \t]*(?P=quote)(?!`)"
+    r"|(?P<plain>AC-\d+)(?!\w|-\w))"
+)
 MENTION = re.compile(r"(?<![\w-])AC-\d+(?!\w|-\w)")
 
 
@@ -27,7 +31,7 @@ def _definitions(files: list[Path]) -> tuple[dict[str, tuple[str, int]], list[Fi
             match = DEFINE.match(line)
             if match is None:
                 continue
-            code = match.group(1)
+            code = match["inline"] or match["plain"]
             if code in first:
                 where = f"{first[code][0]}:{first[code][1]}"
                 found.append(Finding(str(path), number, "ACT003", f"{code} đã định nghĩa ở {where}"))

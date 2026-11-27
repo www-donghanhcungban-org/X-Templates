@@ -8,7 +8,7 @@ updated: 2026-10-15
 
 > **Ai viết:** người đặt yêu cầu + AI; người duyệt đổi trạng thái sang "Approved for implementation". **Giai đoạn:** G3 Specify (một file cho mỗi `F-NNN` MVP).
 > **Cổng dùng:** G3 (mỗi tính năng MVP có tiêu chí chấp nhận kiểm được), DoR trước task, DoD trước merge, `PM-SPEC-*`.
-> **Cách điền:** scenario viết Given/When/Then có ID `S-NNN` để test trỏ về; mục "Ca biên" phải phủ 8 nhóm hoặc ghi "không áp dụng — lý do";
+> **Cách điền:** scenario Given/When/Then có ID `S-NNN`. Nối mỗi kết quả chấp nhận với mã `AC-NNN` và test ở bảng mục 2. Mục "Ca biên" phải phủ 8 nhóm hoặc ghi "không áp dụng — lý do".
 > gặp điểm spec chưa nói → ghi vào "Câu hỏi mở", phiên chính quyết tường minh (`xt.py loop decide`, D-NNN), không lấp ngầm. Đặt tại `docs/specs/SPEC-<slug>.md`.
 
 ```markdown
@@ -26,6 +26,12 @@ updated: 2026-10-15
 Là <ai>, tôi muốn <làm gì>, để <kết quả>. (INVEST: độc lập, thương lượng được, có giá trị, ước lượng được, nhỏ, kiểm được)
 
 ## 2. Tiêu chí chấp nhận (Given/When/Then)
+| Tiêu chí | Scenario | Test |
+|---|---|---|
+| `AC-001` | S-001 | <test kiểm kết quả đường chính> |
+| `AC-002` | S-002 | <test kiểm quyền truy cập> |
+| `AC-003` | S-003 | <test chạy các bộ dữ liệu> |
+
 ### S-001 <tên scenario — đường chính>
 - Given <bối cảnh, dữ liệu ban đầu>
 - When <hành động duy nhất>
