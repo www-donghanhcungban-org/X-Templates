@@ -13,7 +13,7 @@ typecheck: python3 -m mypy --strict --python-version 3.13 scripts/xt.py scripts/
 # test: mỗi LỚP test một tiến trình, chạy song song theo số CPU (D-079): danh sách lớp lấy từ unittest discover (không có
 # lớp rỗng → không sinh "Ran 0 tests"; module lỗi import → in lỗi, exit 1; `xargs -r`: danh sách rỗng không chạy gì); coverage parallel=True ghi mỗi tiến trình một file, combine rồi đòi 100 % — cùng
 # tập test, cùng ngưỡng, 180 s → ~70 s trên 4 CPU. Một lớp đỏ → xargs exit ≠ 0 → cổng đỏ.
-test: d="$(mktemp -d)" && export COVERAGE_FILE="$d/.coverage" && python3 -m coverage erase && python3 -c 'import sys,unittest;S=set();f=lambda s:[f(t) if isinstance(t,unittest.TestSuite) else S.add("tests."+t.__class__.__module__+"."+t.__class__.__name__) for t in s if not isinstance(t,unittest.loader._FailedTest) or print(t._exception,file=sys.stderr) or sys.exit(1)];f(unittest.TestLoader().discover("tests"));print("\n".join(sorted(S)))' | xargs -r -P "$(nproc 2>/dev/null || echo 2)" -n 1 python3 -m coverage run -m unittest && python3 -m coverage combine -q && python3 -m coverage report --fail-under=100; rc=$?; rm -rf "$d"; exit $rc
+test: xt_full_jobs="$(nproc 2>/dev/null || echo 2)" && if [ -n "${XT_CPU_SHARE_ID:-}" ]; then xt_full_jobs="$XT_JOBS"; fi && d="$(mktemp -d)" && export COVERAGE_FILE="$d/.coverage" && python3 -m coverage erase && python3 -c 'import sys,unittest;S=set();f=lambda s:[f(t) if isinstance(t,unittest.TestSuite) else S.add("tests."+t.__class__.__module__+"."+t.__class__.__name__) for t in s if not isinstance(t,unittest.loader._FailedTest) or print(t._exception,file=sys.stderr) or sys.exit(1)];f(unittest.TestLoader().discover("tests"));print("\n".join(sorted(S)))' | xargs -r -P "$xt_full_jobs" -n 1 python3 -m coverage run -m unittest && python3 -m coverage combine -q && python3 -m coverage report --fail-under=100; rc=$?; rm -rf "$d"; exit $rc
 build: python3 scripts/xt.py stats
 # setup: cài công cụ dev ghim hash (ruff, mypy, coverage, shellcheck) — container mới thiếu chúng thì `gate` đỏ sau 1 s.
 # Môi trường cloud gọi `scripts/dev-task.sh setup` trong setup script (ADR-0056); CI vẫn cài bằng bước riêng của nó.
@@ -35,9 +35,9 @@ commit_gate: fast
 # test_fast: `xt.py test-select` đọc XT_CHANGED_FILES (dev-task.sh đặt) → id lớp test liên quan, chọn theo LỚP (thân
 # lớp nhắc file đổi/glob khớp tên, hoặc nhắc tên lớp đã chọn cùng file; D-516 — file không ánh xạ được → cả suite),
 # mỗi lớp một tiến trình như `test`. Module test lỗi import → test-select exit 1 → cổng đỏ.
-# Số tiến trình (-P) do khay CPU cấp (`xt_cpu_share.py jobs`, T-5082/ADR-0112: XT_JOBS người đặt · phần của khay);
-# XT_CPU_SHARE=off hay khay hỏng → ceil(nproc/2) như cũ. Tách nproc ra biến trước số học để lệnh ở trong tập con guard
-# đọc chắc (ADR-0076 P0). Tập test và cổng giữ nguyên.
+# Số tiến trình (-P) do khay CPU cấp (`xt_cpu_share.py jobs`, T-5082: XT_JOBS là trần yêu cầu);
+# XT_CPU_SHARE=off → ceil(nproc/2) như cũ. Tách nproc ra biến trước số học để guard đọc chắc (ADR-0076 P0).
+# Tập test và cổng giữ nguyên.
 test_fast: xt_test_cpus="$(nproc 2>/dev/null || echo 2)" && xt_half="$(( (xt_test_cpus + 1) / 2 ))" && xt_jobs="$(python3 scripts/xt_cpu_share.py jobs --fallback "$xt_half")" && python3 scripts/xt.py test-select --unittest | xargs -r -P "$xt_jobs" -n 1 python3 -m unittest
 # PR quan trọng riêng của repo khung (D-031 → D-080, chủ repo 2026-10-19): chỉ bộ máy merge/ủy quyền/cổng (`scripts/`) và
 # mẫu dự án đích (`framework/templates/` — thành file thật ở dự án đích) và các file PLAN (chứa lệnh Gate mà harness chạy;

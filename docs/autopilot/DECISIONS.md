@@ -1260,3 +1260,10 @@
 - Chọn: Có: cổng nhận việc theo áp lực CPU (PSI some avg10 làm tín hiệu chính, dự phòng loadavg 1 phút chia số nhân); không nhận việc mới khi áp lực vượt ngưỡng cao 85 % của mức bão hoà, nhận lại khi xuống dưới ngưỡng thấp (trễ); việc bị từ chối xếp hàng thử lại có lùi dần, không bỏ; luôn nhận việc nếu chưa có việc nặng nào đăng ký và luôn nhận việc của PR đầu hàng đợi; không hạn thời gian cứng
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án chốt 2026-11-27: đồng ý lớp cổng theo tải, mặc định 85 %. Tiêu chí (1): đếm khay chặn tức thì nhưng không thấy tiến trình ngoài khung (trình duyệt, build khác) làm máy bão hoà; cổng theo tải chặn dựa trên tải thật nên hook, guard và phiên tương tác không bị đói nhân. 85 % là điểm xuất phát giữa 80 và 90 % do chủ chọn, chưa đo: ghi ADR và đo PSI trên máy 14 nhân khi chạy một gate đầy đủ để hiệu chỉnh. (2) đường lùi: tắt bằng XT_CPU_SHARE=off hoặc đặt ngưỡng; một mô-đun. (3) PSI đo việc phải chờ nhân chứ không phải % (không bị đánh lừa khi chờ I/O), dự phòng loadavg/n khi không có PSI; hai ngưỡng có trễ để không dao động; chờ chứ không bỏ việc; BASE-GATE-005: chờ có lùi dần, không đặt hạn thời gian cứng. Giới hạn đã biết: PSI/loadavg đo trễ nên khay vẫn cần; ngưỡng ngoài kho (cgroup) là cấu hình máy.
 - Đường lùi: Bỏ lớp cổng tải (giữ khay) hoặc đặt XT_CPU_SHARE=off; ghi D-NNN mới nếu đổi ngưỡng mặc định sau khi đo.
+
+### D-631 · 2026-11-27T11:44:37+00:00 · T-5082 nên tính worker theo số việc hay theo lease đã cấp?
+
+- Phương án: (1) Tính lại theo số việc như ADR-0112 · (2) Trừ ngân sách đã giữ dưới khoá, dùng XT_JOBS làm trần
+- Chọn: Trừ ngân sách đã giữ dưới khoá, dùng XT_JOBS làm trần
+- Lý do (tiêu chí chất lượng cuối): Hai gate trên môi trường 9 CPU được cấp 5 + 3 worker và chồng một CPU với công thức cũ. Cấp theo lease cho 5 + 2, khớp ngân sách 7 và không chồng affinity.
+- Đường lùi: Đặt XT_CPU_SHARE=off để dùng lại đường chạy trước khi bật điều phối.

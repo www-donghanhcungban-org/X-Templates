@@ -21,6 +21,7 @@ import time
 import unittest
 from collections.abc import Callable
 from contextlib import redirect_stderr, redirect_stdout
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -43,7 +44,7 @@ REC = (
 def clean_env(**extra: str) -> dict[str, str]:
     """Môi trường của tiến trình con: bỏ dấu khay/XT_JOBS của cổng đang chạy test (test chạy bên trong một việc nặng) và
     `CI` (ở CI khay mặc định tắt — test khay phải chạy như máy dev; ca CI có test riêng)."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("XT_CPU", "XT_JOBS")) and k != "CI"}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("XT_CPU", "XT_JOBS", "XT_RESOURCE_")) and k != "CI"}
     env.update(extra)
     return env
 
@@ -88,6 +89,11 @@ class FormulaTest(unittest.TestCase):
         self.assertEqual((sh.n, sh.reserve, sh.usable, len(sh.cpus)), (4, 1, 3, 14))
         self.assertEqual(cs.shape({}, ids=range(2), cores=8).n, 2)
 
+    def test_fractional_quota_never_rounds_up_worker_budget(self):
+        for cores, usable in ((Fraction(1, 2), 1), (Fraction(3, 2), 1), (Fraction(19, 2), 7)):
+            with self.subTest(quota=cores):
+                self.assertEqual(cs.shape({}, ids=range(14), cores=cores).usable, usable)
+
     def test_thresholds(self):
         self.assertEqual(cs.thresholds({}), (0.85, 0.85 - 0.15))
         self.assertEqual(cs.thresholds({"XT_CPU_HIGH": "90"}), (0.9, 0.9 - 0.15))
@@ -120,7 +126,7 @@ class FormulaTest(unittest.TestCase):
 
     def test_pick_avoids_reserved_and_busy_cores(self):
         self.assertEqual(cs.pick(range(14), 2, [], 8), tuple(range(2, 10)))
-        self.assertEqual(cs.pick(range(14), 2, [list(range(2, 10))], 6), (2, 3, 10, 11, 12, 13))
+        self.assertEqual(cs.pick(range(14), 2, [list(range(2, 10))], 6), (10, 11, 12, 13))
         self.assertEqual(cs.pick(range(14), 2, [[2, 3, 99]], 2), (4, 5))
         self.assertEqual(cs.pick([5], 0, [], 1), (5,))
 
@@ -236,6 +242,7 @@ class PressureTest(unittest.TestCase):
             (see(pressure=0.5, closed=True), (True, False)),
             (see(active=3), (False, False)),  # khay đầy
             (see(active=3, head=True, pressure=0.99), (True, True)),  # PR đầu hàng bỏ qua cả khay đầy (slots + 1 việc)
+            (cs.Seen(4, 3, True, False, 0.99, False), (False, True)),
             (see(head_waiting=True), (False, False)),  # nhường việc đầu hàng đang chờ
             (see(head_waiting=True, head=True), (True, False)),
         ]
@@ -276,8 +283,8 @@ class ProcTest(unittest.TestCase):
         self.assertIsNone(cs.quota(proc, cg))  # không có cpu.max
         for raw, want in (
             ("200000 100000", 2),
-            ("150000 100000", 2),
-            ("50000 100000", 1),
+            ("150000 100000", Fraction(3, 2)),
+            ("50000 100000", Fraction(1, 2)),
             ("max 100000", None),
             ("0 100000", None),
             ("100 0", None),
@@ -286,6 +293,30 @@ class ProcTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 (cg / "a" / "b" / "cpu.max").write_text(raw + "\n", encoding="utf-8")
                 self.assertEqual(cs.quota(proc, cg), want)
+
+    def test_quota_and_available_ram_include_ancestor_limits(self):
+        proc, cg = self.tmp / "proc", self.tmp / "cg"
+        (proc / "self").mkdir(parents=True)
+        leaf = cg / "a" / "b"
+        leaf.mkdir(parents=True)
+        membership = proc / "self" / "cgroup"
+        membership.write_text("0::/a/b\n")
+        (leaf.parent / "cpu.max").write_text("150000 100000\n")
+        (leaf / "cpu.max").write_text("max 100000\n")
+        self.assertEqual(cs.quota(proc, cg), Fraction(3, 2))
+        (proc / "meminfo").write_text("MemAvailable:       3000 kB\n")
+        (leaf.parent / "memory.max").write_text("4096000\n")
+        (leaf.parent / "memory.current").write_text("2048000\n")
+        (leaf / "memory.max").write_text("max\n")
+        self.assertEqual(cs.memory_kib(proc, cg), 2000)
+        (proc / "meminfo").write_text("MemTotal:           7000 kB\n")
+        (leaf.parent / "memory.current").write_text("4096001\n")
+        self.assertEqual(cs.memory_kib(proc, cg), 0)
+        (leaf.parent / "memory.current").write_text("-1\n")
+        self.assertIsNone(cs.memory_kib(proc, cg))
+        membership.write_text("0::/a/../b\n")
+        self.assertEqual(cs.cgroup_paths(proc, cg), ())
+        self.assertIsNone(cs.memory_kib(self.tmp, cg))
 
     def test_stat_alive_ancestors(self):
         self.stat(100, "S", 50, 777)
@@ -378,8 +409,8 @@ class TrayTest(unittest.TestCase):
         self.assertEqual(self.measured, [14])
         self.assertTrue((self.d / cs.CLOSED).exists())
         self.assertTrue((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
-        # PR đầu hàng: nhận dù cổng đóng; nhân rảnh trước, rồi nhân ít việc nhất
-        self.assertEqual(self.attempt(head=True), cs.Job((2, 3, 10, 11, 12, 13), 6))
+        # PR đầu hàng bỏ qua cổng tải nhưng chỉ nhận phần còn trống.
+        self.assertEqual(self.attempt(head=True), cs.Job((10, 11, 12, 13), 4))
         self.assertEqual(self.measured, [14])
         self.assertTrue((self.d / cs.CLOSED).exists())  # không đo → giữ trạng thái cổng
         self.assertFalse((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
@@ -389,15 +420,14 @@ class TrayTest(unittest.TestCase):
         self.psi.write_text("some avg10=10.00 avg60=0\n", encoding="ascii")
         got = self.attempt()
         assert isinstance(got, cs.Job)
-        self.assertEqual(got.jobs, 6)
-        self.assertEqual(got.cpus, (2, 3, 10, 11, 12, 13))  # nhân rảnh trước, rồi nhân ít việc nhất
+        self.assertEqual(got.jobs, 4)
+        self.assertEqual(got.cpus, (10, 11, 12, 13))
         self.assertFalse((self.d / cs.CLOSED).exists())
         self.assertFalse((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
 
     def test_full_tray_and_head_waiter(self):
         for pid in (os.getppid(), 1):
-            self.other(pid)
-        self.other(os.getppid() + 0, prefix=cs.JOB)
+            self.other(pid, jobs=2, cpus=[])
         self.sh = cs.shape({"XT_CPU_SLOTS": "2"}, ids=range(14))
         self.assertEqual(self.attempt(), "khay đầy (2/2 việc)")
         got = self.attempt(head=True)  # PR đầu hàng vượt khay đầy: việc thứ slots + 1, vẫn đăng ký và chia phần
@@ -410,21 +440,63 @@ class TrayTest(unittest.TestCase):
         self.assertEqual(self.attempt(), "nhường việc của PR đầu hàng đang chờ")
         self.assertIsInstance(self.attempt(head=True), cs.Job)
 
-    def test_dead_and_broken_entries_expire(self):
+    def test_dead_lease_expires_and_broken_lease_blocks_admission(self):
         dead = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True)
         stale = self.other(int(dead.stdout), cpus=[2, 3])
         broken = self.other(7)
         broken.write_text("{", encoding="utf-8")
-        got = self.attempt()
-        self.assertEqual(got, cs.Job(tuple(range(2, 10)), 8))
+        with self.assertRaisesRegex(ValueError, "lease CPU hỏng"):
+            self.attempt()
+        self.assertTrue(broken.exists())
+        broken.unlink()
+        self.assertEqual(self.attempt(), cs.Job(tuple(range(2, 10)), 8))
         self.assertFalse(stale.exists())
-        self.assertFalse(broken.exists())
 
     def test_nested_job_is_not_registered(self):
-        self.other(os.getppid())  # tiến trình còn sống, đóng vai việc cha đã đăng ký
+        self.other(os.getppid(), jobs=6)  # tiến trình còn sống, đóng vai việc cha đã đăng ký
         with mock.patch.object(cs, "ancestors", return_value={os.getppid(), 9}):
-            self.assertEqual(self.attempt(), cs.Job((), 0, nested=True))
+            self.assertEqual(self.attempt(), cs.Job((), 6, nested=True))
         self.assertFalse((self.d / f"{cs.JOB}{os.getpid()}.json").exists())
+
+    def test_raw_requests_and_priority_cannot_exceed_leases(self):
+        self.other(os.getppid(), cpus=list(range(2, 10)), jobs=8, usable=12)
+        self.other(1, cpus=list(range(10, 14)), jobs=4, usable=12)
+        self.assertEqual(self.attempt(head=True), "hết ngân sách CPU")
+        (self.d / f"{cs.JOB}1.json").unlink()
+        got = cs.attempt(self.d, self.sh, True, self.limits, self.proc, self.measure, 999)
+        self.assertEqual(got, cs.Job((10, 11, 12, 13), 4))
+
+    def test_ram_budget_is_checked_inside_admission(self):
+        args = (self.d, self.sh, True, self.limits, self.proc, self.measure)
+        self.other(os.getppid(), cpus=[2, 3], jobs=2, memory_mib=600)
+        with mock.patch.object(cs, "memory_kib", return_value=1000 * 1024):
+            self.assertEqual(cs.attempt(*args, memory=(200, 100)), cs.Job((4,), 1))
+            own = self.d / f"{cs.JOB}{os.getpid()}.json"
+            own.unlink()
+            self.other(1, cpus=[4], jobs=1, memory_mib=200)
+            self.assertEqual(cs.attempt(*args, memory=(200, 100)), "thiếu RAM khả dụng")
+        with mock.patch.object(cs, "memory_kib", return_value=None):
+            with self.assertRaisesRegex(ValueError, "không đo được RAM"):
+                cs.attempt(*args, memory=(200, 100))
+        self.assertEqual(cs.memory_workers(1200 * 1024, 100, 200, [{"jobs": 2}]), 3)
+
+    def test_wait_timeout_clears_queue_entry(self):
+        self.other(os.getppid(), jobs=12)
+        with mock.patch.object(cs.time, "monotonic", side_effect=[1, 1, 2]):
+            with self.assertRaisesRegex(ValueError, "hết thời gian chờ"):
+                cs.admit({"XT_RESOURCE_WAIT_TIMEOUT": "1"}, self.sh, True, self.d, self.proc, sleep=lambda _: None)
+        self.assertFalse((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
+
+    def test_invalid_lease_fields_and_symlinked_registry_fail_closed(self):
+        for data in ({"jobs": 0}, {"jobs": 1, "usable": False}, {"jobs": 1, "memory_mib": -1}):
+            with self.subTest(data=data):
+                self.other(os.getppid(), **data)
+                with self.assertRaises(ValueError):
+                    self.attempt()
+        link = self.tmp / "link"
+        link.symlink_to(self.d, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "quyền thư mục"), cs.locked(link):
+            self.fail("không được khoá registry qua symlink")
 
     def test_admit_backs_off_without_deadline(self):
         answers = iter(["khay đầy (1/1 việc)", "khay đầy (1/1 việc)", "áp lực CPU 90%", "x", "x", "x", "x", "x"])
@@ -446,16 +518,18 @@ class RunTest(unittest.TestCase):
         self.nice = self.enterContext(mock.patch.object(cs.os, "nice", return_value=0))
         self.aff = self.enterContext(mock.patch.object(cs.os, "sched_setaffinity", create=True))
 
-    def test_off_nested_and_broken_tray_run_plainly(self):
+    def test_off_nested_and_broken_tray(self):
         spawn = self.enterContext(mock.patch.object(cs, "spawn", return_value=9))
-        envs = ({"XT_CPU_SHARE": "OFF "}, {"XT_CPU_SHARE_ID": "9"}, {"XDG_CACHE_HOME": str(SCRIPT)}, {"CI": "true"})
+        envs = ({"XT_CPU_SHARE": "OFF "}, {"XT_CPU_SHARE_ID": "9"}, {"CI": "true"})
         for env in envs:
             with self.subTest(env=env):
                 self.assertEqual(cs.run(["true", "a"], env, False), 9)
-        self.assertEqual(spawn.call_args_list, [mock.call(["true", "a"], env) for env in envs])  # môi trường nguyên vẹn
+        self.assertEqual(spawn.call_args_list, [mock.call(["true", "a"], env) for env in envs])
+        self.assertEqual(cs.run(["true"], {"XDG_CACHE_HOME": str(SCRIPT)}, False), 2)
         self.assertIn("khay CPU không dùng được (NotADirectoryError", self.err.getvalue())
-        with mock.patch.object(cs, "admit", return_value=cs.Job((), 0, nested=True)):
+        with mock.patch.object(cs, "admit", return_value=cs.Job((), 3, nested=True)):
             self.assertEqual(cs.run(["true"], self.env, False), 9)
+        self.assertEqual(spawn.call_args.args[1]["XT_JOBS"], "3")
         self.nice.assert_not_called()
         self.aff.assert_not_called()
 
@@ -493,24 +567,23 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(cs, "shape", return_value=cs.shape({}, ids=range(1))):
             self.assertEqual(cs.run([sys.executable, "-c", "pass"], self.env, True), 0)
         self.nice.assert_called_once_with(0)  # đầu hàng: không hạ ưu tiên
-        self.aff.assert_called_once()  # n = 1: không dành nhân → không ghim
+        self.assertEqual(self.aff.call_args, mock.call(0, (0,)))
 
     def test_limit_failures_are_ignored(self):
-        sh = cs.shape({}, ids=range(4))
         self.nice.side_effect = PermissionError
         self.aff.side_effect = OSError
-        cs.limit(cs.Job((1, 2), 2), sh, False)
+        cs.limit(cs.Job((1, 2), 2), False)
         self.aff.assert_called_once_with(0, (1, 2))
         with mock.patch.object(cs, "os", SimpleNamespace(nice=lambda _n: 0)):
-            cs.limit(cs.Job((1, 2), 2), sh, True)  # hệ không có affinity
-        cs.limit(cs.Job((), 2), sh, True)
+            cs.limit(cs.Job((1, 2), 2), True)  # hệ không có affinity
+        cs.limit(cs.Job((), 2), True)
         self.assertEqual(self.aff.call_count, 1)
 
-    def test_child_env_keeps_user_jobs(self):
+    def test_child_env_exports_granted_jobs(self):
         job = cs.Job((1,), 3)
         self.assertEqual(cs.child_env({}, job)["XT_JOBS"], "3")
         self.assertEqual(cs.child_env({"XT_JOBS": ""}, job)["XT_JOBS"], "3")
-        self.assertEqual(cs.child_env({"XT_JOBS": "abc"}, job)["XT_JOBS"], "abc")  # dev-task.sh: rác → auto như cũ
+        self.assertEqual(cs.child_env({"XT_JOBS": "abc"}, job)["XT_JOBS"], "3")
         self.assertEqual(cs.child_env({"XT_JOBS": "5"}, job)["XT_CPU_SHARE_ID"], str(os.getpid()))
 
     def test_spawn_forwards_signals_and_restores_handlers(self):
@@ -543,15 +616,29 @@ class JobsAndCliTest(unittest.TestCase):
     def test_jobs(self):
         self.assertEqual(cs.jobs({**self.env, "XT_CPU_SHARE": "off"}, "fb"), "fb")
         self.assertEqual(cs.jobs({**self.env, "XT_JOBS": "5"}, "fb"), "5")
-        self.assertEqual(cs.jobs({**self.env, "XT_JOBS": "999"}, "fb"), "56")  # trần 4×n
+        self.assertEqual(cs.jobs({**self.env, "XT_JOBS": "999"}, "fb"), "8")
         self.assertEqual(cs.jobs({**self.env, "XT_CPU_SHARE_ID": "1"}, "fb"), "14")
-        self.assertEqual(cs.jobs({"XDG_CACHE_HOME": str(SCRIPT)}, "fb"), "fb")  # khay hỏng → hành vi cũ
+        self.assertEqual(cs.jobs({"XDG_CACHE_HOME": str(SCRIPT)}, "fb"), "1")
         self.assertEqual(cs.jobs({**self.env, "XT_JOBS": "abc"}, "fb"), "8")  # rác: bỏ qua
         tray = self.tmp / "xt-cpu"
-        (tray / f"{cs.JOB}{os.getpid()}.json").write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
-        self.assertEqual(cs.jobs(self.env, "fb"), "6")
+        (tray / f"{cs.JOB}{os.getpid()}.json").write_text(json.dumps({"pid": os.getpid(), "jobs": 8}), encoding="utf-8")
+        self.assertEqual(cs.jobs(self.env, "fb"), "4")
         with mock.patch.object(cs, "ancestors", return_value={os.getpid()}):
-            self.assertEqual(cs.jobs(self.env, "fb"), "14")  # trong việc đã đăng ký (môi trường bị xoá)
+            self.assertEqual(cs.jobs(self.env, "fb"), "8")  # phục hồi ngân sách từ lease cha
+
+    def test_info_reports_available_measurements(self):
+        with (
+            mock.patch.object(cs, "quota", return_value=Fraction(3, 2)),
+            mock.patch.object(cs, "memory_kib", return_value=2048),
+        ):
+            rc, out, _ = self.main("info", env=self.env)
+            self.assertEqual(rc, 0)
+            info = json.loads(out)
+            self.assertEqual((info["cpu_quota"], info["memory_available_mib"]), ("3/2", 2))
+        with mock.patch.object(cs, "quota", return_value=None), mock.patch.object(cs, "memory_kib", return_value=None):
+            info = cs.resource_info(self.env)
+            self.assertIsNone(info["cpu_quota"])
+            self.assertIsNone(info["memory_available_mib"])
 
     def test_probe(self):
         self.assertTrue(cs.probe({}))
@@ -638,18 +725,19 @@ class ConcurrencyTest(unittest.TestCase):
         )
 
     def test_two_jobs_register_concurrently_and_see_each_other(self):
-        sh = cs.shape({"XT_CPU_SLOTS": "4"}, cores=cs.quota())
-        first = self.popen(1, XT_CPU_SLOTS="4")
-        second = self.popen(2, XT_CPU_SLOTS="4")
+        settings = {"XT_CPU_SLOTS": "4", "XT_CPU_RESERVE": "0"}
+        sh = cs.shape(settings, cores=cs.quota())
+        first = self.popen(1, **settings, XT_JOBS="1")
+        if sh.usable == 1:
+            (self.tmp / "go").touch()
+        second = self.popen(min(2, sh.usable), **settings, XT_JOBS="1")
         outs = [p.communicate(timeout=120) for p in (first, second)]
         self.assertEqual([p.returncode for p in (first, second)], [0, 0], outs)
         a, b = (json.loads(out) for out, _ in outs)
-        self.assertEqual({a["jobs"], b["jobs"]}, {str(cs.share(sh.usable, 1)), str(cs.share(sh.usable, 2))}, outs)
-        self.assertEqual(max(a["seen"], b["seen"]), 2)
-        if HAS_AFFINITY and sh.reserve > 0:
-            reserved = set(sh.cpus[: sh.reserve])
-            self.assertFalse(reserved & (set(a["aff"]) | set(b["aff"])))  # tổng cộng không chạm nhân dành riêng
-            self.assertLessEqual(len(set(a["aff"]) | set(b["aff"])), sh.usable)
+        self.assertEqual((a["jobs"], b["jobs"]), ("1", "1"), outs)
+        self.assertEqual(max(a["seen"], b["seen"]), min(2, sh.usable))
+        if HAS_AFFINITY and sh.usable >= 2:
+            self.assertFalse(set(a["aff"]) & set(b["aff"]))
         self.assertEqual(list(self.tray.glob("job-*.json")), [])
 
 
@@ -688,7 +776,7 @@ class DevTaskIntegrationTest(unittest.TestCase):
     def test_gate_and_gate_fast_run_inside_the_tray(self):
         self.yaml()
         base_nice = os.nice(0)
-        for task in ("gate", "gate-fast"):
+        for task in ("gate", "gate-fast", "test"):
             with self.subTest(task=task):
                 r = self.dt(task)
                 self.assertEqual(r.returncode, 0, r.stderr)
@@ -720,7 +808,31 @@ class DevTaskIntegrationTest(unittest.TestCase):
                 self.assertEqual(r.returncode, 1, r.stderr)  # đỏ vẫn đỏ, cùng mã như không có khay
                 self.assertIn("GATE-FAST ĐỎ ở 'lint'", r.stderr)
         r = self.dt("gate", XT_JOBS="5")
-        self.assertEqual((r.returncode, self.rec("test")["jobs"]), (0, "5"))  # XT_JOBS người đặt thắng
+        self.assertEqual((r.returncode, self.rec("test")["jobs"]), (0, str(min(5, cs.share(self.sh.usable, 1)))))
+
+    def test_gate_par_shares_budget_and_preserves_failure_code(self):
+        (self.tmp / "xt.yaml").write_text(
+            "lint: python3 rec.py lint\ntypecheck: python3 rec.py types\n"
+            "build: python3 rec.py build\ntest: python3 rec.py test\n"
+        )
+        for budget in (1, 2, 3, 6):
+            with self.subTest(budget=budget):
+                r = self.dt("gate-par", XT_CPU_SHARE_ID="outer", XT_JOBS=str(budget))
+                self.assertEqual(r.returncode, 0, r.stderr)
+                expected = (budget, budget, budget) if budget < 3 else (1, 1, budget - 2)
+                got = tuple(int(self.rec(task)["jobs"]) for task in ("lint", "types", "test"))
+                self.assertEqual(got, expected)
+        r = self.dt("gate-par", XT_CPU_SHARE_ID="outer", XT_JOBS="1", REC_RC="3")
+        self.assertEqual(r.returncode, 3, r.stderr)
+        self.assertIn("GATE-PAR ĐỎ", r.stderr)
+
+    def test_test_shard_inherits_budget_and_runs_all_ids(self):
+        (self.tmp / "list_tests.py").write_text("print('one', 'two', 'three', sep='\\n')\n")
+        (self.tmp / "xt.yaml").write_text('test_list: python3 list_tests.py\ntest_unit: python3 rec.py "$1"\n')
+        r = self.dt("test-shard", "1", "1", XT_JOBS="1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for test_id in ("one", "two", "three"):
+            self.assertEqual(self.rec(test_id)["jobs"], "1")
 
     def test_missing_module_or_python_runs_as_before(self):
         self.yaml()
@@ -750,13 +862,13 @@ class DevTaskIntegrationTest(unittest.TestCase):
         self.assertIsNotNone(m, r.stderr)
         return m.group(1) if m else ""
 
-    def test_test_jobs_uses_tray_share_only_when_xt_jobs_unset(self):
+    def test_test_jobs_honors_grant_and_preserves_off_mode(self):
         self.fake_pytest()
         want = cs.share(self.sh.usable, 1)
         for extra, flag in (
             ({}, f"-n {want}"),
-            ({"XT_JOBS": "3"}, "-n 3"),
-            ({"XT_JOBS": "abc"}, "-n auto"),
+            ({"XT_JOBS": "3"}, f"-n {min(3, want)}"),
+            ({"XT_JOBS": "abc"}, f"-n {want}"),
             ({"XT_CPU_SHARE": "off"}, "-n auto"),
             ({"CI": "true"}, "-n auto"),  # CI: như trước khi có khay
             ({"CI": "true", "XT_CPU_SHARE": "on"}, f"-n {want}"),
@@ -806,7 +918,7 @@ class XtYamlTestFastTest(unittest.TestCase):
     def test_parallelism_follows_tray(self):
         nproc = int(subprocess.run(["nproc"], capture_output=True, text=True, check=True).stdout)
         sh = cs.shape({}, cores=cs.quota())
-        self.assertEqual(self.procs(XT_JOBS="5"), 5)  # đỏ trước khi nối: -P cố định ceil(nproc/2)
+        self.assertEqual(self.procs(XT_JOBS="5"), min(5, cs.share(sh.usable, 1)))
         self.assertEqual(self.procs(), cs.share(sh.usable, 1))
         self.assertEqual(self.procs(XT_CPU_SHARE="off"), math.ceil(nproc / 2))
         self.assertEqual(self.procs(CI="true"), math.ceil(nproc / 2))  # CI: khay mặc định tắt → như cũ
@@ -862,7 +974,7 @@ class LiveCliTest(unittest.TestCase):
                 self.assertEqual(mark.read_text(), "term")
                 self.assertEqual(list((self.tmp / "xt-cpu").glob("job-*.json")), [])
 
-    def test_unwritable_cache_runs_as_before(self):
+    def test_unwritable_cache_stops_managed_run(self):
         blocker = self.tmp / "file"
         blocker.write_text("", encoding="utf-8")
         env = {**self.env, "XDG_CACHE_HOME": str(blocker)}
@@ -871,12 +983,12 @@ class LiveCliTest(unittest.TestCase):
             "--",
             sys.executable,
             "-c",
-            "import os, sys; sys.exit(0 if 'XT_JOBS' not in os.environ else 9)",
+            "raise SystemExit(9)",
             env=env,
         )
-        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("khay CPU không dùng được", r.stderr)
-        self.assertEqual(cli("jobs", "--fallback", "auto", env=env).stdout, "auto\n")
+        self.assertEqual(cli("jobs", "--fallback", "auto", env=env).stdout, "1\n")
 
     def test_dead_pid_lock_expires(self):
         dead = subprocess.run([sys.executable, "-c", "import os; print(os.getpid())"], capture_output=True, text=True)

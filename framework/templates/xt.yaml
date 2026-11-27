@@ -18,8 +18,9 @@ format_file: "" # format MỘT file (hook PostToolUse), `{}` = đường dẫn; 
 # commit_gate: hook trước `git commit` — fast = gate-fast · full = gate; diff đụng cấu hình cổng → mọi lớp test
 commit_gate: fast
 test_fast: "" # test liên quan file đổi (XT_CHANGED_FILES, mỗi dòng một file); trống → test
-# Lệnh tự chia tiến trình (xargs -P, pytest -n): lấy số từ khay CPU `python3 .xtemplates/scripts/xt_cpu_share.py jobs`
-# thay cho nproc; gate/gate-fast tự vào khay và đặt XT_JOBS; XT_CPU_SHARE=off = như cũ (LOOP-ORCH-025).
+# Lệnh tự chia tiến trình (xargs -P, pytest -n): dùng XT_JOBS do dev-task.sh cấp, với mặc định riêng của dự án khi biến trống.
+# Test, build và gate trên máy dev dùng chung khay. Chạy python3 .xtemplates/scripts/xt_cpu_share.py info để xem ngân sách.
+# XT_CPU_SHARE=off quay về cách chạy cũ (LOOP-ORCH-025).
 # Ngưỡng coverage của CI mẫu nằm trong `test` (job `gate` chạy nó). Chia shard (chỉ khi đo thấy test là đường dài nhất
 # và CI tách test ra job riêng; gate-fast cũng dùng khi diff đụng cấu hình cổng): test_list (in mỗi dòng một id) ·
 # test_unit (chạy id "$1", coverage vào "$XT_COV_DIR" nếu có) · test_combine (gộp coverage, đòi ngưỡng).
