@@ -827,11 +827,13 @@ class DevTaskIntegrationTest(unittest.TestCase):
         self.assertIn("GATE-PAR ĐỎ", r.stderr)
 
     def test_test_shard_inherits_budget_and_runs_all_ids(self):
-        (self.tmp / "list_tests.py").write_text("print('one', 'two', 'three', sep='\\n')\n")
+        expected = {f"unit-{i}" for i in range(100)}
+        (self.tmp / "list_tests.py").write_text("for i in range(100): print(f'unit-{i}')\n", encoding="utf-8")
         (self.tmp / "xt.yaml").write_text('test_list: python3 list_tests.py\ntest_unit: python3 rec.py "$1"\n')
-        r = self.dt("test-shard", "1", "1", XT_JOBS="1")
+        r = self.dt("test-shard", "1", "1", XT_JOBS="1", XT_MIN_TESTS="100")
         self.assertEqual(r.returncode, 0, r.stderr)
-        for test_id in ("one", "two", "three"):
+        self.assertEqual({p.stem for p in self.out.glob("*.json")}, expected)
+        for test_id in expected:
             self.assertEqual(self.rec(test_id)["jobs"], "1")
 
     def test_missing_module_or_python_runs_as_before(self):
