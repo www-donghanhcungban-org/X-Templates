@@ -354,9 +354,61 @@ const findClipped = (path) => {
   for (const el of elements(document, false)) {
     const s = getComputedStyle(el);
     if (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis') continue;
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1 || el.scrollWidth <= el.clientWidth + 1) continue;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
+    if (el.scrollWidth <= el.clientWidth + 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
     if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
     const box = el.getBoundingClientRect();
+    // clientLeft gồm viền trái và scrollbar bên trái (RTL); clientWidth là chiều rộng mép cắt.
+    // Quy đổi về toạ độ viewport như Range, kể cả scale/zoom trên phần tử hoặc tổ tiên.
+    let axisAligned = el.offsetWidth > 0;
+    for (let ancestor = el; ancestor && axisAligned; ancestor = parentOf(ancestor)) {
+      const style = getComputedStyle(ancestor);
+      // Biến đổi riêng rotate/scale và perspective không được phản ánh trong `transform`.
+      if (style.rotate !== 'none' || style.scale !== 'none' || style.perspective !== 'none') {
+        axisAligned = false;
+        break;
+      }
+      const transform = style.transform;
+      if (transform === 'none') continue;
+      const matrix = new DOMMatrixReadOnly(transform);
+      axisAligned = matrix.is2D && matrix.a > 0 && matrix.d > 0 && matrix.b === 0 && matrix.c === 0;
+    }
+    if (!axisAligned) {
+      found.push({ element: name(el), kind: 'hidden' });
+      if (found.length === 20) break;
+      continue;
+    }
+    const scaleX = box.width / el.offsetWidth;
+    let left = box.left + el.clientLeft * scaleX;
+    let right = left + el.clientWidth * scaleX;
+    if (s.overflowX === 'clip') {
+      // Computed value là độ dài px, có thể kèm geometry-box; mặc định là padding-box.
+      const parts = s.overflowClipMargin?.trim().split(/\s+/) ?? [];
+      const lengths = parts.filter((part) => /^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(part));
+      const boxes = parts.filter((part) => ['padding-box', 'border-box', 'content-box'].includes(part));
+      if (lengths.length > 1 || boxes.length > 1 || lengths.length + boxes.length !== parts.length || (!lengths.length && !boxes.length)) {
+        found.push({ element: name(el), kind: 'hidden' });
+        if (found.length === 20) break;
+        continue;
+      }
+      if (boxes[0] === 'border-box') {
+        left = box.left;
+        right = box.right;
+      } else if (boxes[0] === 'content-box') {
+        const paddingLeft = Number.parseFloat(s.paddingLeft);
+        const paddingRight = Number.parseFloat(s.paddingRight);
+        if (!Number.isFinite(paddingLeft) || !Number.isFinite(paddingRight)) {
+          found.push({ element: name(el), kind: 'hidden' });
+          if (found.length === 20) break;
+          continue;
+        }
+        left += paddingLeft * scaleX;
+        right -= paddingRight * scaleX;
+      }
+      const margin = (lengths.length ? Number.parseFloat(lengths[0]) : 0) * scaleX;
+      left -= margin;
+      right += margin;
+    }
     let kind = null;
     let seen = 0;
     for (const node of leaves(el)) {
@@ -377,8 +429,8 @@ const findClipped = (path) => {
       }
       for (const rect of rects) {
         // Cả mép phải lẫn mép trái (chữ RTL tràn sang trái): vắt qua mép là `cut`, nằm hẳn ngoài là `hidden`.
-        if (rect.width <= 0 || (rect.right <= box.right + 1 && rect.left >= box.left - 1)) continue;
-        const straddles = rect.left < box.right - 1 && rect.right > box.left + 1;
+        if (rect.width <= 0 || (rect.right <= right + 1 && rect.left >= left - 1)) continue;
+        const straddles = rect.left < right - 1 && rect.right > left + 1;
         kind = straddles && !isMedia ? 'cut' : (kind ?? 'hidden');
       }
     }

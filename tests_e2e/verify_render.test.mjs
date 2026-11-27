@@ -304,8 +304,9 @@ test('a hover colour reached through a transition is measured at its final value
 });
 
 test('an infinite animation on the control is UNMEASURED instead of a guess', async (t) => {
+  // Keep both ends readable so axe does not fail based on when it samples the animation.
   const sample = await fixture(t, page({ css: `
-    @keyframes pulse { from { color: #111; } to { color: #fff; } }
+    @keyframes pulse { from { color: #111; } to { color: #333; } }
     #sample { animation: pulse 1s infinite alternate; }
   ` }));
   const strict = await sample.run(['--strict', '--widths', '320']);
@@ -364,6 +365,43 @@ test('opacity and transparent text fill make a control UNMEASURED instead of a g
 
 const WIDE_TEXT = 'content that is far wider than its box and gets cut off';
 const wideBox = (id, style) => `<div id="${id}" tabindex="0" role="region" aria-label="wide content" style="${style}"><div style="width:900px;white-space:nowrap">${WIDE_TEXT}</div></div>`;
+
+test('bordered clipping uses the padding edge for fitting and cut text', async (t) => {
+  for (const [id, overflow, direction, transform] of [
+    ['ltr', 'hidden', 'ltr', ''], ['rtl', 'clip', 'rtl', ''],
+    ['scaled', 'hidden', 'ltr', 'transform:scale(1.5);transform-origin:left top;'],
+  ]) {
+    const box = (text) => `<div id="${id}" dir="${direction}" style="overflow:${overflow};width:100px;border:20px solid;white-space:nowrap;font:20px/1 monospace;background:#fff;color:#111;${transform}">${text}</div>`;
+    const fit = await fixture(t, page({ markup: box('12345678') }));
+    status(await fit.run(['--strict', '--widths', '320']), 0);
+    const cut = await fixture(t, page({ markup: box('123456789') }));
+    const result = await cut.run(['--strict', '--widths', '320']);
+    status(result, 1);
+    assert.match(result.stdout, new RegExp(`check=reflow element="#${id}" — chữ bị cắt`));
+  }
+});
+
+test('overflow clip margin extends the clipping edge but does not affect hidden', async (t) => {
+  for (const [overflow, margin, expected] of [['clip', 0, 1], ['clip', 10, 0], ['hidden', 10, 1]]) {
+    const sample = await fixture(t, page({ markup: `<p id="edge" style="width:100px;border:20px solid;white-space:nowrap;font:20px/1 monospace;overflow:${overflow};overflow-clip-margin:${margin}px">AVAILABLE</p>` }));
+    const result = await sample.run(['--strict', '--widths', '320']);
+    status(result, expected);
+    if (expected) assert.match(result.stdout, /check=reflow element="#edge" — chữ bị cắt/);
+    else assert.doesNotMatch(result.stdout, /check=reflow element="#edge"/);
+  }
+});
+
+test('overflow clip geometry boxes without an explicit length use zero margin', async (t) => {
+  const border = await fixture(t, page({ markup: `<p id="edge" style="width:100px;border:20px solid;white-space:nowrap;font:20px/1 monospace;overflow:clip;overflow-clip-margin:border-box">AVAILABLE</p>
+    <script>if (!CSS.supports('overflow-clip-margin', 'border-box')) document.querySelector('#edge').textContent = 'FIT';</script>` }));
+  status(await border.run(['--strict', '--widths', '320']), 0);
+
+  const content = await fixture(t, page({ markup: `<p id="edge" style="width:100px;padding:20px;border:20px solid;white-space:nowrap;font:20px/1 monospace;overflow:clip;overflow-clip-margin:content-box">AVAILABLE</p>
+    <script>if (!CSS.supports('overflow-clip-margin', 'content-box')) document.querySelector('#edge').style.padding = '0';</script>` }));
+  const result = await content.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /check=reflow element="#edge" — chữ bị cắt/);
+});
 
 test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
   const clipped = await fixture(t, page({ markup: wideBox('clip', 'overflow:hidden;width:200px') }));
