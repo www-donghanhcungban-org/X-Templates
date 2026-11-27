@@ -488,3 +488,49 @@ test('a missing Chromium executable makes the real gate fail UNMEASURED', async 
   assert.match(result.stderr, /UNMEASURED.*không chạy hết cổng/);
   assert.doesNotMatch(result.stdout, /^✓/m);
 });
+
+const shadowPage = (mode, html, style = 'overflow:hidden;width:200px') => page({
+  markup: `<div id="outer" tabindex="0" role="region" aria-label="shadow content" style="${style}"><x-wide id="host"></x-wide></div><script>
+    const root = document.getElementById('host').attachShadow({ mode: '${mode}' });
+    root.innerHTML = ${JSON.stringify(html)};
+  </script>`,
+});
+const WIDE_IN_SHADOW = `<div style="width:900px;white-space:nowrap">${WIDE_TEXT}</div>`;
+
+test('reflow descends into open shadow roots: cut text and a clipper inside the shadow fail, fitting text passes', async (t) => {
+  const cut = await fixture(t, shadowPage('open', WIDE_IN_SHADOW));
+  const cutResult = await cut.run(['--strict', '--widths', '320']);
+  status(cutResult, 1);
+  assert.match(cutResult.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#outer" — chữ bị cắt/m);
+  assert.match(cutResult.stdout, /^REFLOW .*viewport=320x800 .*shadow_measured=[1-9]\d* shadow_closed_not_measured=0$/m);
+  const inner = await fixture(t, shadowPage('open', `<div id="in" style="overflow:hidden;width:200px">${WIDE_IN_SHADOW}</div>`, ''));
+  const innerResult = await inner.run(['--strict', '--widths', '320']);
+  status(innerResult, 1);
+  assert.match(innerResult.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#host >>> div#in" — chữ bị cắt/m);
+  const fits = await fixture(t, shadowPage('open', '<p>Short text</p>'));
+  const fitsResult = await fits.run(['--strict', '--widths', '320']);
+  status(fitsResult, 0);
+  assert.doesNotMatch(fitsResult.stdout, /^✗ /m);
+  assert.match(fitsResult.stdout, /^REFLOW .*viewport=320x800 .*shadow_measured=[1-9]\d* shadow_closed_not_measured=0$/m);
+});
+
+test('an image sticking out of an overflow:hidden box is UNMEASURED, also inside an open shadow root', async (t) => {
+  const img = `<img alt="" src="${SAMPLE_IMAGE}" width="900" height="20">`;
+  const light = await fixture(t, page({ markup: `<div id="pic" tabindex="0" role="region" aria-label="picture" style="overflow:hidden;width:200px">${img}</div>` }));
+  const lightResult = await light.run(['--strict', '--widths', '320']);
+  status(lightResult, 1);
+  assert.match(lightResult.stdout, /^UNMEASURED .*check=reflow element="#pic"/m);
+  const shadow = await fixture(t, shadowPage('open', img));
+  const shadowResult = await shadow.run(['--strict', '--widths', '320']);
+  status(shadowResult, 1);
+  assert.match(shadowResult.stdout, /^UNMEASURED .*check=reflow element="#outer"/m);
+});
+
+test('a closed shadow root cannot be measured: reported not_measured, never a pass', async (t) => {
+  const closed = await fixture(t, shadowPage('closed', WIDE_IN_SHADOW));
+  const result = await closed.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^REFLOW .*viewport=320x800 .*shadow_closed_not_measured=1$/m);
+  assert.match(result.stdout, /^UNMEASURED .*check=reflow element="shadow\[closed\]" — not_measured/m);
+  assert.doesNotMatch(result.stdout, /^✓/m);
+});
