@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `install.py` (T-5080, D-628): bản chép mới/`--force-harness` của `.claude/settings.json` **không còn mang `autoCompactWindow` sang dự án đích** (hằng `UNSHIPPED_SETTINGS_KEYS`, gỡ bằng quyết định mới khi D-613 có số đo `preTokens` và tỉ lệ Gate xanh lần đầu); `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` vẫn mang sang, repo khung vẫn giữ khoá. Khoá đã có ở đích (chủ dự án tự đặt hoặc bản cài cũ) không bị đụng; `--plan` dùng cùng biến đổi. Sửa lại dòng T-5040 bên dưới: bản cài mới không nhận `autoCompactWindow`. `LOOP-CTX-016` ghi rõ. Test `tests/test_hook_precompact_output.py`.
+
 - Đăng ký `T-5082` giới hạn CPU tổng quát cho việc nặng (D-629): khay dùng chung theo máy, mọi tham số là hàm của số nhân (dành `ceil(n/8)` nhân, `max(1, n // 4)` việc đồng thời, chia phần theo số việc đang chạy có sàn và trần), ghi đè bằng `XT_CPU_RESERVE`, `XT_CPU_SLOTS`, `XT_CPU_SHARE=off`; áp cho `dev-task.sh`, lệnh `test_fast` của `xt.yaml` và mẫu, nên cả khung lẫn dự án đích. Chỉ PLAN và lịch §0.5, chưa đổi mã.
 - Mẫu dự án đích `CLAUDE.md`, `AGENTS.md` §8, `xt.yaml` nêu tuyến review (reviewer opus/high, `executor-deep` opus/medium, người viết Opus ≥ high → inconclusive; ADR-0110, D-623, D-625, D-627); `model-tiers.json` giữ `write_code_max_effort: xhigh` (T-5078).
 
