@@ -22,6 +22,8 @@ Trên môi trường Linux kiểm thử có 9 CPU khả dụng, ngân sách là 
 
 ## Giới hạn của lần triển khai
 
+`slots` và `XT_CPU_SLOTS` chỉ là trần trên của số việc nặng, không bảo đảm đạt (D-633). Việc đầu lấy `ceil(2·usable/3)`, việc sau lấy phần còn lại, nên mặc định tối đa 2 việc nặng cùng lúc; việc thứ ba chỉ vào khi còn ngân sách. Việc đầu hàng được ưu tiên nhưng vẫn chờ khi hết ngân sách. Mã giữ nguyên để không đổi hành vi đã đo; nợ 🟠 AUD-HAR-581 theo dõi việc quyết định có cấp việc đầu tối đa `usable // slots` hay không.
+
 Khay dùng đường dẫn cache hiện tại theo người dùng. Chỉ chia sẻ trong một miền mà các bản cài cùng nhìn thấy tiến trình và hệ thống tệp. Bản trước ADR này có thể cấp chồng nếu còn khởi chạy chung. Nên kết thúc các lượt chạy bản cũ trước khi bật bản mới. Giá trị RAM ước lượng cần được đo trên workload trước khi áp dụng rộng.
 
 Việc dọn sau `SIGKILL` vẫn theo PID của supervisor. Chưa chứng minh thu hồi an toàn khi cây con sống tiếp. Mount cgroup không chuẩn, cgroup v1, Windows native, cân bằng theo áp lực I/O và single-flight commit nằm ngoài lần triển khai này.

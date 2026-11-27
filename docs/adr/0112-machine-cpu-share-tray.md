@@ -1,6 +1,6 @@
 # ADR-0112: Khay CPU dùng chung theo máy và cổng nhận việc theo áp lực CPU
 
-- **Trạng thái:** Đề xuất ngày 2026-11-27 (D-629, D-630), chờ phiên chính duyệt cùng PR của T-5082. Số 0111 đã giữ cho ADR của T-5069 (PLAN-upgrade-2026-11-27) nên ADR này lấy 0112.
+- **Trạng thái:** Đề xuất ngày 2026-11-27 (D-629, D-630), chờ phiên chính duyệt cùng PR của T-5082. **Thay một phần bởi [ADR-0113](0113-resource-lease-admission.md)**: (a) việc đầu hàng không còn luôn được nhận, vẫn chờ khi hết ngân sách và chỉ được ưu tiên; (b) lỗi đọc lease hoặc quyền thư mục cache làm `run` dừng mã 2 (không còn fail-open ở mục 9 về thư mục cache; `XT_CPU_SHARE=off` là đường lùi); (c) cách chia 8/6/4 theo số việc thay bằng cấp theo lease (8 và tối đa 4 trên 14 nhân). Số 0111 đã giữ cho ADR của T-5069 (PLAN-upgrade-2026-11-27) nên ADR này lấy 0112.
 - **Trạng thái triển khai:** T-5082 — `scripts/xt_cpu_share.py`, `dev-task.sh` (`gate`/`gate-fast` trong khay, `test_jobs()`), `test_fast` của `xt.yaml`, chú thích ở mẫu `xt.yaml`, ba danh sách mô-đun, `LOOP-ORCH-025`.
 - **Liên quan:** [ADR-0061](0061-adaptive-agent-topology.md) (số agent theo loại việc), [ADR-0076](0076-guard-positive-grammar-gate.md) (lệnh `xt.yaml` trong tập con guard đọc chắc), D-367/D-369 (`XT_JOBS`, pytest-xdist), BASE-GATE-005.
 
@@ -22,7 +22,7 @@ Nhiều phiên hoặc agent cùng chạy cổng commit, cổng đầy đủ và 
    | 1 | 0 | 1 | 1 | 1 | — | — |
    | 2 | 1 | 1 | 1 | 1 | — | — |
    | 4 | 1 | 1 | 3 | 2 | — | — |
-   | 14 | 2 | 3 | 12 | 8 | 6 | 4 |
+   | 14 | 2 | 3 | 12 | 8 | 6 (đã bị thay: ADR-0113 cấp 4) | 4 (đã bị thay: ADR-0113) |
    | 64 | 8 | 16 | 56 | 38 | 28 | 18 |
 3. **Khay** là thư mục `$XDG_CACHE_HOME/xt-cpu` (mặc định `~/.cache/xt-cpu`). Mỗi việc ghi một tệp `job-<pid>.json` (pid, thời điểm khởi động tiến trình, các nhân được ghim, số tiến trình). Mọi lần đọc và ghi diễn ra dưới `flock`; tiến trình chết thì hệ tự nhả khoá. Tệp của PID đã chết, của PID bị tái dùng (thời điểm khởi động khác), của zombie, hoặc tệp hỏng đều bị xoá ở lần đọc kế. Vì vậy việc crash không để lại khoá mồ côi.
 4. **Nhận việc**, theo thứ tự:
@@ -76,7 +76,7 @@ Kết luận đo: trên máy này, cả khi `loadavg`/`n` ≈ 1 (mọi nhân đ�
 
 ## Hệ quả
 
-- Máy 14 nhân: một việc một mình dùng 8 nhân (`test_fast` trước đây dùng `ceil(14/2) = 7`). Hai việc dùng 8 và 6 nhân, hợp ghim nằm trong 12 nhân dùng được, 2 nhân dành riêng không bị việc nặng chạm.
+- Máy 14 nhân: một việc một mình dùng 8 nhân (`test_fast` trước đây dùng `ceil(14/2) = 7`). Hai việc dùng 8 và 6 nhân (đã bị thay: ADR-0113 cấp 8 và tối đa 4), hợp ghim nằm trong 12 nhân dùng được, 2 nhân dành riêng không bị việc nặng chạm.
 - Máy 4 nhân: mỗi lúc một việc, dùng 2 nhân. Việc thứ hai chờ, trừ việc của PR đầu hàng.
 - Việc của PR đầu hàng vượt giới hạn số việc: tối đa `slots + 1` việc cùng lúc, và lúc đó tổng phần chia có thể vượt `usable` nhiều hơn.
 - Cổng commit tốn thêm khoảng hai lần khởi động python (`probe` rồi `run`), cộng 0,5 s đo CPU khi đã có việc khác trong khay.

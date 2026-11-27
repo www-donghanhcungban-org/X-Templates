@@ -326,8 +326,8 @@ def alive(pid: int, start: object, proc: Path = PROC) -> bool:
     """PID còn sống và đúng tiến trình đã đăng ký (cùng thời điểm khởi động khi /proc có); zombie tính là chết."""
     try:
         os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
+    except (ProcessLookupError, OverflowError):
+        return False  # PID vượt giới hạn int của hệ điều hành không thể là tiến trình đang sống
     except PermissionError:
         pass
     fields = proc_stat(pid, proc)
@@ -548,7 +548,7 @@ def run(cmd: Sequence[str], env: Mapping[str, str], head: bool) -> int:
         sh = shape(env, cores=quota())
         job = admit(env, sh, head, tray)
     except (OSError, ValueError) as e:
-        log(f"khay CPU không dùng được ({type(e).__name__}: {e})")
+        log(f"khay CPU không dùng được ({type(e).__name__}: {e}); đặt XT_CPU_SHARE=off để chạy không qua khay")
         return 2
     if job.nested:
         return plain(cmd, child_env(env, job))

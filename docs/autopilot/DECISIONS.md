@@ -1267,3 +1267,10 @@
 - Chọn: Trừ ngân sách đã giữ dưới khoá, dùng XT_JOBS làm trần
 - Lý do (tiêu chí chất lượng cuối): Hai gate trên môi trường 9 CPU được cấp 5 + 3 worker và chồng một CPU với công thức cũ. Cấp theo lease cho 5 + 2, khớp ngân sách 7 và không chồng affinity.
 - Đường lùi: Đặt XT_CPU_SHARE=off để dùng lại đường chạy trước khi bật điều phối.
+
+### D-633 · 2026-11-27T13:50:36+00:00 · T-5082 (review #865, 🟠2): slots/XT_CPU_SLOTS không bảo đảm số việc nặng cùng lúc vì worker_budget cấp ceil(2u/3) cho việc đầu — sửa mã hay sửa tài liệu?
+
+- Phương án: (1) A: giữ mã worker_budget, sửa tài liệu: mặc định tối đa 2 việc nặng (việc đầu ceil(2u/3), việc sau phần còn lại), slots là trần trên không bảo đảm đạt; mở nợ 🟠 hành vi slots · (2) B: cho việc đầu cấp tối đa usable//slots để đạt đúng slots việc cùng lúc (đổi hành vi, giảm tốc việc đơn lẻ)
+- Chọn: A: giữ mã worker_budget, sửa tài liệu: mặc định tối đa 2 việc nặng (việc đầu ceil(2u/3), việc sau phần còn lại), slots là trần trên không bảo đảm đạt; mở nợ 🟠 hành vi slots
+- Lý do (tiêu chí chất lượng cuối): Giữ đường lùi và không đổi hành vi đã đo ở ADR-0113 (8+4 trên 14 CPU); sai lệch tài liệu là lỗi đúng-sai cần sửa ngay, còn đổi chính sách cấp là quyết định riêng cần số đo; B làm chậm việc đơn lẻ khi máy rảnh
+- Đường lùi: Đổi sang B bằng quyết định mới thay D này: sửa worker_budget và test, cập nhật lại ADR-0113 và tài liệu

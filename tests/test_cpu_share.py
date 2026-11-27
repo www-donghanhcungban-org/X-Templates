@@ -452,6 +452,12 @@ class TrayTest(unittest.TestCase):
         self.assertEqual(self.attempt(), cs.Job(tuple(range(2, 10)), 8))
         self.assertFalse(stale.exists())
 
+    def test_oversized_pid_lease_is_dead_not_a_traceback(self):
+        huge = self.other(99999999999999, jobs=1)
+        self.assertFalse(cs.alive(99999999999999, None, self.proc))
+        self.assertEqual(self.attempt(), cs.Job(tuple(range(2, 10)), 8))
+        self.assertFalse(huge.exists())
+
     def test_nested_job_is_not_registered(self):
         self.other(os.getppid(), jobs=6)  # tiến trình còn sống, đóng vai việc cha đã đăng ký
         with mock.patch.object(cs, "ancestors", return_value={os.getppid(), 9}):
@@ -527,6 +533,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(spawn.call_args_list, [mock.call(["true", "a"], env) for env in envs])
         self.assertEqual(cs.run(["true"], {"XDG_CACHE_HOME": str(SCRIPT)}, False), 2)
         self.assertIn("khay CPU không dùng được (NotADirectoryError", self.err.getvalue())
+        self.assertIn("XT_CPU_SHARE=off", self.err.getvalue())
         with mock.patch.object(cs, "admit", return_value=cs.Job((), 3, nested=True)):
             self.assertEqual(cs.run(["true"], self.env, False), 9)
         self.assertEqual(spawn.call_args.args[1]["XT_JOBS"], "3")
@@ -991,6 +998,7 @@ class LiveCliTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 2, r.stderr)
         self.assertIn("khay CPU không dùng được", r.stderr)
+        self.assertIn("XT_CPU_SHARE=off", r.stderr)
         self.assertEqual(cli("jobs", "--fallback", "auto", env=env).stdout, "1\n")
 
     def test_dead_pid_lock_expires(self):

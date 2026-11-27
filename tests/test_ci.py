@@ -308,7 +308,7 @@ class GateFanOutTest(unittest.TestCase):
 
     def test_fast_parallelism_preserved(self):
         # Tách nproc ra biến trước số học: số job và đường lùi khi nproc lỗi giữ như lệnh trước P0. Từ T-5082 (ADR-0112)
-        # -P do khay CPU cấp; tắt khay (XT_CPU_SHARE=off — cũng là đường của khay hỏng) phải ra đúng số cũ.
+        # -P do khay CPU cấp; tắt khay (XT_CPU_SHARE=off) phải ra đúng số cũ; khay hỏng thì `jobs` trả "1" và `run` thoát 2.
         before = '"$(( ("$(nproc 2>/dev/null || echo 2)" + 1) / 2 ))"'
         command = xt._xt_keys(ROOT)["test_fast"]
         setup = command.partition(" && python3 scripts/xt.py test-select")[0]
