@@ -1302,3 +1302,10 @@
 - Chọn: Cho workflow dùng GitHub App theo cấu hình repo, lỗi rõ khi đã bật App nhưng không cấp được token; giữ đường đang dùng ở repo chưa bật
 - Lý do (tiêu chí chất lượng cuối): Ruleset chỉ cho một App tạo tag. Cần chuẩn bị và diễn tập App trên đúng repo trước khi áp luật live, đồng thời bản cài cũ chưa có App vẫn cần đi qua đúng cổng release hiện hành.
 - Đường lùi: Trước khi áp ruleset có thể bỏ biến Client ID để trở về đường cũ. Sau khi áp ruleset, thay hoặc khôi phục App được phép cùng lúc với cấu hình workflow.
+
+### D-638 · 2026-11-27T17:03:59+00:00 · Thứ tự xử lý audit delta của X-Templates ở mốc 60681783?
+
+- Phương án: (1) Tách từng lỗi có ca tái hiện tiến hành song song cục bộ theo phạm vi; merge qua hàng đợi, làm lại audit và cổng ký · (2) Gộp thay đổi installer, khay CPU, cổng kiểm và CI vào một PR
+- Chọn: Tách từng lỗi có ca tái hiện tiến hành song song cục bộ theo phạm vi; merge qua hàng đợi, làm lại audit và cổng ký
+- Lý do (tiêu chí chất lượng cuối): Mỗi sửa có Gate và đường lùi riêng; giữ quyền live và số đo môi trường ở các task phụ thuộc, không trộn chúng vào sửa mã
+- Đường lùi: Revert từng PR nếu hồi quy; mở lại đúng hàng audit và chạy lại Gate của lát đó
