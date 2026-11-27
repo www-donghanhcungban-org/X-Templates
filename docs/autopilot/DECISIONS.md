@@ -1183,3 +1183,10 @@
 - Chọn: Sổ riêng docs/autopilot/DESIGN.json (sổ bằng chứng của guard); lệnh xt.py stage design-submit/design-reopen/design-check; duyệt bằng xt.py stage approve --design --sha --note — luôn chỉ người (guard chặn mọi stage approve có cờ ngoài --sha/--note, đã thử bằng payload giả 2026-11-26; xt.py từ chối phiên agent); loop next/record chặn task (ui: yes) khi PROJECT.md khai 'Duyệt thiết kế: khách' mà bản thiết kế mới nhất chưa duyệt; logic ở module mới xt_design.py, nới trần dòng xt.py qua ADR
 - Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: duyệt của khách là việc người theo định nghĩa — phương án 2 cho agent tự duyệt khi stage_approval: agent và phải sửa bộ phát lại lịch sử sổ giai đoạn; phương án 3 trái P1, agent tự viết tệp duyệt được. Figma không có trạng thái duyệt đọc được qua REST (Dev Mode status chỉ là nhãn, không người duyệt — đọc 2026-11-26) nên bằng chứng duyệt phải ở sổ của khung. (2) đường lùi: dự án không khai 'Duyệt thiết kế: khách' không đổi gì. (3) dùng lại lớp chặn của ADR-0058, guard chỉ thêm tên sổ vào EVIDENCE_LEDGERS.
 - Đường lùi: Revert PR; dự án đang khai 'Duyệt thiết kế: khách' bỏ dòng đó hoặc chuyển 'không'; DESIGN.json giữ làm hồ sơ.
+
+### D-623 · 2026-11-27T00:38:21+00:00 · Bậc model tối đa của reviewer-alt: opus trở xuống hay được dùng bậc top?
+
+- Phương án: (1) reviewer-alt chỉ opus trở xuống, trần effort high · (2) reviewer-alt được dùng bậc top (fable) khi chủ bật
+- Chọn: reviewer-alt chỉ opus trở xuống, trần effort high
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chốt 2026-11-26 (research unified-upgrade-plan §12.4): giữ chi phí review thấp, người viết opus vẫn có reviewer cùng họ effort cao hơn khi cần; ưu tiên tiêu chí (3) bền, đơn giản.
+- Đường lùi: Đổi lại khung reviewer-alt và LOOP-ORCH-019 theo bậc top; ghi D-NNN mới.

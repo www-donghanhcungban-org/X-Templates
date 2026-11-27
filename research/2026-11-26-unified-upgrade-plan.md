@@ -235,7 +235,7 @@ Dấu task trong PLAN là nguồn trạng thái; số đo trong nghiên cứu [f
 T-5038 (canary X-Company) đã bỏ theo D-610; phương án nâng đích giữ làm tài liệu cho đợt sau. T-5018 có nội dung rollout cũ cũng phải được diễn giải cùng quyết định hoãn.
 
 ## 9. Phương pháp và giới hạn kiểm chứng
-Đã đọc PDF gốc 16 trang, mã ở `02480424`, AGENTS/ADR/PLAN liên quan, nghiên cứu 31 lát, tests, đường cài/phát hành. Nhận định cấu trúc dùng AST/symbol table, mở rộng qua assignment, bảng callable, alias; không chứng minh mọi dynamic reference.
+Đã đọc PDF gốc 40 trang, mã ở `02480424`, AGENTS/ADR/PLAN liên quan, nghiên cứu 31 lát, tests, đường cài/phát hành. Nhận định cấu trúc dùng AST/symbol table, mở rộng qua assignment, bảng callable, alias; không chứng minh mọi dynamic reference.
 
 Kiểm thử chọn lọc: `python3.13 -m unittest tests.test_docs_budget tests.test_python_floor tests.test_guard_profile tests.test_release_assets` → 47 test, exit 0. Tái hiện an toàn (cô lập, không chạy tác vụ thật): parser CLI mech → `SystemExit 2`; cost wrapper rc=1 không gọi `write_cost`; installer tiêm lỗi sau 4 byte; release candidate trong repo tạm exit 0 + output rỗng; Guard fallback với payload merge giả, không gọi merge.
 
@@ -331,7 +331,7 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
    | `executor-deep` (opus, `effort: high`) | cùng họ, high = high | **Bị từ chối clean** |
    | Phiên chính viết code (opus, effort tới `xhigh` — D-558/D-559) | cùng họ, high ≤ tác giả | **Bị từ chối clean**, trừ khi phiên chính chạy ≤ `medium` |
 
-   **Chủ dự án chốt (2026-11-26): `reviewer-alt` chỉ dùng opus trở xuống** — không dùng bậc `top` cho review, kể cả ở effort ≤ `high`. Cùng với trần `high`, cấu hình cao nhất của reviewer là opus/`high`. Hệ quả: người viết opus muốn có review sạch cùng họ thì phải chạy effort ≤ `medium`. Ba lối còn lại cho diff của `executor-deep` và của phiên chính viết code:
+   **Chủ dự án chốt (2026-11-26, D-623): `reviewer-alt` chỉ dùng opus trở xuống** — không dùng bậc `top` cho review, kể cả ở effort ≤ `high`. Cùng với trần `high`, cấu hình cao nhất của reviewer là opus/`high`. Hệ quả: người viết opus muốn có review sạch cùng họ thì phải chạy effort ≤ `medium`. Ba lối còn lại cho diff của `executor-deep` và của phiên chính viết code:
    - **(d) Mặc định: không ghi clean.** Reviewer opus/`high` vẫn rà và báo phát hiện (🔴 sửa ngay), nhưng lượt đó ghi `pr reviewed --inconclusive`, phần còn lại thành nợ review trả theo lô ở pha harden (ADR-0062). Giữ nguyên năng lực tầng sâu, không nới luật; giá là nợ review tăng đều theo số diff tầng sâu.
    - **(c) Hạ effort thật của người viết xuống `medium`** (`executor-deep`, hoặc phiên chính khi tự viết code): cặp medium/high hợp lệ về máy. Chỉ chuyển sang lối này khi bộ đánh giá G10 cho thấy tầng sâu ở `medium` không tụt chất lượng trên cùng tác vụ; không làm chỉ để cặp hợp lệ.
    - **(b) Reviewer khác nhà cung cấp:** để sau, vì bảng bậc ngoài Anthropic còn `verified: false`.
@@ -371,7 +371,7 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
 
 PR 1, 3, 6, 7 không chạm `xt.py`/`guard.py` nên làm song song được; PR 2 chặn PR 4 và 8; PR 5 chặn baseline parity của G12.4.
 
-**Đã chốt:** `reviewer-alt` chỉ opus trở xuống (§12.4 mục 2). **Cần chủ dự án:** `T-4007` kèm bật release immutability; `T-5020`. **Chưa làm trong lượt này:** tiêm lỗi lại năm ca (đã đọc mã thay thế), full CI trên nhánh thay đổi mã, benchmark hook đầu–cuối.
+**Đã chốt (D-623):** `reviewer-alt` chỉ opus trở xuống (§12.4 mục 2). **Cần chủ dự án:** `T-4007` kèm bật release immutability; `T-5020`. **Chưa làm trong lượt này:** tiêm lỗi lại năm ca (đã đọc mã thay thế), full CI trên nhánh thay đổi mã, benchmark hook đầu–cuối.
 
 ## 13. Nguồn
 Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a3253f0ad188f1`.
