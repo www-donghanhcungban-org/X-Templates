@@ -77,6 +77,14 @@
         ]
       }
     ],
+    "PreSkillShellCommand": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre-bash-guard.sh\"", "timeout": 1200, "onFailure": "block" }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|mcp__.*",

@@ -989,11 +989,31 @@ def install_settings(
             log(f"  ⚠ giữ `ask` trùng chuỗi rule cũ của khung nhưng manifest không chứng minh khung đặt: {unproven}")
         return update_provenance(prov, report)
     own = own_permissions(target)
-    r = copy_if_absent(SRC / ".claude" / "settings.json", settings, force_harness, own_settings if own else None)
+    r = copy_if_absent(SRC / ".claude" / "settings.json", settings, force_harness, settings_transform(own))
     stats[r] += 1
     if r != "copied":
         return prov
     return dict.fromkeys(RULE_KEYS, []) if own else our_rules()
+
+
+# Khoá cấp cao của settings khung chưa mang sang đích: D-613/LOOP-CTX-016 đòi đo `preTokens` và tỉ lệ Gate xanh lần đầu
+# trước; gỡ khỏi danh sách này bằng quyết định mới khi có số đo (D-628). Chỉ lọc ở bản chép mới/`--force-harness`; đường
+# gộp (`merge_hooks`) chưa từng thêm khoá cấp cao nên khoá đã có ở đích (chủ dự án đặt, hoặc bản cài cũ) không bị đụng.
+UNSHIPPED_SETTINGS_KEYS = ("autoCompactWindow",)
+
+
+def target_settings(text: str) -> str:
+    """settings.json khung cho đích: bỏ `UNSHIPPED_SETTINGS_KEYS`; không có khoá nào để bỏ thì giữ nguyên từng byte."""
+    data = json.loads(text)
+    if not any(k in data for k in UNSHIPPED_SETTINGS_KEYS):
+        return text
+    kept = {k: v for k, v in data.items() if k not in UNSHIPPED_SETTINGS_KEYS}
+    return settings_text(text, kept)  # giữ định dạng văn bản của khung (tệp không phình qua giới hạn kích thước ghi)
+
+
+def settings_transform(own: bool) -> Callable[[str], str]:
+    """Biến đổi settings khung khi chép mới: lọc khoá chưa mang sang, rồi (`harness_permissions: own`) bỏ quyền."""
+    return (lambda text: own_settings(target_settings(text))) if own else target_settings
 
 
 def own_settings(text: str) -> str:
@@ -2652,7 +2672,7 @@ def plan_settings(target: Path, force_harness: bool, prov: dict[str, list[str]])
         rep = settings_changes(pair[0], pair[1], prov, own_permissions(target))
         action = "merged-hooks" if rep.pop("changes") else "kept"
         return {"action": action, **rep}
-    return {"action": classify_copy(src, dst, force_harness, own_settings if own_permissions(target) else None)[0]}
+    return {"action": classify_copy(src, dst, force_harness, settings_transform(own_permissions(target)))[0]}
 
 
 PlanJob = tuple[Path, str, bool, Callable[[str], str] | None, str | None]  # nguồn, đích, force, biến đổi, hash mẫu
