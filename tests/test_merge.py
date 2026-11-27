@@ -3196,6 +3196,26 @@ class PrNextCliTest(unittest.TestCase):
         self.assertEqual((last()["reviewer_model"], last()["reviewer_effort"], last()["author_effort"]),
                          ("opus", "max", "high"))  # fmt: skip
         self.assertEqual(run("--reviewer-model", "gpt-5", "--author-model", "gpt-5", *hi)[0], 0)  # họ không bậc
+        for reviewer, author, author_effort, expected in (
+            ("gpt-6.2-sol", "gpt-6.1-terra", "high", 0),  # bậc trước effort
+            ("openai/GPT-6.2-SOL", "gpt-6.2-sol", "medium", 0),
+            ("gpt-6.2-sol", "gpt-6.2-sol", "high", 2),
+            ("gpt-6.2-sol", "gpt-6.2-astra", "medium", 2),
+            ("gpt-6.2-sol", "gpt-6.2-other", "medium", 2),
+            ("ollama_chat/gpt-6.2-sol", "gpt-6.1-terra", "medium", 2),
+            ("gpt4all/gpt-6.2-sol", "gpt-6.1-terra", "medium", 2),
+        ):
+            rc, _, err = run(
+                "--reviewer-model",
+                reviewer,
+                "--author-model",
+                author,
+                "--reviewer-effort",
+                "high",
+                "--author-effort",
+                author_effort,
+            )
+            self.assertEqual(rc, expected, (reviewer, author, author_effort, err))
         cross = (("gpt-5", "claude-opus-5-5"), ("claude-haiku-4-5", "gpt-5"), ("mythos", "gpt-5"), ("gemma-3", "o3"))
         for rv, au in cross:  # khác nhà cung cấp: máy không xếp hạng được → nhận
             self.assertEqual(run("--reviewer-model", rv, "--author-model", au)[0], 0, (rv, au))

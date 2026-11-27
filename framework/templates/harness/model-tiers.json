@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "note": "Nguồn duy nhất cho bậc model theo nhà cung cấp và vai trò của agent (ADR-0098). Bậc đếm từ đỉnh: top = bậc cao nhất của nhà cung cấp, top-1 = thấp hơn một nấc (dùng cho rà code, D-558/D-559), top-2, bottom = nhẹ nhất. Giá USD/MTok vào/ra, bậc chuẩn, đọc ngày as_of từ trang chính thức; ID và giá đổi nhanh nên đọc lại trước khi dựa vào. Nhà cung cấp chưa xác minh thì không được máy dùng để xếp hạng.",
+ "note": "Nguồn duy nhất cho bậc model theo nhà cung cấp và vai trò của agent (ADR-0098). Bậc đếm từ đỉnh: top = bậc cao nhất của nhà cung cấp, top-1 = thấp hơn một nấc (dùng cho rà code, D-558/D-559), top-2, bottom = nhẹ nhất. Giá USD/MTok vào/ra, bậc chuẩn, đọc ngày as_of từ trang chính thức; ID và giá đổi nhanh nên đọc lại trước khi dựa vào. Máy chỉ dùng bậc từ các nguồn tin cậy đã được khung tích hợp (ADR-0114).",
  "as_of": "2026-11-24",
  "tiers": ["bottom", "top-2", "top-1", "top"],
  "vendors": {
@@ -15,7 +15,7 @@
   "openai": {
    "verified": false,
    "source": "https://learn.chatgpt.com/docs/models",
-   "note": "Thứ bậc Astra > Sol > Terra > Luna suy từ mô tả trên docs, không phải bảng xếp hạng chính thức; máy dùng làm bậc chỉ khi dự án đích khai bật (lát R2).",
+   "note": "ID và effort đã đối chiếu bằng codex debug models ngày 2026-11-27. Thứ bậc Astra > Sol > Terra > Luna là quy ước của X-Templates (ADR-0114), chưa có bảng xếp hạng chính thức của OpenAI.",
    "bottom": {"id": "gpt-6-luna", "price": "0.10/0.50"},
    "top-2": {"id": "gpt-6.1-terra", "price": "1/5"},
    "top-1": {"id": "gpt-6.2-sol", "price": "2/10"},

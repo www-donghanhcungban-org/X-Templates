@@ -1216,12 +1216,12 @@ class DoctorOrchestrationTest(DoctorCase):
     def test_harness_settings_mcp_all_model_and_gitignore_warn(self):
         """LOOP-HARNESS-032 (stored XT-H-021): settings dự án bật mọi MCP server hoặc ghim `model` ngoài họ của khung →
         cảnh báo (không in giá trị); `settings.local.json` có mà `.gitignore` không chặn → cảnh báo; JSON hỏng → bỏ qua."""
-        self.write(".claude/settings.json", json.dumps({"enableAllProjectMcpServers": True, "model": "gpt-5"}))
+        self.write(".claude/settings.json", json.dumps({"enableAllProjectMcpServers": True, "model": "gpt-6.2-sol"}))
         msgs = [f.msg for f in self.orch()]
         self.assertEqual(len(msgs), 2, msgs)
         self.assertTrue(any("`enableAllProjectMcpServers: true`" in m and "LOOP-HARNESS-032" in m for m in msgs))
         self.assertTrue(any("`model` ngoài họ của khung" in m and "LOOP-ORCH-019" in m for m in msgs))
-        self.assertFalse(any("gpt-5" in m for m in msgs))
+        self.assertFalse(any("gpt-6.2-sol" in m for m in msgs))
         self.write(
             ".claude/settings.json", json.dumps({"enableAllProjectMcpServers": False, "model": "claude-opus-5-5"})
         )

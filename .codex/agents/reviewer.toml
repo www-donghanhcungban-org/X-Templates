@@ -1,6 +1,7 @@
 # Sinh từ .claude/agents/reviewer.md bởi install.py của X-Templates (ADR-0082) — sửa tệp nguồn rồi sinh lại, không sửa tay.
 name = "reviewer"
-description = "Review độc lập diff/PR theo checklist của khung (đúng spec, lỗi logic & ca biên, bảo mật, thống nhất, test) — chạy opus/high, trần cố định (ADR-0110); nhận clean khi người viết bậc thấp hơn (`executor-mech`, `executor`, `researcher`, `acceptance-author`); diff của `executor-deep`/phiên chính → `reviewer-alt`; mọi phát hiện phải có đường tái hiện. Giao khi `xt.py pr next` trả `review` hoặc khi /review."
+description = "Review độc lập diff/PR theo checklist của khung (đúng spec, lỗi logic & ca biên, bảo mật, thống nhất, test) — chạy bậc top-1/high, trần cố định (ADR-0110); nhận clean khi người viết bậc thấp hơn (`executor-mech`, `executor`, `researcher`, `acceptance-author`); diff của `executor-deep`/phiên chính → `reviewer-alt`; mọi phát hiện phải có đường tái hiện. Giao khi `xt.py pr next` trả `review` hoặc khi /review."
+model = "gpt-6.2-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 Bạn là người gác cổng, không phải người viết. Đọc `.claude/skills/review/SKILL.md` của dự án (hoặc của khung) và làm theo thứ tự rà ở đó.

@@ -1,7 +1,7 @@
 ---
 title: Adapter hook cho công cụ agent khác
 kind: index
-updated: 2026-11-24
+updated: 2026-11-27
 ---
 
 # Adapter hook cho công cụ agent khác Claude Code (ADR-0064 lát B)
@@ -41,8 +41,7 @@ Edit/Write hoặc chạy lại `install.py --harness`.
 `--harness codex` ngoài `.codex/hooks.json` còn sinh, từ `.claude/` của dự án sau bước harness (nguồn duy nhất):
 `.agents/skills/<tên>/SKILL.md` — bản sao byte của skill khung; `.codex/agents/<tên>.toml` — `name`, `description`,
 `model_reasoning_effort` (từ `effort`), `developer_instructions` (thân tệp, giữ đường `.claude/…`), không `model` (agent
-thừa hưởng model của phiên) trừ khi thêm `--codex-models`: `model` lấy từ `model-tiers.json` theo vai (nhà cung cấp OpenAI
-chưa xác minh — chỉ khi dự án chọn; nâng khung thì cài lại cùng cờ, nếu không tệp agent bị coi là đã sửa). Chỉ skill/agent khung cài (trừ skill bị `.claude/commands/` che); ghi như file harness:
+thừa hưởng model của phiên) trừ khi thêm `--codex-models`: `model` lấy từ `model-tiers.json` theo vai (ADR-0114). Khi nâng khung với model ghim, tiếp tục dùng cờ đó. Chỉ skill/agent khung cài (trừ skill bị `.claude/commands/` che); ghi như file harness:
 chưa có → chép, còn đúng hash lần trước → cập nhật, dự án đã sửa → `kept-own`/`.xtemplates-new`; không ghi/đọc xuyên
 symlink; hash ở `codex_files` của `.xtemplates/manifest.json`; `--plan` liệt kê ở `codex_harness` (kèm `reason` khi bỏ
 qua). Tệp Codex là sản phẩm sinh từ `.claude/`: tệp trùng đầu ra sinh được ghi nhận vào `codex_files` (như tệp harness
@@ -53,24 +52,22 @@ trùng hash nguồn khung đã ghi; agent: nguồn `.md` chưa sửa và gương
 trơn hoặc nháy không thoát; `name`/`description`/`effort` trơn có kiểu YAML như `null`, `true`, số, ngày phải đặt trong
 nháy); khối `|`/`>`, khoá lồng, nháy có thoát, chú thích cuối dòng, ngắt dòng lạ… → bỏ qua kèm cảnh báo nêu dòng, giữ
 bản cũ. Sửa skill/agent ở `.claude/` thì chạy lại `install.py --harness codex`. Repo khung: `python3 scripts/install.py .
---sync-codex` (tệp ĐÃ track dưới `.agents/`, `.codex/` phải do bộ sinh tạo — thừa thì exit 1; tệp chưa track như
+--sync-codex` luôn sinh model theo bảng vai (tệp ĐÃ track dưới `.agents/`, `.codex/` phải do bộ sinh tạo — thừa thì exit 1; tệp chưa track như
 `.DS_Store`, `.codex/config.toml` cục bộ chỉ cảnh báo; không xoá gì).
 
 **Tin cậy:** hook dự án chỉ chạy sau khi người tin cậy bằng `/hooks` (theo hash — đổi `hooks.json` phải tin cậy lại);
 chưa tin cậy thì Codex bỏ qua cả lớp `.codex/`. **Giới hạn:** chỉ `PreToolUse` (không Stop hook — vòng "chạy đến khi
-xong" của `/autopilot` không có ở Codex, dùng `loop run --agent codex`); `ask` không hỗ trợ; agent thừa hưởng model của phiên nên luật
-"reviewer cao hơn người viết" (`LOOP-ORCH-005`) chỉ còn effort để phân biệt — `executor` và `reviewer` đều không khai
-effort nên cặp mặc định **không** phân biệt được, `executor-deep` (medium, D-627) so với `reviewer`/`reviewer-alt` (high, ADR-0110) là cặp hợp lệ về effort, phần còn lại không phân biệt được; `maxTurns` (reviewer 120) **không** sang Codex (`agent_toml` không map, khoá TOML chưa xác nhận); tool đọc tệp không qua adapter; mức hỗ trợ vẫn **thử nghiệm**.
-Từ ADR-0098, bậc model của từng agent nằm ở [`model-tiers.json`](model-tiers.json) (bảng bậc theo nhà cung cấp và vai); lát R2 sinh `model` cho agent Codex từ đó khi dự án khai bật.
+xong" của `/autopilot` không có ở Codex, dùng `loop run --agent codex`); `ask` không hỗ trợ; khi agent kế thừa cùng model phiên, luật `LOOP-ORCH-005` đòi effort reviewer cao hơn và effort thực tế của cả hai phải được khai; `maxTurns` (reviewer 120) **không** sang Codex (`agent_toml` không map, khoá TOML chưa xác nhận); tool đọc tệp không qua adapter; mức hỗ trợ vẫn **thử nghiệm**.
+Từ ADR-0098, bậc model của từng agent nằm ở [`model-tiers.json`](model-tiers.json) (bảng bậc theo nhà cung cấp và vai); agent Codex dùng bảng này trong gương khung và ở dự án bật `--codex-models`. Reviewer ghim `high`, executor thường mặc định `medium` khi ghim model, executor sâu dùng `medium` ở cùng bậc với reviewer.
 
 ## Bảng bậc model theo harness (ADR-0098, D-559)
 
-Review và rà code dùng **bậc thấp hơn đúng một nấc so với bậc cao nhất** của harness (`top-1`); model nhẹ nhất (`bottom`) chỉ cho tra cứu chỉ đọc (`explore`) và việc cơ học có Gate máy (`executor-mech`, D-605); phiên chính lập PLAN/SPEC ở `top-1`, `top` chỉ khi chủ dự án bật. Dữ liệu và ngày đọc ở `model-tiers.json`; nhà cung cấp chưa xác minh thì không dùng để xếp hạng.
+Review và rà code dùng **bậc thấp hơn đúng một nấc so với bậc cao nhất** của harness (`top-1`); model nhẹ nhất (`bottom`) chỉ cho tra cứu chỉ đọc (`explore`) và việc cơ học có Gate máy (`executor-mech`, D-605); phiên chính lập PLAN/SPEC ở `top-1`, `top` chỉ khi chủ dự án bật. Dữ liệu và ngày đọc ở `model-tiers.json`; các ID Codex được đối chiếu với danh mục CLI ngày 2026-11-27 và so theo bậc của X-Templates (ADR-0114).
 
 | Harness (adapter) | `top` | `top-1` (rà code) | `bottom` (tra cứu, cơ học) | Trạng thái bậc |
 |---|---|---|---|---|
 | Claude Code (`.claude/`) | `claude-fable-5-2` | `claude-opus-5-5` | `claude-haiku-5-5` | đã xác minh; agent đồng bộ qua `model:` |
-| Codex CLI (`codex-hooks.json`) | `gpt-6.2-astra` | `gpt-6.2-sol` | `gpt-6-luna` | thứ bậc suy từ docs, chưa chính thức; R2 sinh `model` khi khai bật |
+| Codex CLI (`codex-hooks.json`) | `gpt-6.2-astra` | `gpt-6.2-sol` | `gpt-6-luna` | bậc X-Templates; `top-2` là `gpt-6.1-terra` |
 | Gemini CLI (`gemini-settings.json`) | chưa xác minh | chưa xác minh | chưa xác minh | Carbon/Argon cùng giá; CLI có thể đã đổi sang Antigravity |
 | Grok CLI (`grok-xt.json`) | `grok-4.7` | `grok-4.6` (cùng giá) | `grok-4.3` | chưa xác minh model CLI hỗ trợ |
 | Cursor (`cursor-hooks.json`) | theo nhà cung cấp của model đã chọn | như vậy | Composer 2.5 | dùng bảng của nhà cung cấp tương ứng |
