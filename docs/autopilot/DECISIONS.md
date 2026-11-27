@@ -1275,6 +1275,13 @@
 - Lý do (tiêu chí chất lượng cuối): Giữ đường lùi và không đổi hành vi đã đo ở ADR-0113 (8+4 trên 14 CPU); sai lệch tài liệu là lỗi đúng-sai cần sửa ngay, còn đổi chính sách cấp là quyết định riêng cần số đo; B làm chậm việc đơn lẻ khi máy rảnh
 - Đường lùi: Đổi sang B bằng quyết định mới thay D này: sửa worker_budget và test, cập nhật lại ADR-0113 và tài liệu
 
+### D-634 · 2026-11-27T14:45:56+00:00 · Gán bậc model cho agent Codex và xác thực dấu review thế nào?
+
+- Phương án: (1) Dùng bảng vai ADR-0098 cho gương khung và so bậc theo ID đã đối chiếu trong Codex CLI · (2) Để agent kế thừa model phiên và chỉ so effort
+- Chọn: Dùng bảng vai ADR-0098 cho gương khung và so bậc theo ID đã đối chiếu trong Codex CLI
+- Lý do (tiêu chí chất lượng cuối): Giữ tuyến ADR-0110, reviewer luôn high và cao hơn executor thường. Executor sâu chỉ nhận clean khi effort thấp hơn reviewer. Các dự án đích vẫn chọn dùng model ghim qua cờ cài.
+- Đường lùi: Revert commit để gương khung trở lại model kế thừa và khôi phục cách so cũ.
+
 ### D-635 · 2026-11-27T14:50:17+00:00 · Giữ lease T-5082 khi dừng shell của workload bằng tín hiệu ra sao?
 
 - Phương án: (1) Quản lý nhóm tiến trình riêng ở Linux và giữ lease tới khi nhóm dừng sau tín hiệu · (2) Giữ chuyển tín hiệu tới tiến trình con trực tiếp và chấp nhận tiến trình cháu còn chạy ngoài ngân sách

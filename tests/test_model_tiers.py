@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -135,6 +136,13 @@ class ModelTiersTest(unittest.TestCase):
     def test_codex_mirror_has_every_agent(self):
         mirror = {p.stem for p in (ROOT / ".codex" / "agents").glob("*.toml")}
         self.assertEqual(mirror, set(AGENTS))
+        openai = TIERS["vendors"]["openai"]
+        ranked = {openai[tier]["id"]: rank for rank, tier in enumerate(TIERS["tiers"], 1)}
+        self.assertEqual(xt.CODEX_MODEL_TIERS, ranked)
+        for name in AGENTS:
+            with self.subTest(agent=name):
+                doc = tomllib.loads((ROOT / f".codex/agents/{name}.toml").read_text(encoding="utf-8"))
+                self.assertEqual(doc["model"], openai[TIERS["roles"][name]]["id"])
 
     def test_docs_and_templates_are_in_sync(self):
         orch = (ROOT / "framework" / "11-autonomous-loop" / "orchestration-and-subagents.md").read_text(

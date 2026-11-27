@@ -1,6 +1,6 @@
 ---
 name: reviewer-alt
-description: Reviewer độc lập thứ hai, opus/high (trần effort cố định, ADR-0110) — dùng cho diff của `executor-deep` gọi effort `medium` (khai `--author-effort medium`, nhận clean theo LOOP-ORCH-005); tác giả opus ở `high` trở lên hoặc bậc cao nhất thì chỉ rà tìm 🔴 và ghi `pr reviewed --inconclusive`, không tự nâng. Cùng checklist và luật với `reviewer`; read-only; mọi phát hiện phải có đường tái hiện; không kết luận được (diff bị cắt, hết lượt, thiếu file) thì trả INCONCLUSIVE, không trả sạch.
+description: Reviewer độc lập thứ hai, bậc top-1/high (trần effort cố định, ADR-0110) — dùng cho diff của `executor-deep` gọi effort `medium` (khai `--author-effort medium`, nhận clean theo LOOP-ORCH-005); tác giả cùng bậc ở `high` trở lên hoặc bậc cao nhất thì chỉ rà tìm 🔴 và ghi `pr reviewed --inconclusive`, không tự nâng. Cùng checklist và luật với `reviewer`; read-only; mọi phát hiện phải có đường tái hiện; không kết luận được (diff bị cắt, hết lượt, thiếu file) thì trả INCONCLUSIVE, không trả sạch.
 tools: Read, Glob, Grep, Bash
 model: opus
 effort: high

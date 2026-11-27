@@ -64,6 +64,7 @@ import unicodedata
 from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from functools import partial
 from types import ModuleType
 from typing import Any, TypeGuard
 from pathlib import Path
@@ -1569,10 +1570,10 @@ def codex_tier_model(name: str) -> str | None:
     return model if isinstance(model, str) and model else None
 
 
-def agent_toml(text: str, source: str) -> str:
+def agent_toml(text: str, source: str, *, framework: bool = False) -> str:
     """`.claude/agents/<tên>.md` → TOML agent của Codex: `name`, `description`, `model_reasoning_effort` (từ `effort`
     khi thuộc `CODEX_EFFORTS`), `developer_instructions` (thân sau frontmatter, bỏ dòng trống đầu, giữ đường `.claude/…`).
-    Không `model` (tên model Claude vô nghĩa với Codex) trừ khi `--codex-models`: lúc đó `model` lấy từ bảng bậc theo vai.
+    Gương khung và bản cài với `--codex-models` lấy `model` từ bảng bậc theo vai (ADR-0114).
     Frontmatter ngoài tập con phẳng → ValueError (`agent_frontmatter`)."""
     meta, body = agent_frontmatter(text)
     out = [
@@ -1580,19 +1581,21 @@ def agent_toml(text: str, source: str) -> str:
         f"name = {toml_string(meta['name'])}",
         f"description = {toml_string(meta['description'])}",
     ]
-    model = codex_tier_model(meta["name"]) if CODEX_MODELS else None
+    model = codex_tier_model(meta["name"]) if framework or CODEX_MODELS else None
     if model:
         out.append(f"model = {toml_string(model)}")
-    if meta.get("effort") in CODEX_EFFORTS:
-        out.append(f"model_reasoning_effort = {toml_string(meta['effort'])}")
+    default_effort = "medium" if model and meta["name"] == "executor" else ""
+    effort = meta.get("effort", default_effort)
+    if effort in CODEX_EFFORTS:
+        out.append(f"model_reasoning_effort = {toml_string(effort)}")
     out.append(f"developer_instructions = {toml_multiline(body)}")
     return "\n".join(out) + "\n"
 
 
-def render_agent(raw: bytes, source: str) -> bytes | str:
+def render_agent(raw: bytes, source: str, *, framework: bool = False) -> bytes | str:
     """TOML (byte) của agent; không sinh được → lý do (chuỗi) để cảnh báo."""
     try:
-        return agent_toml(raw.decode("utf-8"), source).encode("utf-8")
+        return agent_toml(raw.decode("utf-8"), source, framework=framework).encode("utf-8")
     except UnicodeDecodeError:
         return "không phải UTF-8"
     except ValueError as exc:
@@ -1613,7 +1616,7 @@ def read_regular(path: Path) -> bytes | None:
         return None
 
 
-def codex_jobs(target: Path) -> list[CodexJob]:
+def codex_jobs(target: Path, *, framework: bool = False) -> list[CodexJob]:
     """Skill (trừ skill bị lệnh dự án che — `shadowed_skills`) và agent của khung → việc sinh tệp Codex."""
     claude = SRC / ".claude"
     hidden = set(shadowed_skills(target))
@@ -1622,7 +1625,8 @@ def codex_jobs(target: Path) -> list[CodexJob]:
         (f".claude/skills/{n}/SKILL.md", f".agents/skills/{n}/SKILL.md", render_skill) for n in skills
     ]
     agents = sorted(p.stem for p in (claude / "agents").glob("*.md"))
-    return jobs + [(f".claude/agents/{n}.md", f".codex/agents/{n}.toml", render_agent) for n in agents]
+    agent_renderer = partial(render_agent, framework=framework)
+    return jobs + [(f".claude/agents/{n}.md", f".codex/agents/{n}.toml", agent_renderer) for n in agents]
 
 
 def codex_render(job: CodexJob, read: Callable[[str], bytes | None]) -> bytes | str:
@@ -1740,7 +1744,7 @@ def framework_codex_hooks() -> bytes:
 def codex_framework_files() -> dict[str, bytes]:
     """Đường → nội dung mọi tệp Codex của repo khung, sinh từ `SRC/.claude/` (cùng bộ sinh với dự án đích)."""
     out = {ADAPTERS["codex"][1]: framework_codex_hooks()}
-    for job in codex_jobs(SRC):
+    for job in codex_jobs(SRC, framework=True):
         data = codex_render(job, lambda rel: read_regular(SRC / rel))
         if isinstance(data, str):
             raise ValueError(f"{job[0]}: {data} — không sinh được {job[1]}")
@@ -3209,7 +3213,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--codex-models",
         action="store_true",
-        help="với --harness codex: ghi `model` cho agent Codex theo bảng bậc (OpenAI chưa xác minh — chỉ khi dự án chọn; "
+        help="với --harness codex: ghi `model` cho agent Codex theo bảng bậc (dự án đích chọn bật; "
         "cài lại cùng cờ để nâng, ADR-0098)",
     )
     p.add_argument(

@@ -31,14 +31,13 @@ SKILLS = ROOT / ".claude" / "skills"
 AGENTS = ROOT / ".claude" / "agents"
 SKILL_NAMES = sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
 AGENT_NAMES = sorted(p.stem for p in AGENTS.glob("*.md"))
-AGENT_KEYS = {"name", "description", "model_reasoning_effort", "developer_instructions"}
+AGENT_KEYS = {"name", "description", "model", "model_reasoning_effort", "developer_instructions"}
 
 
-# Giá trị kỳ vọng viết tay theo 5 agent của khung (không tính lại bằng bộ đọc frontmatter của mã): `effort` khai ở
-# reviewer, reviewer-alt (high), executor-deep (medium, D-627); các agent còn lại không khai.
+# Effort của gương khung: executor có mặc định Codex, các vai khác lấy từ frontmatter.
 EXPECTED_EFFORT = {
     "acceptance-author": None,
-    "executor": None,
+    "executor": "medium",
     "executor-deep": "medium",
     "executor-mech": None,
     "explore": None,
@@ -193,7 +192,7 @@ class AgentTomlTest(unittest.TestCase):
             with self.subTest(agent=name):
                 text = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
                 doc = tomllib.loads((ROOT / ".codex" / "agents" / f"{name}.toml").read_text(encoding="utf-8"))
-                self.assertLessEqual(set(doc), AGENT_KEYS)  # không `model`: tên model Claude vô nghĩa với Codex
+                self.assertLessEqual(set(doc), AGENT_KEYS)
                 self.assertEqual(doc["name"], name)
                 self.assertEqual(doc.get("model_reasoning_effort"), EXPECTED_EFFORT[name])
                 self.assertTrue(doc["description"].startswith(DESCRIPTION_HEAD[name]))
@@ -407,7 +406,9 @@ class InstallCodexHarnessTest(unittest.TestCase):
         for n in SKILL_NAMES:
             self.assertEqual(files[f".agents/skills/{n}/SKILL.md"], (SKILLS / n / "SKILL.md").read_bytes())
         for n in AGENT_NAMES:
-            self.assertEqual(tomllib.loads(files[f".codex/agents/{n}.toml"].decode())["name"], n)
+            agent = tomllib.loads(files[f".codex/agents/{n}.toml"].decode())
+            self.assertEqual(agent["name"], n)
+            self.assertNotIn("model", agent)
         manifest = self.target / install.MANIFEST_V2
         recorded = json.loads(manifest.read_text(encoding="utf-8"))["codex_files"]
         want = {
@@ -421,6 +422,10 @@ class InstallCodexHarnessTest(unittest.TestCase):
         self.assertEqual(json.loads(self.install("--plan")[1])["codex_harness"], [])  # không codex: không có việc
         self.assertEqual(self.install()[0], 0)  # cài không `--harness`: manifest giữ `codex_files`
         self.assertEqual(json.loads(manifest.read_text(encoding="utf-8"))["codex_files"], want)
+        self.assertEqual(self.install("--harness", "codex", "--codex-models")[0], 0)
+        for name, model, effort in (("executor", "gpt-6.1-terra", "medium"), ("reviewer", "gpt-6.2-sol", "high")):
+            agent = tomllib.loads((self.target / f".codex/agents/{name}.toml").read_text(encoding="utf-8"))
+            self.assertEqual((agent["model"], agent["model_reasoning_effort"]), (model, effort))
 
 
 class CodexMirrorInstallTest(unittest.TestCase):
@@ -771,6 +776,7 @@ class SyncCodexTest(unittest.TestCase):
         harness = self.src / "framework" / "templates" / "harness"
         harness.mkdir(parents=True)
         shutil.copy2(install.adapter_src("codex"), harness / "codex-hooks.json")
+        shutil.copy2(ROOT / "framework/templates/harness/model-tiers.json", harness)
         self.enterContext(mock.patch.object(install, "SRC", self.src))
 
     def sync(self, *extra: str, target: Path | None = None) -> tuple[int, str]:
@@ -784,6 +790,8 @@ class SyncCodexTest(unittest.TestCase):
         for rel, data in want.items():
             self.assertEqual((self.src / rel).read_bytes(), data)
         self.assertIn(f"{len(want)} tệp", err)
+        reviewer = tomllib.loads(want[".codex/agents/reviewer.toml"].decode())
+        self.assertEqual((reviewer["model"], reviewer["model_reasoning_effort"]), ("gpt-6.2-sol", "high"))
         toml = self.src / ".codex" / "agents" / "reviewer.toml"
         toml.write_text("sửa tay\n", encoding="utf-8")
         rc, err = self.sync()
@@ -838,7 +846,7 @@ class SyncCodexTest(unittest.TestCase):
         rc, err = self.sync(target=self.outside)
         self.assertEqual(rc, 2)
         self.assertIn("chỉ chạy ở gốc repo khung", err)
-        # AUD-HAR-564: `--codex-models` ghi `model` OpenAI chưa xác minh vào .codex/agents của repo khung: không đi cùng
+        # Gương khung tự ghim model; `--codex-models` là cờ cho dự án đích.
         for flags in (("--plan",), ("--harness", "codex"), ("--no-harness",), ("--new",), ("--codex-models",)):
             with self.subTest(flags=flags):
                 self.assertEqual(self.sync(*flags)[0], 2)

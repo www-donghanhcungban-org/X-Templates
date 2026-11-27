@@ -6046,7 +6046,7 @@ MCP_ALL_KEY = "enableAllProjectMcpServers"
 
 def _doctor_harness_settings(base: Path) -> List[Finding]:
     """LOOP-HARNESS-032 (stored XT-H-021): settings dự án không bật mọi MCP server của `.mcp.json` không hỏi; khoá
-    `model` khai trong settings thuộc họ của khung (`MODEL_TIER`); `settings.local.json` có thì `.gitignore` phải chặn.
+    `model` khai trong settings thuộc họ Claude của khung; `settings.local.json` có thì `.gitignore` phải chặn.
     Fail-open: JSON hỏng bỏ qua; chỉ in tên file và khoá, không in giá trị."""
     out: List[Finding] = []
     for name in ("settings.json", "settings.local.json"):
@@ -6062,12 +6062,12 @@ def _doctor_harness_settings(base: Path) -> List[Finding]:
             )
         model = data.get("model")
         alias = isinstance(model, str) and model.strip().lower() in MODEL_ALIASES_OK
-        if isinstance(model, str) and model.strip() and not alias and model_family(model) not in MODEL_TIER:
+        if isinstance(model, str) and model.strip() and not alias and model_family(model) not in CLAUDE_MODEL_TIERS:
             out.append(
                 Finding(
                     "orchestration",
                     "warn",
-                    f".claude/{name}: `model` ngoài họ của khung ({', '.join(MODEL_TIER)}) — bỏ khoá hoặc dùng tầng"
+                    f".claude/{name}: `model` ngoài họ của khung ({', '.join(CLAUDE_MODEL_TIERS)}) — bỏ khoá hoặc dùng tầng"
                     " của khung (LOOP-HARNESS-032, LOOP-ORCH-019)",
                 )
             )
@@ -17877,12 +17877,8 @@ def _pr_next_final(d: Dict[str, Any], auto_merge: bool, label: str, act: PrAct, 
     )
 
 
-# Luật review sạch (LOOP-ORCH-005, ADR-0044, D-161 thay "khác họ" của D-045): reviewer phải có năng lực CAO HƠN người
-# viết — họ Claude so theo bậc `MODEL_TIER`; cùng họ thì so effort; khác nhà cung cấp máy không xếp hạng được nên nhận
-# như D-045; cùng nhà cung cấp mà một họ chưa có bậc thì từ chối (review #247, #249). Họ ngắn (`phi`, `glm`, `nova`,
-# `command`, `kimi`, `o3`) cần ranh giới theo CHỮ CÁI
-# (không phải `\b`: `phi4`, `glm4.5`, `command_r`, `o3mini` là tên thẻ thật) — `graphic`/`commander`/`novaX` không phải
-# tên model (review #162, #164).
+# LOOP-ORCH-005: khác họ cùng nhà cung cấp so bậc, cùng họ so effort. Họ ngắn cần ranh giới chữ cái
+# để nhận `phi4`, `command_r` và loại `graphic`/`commander` (review #162, #164).
 MODEL_FAMILY_RE = re.compile(
     r"opus|sonnet|haiku|fable|mythos|gpt|gemini|gemma|codex|grok|llama|qwen|deepseek|mistral"
     r"|(?<![a-z])(?:kimi|glm|phi|command|nova)(?![a-z])|(?<![a-z0-9])o\d",
@@ -17903,6 +17899,8 @@ def _model_tail(name: str) -> str:
 
 def model_family(name: str) -> str:
     """Họ model để so năng lực: `claude-opus-5-5`/`Opus 5.5`/`opus` → `opus`; tên lạ → chữ thường bỏ số và dấu."""
+    if (codex_id := name.strip().lower().removeprefix("openai/")) in CODEX_MODEL_TIERS:
+        return codex_id
     name = _model_tail(name)
     m = MODEL_FAMILY_RE.search(name)
     return m.group(0).lower() if m else re.sub(r"[^a-z]+", "", name.lower())
@@ -17913,9 +17911,11 @@ def _names_family(name: str) -> bool:
     return bool(MODEL_FAMILY_RE.search(_model_tail(name)))
 
 
-MODEL_TIER = {"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4}  # bậc năng lực họ Claude (D-161)
-# Nhà cung cấp theo họ (`model_family`); họ `o\d` (o3, o4) là openai; họ không có ở đây → nhà cung cấp = chính họ đó.
-MODEL_VENDOR = dict.fromkeys(("opus", "sonnet", "haiku", "fable", "mythos"), "anthropic")
+CODEX_MODEL_TIERS = {"gpt-6-luna": 1, "gpt-6.1-terra": 2, "gpt-6.2-sol": 3, "gpt-6.2-astra": 4}  # ADR-0114
+CLAUDE_MODEL_TIERS = {"haiku": 1, "sonnet": 2, "opus": 3, "fable": 4}
+MODEL_TIER = {**CLAUDE_MODEL_TIERS, **CODEX_MODEL_TIERS}
+MODEL_VENDOR = dict.fromkeys((*CLAUDE_MODEL_TIERS, "mythos"), "anthropic")
+MODEL_VENDOR.update(dict.fromkeys(CODEX_MODEL_TIERS, "openai"))
 MODEL_VENDOR.update(gpt="openai", codex="openai", gemini="google", gemma="google")
 
 

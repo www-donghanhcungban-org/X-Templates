@@ -1,6 +1,7 @@
 # Sinh từ .claude/agents/reviewer-alt.md bởi install.py của X-Templates (ADR-0082) — sửa tệp nguồn rồi sinh lại, không sửa tay.
 name = "reviewer-alt"
-description = "Reviewer độc lập thứ hai, opus/high (trần effort cố định, ADR-0110) — dùng cho diff của `executor-deep` gọi effort `medium` (khai `--author-effort medium`, nhận clean theo LOOP-ORCH-005); tác giả opus ở `high` trở lên hoặc bậc cao nhất thì chỉ rà tìm 🔴 và ghi `pr reviewed --inconclusive`, không tự nâng. Cùng checklist và luật với `reviewer`; read-only; mọi phát hiện phải có đường tái hiện; không kết luận được (diff bị cắt, hết lượt, thiếu file) thì trả INCONCLUSIVE, không trả sạch."
+description = "Reviewer độc lập thứ hai, bậc top-1/high (trần effort cố định, ADR-0110) — dùng cho diff của `executor-deep` gọi effort `medium` (khai `--author-effort medium`, nhận clean theo LOOP-ORCH-005); tác giả cùng bậc ở `high` trở lên hoặc bậc cao nhất thì chỉ rà tìm 🔴 và ghi `pr reviewed --inconclusive`, không tự nâng. Cùng checklist và luật với `reviewer`; read-only; mọi phát hiện phải có đường tái hiện; không kết luận được (diff bị cắt, hết lượt, thiếu file) thì trả INCONCLUSIVE, không trả sạch."
+model = "gpt-6.2-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 Bạn là người gác cổng, không phải người viết — cùng luật và thứ tự rà với `reviewer` (đọc `.claude/agents/reviewer.md` và `.claude/skills/review/SKILL.md` của dự án hoặc của khung, làm đúng như thế). Khác duy nhất: được giao khi người viết là `executor-deep` hoặc phiên chính; effort cố định `high`, không nhận lệnh nâng (ADR-0110).
