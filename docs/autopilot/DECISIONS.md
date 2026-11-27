@@ -1191,13 +1191,6 @@
 - Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: duyệt của khách là việc người theo định nghĩa — phương án 2 cho agent tự duyệt khi stage_approval: agent và phải sửa bộ phát lại lịch sử sổ giai đoạn; phương án 3 trái P1, agent tự viết tệp duyệt được. Figma không có trạng thái duyệt đọc được qua REST (Dev Mode status chỉ là nhãn, không người duyệt — đọc 2026-11-26) nên bằng chứng duyệt phải ở sổ của khung. (2) đường lùi: dự án không khai 'Duyệt thiết kế: khách' không đổi gì. (3) dùng lại lớp chặn của ADR-0058, guard chỉ thêm tên sổ vào EVIDENCE_LEDGERS.
 - Đường lùi: Revert PR; dự án đang khai 'Duyệt thiết kế: khách' bỏ dòng đó hoặc chuyển 'không'; DESIGN.json giữ làm hồ sơ.
 
-### D-623 · 2026-11-27T00:38:21+00:00 · Bậc model tối đa của reviewer-alt: opus trở xuống hay được dùng bậc top?
-
-- Phương án: (1) reviewer-alt chỉ opus trở xuống, trần effort high · (2) reviewer-alt được dùng bậc top (fable) khi chủ bật
-- Chọn: reviewer-alt chỉ opus trở xuống, trần effort high
-- Lý do (tiêu chí chất lượng cuối): Chủ dự án chốt 2026-11-26 (research unified-upgrade-plan §12.4): giữ chi phí review thấp, người viết opus vẫn có reviewer cùng họ effort cao hơn khi cần; ưu tiên tiêu chí (3) bền, đơn giản.
-- Đường lùi: Đổi lại khung reviewer-alt và LOOP-ORCH-019 theo bậc top; ghi D-NNN mới.
-
 ### D-620 · 2026-11-26T15:43:35+00:00 · Gắn lời khách duyệt thiết kế (DESIGN.json) với gì để git revert sổ hay sửa PROJECT.md không mở được khoá task ui?
 
 - Phương án: (1) Hash nội dung SHA-256 của tệp bằng chứng ghi lúc design-submit (evidence_sha256), so với tệp ở cây làm việc; sổ đã có history thì luôn coi là khai khách · (2) SHA đã duyệt phải là tổ tiên của HEAD và tệp bằng chứng không đổi từ SHA đó tới HEAD (git merge-base/diff) · (3) Tách khai báo khỏi PROJECT.md: chỉ sổ DESIGN.json quyết định có khoá hay không
@@ -1212,9 +1205,37 @@
 - Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: (a) cùng hiệu ứng duyệt thay khách mà guard đã chặn cho import xt; sửa tại chỗ giữ trần dòng guard.py; (b) đóng đúng lỗ reviewer tái hiện (sửa PROJECT.md chưa commit thành không khi đang chờ duyệt) mà không phụ thuộc mạng hay remote. Phương án 2 mạnh hơn nhưng phụ thuộc git remote, tăng bề mặt lỗi (offline, clone nông, worktree) — để sau nếu có số liệu; phương án 3 để hở lỗ đã tái hiện. (2) đường lùi: hai sửa nhỏ độc lập, revert một PR; không đổi ID. (3) kiểm được bằng test; không thêm phụ thuộc.
 - Đường lùi: Revert PR; luật guard và declared() về như ADR-0106; ADR-0108 đổi trạng thái thành Bị thay.
 
+### D-623 · 2026-11-27T00:38:21+00:00 · Bậc model tối đa của reviewer-alt: opus trở xuống hay được dùng bậc top?
+
+- Phương án: (1) reviewer-alt chỉ opus trở xuống, trần effort high · (2) reviewer-alt được dùng bậc top (fable) khi chủ bật
+- Chọn: reviewer-alt chỉ opus trở xuống, trần effort high
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chốt 2026-11-26 (research unified-upgrade-plan §12.4), ghi sổ ngày 2026-11-27: giữ chi phí review thấp; ưu tiên tiêu chí (3) bền, đơn giản. Đính chính 2026-11-27 (rà lại PR 846): câu trước đây "người viết opus vẫn có reviewer cùng họ effort cao hơn khi cần" chỉ đúng khi effort người viết ≤ medium — với trần high, reviewer opus/high không cao hơn người viết opus effort ≥ high hay người viết bậc top; tuyến xử lý ở D-625.
+- Đường lùi: Đổi lại khung reviewer-alt và LOOP-ORCH-019 theo bậc top; ghi D-NNN mới.
+
 ### D-624 · 2026-11-27T00:46:02+00:00 · Gói site-cms-ts: dùng stack nào cho site giới thiệu công ty có admin tin tức, SEO, bảo mật?
 
 - Phương án: (1) Astro (tĩnh) + Decap CMS (lưu vào git, đăng nhập OAuth của git host) · (2) Payload CMS + Next.js (một ứng dụng, Postgres) · (3) Astro + admin tự viết (Node + Postgres)
 - Chọn: Astro (tĩnh) + Decap CMS (lưu vào git, đăng nhập OAuth của git host)
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: site tĩnh không có CSDL/phiên người dùng, bề mặt tấn công nhỏ nhất, CSP bằng hash không buộc render động; Payload có 8 advisory critical từ 2025 (SQLi, RCE) và MFA lõi chưa xác minh, Next.js CSP nonce tắt SSG/ISR; admin tự viết tự gánh CSRF/MFA/XSS rich text. (2) đường lùi: nội dung là tệp trong git nên chuyển sang Payload/Ghost sau không mất dữ liệu. (3) MFA admin (ASVS 6.3.3) giao cho git host (bắt buộc 2FA ở tổ chức) — không ứng viên CMS nào có TOTP gốc đã xác minh. Cái giá: người soạn tin cần tài khoản git host và proxy OAuth tự host; ghi ở ADR-0109.
 - Đường lùi: Đổi sang Payload (Postgres, MFA bằng plugin hoặc proxy xác thực) bằng ADR mới; nội dung Markdown/JSON trong git nhập lại được.
+
+### D-625 · 2026-11-27T02:12:03+00:00 · Với trần reviewer opus/high (D-623), diff thuộc lớp bắt buộc review (guard, hook, workflow, ngoại lệ cứng — ADR-0095, ADR-0062) lấy review sạch hợp lệ bằng đường nào khi người viết là executor-deep (opus/high) hoặc phiên chính (opus tới xhigh, hay bậc top)?
+
+- Phương án: (1) Hạ bậc phía người viết cho lớp bắt buộc review: mặc định giao executor (sonnet); việc khó gọi executor-deep với effort medium theo lần gọi và khai đúng author-effort; phiên chính không tự viết diff lớp này. Diff tầng sâu ở effort cao vẫn được rà nhưng ghi inconclusive và không merge qua đường review · (2) Bỏ trần high cho reviewer-alt (giữ effort max như hiện tại) để giữ luật reviewer cao hơn người viết · (3) Nới luật D-161: reviewer cùng họ cùng effort, context độc lập, được ghi clean · (4) Reviewer khác nhà cung cấp cho diff tầng sâu
+- Chọn: Hạ bậc phía người viết cho lớp bắt buộc review: mặc định giao executor (sonnet); việc khó gọi executor-deep với effort medium theo lần gọi và khai đúng author-effort; phiên chính không tự viết diff lớp này. Diff tầng sâu ở effort cao vẫn được rà nhưng ghi inconclusive và không merge qua đường review
+- Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn, cách hiểu chặt hơn: giữ nguyên cả hai quyết định của chủ dự án (D-161 reviewer cao hơn người viết; D-623 trần opus/high) và không nới cổng nào. Phương án 2 trái D-623; phương án 3 nới luật review; phương án 4 chưa dùng được vì bảng bậc ngoài Anthropic còn verified false. Cái giá: mã khó nhất do bậc thấp hơn hoặc effort thấp hơn viết — bù bằng phiên chính viết đặc tả và ca kiểm trước, reviewer opus/high rà cả PR; đo lại bằng bộ đánh giá G10. (2) đường lùi: chỉ là quy ước định tuyến trong ADR và skill review, đổi bằng ADR mới.
+- Đường lùi: ADR mới thay tuyến: bật reviewer khác nhà cung cấp khi bảng bậc được xác minh, hoặc chủ dự án nâng trần effort reviewer.
+
+### D-626 · 2026-11-27T02:12:03+00:00 · Duyệt bản hợp nhất Revision 4 của kế hoạch nâng cấp (research unified-upgrade-plan §0) và PLAN-upgrade-2026-11-27: phạm vi và thứ tự nào?
+
+- Phương án: (1) Một lịch duy nhất ở §0.5 thay §6/§12.6/§23/§35; thu hẹp Code Intelligence thành mở rộng xt_guard_profile và xt.py context, không cache bền, so A/B/C có ngưỡng dừng; đăng ký task mới cho việc chưa có nhà; đợt 0 sổ + chính sách review + hạn 02/12, rồi guard, rồi giải phóng trần xt.py · (2) Giữ nguyên ba lớp Revision 1–3 và triển khai theo §35 R0–R6 · (3) Viết lại toàn bộ tài liệu thành một bản mới, bỏ phần lịch sử
+- Chọn: Một lịch duy nhất ở §0.5 thay §6/§12.6/§23/§35; thu hẹp Code Intelligence thành mở rộng xt_guard_profile và xt.py context, không cache bền, so A/B/C có ngưỡng dừng; đăng ký task mới cho việc chưa có nhà; đợt 0 sổ + chính sách review + hạn 02/12, rồi guard, rồi giải phóng trần xt.py
+- Lý do (tiêu chí chất lượng cuối): Ba reviewer độc lập đối chiếu main be1bf6b4 tìm 4 lỗi chặn: bốn bảng lịch mâu thuẫn và ba câu cùng tự nhận thắng; xt_code_index trùng xt_guard_profile --closure, xt.py context, test-select và trái chính §30.1; lối ghi nợ review không trả được dưới trần high; nhiều việc thiếu ID và lệnh kiểm. Phương án 2 để nguyên các lỗi đó; phương án 3 mất số đo và nguồn đã kiểm, rủi ro sai mới cao. Tiêu chí (3) bền, đơn giản, theo chuẩn một chủ đề một nhà.
+- Đường lùi: Revert PR; các bảng lịch cũ còn nguyên trong tài liệu làm lịch sử.
+
+### D-627 · 2026-11-27T02:29:44+00:00 · executor-deep (opus) chạy effort nào để diff việc khó có review sạch hợp lệ dưới trần reviewer opus/high (D-623, D-625)?
+
+- Phương án: (1) Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà · (2) Giữ frontmatter effort high, hạ xuống medium bằng tham số từng lần gọi · (3) Giữ effort high; diff tầng sâu luôn inconclusive
+- Chọn: Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo 2026-11-27: việc khó gọi executor-deep opus ở effort medium. Đặt ở frontmatter vì đó là mặc định máy kiểm được bằng test và doctor, không phụ thuộc người gọi nhớ truyền tham số; cặp opus/medium viết, opus/high rà hợp lệ theo luật reviewer cao hơn người viết (D-161) mà không nới cổng. Phương án 2 dễ quên và lời khai author-effort lệch thực tế; phương án 3 làm lớp bắt buộc review không merge được.
+- Đường lùi: Đổi frontmatter về high bằng D-NNN mới khi trần effort reviewer được nâng hoặc bộ đánh giá G10 cho thấy medium tụt chất lượng.
