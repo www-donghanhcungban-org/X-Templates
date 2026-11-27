@@ -1745,7 +1745,12 @@ class InstallPlanTest(unittest.TestCase):
         self.assertEqual(self.install(), 0)
         data = json.loads(self.settings.read_text(encoding="utf-8"))
         got = [h for es in data["hooks"].values() for e in es for h in e["hooks"]]
-        self.assertEqual([h["timeout"] for h in got if "pre-bash-guard" in h["command"]], [guard["timeout"]])
+        # guard dùng lại ở nhiều sự kiện (PreToolUse Bash, PreSkillShellCommand — T-5081): mọi mục đều được nâng
+        guard_entries = [h for h in handlers if "pre-bash-guard" in h["command"]]
+        self.assertEqual(
+            [h["timeout"] for h in got if "pre-bash-guard" in h["command"]],
+            [guard["timeout"]] * len(guard_entries),
+        )
         self.assertTrue(
             all(h["timeout"] == 99999 for h in got if "timeout" in h and "pre-bash-guard" not in h["command"])
         )
