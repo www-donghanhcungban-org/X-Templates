@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 from typing import Any
 import unicodedata
 from urllib.error import HTTPError, URLError
@@ -377,6 +378,39 @@ def tags_for_wave(git: Path, installed: str, wave: str, soak: int, now: int) -> 
             if tag not in withdrawn and age.isdecimal() and (wave == "canary" or now - int(age) >= soak * 86400):
                 eligible.append((number, tag))
     return newer, [tag for _, tag in sorted(eligible, reverse=True)]
+
+
+def _recorded_codex_pin(path: Path, digest: object) -> bool:
+    if not isinstance(digest, str) or path.is_symlink() or not path.is_file():
+        return False
+    try:
+        data = path.read_bytes()
+        if hashlib.sha256(data).hexdigest() != digest.removeprefix("sha256:"):
+            return False
+        model = tomllib.loads(data.decode("utf-8")).get("model")
+    except (OSError, ValueError):
+        return False
+    return isinstance(model, str) and bool(model)
+
+
+def codex_models_selected(manifest: dict[str, Any], project: Path) -> bool:
+    """Read the recorded choice, or infer it for legacy installs from an unchanged managed agent."""
+    choice = manifest.get("codex_models")
+    if isinstance(choice, bool):
+        return choice
+    files = manifest.get("codex_files")
+    if not isinstance(files, dict):
+        return False
+    codex = project / ".codex"
+    agents = codex / "agents"
+    if codex.is_symlink() or agents.is_symlink():
+        return False
+    # Khi giữ tệp của dự án, installer có thể ghi hash bản đề xuất vào manifest của đường dẫn chính.
+    return any(
+        _recorded_codex_pin(path, files.get(f".codex/agents/{path.name.removesuffix('.xtemplates-new')}"))
+        for pattern in ("*.toml", "*.toml.xtemplates-new")
+        for path in agents.glob(pattern)
+    )
 
 
 def install_options(manifest: dict[str, Any]) -> list[str]:
