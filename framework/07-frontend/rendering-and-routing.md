@@ -3,7 +3,7 @@ title: Render (SSR/SSG/CSR/ISR), routing, hydration
 kind: module
 prefix: FE-RENDER
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-24
+updated: 2026-11-27
 ---
 
 # Render (SSR/SSG/CSR/ISR), routing, hydration
@@ -59,6 +59,9 @@ cho dự án có sẵn chỉ vì "mới".
 - [ ] `FE-RENDER-016` **SHOULD** Redirect/rewrite và trailing slash/canonical thống nhất một nơi (config framework hoặc CDN), không rải trong component. → Kiểm: grep `router.push('/old` ngoài file cấu hình redirect = 0; `curl -I` URL cũ → 301 tới canonical.
 - [ ] `FE-RENDER-017` **MAY** Dùng View Transitions cho chuyển route (tắt khi reduced-motion; Baseline newly available từ 2025-10-14 (WebStatus), cần fallback). → Kiểm: xem [`../06-design-ux/motion-and-visual-quality.md`](../06-design-ux/motion-and-visual-quality.md).
 - [ ] `FE-RENDER-018` **MAY** Edge runtime cho route nhẹ cần độ trễ thấp toàn cầu; không dùng khi cần thư viện Node hoặc kết nối DB giữ lâu. → Kiểm: ADR ghi lý do; test tích hợp chạy trên runtime đích.
+- [ ] `FE-RENDER-019` **MUST@L** Trang công khai có dữ liệu có cấu trúc **JSON-LD hợp lệ và khớp nội dung hiển thị**: trang chủ `Organization` + `WebSite` (`name`, `url`), bài viết `Article`/`NewsArticle`/`BlogPosting`, trang con `BreadcrumbList` (`itemListElement`, `position`); không đánh dấu nội dung người đọc không thấy; trang quản trị `noindex` và **không** chặn trong `robots.txt`. → Kiểm: test của dự án parse JSON-LD từ HTML build (JSON hợp lệ, `@type` + trường theo [`research/2026-11-26-seo-indexing.md`](../../research/2026-11-26-seo-indexing.md), giá trị khớp thẻ hiển thị); `curl -I /admin` có `X-Robots-Tag: noindex` hoặc meta `noindex`, `robots.txt` không `Disallow` đường dẫn đó. · Nguồn: Google Search Central (structured data policies, block indexing)
+- [ ] `FE-RENDER-020` **SHOULD** Site công khai đã xác minh Google Search Console (property Domain bằng DNS, thêm ít nhất một cách dự phòng) và đã gửi `sitemap.xml`; `lastmod` là ngày trang đổi thật, không dùng `priority`/`changefreq`. → Kiểm: bản ghi DNS xác minh có trong hồ sơ bàn giao; sitemap ≤ 50 000 URL và ≤ 50 MB, `lastmod` lấy từ ngày sửa nội dung (test).
+- [ ] `FE-RENDER-021` **MAY** Báo URL đổi cho công cụ tìm kiếm hỗ trợ IndexNow (Bing, Yandex, Naver…; Google chưa xác minh tham gia): khoá ở tệp gốc, ≤ 10 000 URL/lần, chỉ gửi khi nội dung công khai đổi. → Kiểm: `curl /{key}.txt` trả khoá; log gửi có HTTP 200/202.
 
 ## Bẫy thường gặp
 
