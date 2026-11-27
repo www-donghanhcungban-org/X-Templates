@@ -4,7 +4,7 @@ kind: profile
 slug: static-site
 prefix: PRF-STATIC
 modules: [04-standards/*, 05-architecture/*, 06-design-ux/*, 07-frontend/*, 10-workflow/*, 11-autonomous-loop/*, 12-security/*, 14-testing-quality/*, 15-operations/*, 16-compliance-privacy/*, 17-product-project/*, 18-cross-cutting/*]
-updated: 2026-11-24
+updated: 2026-11-26
 ---
 
 # Hồ sơ: Site nội dung tĩnh / tài liệu / landing
@@ -15,7 +15,7 @@ updated: 2026-11-24
 
 ## Khi nào dùng
 
-- Nội dung thay đổi theo chu kỳ biên tập, không theo từng người dùng; không có đăng nhập.
+- Nội dung thay đổi theo chu kỳ biên tập, không theo từng người dùng; người đọc không đăng nhập. Biên tập viên đăng nhập vào CMS (site giới thiệu công ty, tin tức có trang quản trị) vẫn dùng hồ sơ này — trang quản trị là ranh giới riêng, sàn ở `PRF-STATIC-018`.
 - Ưu tiên tốc độ, SEO, chi phí gần 0, bề mặt tấn công nhỏ.
 - Không dùng khi: có tài khoản/dữ liệu người dùng → [`web-app.md`](web-app.md); nếu chỉ một vài tính năng động (form, search) → vẫn dùng hồ sơ này + dịch vụ ngoài/edge function; tài liệu của thư viện → ghép cùng [`library-sdk.md`](library-sdk.md).
 
@@ -57,7 +57,7 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 - [ ] `PRF-STATIC-001` **MUST** Build tái lập từ clean checkout bằng một lệnh, output vào thư mục duy nhất; asset có hash nội dung trong tên file; lockfile commit. → Kiểm: CI `pnpm i --frozen-lockfile && pnpm build` trên runner sạch; build 2 lần cho cùng hash thư mục `dist/` (trừ sitemap có ngày).
 - [ ] `PRF-STATIC-002` **MUST** 0 link gãy nội bộ và 0 anchor sai trên toàn site sau build; link ngoài kiểm theo lịch (không chặn PR vì site ngoài chập chờn). → Kiểm: `lychee --offline dist/` (hoặc `lychee 'dist/**/*.html' --exclude-all-private`) trong CI PR; job cron hằng tuần kiểm link ngoài có `--accept 200,429`.
 - [ ] `PRF-STATIC-003` **MUST** Core Web Vitals p75 mobile: LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1; Lighthouse Performance/SEO/Accessibility/Best Practices ≥ 0.9 trên trang chủ + 4 mẫu trang. → Kiểm: `lhci autorun` assertions; job required. · Nguồn: web.dev/vitals; ngân sách ở [`../07-frontend/performance-web-vitals.md`](../07-frontend/performance-web-vitals.md)
-- [ ] `PRF-STATIC-004` **MUST** SEO kỹ thuật: `sitemap.xml` sinh tự động, `robots.txt`, canonical mỗi trang, `<title>`/`meta description` duy nhất, Open Graph/Twitter card, structured data (JSON-LD) cho bài viết/sản phẩm, redirect 301 khi đổi URL. → Kiểm: test E2E đọc meta mỗi mẫu trang; `curl /sitemap.xml` 200 và chứa mọi route; file `_redirects`/`vercel.json` có test.
+- [ ] `PRF-STATIC-004` **MUST** SEO kỹ thuật: `sitemap.xml` sinh tự động, `robots.txt`, canonical mỗi trang, `<title>`/`meta description` duy nhất, Open Graph/Twitter card, structured data (JSON-LD) cho bài viết/sản phẩm, redirect 301 khi đổi URL; JSON-LD hợp lệ và lập chỉ mục theo [`FE-RENDER-019…021`](../07-frontend/rendering-and-routing.md). → Kiểm: test E2E đọc meta mỗi mẫu trang; `curl /sitemap.xml` 200 và chứa mọi route; file `_redirects`/`vercel.json` có test.
 - [ ] `PRF-STATIC-005` **MUST** Security headers qua cấu hình hosting: CSP (không `unsafe-inline` script; islands dùng hash/nonce lúc build), HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`; GitHub Pages không đặt header được → dùng `<meta http-equiv="Content-Security-Policy">` và ghi giới hạn. → Kiểm: test E2E đọc header trên preview; `curl -sI` trong CI. · Nguồn: CSP Level 3; [`../07-frontend/client-security.md`](../07-frontend/client-security.md)
 - [ ] `PRF-STATIC-006` **MUST** A11y: axe 0 `critical`/`serious` trên mọi mẫu trang; heading có thứ tự; ảnh có `alt`; tương phản AA; điều hướng bàn phím và skip link. → Kiểm: `@axe-core/playwright` trên tập trang mẫu; Lighthouse Accessibility ≥ 0.9. · Nguồn: WCAG 2.2 AA; [`../06-design-ux/accessibility.md`](../06-design-ux/accessibility.md)
 - [ ] `PRF-STATIC-007` **MUST** Ảnh và font tối ưu lúc build: định dạng hiện đại (AVIF/WebP) + `srcset`, `width`/`height` đặt sẵn, lazy-load ngoài màn hình đầu; font self-host, `font-display: swap`, preload font chính. → Kiểm: Lighthouse audit "Properly size images"/"Serve images in next-gen formats" đạt; CLS ≤ 0.1.
@@ -71,6 +71,8 @@ Xác minh ngày **2026-10-13** — **xác minh lại trước khi dùng**.
 - [ ] `PRF-STATIC-015` **SHOULD** i18n khi có nhiều ngôn ngữ: `hreflang`, URL theo locale, `lang` trên `<html>`, ngày/số theo locale. → Kiểm: test meta `hreflang` chéo giữa các bản. · Nguồn: [`../18-cross-cutting/i18n-and-l10n.md`](../18-cross-cutting/i18n-and-l10n.md)
 - [ ] `PRF-STATIC-016` **MAY** RSS/Atom feed và `llms.txt` cho site nội dung/docs; OpenGraph image sinh tự động mỗi bài. → Kiểm: `/rss.xml` hợp lệ (validator); ảnh OG trả 200.
 - [ ] `PRF-STATIC-017` **MAY** Kiểm chính tả/ngữ pháp và lint Markdown trong CI (markdownlint, cspell — chưa xác minh phiên bản). → Kiểm: job lint nội dung.
+- [ ] `PRF-STATIC-018` **MUST** Khi có trang quản trị/CMS tự host (N/A khi nội dung là Markdown trong git hoặc CMS SaaS — ghi lý do), ranh giới quản trị đạt phần ASVS L1: chống CSRF cho request đổi trạng thái (nhà [`SEC-WEB-007`](../12-security/appsec-web.md)); giới hạn đăng nhập thất bại theo tài khoản ([`BE-AUTH-003`](../08-backend/authn-authz.md)); không tài khoản/mật khẩu mặc định; HTML do biên tập viên nhập được lọc theo allowlist trước khi xuất bản; truy vấn tham số hoá; trang quản trị không bị CDN cache và có `noindex`. → Kiểm: test POST quản trị cross-site → 403; 11 lần sai mật khẩu → bị trì hoãn/khoá; bài chứa `<script>`/`onerror=` → HTML xuất bản không còn; `curl -I /admin` có `Cache-Control: private|no-store` và `X-Robots-Tag: noindex`. · Nguồn: OWASP ASVS 5.0.0 3.5.1–3.5.3, 6.3.1, 6.3.2, 1.3.1, 1.2.4 (L1; đọc 2026-11-26)
+- [ ] `PRF-STATIC-019` **MUST@M** Tài khoản quản trị CMS tự host dùng MFA ([`BE-AUTH-013`](../08-backend/authn-authz.md)); phiên quản trị có hết hạn idle và tuyệt đối thực thi ở server ([`BE-AUTH-005`](../08-backend/authn-authz.md)). → Kiểm: đăng nhập admin thiếu yếu tố thứ hai → từ chối; test vượt idle → 401. · Nguồn: OWASP ASVS 5.0.0 6.3.3, 7.3.1, 7.3.2 (L2); NIST SP 800-63B-4 AAL2: idle SHOULD ≤ 1 giờ, tổng SHOULD ≤ 24 giờ (đọc 2026-11-26)
 
 ## Cổng chất lượng tương đương
 

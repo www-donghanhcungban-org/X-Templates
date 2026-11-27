@@ -269,7 +269,7 @@ def _match_any(rel: str, patterns: Tuple[str, ...]) -> bool:
 
 STAGE_LEDGER = "docs/autopilot/STAGE.json"
 DEPLOY_LEDGER = "docs/ops/DEPLOYS.json"
-EVIDENCE_LEDGERS = (STAGE_LEDGER, "docs/autopilot/ACCEPTANCE.json", DEPLOY_LEDGER)
+EVIDENCE_LEDGERS = (STAGE_LEDGER, "docs/autopilot/ACCEPTANCE.json", DEPLOY_LEDGER, "docs/autopilot/DESIGN.json")
 LEDGER_COMPONENTS = tuple(path.split("/") for path in EVIDENCE_LEDGERS)
 
 
@@ -11447,8 +11447,8 @@ REVIEW_FORGE_WHY = (
 STAGE_APPROVE_WHY = (
     # vế lệnh-con-từ-biến đứng đầu: lý do bị cắt ở trần độ dài khi có lý do chặn khác (AUD-HAR-313)
     "duyệt giai đoạn sản phẩm (`xt.py stage approve`/`init --adopt`; lệnh con lấy từ biến `xt.py $c` cũng tính — viết"
-    " rõ từng lệnh, AUD-HAR-307) — chỉ người, ngoài phiên agent (ADR-0058); `stage approve` dạng chữ rõ được khi"
-    " xt.yaml ở cây VÀ bản đã commit ở nhánh chính khai `stage_approval: agent` (ADR-0069); cũng `loop decide-prod`"
+    " rõ, AUD-HAR-307) — chỉ người, ngoài phiên agent (ADR-0058); `stage approve` chữ rõ (trừ `--design`, ADR-0106)"
+    " được khi xt.yaml ở cây VÀ nhánh chính khai `stage_approval: agent` (ADR-0069); cũng `loop decide-prod`"
     " (AUD-SEC-541)"
 )
 
@@ -11739,9 +11739,9 @@ def _approves_literal(n: List[str]) -> bool:
 # (`xt.parse_plan`, `xt.review_debt` — Kiểm PM-PLAN-001, Gate audit) vẫn qua khi script không có tên/chữ rủi ro.
 # Phân tích tĩnh chữ nguyên văn: tên dựng lúc chạy qua đường guard không thấy vẫn lọt (AUD-SEC-161).
 XT_INPROC_WHY = (
-    "duyệt giai đoạn sản phẩm (AUD-SEC-498) có thể chạy trong tiến trình: script trình thông dịch nạp `xt` (`import xt`"
-    " kèm `main`/`stage`/`approve`/`adopt`/biến môi trường/truy cập động; `runpy`, `import_module`, `exec`/`eval` chữ"
-    " không rõ; `-m runpy xt`) — guard không thấy lệnh con; gọi `python3 scripts/xt.py <lệnh>`"
+    "duyệt giai đoạn sản phẩm/thiết kế (AUD-SEC-498) có thể chạy trong tiến trình: script trình thông dịch nạp `xt`"
+    " (kèm `main`/`stage`/`approve`/biến môi trường/truy cập động; `runpy`, `import_module`, `exec` chữ không rõ) hay"
+    " `xt_design` (mọi cách) — guard không thấy lệnh con; gọi `xt.py <lệnh>`, đọc sổ: `xt.py stage design-check --json`"
 )
 XT_INPROC_DEPTH = 3  # số tầng `exec('…')` lồng đọc lại; sâu hơn → chặt
 # Hàm nạp/chạy mã theo tên hay đường (gọi theo tên hay thuộc tính: `runpy.run_path`, `from runpy import run_path`)
@@ -11751,7 +11751,7 @@ XT_INPROC_LOADERS = frozenset(
 )
 XT_INPROC_BUILTINS = frozenset({"exec", "eval", "compile", "execfile", "__import__"})  # chỉ khi gọi như builtin
 XT_INPROC_BUILTIN_MODS = frozenset({"builtins", "__builtins__"})  # `builtins.exec(…)`
-XT_INPROC_NAME_RE = re.compile(r"(?:.*[/\\.])?xt(?:\.pyc?)?", re.S)  # `xt`, `scripts.xt`, `scripts/xt.py`
+XT_INPROC_NAME_RE = re.compile(r"(?:.*[/\\.])?xt(?:_design)?(?:\.pyc?)?", re.S)  # `xt`, `scripts.xt_design`, `…/xt.py`
 # Tên/chữ thư viện đọc của xt không cần — đi cùng `import xt` thì chặn (gọi CLI, sửa biến agent, truy cập động)
 XT_INPROC_RISKY_RE = re.compile(
     r"main|stage|approv|adopt|sign|release|decide|prod|environ|putenv|unsetenv|CLAUDE|AI_AGENT|agent_session|[gsd]etattr"
@@ -11762,7 +11762,7 @@ XT_INPROC_RISKY_RE = re.compile(
 )
 # Script không phải Python hợp lệ: luật chữ (`import … xt`, tên hàm nạp)
 XT_INPROC_TEXT_RE = re.compile(
-    r"\b(?:import|from)\b[^;\n]*\bxt\b(?![\w-])|\b(?:runpy|run_path|run_module|spec_from_file_location"
+    r"\b(?:import|from)\b[^;\n]*\bxt(?:_design)?\b(?![\w-])|\b(?:runpy|run_path|run_module|spec_from_file_location"
     r"|Source(?:less)?FileLoader|load_source|import_module|__import__|execfile)\b"
 )
 RUNPY_OPT_RE = re.compile(r"-[A-Za-z]*m(runpy)?")  # `-m runpy`, `-mrunpy`, `-Bm runpy`
@@ -11812,13 +11812,13 @@ def _xt_loader_call(call: Any, depth: int) -> bool:
 
 
 def _xt_imports(node: Any) -> bool:
-    """`import xt`, `import scripts.xt`, `from xt import …`, `from scripts import xt`."""
+    """`import xt`, `import scripts.xt`, `from xt import …`, `from scripts import xt` — cả `xt_design` (ADR-0108)."""
     import ast
 
     if isinstance(node, ast.Import):
-        return any("xt" in a.name.split(".") for a in node.names)
+        return any({"xt", "xt_design"} & set(a.name.split(".")) for a in node.names)
     if isinstance(node, ast.ImportFrom):
-        return "xt" in (node.module or "").split(".") or any(a.name == "xt" for a in node.names)
+        return bool({"xt", "xt_design"} & {*(node.module or "").split("."), *(a.name for a in node.names)})
     return False
 
 
@@ -11830,8 +11830,8 @@ def _xt_risky(node: Any) -> bool:
         words = [node.name, node.asname or ""]
     elif isinstance(node, ast.Constant):
         words = [node.value] if isinstance(node.value, str) else []
-    else:
-        words = [getattr(node, "id", "") if isinstance(node, ast.Name) else getattr(node, "attr", "")]
+    else:  # Name.id, Attribute.attr, ImportFrom.module — `xt_design` có chữ `sign`: mọi lần nạp đều chặn (ADR-0108)
+        words = [getattr(node, k, None) or "" for k in ("id", "attr", "module")]
     return any(w == "*" or XT_INPROC_RISKY_RE.search(w) for w in words if w)
 
 

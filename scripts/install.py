@@ -919,6 +919,7 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         "xt_distribution.py",
         "xt_scale.py",
         "xt_field.py",
+        "xt_design.py",
         "xt_toolcfg.py",
     )
     for f in ("xt.py", "dev-task.sh", "check-links.py", *optional_scripts):

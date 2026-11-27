@@ -3,7 +3,7 @@ title: Chuyển động, hình ảnh, chống 'AI slop', kiểm bằng máy
 kind: module
 prefix: UX-VISUAL
 applies_to: [web-app, mobile-app, desktop-app, static-site, game, monorepo]
-updated: 2026-11-24
+updated: 2026-11-26
 ---
 
 # Chuyển động, hình ảnh, chống 'AI slop', kiểm bằng máy
@@ -48,7 +48,7 @@ updated: 2026-11-24
 
 ## Checklist
 
-- [ ] `UX-VISUAL-001` **MUST** Mọi animation dịch chuyển/zoom/parallax/auto-play được giảm hoặc thay bằng fade khi `prefers-reduced-motion: reduce`. → Kiểm: Playwright `emulateMedia({ reducedMotion: 'reduce' })` → không phần tử nào có `transform` animation đang chạy (`getAnimations()` lọc transform = 0); CSS có khối `@media (prefers-reduced-motion: reduce)`. · Nguồn: MDN `prefers-reduced-motion`; WCAG 2.2 SC 2.3.3
+- [ ] `UX-VISUAL-001` **MUST** Mọi animation dịch chuyển/zoom/parallax/auto-play được giảm hoặc thay bằng fade khi `prefers-reduced-motion: reduce`. → Kiểm: Playwright `emulateMedia({ reducedMotion: 'reduce' })` → không phần tử nào có `transform` animation đang chạy (`getAnimations()` lọc transform = 0); CSS có khối `@media (prefers-reduced-motion: reduce)`. · Nguồn: MDN `prefers-reduced-motion`; WCAG 2.2 SC 2.3.3 — mức AAA (đọc 2026-11-26): khung chọn chặt hơn AA vì chuyển động lớn gây hại thật cho người rối loạn tiền đình; hợp đồng chỉ đòi AA vẫn giữ mục này
 - [ ] `UX-VISUAL-002` **MUST** Không nội dung nhấp nháy quá 3 lần/giây; chuyển động tự động > 5 s có nút dừng. → Kiểm: review animation `infinite`; carousel/video nền có nút Pause (E2E). · Nguồn: WCAG 2.2 SC 2.3.1, 2.2.2
 - [ ] `UX-VISUAL-003` **MUST@L** Chỉ animate `transform`/`opacity` (và `filter` có cân nhắc); không `transition: all`; không animate thuộc tính layout. → Kiểm: stylelint `declaration-property-value-disallowed-list` cho `transition: all`; rule cấm `animation`/`transition` trên `top|left|width|height|margin`. · Nguồn: web.dev Animations guide
 - [ ] `UX-VISUAL-004` **MUST@L** Thời lượng/easing lấy từ token (`--motion-duration-*`, `--motion-ease-*`); không số lẻ. → Kiểm: grep `transition.*\d+ms` ngoài file token = 0.
