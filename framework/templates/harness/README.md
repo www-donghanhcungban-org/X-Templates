@@ -60,7 +60,7 @@ bản cũ. Sửa skill/agent ở `.claude/` thì chạy lại `install.py --harn
 chưa tin cậy thì Codex bỏ qua cả lớp `.codex/`. **Giới hạn:** chỉ `PreToolUse` (không Stop hook — vòng "chạy đến khi
 xong" của `/autopilot` không có ở Codex, dùng `loop run --agent codex`); `ask` không hỗ trợ; agent thừa hưởng model của phiên nên luật
 "reviewer cao hơn người viết" (`LOOP-ORCH-005`) chỉ còn effort để phân biệt — `executor` và `reviewer` đều không khai
-effort nên cặp mặc định **không** phân biệt được, chỉ `executor-deep` (high) so với `reviewer-alt` (max); tool đọc tệp không qua adapter; mức hỗ trợ vẫn **thử nghiệm**.
+effort nên cặp mặc định **không** phân biệt được, `executor-deep` (high) và `reviewer-alt` (high, ADR-0110) cũng ngang nhau nên diff tầng sâu ghi `--inconclusive`; tool đọc tệp không qua adapter; mức hỗ trợ vẫn **thử nghiệm**.
 Từ ADR-0098, bậc model của từng agent nằm ở [`model-tiers.json`](model-tiers.json) (bảng bậc theo nhà cung cấp và vai); lát R2 sinh `model` cho agent Codex từ đó khi dự án khai bật.
 
 ## Bảng bậc model theo harness (ADR-0098, D-559)
