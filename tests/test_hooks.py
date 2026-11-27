@@ -3970,7 +3970,9 @@ class DevTaskGateParTest(unittest.TestCase):
 
     def gate_par(self, yaml: str, **env: str) -> subprocess.CompletedProcess[str]:
         (self.tmp / "xt.yaml").write_text(yaml, encoding="utf-8")
-        full = dict(os.environ, CLAUDE_PROJECT_DIR=str(self.tmp), **env)
+        # Fixture chỉ chép dev-task.sh, nên không kế thừa lease của cổng đang chạy bộ test.
+        full = {k: v for k, v in os.environ.items() if k not in {"XT_CPU_SHARE_ID", "XT_JOBS"}}
+        full.update(CLAUDE_PROJECT_DIR=str(self.tmp), **env)
         cmd = ["bash", str(self.tmp / "scripts" / "dev-task.sh"), "gate-par"]
         return subprocess.run(cmd, capture_output=True, text=True, cwd=self.tmp, env=full, timeout=60)
 

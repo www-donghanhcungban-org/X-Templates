@@ -1,7 +1,7 @@
 # ADR-0113: Cấp phát lease CPU và RAM ước lượng
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-27 (D-631).
-- **Trạng thái triển khai:** bước đầu của X-Resource Manager trong T-5082.
+- **Trạng thái triển khai:** bước đầu của X-Resource Manager trong T-5082 (#865). [ADR-0115](0115-cpu-lease-cancellation.md) bổ sung vòng đời lease khi huỷ và xác nhận trần số việc.
 - **Tiếp nối:** [ADR-0112](0112-machine-cpu-share-tray.md), D-629 và D-630. Các quy tắc nhận việc dưới đây cập nhật chính sách tương ứng của ADR-0112.
 
 ## Quyết định

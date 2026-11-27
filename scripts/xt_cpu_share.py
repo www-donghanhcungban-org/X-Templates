@@ -16,6 +16,7 @@ khi lệnh đã chạy, khay giữ mã thoát của lệnh."""
 
 from __future__ import annotations
 
+import ctypes
 import importlib
 import json
 import math
@@ -27,7 +28,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -45,6 +46,9 @@ GAP = 0.15  # ngưỡng thấp = cao − GAP (trễ, không dao động)
 NICE = 5  # việc không phải PR đầu hàng chạy thấp hơn phiên tương tác và việc đầu hàng
 FIRST_WAIT = 1.0
 MAX_WAIT = 30.0
+GROUP_POLL = 0.05
+PR_SET_CHILD_SUBREAPER = 36
+PR_GET_CHILD_SUBREAPER = 37
 JOB = "job-"
 WAIT = "wait-"
 CLOSED = "gate-closed"
@@ -309,7 +313,7 @@ def locked(d: Path) -> Iterator[None]:
 
 
 def proc_stat(pid: int, proc: Path = PROC) -> list[str]:
-    """Các trường sau `comm` của /proc/<pid>/stat: [0] trạng thái, [1] ppid, [19] thời điểm khởi động; không đọc được → []."""
+    """Các trường sau `comm` của /proc/<pid>/stat, bắt đầu ở trường 3 của proc_pid_stat(5)."""
     try:
         raw = (proc / str(pid) / "stat").read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -499,30 +503,95 @@ def child_env(env: Mapping[str, str], job: Job) -> dict[str, str]:
     return dict(env, XT_CPU_SHARE_ID=str(os.getpid()), XT_JOBS=str(job.jobs))
 
 
-def spawn(cmd: Sequence[str], env: Mapping[str, str]) -> int:
+@contextmanager
+def child_subreaper(enabled: bool) -> Iterator[bool]:
+    """Linux: nhận hậu duệ mất cha để chờ bằng waitpid, không quét danh sách PID đang thay đổi."""
+    if not enabled:
+        yield False
+        return
+    prctl = getattr(ctypes.CDLL(None), "prctl", None)
+    previous = ctypes.c_int()
+    if prctl is None or prctl(PR_GET_CHILD_SUBREAPER, ctypes.byref(previous), 0, 0, 0):
+        yield False
+        return
+    if prctl(PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0):
+        yield False
+        return
+    try:
+        yield True
+    finally:
+        prctl(PR_SET_CHILD_SUBREAPER, previous.value, 0, 0, 0)
+
+
+def wait_group_leader(child: subprocess.Popen[bytes]) -> int:
+    """Thu hồi hậu duệ đã dừng trong khi vẫn chờ mã thoát của leader."""
+    while True:
+        event = os.waitid(os.P_PGID, child.pid, os.WEXITED | os.WNOWAIT)
+        assert event is not None  # waitid chỉ trả None nếu gọi WNOHANG.
+        if event.si_pid == child.pid:
+            break
+        os.waitpid(event.si_pid, 0)
+    return child.wait()
+
+
+def drain_group(group: int) -> None:
+    """Chờ hậu duệ được nhận nuôi cùng nhóm còn dọn sau khi huỷ."""
+    with suppress(ChildProcessError):
+        while True:
+            pid, _ = os.waitpid(-group, os.WNOHANG)
+            if not pid:
+                # Lệnh có thể đổi nhóm trong khi đang dọn, nên không chờ chặn theo PGID.
+                time.sleep(GROUP_POLL)
+
+
+def finish_child(children: list[subprocess.Popen[bytes]], group: bool, forwarded: list[int]) -> int:
+    child = children[0]
+    rc = wait_group_leader(child) if group else child.wait()
+    if not forwarded:
+        children.clear()  # Sau lệnh thoát bình thường, không bắt đầu một đợt huỷ mới.
+    if forwarded:
+        drain_group(child.pid)
+    return rc
+
+
+def spawn(cmd: Sequence[str], env: Mapping[str, str], *, group: bool = False) -> int:
     """Chạy lệnh con (không shell; stdin/stdout/stderr kế thừa, không qua bộ đệm), chuyển SIGINT/SIGTERM/SIGHUP gửi tới
     tiến trình này cho nó — kể cả tín hiệu tới trước khi lệnh con kịp khởi động —, trả returncode (âm = chết vì tín
     hiệu); lệnh không có → 127, không thực thi được → 126."""
     children: list[subprocess.Popen[bytes]] = []
     pending: list[int] = []
+    forwarded: list[int] = []
+
+    def send(child: subprocess.Popen[bytes], sig: int) -> None:
+        if group:
+            forwarded.append(sig)
+            with suppress(ChildProcessError, ProcessLookupError):
+                # Còn con để chờ thì nhóm chưa thể mang mã của một workload khác.
+                os.waitid(os.P_PGID, child.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+                os.killpg(child.pid, sig)
+        else:
+            child.send_signal(sig)
 
     def forward(sig: int, _frame: FrameType | None) -> None:
         for child in children:
-            child.send_signal(sig)
+            send(child, sig)
         if not children:
             pending.append(sig)
 
     old = {s: signal.signal(s, forward) for s in signal.Signals if s.name in FORWARD}
+    if group:
+        # SIGCHLD bị bỏ qua tường minh làm kernel tự thu hồi con trước khi chờ.
+        old[signal.SIGCHLD] = signal.signal(signal.SIGCHLD, signal.SIG_DFL)
     try:
         sys.stdout.flush()
         try:
-            children.append(subprocess.Popen(list(cmd), env=dict(env)))
+            children.append(subprocess.Popen(list(cmd), env=dict(env), start_new_session=group))
         except OSError as e:
             log(f"không chạy được {cmd[0]!r}: {e}")
             return 127 if isinstance(e, FileNotFoundError) else 126
         for sig in pending:
-            children[0].send_signal(sig)
-        return children[0].wait()
+            send(children[0], sig)
+        return finish_child(children, group, forwarded)
     finally:
         for s, handler in old.items():
             signal.signal(s, handler)
@@ -554,7 +623,10 @@ def run(cmd: Sequence[str], env: Mapping[str, str], head: bool) -> int:
         return plain(cmd, child_env(env, job))
     limit(job, head)
     try:
-        rc = spawn(cmd, child_env(env, job))
+        # Giữ controlling TTY và job control khi chạy tương tác (tty_nr là trường 7).
+        group = sys.platform == "linux" and proc_stat(os.getpid())[4:5] == ["0"]
+        with child_subreaper(group) as grouped:
+            rc = spawn(cmd, child_env(env, job), group=grouped)
     finally:
         (tray / f"{JOB}{os.getpid()}.json").unlink(missing_ok=True)
     return exit_code(rc)

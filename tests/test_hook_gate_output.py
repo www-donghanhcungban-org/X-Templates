@@ -66,7 +66,8 @@ class GateOutputCapTest(unittest.TestCase):
         self.gitdir = self.repo / ".git"
 
     def xt(self, test_cmd: str = "") -> None:
-        test_cmd = test_cmd or f"python3 -u {self.tmp / 'gen.py'}"  # -u: stdout/stderr xen đúng thứ tự như test thật
+        # Gộp hai luồng của fixture trước các tee của dev-task để chuỗi UTF-8 dài không bị xen byte.
+        test_cmd = test_cmd or f"python3 -u {self.tmp / 'gen.py'} 2>&1"
         (self.repo / "xt.yaml").write_text(f"test: {test_cmd}\n", encoding="utf-8")
 
     def hook(self, env: dict[str, str] | None = None, cmd: str = "git commit -m x") -> tuple[int, str, str]:

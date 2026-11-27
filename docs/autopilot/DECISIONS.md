@@ -1274,3 +1274,17 @@
 - Chọn: A: giữ mã worker_budget, sửa tài liệu: mặc định tối đa 2 việc nặng (việc đầu ceil(2u/3), việc sau phần còn lại), slots là trần trên không bảo đảm đạt; mở nợ 🟠 hành vi slots
 - Lý do (tiêu chí chất lượng cuối): Giữ đường lùi và không đổi hành vi đã đo ở ADR-0113 (8+4 trên 14 CPU); sai lệch tài liệu là lỗi đúng-sai cần sửa ngay, còn đổi chính sách cấp là quyết định riêng cần số đo; B làm chậm việc đơn lẻ khi máy rảnh
 - Đường lùi: Đổi sang B bằng quyết định mới thay D này: sửa worker_budget và test, cập nhật lại ADR-0113 và tài liệu
+
+### D-635 · 2026-11-27T14:50:17+00:00 · Giữ lease T-5082 khi dừng shell của workload bằng tín hiệu ra sao?
+
+- Phương án: (1) Quản lý nhóm tiến trình riêng ở Linux và giữ lease tới khi nhóm dừng sau tín hiệu · (2) Giữ chuyển tín hiệu tới tiến trình con trực tiếp và chấp nhận tiến trình cháu còn chạy ngoài ngân sách
+- Chọn: Quản lý nhóm tiến trình riêng ở Linux và giữ lease tới khi nhóm dừng sau tín hiệu
+- Lý do (tiêu chí chất lượng cuối): Giữ kế toán CPU và RAM khi huỷ các tác vụ shell. Dùng nhóm phiên trong phạm vi khay Linux có procfs, giữ đường chạy trực tiếp trên hệ khác và khi khay tắt.
+- Đường lùi: Revert lát sửa vòng đời nhóm tiến trình và mở lại AUD-HAR-580.
+
+### D-636 · 2026-11-27T14:52:02+00:00 · Có đổi XT_CPU_SLOTS từ trần thành mục tiêu số việc đồng thời của T-5082 không?
+
+- Phương án: (1) Giữ XT_CPU_SLOTS là trần và XT_JOBS là cách dành chỗ cho thêm việc khi workload phù hợp · (2) Giới hạn việc đầu theo usable chia slots để dành trước CPU cho việc chưa đến
+- Chọn: Giữ XT_CPU_SLOTS là trần và XT_JOBS là cách dành chỗ cho thêm việc khi workload phù hợp
+- Lý do (tiêu chí chất lượng cuối): Giữ hành vi đã kiểm ở #865. Trên 14 CPU, lịch 8 + 4 tận dụng hết 12 CPU, lịch 4 + 4 + 4 dùng được khi các việc tự khai XT_JOBS=4. Đổi mặc định sẽ hạ phần cấp khi chỉ có một việc từ 8 xuống 4; chưa có số đo workload thật trên WSL2 để biện minh.
+- Đường lùi: Xét lại nếu số đo workload trên WSL2 cho thấy giảm thời gian hoàn thành nhiều việc mà vẫn đáp ứng độ trễ của gate đi đầu.

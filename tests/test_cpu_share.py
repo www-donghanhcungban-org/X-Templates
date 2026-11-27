@@ -472,6 +472,16 @@ class TrayTest(unittest.TestCase):
         got = cs.attempt(self.d, self.sh, True, self.limits, self.proc, self.measure, 999)
         self.assertEqual(got, cs.Job((10, 11, 12, 13), 4))
 
+    def test_worker_caps_allow_three_jobs_without_reserving_idle_slots(self):
+        sh = cs.shape({}, ids=range(14))
+        self.assertEqual(cs.worker_budget(sh, [], None), tuple(range(2, 10)))
+        leases = []
+        for start in (2, 6, 10):
+            cpus = cs.worker_budget(sh, leases, 4)
+            self.assertEqual(cpus, tuple(range(start, start + 4)))
+            leases.append({"jobs": len(cpus), "cpus": cpus})
+        self.assertEqual(cs.worker_budget(sh, leases, 4), ())
+
     def test_ram_budget_is_checked_inside_admission(self):
         args = (self.d, self.sh, True, self.limits, self.proc, self.measure)
         self.other(os.getppid(), cpus=[2, 3], jobs=2, memory_mib=600)
@@ -601,6 +611,33 @@ class RunTest(unittest.TestCase):
         self.assertEqual(cs.spawn(["khong-co-lenh-nay-xt"], {}), 127)
         with mock.patch.object(cs.subprocess, "Popen", side_effect=PermissionError("denied")):
             self.assertEqual(cs.spawn(["x"], {}), 126)
+
+    def test_wait_group_leader_reaps_adopted_members_while_leader_runs(self):
+        child = mock.Mock(pid=123, wait=mock.Mock(return_value=7))
+        with (
+            mock.patch.object(cs.os, "waitid", side_effect=(SimpleNamespace(si_pid=124), SimpleNamespace(si_pid=123))),
+            mock.patch.object(cs.os, "waitpid") as waitpid,
+        ):
+            self.assertEqual(cs.wait_group_leader(child), 7)
+        waitpid.assert_called_once_with(124, 0)
+        child.wait.assert_called_once_with()
+
+    def test_drain_group_reaps_adopted_group_members(self):
+        with (
+            mock.patch.object(cs.os, "waitpid", side_effect=((0, 0), (124, 0), ChildProcessError)) as waitpid,
+            mock.patch.object(cs.time, "sleep") as sleep,
+        ):
+            cs.drain_group(123)
+        self.assertEqual(waitpid.call_args_list, [mock.call(-123, os.WNOHANG)] * 3)
+        sleep.assert_called_once_with(cs.GROUP_POLL)
+
+    def test_subreaper_falls_back_if_unavailable(self):
+        with cs.child_subreaper(False) as enabled:
+            self.assertFalse(enabled)
+        for prctl in (None, mock.Mock(return_value=1), mock.Mock(side_effect=(0, 1))):
+            with mock.patch.object(cs.ctypes, "CDLL", return_value=SimpleNamespace(prctl=prctl)):
+                with cs.child_subreaper(True) as enabled:
+                    self.assertFalse(enabled)
 
     def test_exit_code(self):
         kill = mock.Mock()
@@ -958,6 +995,28 @@ class LiveCliTest(unittest.TestCase):
         r = cli("run", "--", "khong-co-lenh-nay-xt", env=self.env)
         self.assertEqual(r.returncode, 127, r.stderr)
 
+    def test_run_can_reap_child_when_sigchld_was_ignored(self):
+        r = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'trap "" CHLD; exec "$@"',
+                "bash",
+                sys.executable,
+                str(SCRIPT),
+                "run",
+                "--",
+                sys.executable,
+                "-c",
+                "raise SystemExit(7)",
+            ],
+            env=self.env,
+            capture_output=True,
+            text=True,
+            start_new_session=True,
+        )
+        self.assertEqual(r.returncode, 7, r.stderr)
+
     def test_sigterm_to_run_is_forwarded_and_tray_cleaned(self):
         """SIGTERM gửi tới `run` tới được lệnh con (lệnh con bắt, ghi dấu, thoát 42); `run` trả 42; khay được dọn."""
         ready, mark = self.tmp / "ready", self.tmp / "mark"
@@ -983,6 +1042,58 @@ class LiveCliTest(unittest.TestCase):
                 self.assertEqual(p.returncode, 42, err)
                 self.assertEqual(mark.read_text(), "term")
                 self.assertEqual(list((self.tmp / "xt-cpu").glob("job-*.json")), [])
+
+    def test_cancel_keeps_lease_until_grandchild_finishes(self):
+        ready, stopping, release = (self.tmp / n for n in ("ready", "stopping", "release"))
+        worker = (
+            "import os, signal, sys, time\nfrom pathlib import Path\n"
+            "ready, stopping, release = map(Path, sys.argv[1:])\n"
+            "def finish(*_):\n    if os.fork(): sys.exit(0)\n    stopping.touch()\n"
+            "    while not release.exists(): time.sleep(0.01)\n    sys.exit(0)\n"
+            "signal.signal(signal.SIGTERM, finish)\n"
+            "ready.write_text(f'{os.getppid()} {os.getpid()}')\n"
+            "while not release.exists(): time.sleep(0.01)\n"
+        )
+        with subprocess.Popen(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "run",
+                "--",
+                "bash",
+                "-c",
+                '"$@" & wait',
+                "bash",
+                sys.executable,
+                "-c",
+                worker,
+                str(ready),
+                str(stopping),
+                str(release),
+            ],
+            env=self.env,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        ) as supervisor:
+            lease = self.tmp / "xt-cpu" / f"job-{supervisor.pid}.json"
+            try:
+                self.poll_until(lambda: (ready.exists() and ready.stat().st_size > 0) or supervisor.poll() is not None)
+                leader, worker_pid = map(int, ready.read_text().split())
+                self.assertTrue(lease.exists())
+                supervisor.send_signal(signal.SIGTERM)
+                self.poll_until(lambda: stopping.exists() or supervisor.poll() is not None)
+                self.assertTrue(stopping.exists(), "tiến trình cháu phải nhận SIGTERM")
+                self.poll_until(lambda: not cs.proc_stat(leader) and not cs.proc_stat(worker_pid))
+                self.assertFalse(cs.proc_stat(leader), "shell đã thoát và được thu hồi")
+                self.assertFalse(cs.proc_stat(worker_pid), "worker đã giao việc dọn cho hậu duệ")
+                self.assertIsNone(supervisor.poll())
+                self.assertTrue(lease.exists(), "cháu còn dọn dẹp thì chưa nhả lease")
+            finally:
+                release.touch()
+                _, err = supervisor.communicate(timeout=120)
+            self.assertEqual(supervisor.returncode, -signal.SIGTERM, err)
+            self.assertFalse(lease.exists())
 
     def test_unwritable_cache_stops_managed_run(self):
         blocker = self.tmp / "file"

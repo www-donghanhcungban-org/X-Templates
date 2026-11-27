@@ -32,7 +32,7 @@
 - Coverage cục bộ < 100 % khi `coverage` cài ở site người dùng: hook chạy `python3 -I` nên tiến trình con không được đo — CI là cổng coverage (đo 2026-11-05).
 
 ## Bàn giao phiên
-- 2026-11-27: PR #865 (T-5082): sửa test pytest một worker (AUD-TEST-158); nợ SIGTERM: AUD-HAR-580. Review cục bộ INCONCLUSIVE: thiếu reviewer theo ADR-0110; chưa merge.
+- 2026-11-27: #865 (T-5082) đã merge tại `53cb335f`, CI xanh. Hậu kiểm: ADR-0115 (huỷ lease) và AUD-HAR-581 (số đo WSL2).
 - 2026-11-26: #822 `e6cb6da` (AUD-HAR-542); AUD-HAR-541 **mở** (guard còn cho qua tag glob `?*`, `??????+b`, `[[=v=]]`; vá tiếp cần ADR nới trần, hàng rào thật là ruleset tag T-4007). #823 `7dd219b`: [baseline](research/2026-11-26-delivery-baseline.md) 20 PR. Nợ: AUD-HAR-567/568. Nhánh thừa `claude/t4010-baseline` chờ chủ xoá.
 - Mốc `main` `42f3c64` (#765; tag `v3.36.0` cùng commit). Cắt bản: CPython 3.15.2 (`dev-task.sh bootstrap`, `XT_PYTHON`); ký bằng `python3 scripts/xt.py release-sign --note …`. "Tiếp tục": đọc [sổ audit](docs/ops/AUDIT-STATUS.md) và CHANGELOG.
 - Container mới: `scripts/dev-task.sh setup`; trước khi đẩy `gate-fast`, CI là cổng đầy đủ. Gate cục bộ: `coverage` và `pip` phải ở site-packages của `python3` (hook chạy `python3 -I`) — venv đầu PATH; G7 cần `fetch --unshallow --tags`; `release-check` chạy ở worktree sạch.
