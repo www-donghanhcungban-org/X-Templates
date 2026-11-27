@@ -37,7 +37,7 @@
 
 ### Lát 3 — Phát hiện bổ sung ở `feb86abd` theo D-640
 
-- [ ] `T-5092` (nguồn: audit:AUD-CODE-069) Từ chối `--cost ''` trước khi thực thi Gate hoặc ghi dấu review, vẫn chấp nhận bỏ cờ (files: scripts/xt.py, tests/test_cost_flag.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_cost_flag`
+- [x] `T-5092` (nguồn: audit:AUD-CODE-069) Từ chối `--cost ''` trước khi thực thi Gate hoặc ghi dấu review, vẫn chấp nhận bỏ cờ (files: scripts/xt.py, tests/test_cost_flag.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_cost_flag`
 - [ ] `T-5093` (nguồn: audit:AUD-XFEAT-061) API thống kê PR dùng cùng repo và host đã xác minh với API danh sách. Giữ khả năng chọn repo của CLI (files: scripts/xt_app/api_pr.py, tests/test_app_pr.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_app_pr.PrsTest tests.test_app_pr.PrStatsTest`
 
 ### Lát 4 — Hồ sơ license verify-render theo D-642

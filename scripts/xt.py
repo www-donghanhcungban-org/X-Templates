@@ -3543,7 +3543,7 @@ def parse_cost(spec: str) -> Tuple[str, Dict[str, Any]]:
 def _cost_arg(args: argparse.Namespace) -> Tuple[Optional[Tuple[str, Dict[str, Any]]], int]:
     """(chi phí đã phân tích | None, mã thoát): `--cost` sai → (None, 2) kèm lý do, trước khi chạy gì."""
     spec = getattr(args, "cost", None)
-    if not spec:
+    if spec is None:
         return None, 0
     try:
         return parse_cost(spec), 0

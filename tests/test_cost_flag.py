@@ -159,6 +159,20 @@ class WriteCostTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("không ghi được chi phí p", err)
 
+    def test_empty_cost_stops_before_gate_or_review(self):
+        xt.write_state({"active": True, "plan": "docs/autopilot/PLAN-x.md"}, self.base)
+        for argv in (
+            ("loop", "record", "--task", "T-0010", "--cost", "", "--", "touch gate-ran"),
+            ("pr", "reviewed", "--pr", "9", "--head", HEAD, "--blocking", "--no-publish", "--cost", ""),
+        ):
+            with self.subTest(command=argv[:2]):
+                rc, _, err = run_main(*argv)
+                self.assertEqual(rc, 2)
+                self.assertIn("--cost", err)
+        self.assertFalse((self.base / "gate-ran").exists())
+        self.assertFalse((xt.state_dir(self.base) / "reviews.json").exists())
+        self.assertEqual(self.rows(), [])
+
 
 if __name__ == "__main__":
     unittest.main()
