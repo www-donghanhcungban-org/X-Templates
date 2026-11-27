@@ -9957,10 +9957,10 @@ def _remote_ref_rule(sub: str, args: List[str], cwd: Optional[str]) -> Tuple[str
     return ("deny", REMOTE_REF_WHY.format(hit) + _fetch_hint(sub, hit)) if hit else ("", "")
 
 
-def _release_ref_write(sub: str, name: str) -> bool:  # F-144: tạo ref là tag phiên bản/có glob
-    if sub not in ("tag", "update-ref", "symbolic-ref"):
-        return False
-    return bool(RELEASE_VERSION_TAG.fullmatch(name.removeprefix("refs/tags/"))) or _tag_glob(name)
+def _release_ref_write(sub: str, name: str) -> bool:  # D-612: tag phiên bản hay glob bung ra được nó
+    base = name.removeprefix("refs/tags/")
+    may = _tag_glob(name) or GLOB_LOOSE_RE.search(base) and base[:1] in "vV*?[" and ("*" in base or len(base) > 5)
+    return sub in ("tag", "update-ref", "symbolic-ref") and bool(RELEASE_VERSION_TAG.fullmatch(base) or may)
 
 
 def _fetch_hint(sub: str, hit: str) -> str:
