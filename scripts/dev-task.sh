@@ -84,6 +84,18 @@ if [ -z "$TASK" ]; then
   exit 2
 fi
 
+# Các tác vụ nặng ở máy dev chạy lại script dưới khay CPU dùng chung (T-5082, ADR-0112).
+# `xt_cpu_share.py run` cấp XT_JOBS, ghim nhân và đặt nice; XT_CPU_HEAD=1 ưu tiên PR đầu hàng.
+# Không bọc khi: đã ở trong khay (XT_CPU_SHARE_ID), XT_CPU_SHARE=off, đang ở CI (biến `CI`; XT_CPU_SHARE=on bật lại),
+# vắng mô-đun hay python không chạy được nó (chạy như cũ). `run` trả đúng mã thoát của script.
+CPU_SHARE="$(dirname "$0")/xt_cpu_share.py"
+cpu_share_wrap() { # $@=đối số của script → exec lại trong khay, hoặc trả về để chạy như cũ
+  [ -z "${XT_CPU_SHARE_ID:-}" ] && [ "${XT_CPU_SHARE:-}" != off ] && [ -f "$CPU_SHARE" ] || return 0
+  [ "$("$FRAMEWORK_PYTHON" -I "$CPU_SHARE" probe 2>/dev/null)" = xt-cpu-share-ok ] || return 0
+  exec "$FRAMEWORK_PYTHON" -I "$CPU_SHARE" run -- bash "$0" "$@"
+}
+case "$TASK" in gate|gate-fast|gate-par|test|test-shard|test-combine|test-weights|lint|typecheck|build|e2e) cpu_share_wrap "$@" ;; esac
+
 # --- 1) Lệnh KHAI BÁO (escape hatch cho mọi dự án đặc thù) --------------------
 yaml_has() { [ -f "$YAML" ] && grep -Eq "^$1:" "$YAML"; }
 strip_comment() { # bỏ comment YAML: `#` ở đầu giá trị hoặc sau khoảng trắng, ngoài nháy (AUD-HAR-025)
@@ -140,7 +152,14 @@ node_has_script() {
 }
 
 ncpu() { nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
-test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần 4×số nhân), rác/không đặt → `auto`; log khi DT_HINT=1
+cpu_share_jobs() { # phần của khay CPU (`xt_cpu_share.py jobs`, T-5082); khay tắt/vắng/hỏng hay in lạ → `auto`
+  local j=""
+  [ "${XT_CPU_SHARE:-}" != off ] && [ -f "$CPU_SHARE" ] &&
+    j="$("$FRAMEWORK_PYTHON" -I "$CPU_SHARE" jobs --fallback auto 2>/dev/null)"
+  if [[ "$j" =~ ^[1-9][0-9]{0,5}$ ]]; then printf '%s' "$j"; else printf 'auto'; fi
+}
+test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần 4×số nhân), rác → `auto`, không đặt → phần của
+  # khay CPU (`auto` khi khay tắt/vắng); log khi DT_HINT=1
   local j="${XT_JOBS:-}" cap
   cap=$(( $(ncpu) * 4 ))
   if [[ "$j" =~ ^[1-9][0-9]{0,5}$ ]]; then
@@ -150,8 +169,11 @@ test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần
     fi
     printf '%s' "$j"; return 0
   fi
-  [ -n "$j" ] && [ "${DT_HINT:-}" = 1 ] && log "XT_JOBS='$j' không phải số nguyên dương — dùng mặc định (auto)"
-  printf 'auto'
+  if [ -n "$j" ]; then
+    [ "${DT_HINT:-}" = 1 ] && log "XT_JOBS='$j' không phải số nguyên dương — dùng mặc định (auto)"
+    printf 'auto'; return 0
+  fi
+  cpu_share_jobs
 }
 pytest_xdist_off() { # 0 = tắt xdist có chủ ý: PYTEST_DISABLE_PLUGIN_AUTOLOAD, PYTEST_ADDOPTS hoặc cấu hình pytest ở ROOT có `no:xdist`
   [ -n "${PYTEST_DISABLE_PLUGIN_AUTOLOAD:-}" ] && return 0
@@ -408,24 +430,36 @@ gate_report() { # $1=rc $2=tên cổng → log kết quả, exit rc
 
 # --- gate-par: nhóm độc lập của `gate` chạy nền cùng lúc (D-128) ------------------------------------------------------
 gate_par() { # → exit qua gate_report (rc = exit code nhóm đỏ đầu tiên theo thứ tự nhóm); 126 nếu guard cấm lệnh nào
-  local floor="" d i grc rc=0 ran=0 n; local -a groups=() pids=()
+  local floor="" d i grc rc=0 ran=0 n; local -a groups=() pids=() statuses=()
   [ -n "$(declared_cmd test_floor)" ] && floor=" test_floor"
   # shellcheck disable=SC2086 # $floor rỗng hoặc một tên task
   guard_turn build typecheck lint test $floor || exit 126
   groups=("typecheck" "lint" "build test$floor")
+  local budget="${XT_JOBS:-}" managed=0
+  if [ -n "${XT_CPU_SHARE_ID:-}" ] && [[ "$budget" =~ ^[1-9][0-9]{0,5}$ ]]; then managed=1; fi
   d="$(mktemp -d)" || exit 2
   trap 'kill "${pids[@]}" 2>/dev/null; rm -rf -- "$d"' INT TERM
   for i in "${!groups[@]}"; do
     (
+      if [ "$managed" -eq 1 ] && [ "$budget" -ge 3 ]; then
+        if [ "$i" -eq 2 ]; then export XT_JOBS=$((budget - 2)); else export XT_JOBS=1; fi
+      fi
       RAN=0; grc=0
       for t in ${groups[$i]}; do run_task "$t" || { grc=$?; log "nhóm ĐỎ ở '$t' (exit $grc) → dừng nhóm"; break; }; done
       echo "$RAN" > "$d/$i.ran"
       exit "$grc"
     ) > "$d/$i.log" 2>&1 &
     pids+=("$!")
+    if [ "$managed" -eq 1 ] && [ "$budget" -lt 3 ]; then
+      wait "${pids[$i]}"; statuses[i]=$?
+    fi
   done
   for i in "${!groups[@]}"; do
-    wait "${pids[$i]}"; grc=$?
+    if [ -n "${statuses[i]:-}" ]; then
+      grc="${statuses[i]}"
+    else
+      wait "${pids[$i]}"; grc=$?
+    fi
     log "── nhóm [${groups[$i]// / → }] exit $grc ──"
     cat -- "$d/$i.log" >&2
     n="$(cat -- "$d/$i.ran" 2>/dev/null)"; ran=$((ran + ${n:-0}))
@@ -439,6 +473,13 @@ gate_par() { # → exit qua gate_report (rc = exit code nhóm đỏ đầu tiên
 }
 
 # --- test-shard / test-combine: chia bộ test cho job CI song song, gộp coverage ----------
+shard_jobs() {
+  if [ -n "${XT_CPU_SHARE_ID:-}" ] && [[ "${XT_JOBS:-}" =~ ^[1-9][0-9]{0,5}$ ]]; then
+    printf '%s' "$XT_JOBS"
+  else
+    ncpu
+  fi
+}
 shard_decl() { # $1=khoá → lệnh khai báo (in ra); thiếu → log, 1
   local c; c="$(declared_cmd "$1")"
   [ -n "$c" ] && ! is_noop "$c" && { printf '%s' "$c"; return 0; }
@@ -480,7 +521,7 @@ test_shard() { # $1=I (1..N) $2=N [$3=thư mục dữ liệu coverage]
   pick="$(printf '%s\n' "$ids" | shard_pick "$i" "$n")" || return $?
   [ -n "$pick" ] || { log "test-shard: shard $i/$n rỗng (chỉ $total id) — giảm N"; return 1; }
   log "test-shard $i/$n: $(printf '%s\n' "$pick" | grep -c .)/$total id"
-  printf '%s\n' "$pick" | (cd "$ROOT" && run_counted xargs -r -P "$(ncpu)" -n 1 bash -o pipefail -c "$unit" _)
+  printf '%s\n' "$pick" | (cd "$ROOT" && run_counted xargs -r -P "$(shard_jobs)" -n 1 bash -o pipefail -c "$unit" _)
 }
 test_weights() { # đo lại `test_weights` bằng `test_list` + `test_unit` (coverage vào thư mục tạm, như job `test` của CI)
   local list unit w ids d rc
