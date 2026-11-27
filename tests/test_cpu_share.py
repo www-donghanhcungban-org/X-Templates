@@ -867,18 +867,19 @@ class DevTaskIntegrationTest(unittest.TestCase):
     def test_test_jobs_honors_grant_and_preserves_off_mode(self):
         self.fake_pytest()
         want = cs.share(self.sh.usable, 1)
-        for extra, flag in (
-            ({}, f"-n {want}"),
-            ({"XT_JOBS": "3"}, f"-n {min(3, want)}"),
-            ({"XT_JOBS": "abc"}, f"-n {want}"),
-            ({"XT_CPU_SHARE": "off"}, "-n auto"),
-            ({"CI": "true"}, "-n auto"),  # CI: như trước khi có khay
-            ({"CI": "true", "XT_CPU_SHARE": "on"}, f"-n {want}"),
+        for extra, jobs in (
+            ({}, want),
+            ({"XT_JOBS": "3"}, min(3, want)),
+            ({"XT_JOBS": "abc"}, want),
+            ({"XT_CPU_SHARE": "off"}, "auto"),
+            ({"CI": "true"}, "auto"),  # CI: như trước khi có khay
+            ({"CI": "true", "XT_CPU_SHARE": "on"}, want),
         ):
             with self.subTest(extra=extra):
                 r = self.dt("test", **extra)
                 self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(self.ran(r), f"python3 -P -m pytest -q {flag}")
+                expected = "pytest -q" if jobs == 1 else f"python3 -P -m pytest -q -n {jobs}"
+                self.assertEqual(self.ran(r), expected)
         (self.tmp / "scripts" / "xt_cpu_share.py").unlink()
         self.assertEqual(self.ran(self.dt("test")), "python3 -P -m pytest -q -n auto")  # vắng mô-đun → như cũ
 
