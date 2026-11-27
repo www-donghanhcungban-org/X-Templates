@@ -25432,6 +25432,12 @@
 {"id":"guard-control-har541-tag-glob-2","origin":"control","refs":["AUD-HAR-541"],"input":{"command":"git tag -n5 v*"},"expect":{"allowed":true}},
 {"id":"guard-control-har541-tag-glob-3","origin":"control","refs":["AUD-HAR-541"],"input":{"command":"git tag nightly"},"expect":{"allowed":true}},
 {"id":"guard-control-har541-tag-glob-4","origin":"control","refs":["AUD-HAR-541"],"input":{"command":"git tag v1.2"},"expect":{"allowed":true}},
-{"id":"guard-control-har541-tag-glob-5","origin":"control","refs":["AUD-HAR-541"],"input":{"command":"git update-ref refs/heads/topic HEAD"},"expect":{"allowed":true}}
+{"id":"guard-control-har541-tag-glob-5","origin":"control","refs":["AUD-HAR-541"],"input":{"command":"git update-ref refs/heads/topic HEAD"},"expect":{"allowed":true}},
+{"id":"guard-har541-tag-glob-var-prefix-0","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git tag $X?????[0-9]"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"},
+{"id":"guard-har541-tag-glob-var-prefix-1","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git tag $X*"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"},
+{"id":"guard-har541-tag-glob-var-prefix-2","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git tag \"$X\"*"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"},
+{"id":"guard-har541-tag-glob-var-prefix-3","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git -C . tag $X??????"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"},
+{"id":"guard-har541-tag-glob-var-prefix-4","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git update-ref refs/tags/$X?* HEAD"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"},
+{"id":"guard-har541-tag-glob-var-prefix-5","origin":"repro","refs":["AUD-HAR-541"],"input":{"command":"git symbolic-ref refs/tags/$X* refs/heads/main"},"expect":{"allowed":false},"note":"biến rỗng đứng trước glob: bash bung ra v1.2.0 (T-5041)"}
  ]
 }

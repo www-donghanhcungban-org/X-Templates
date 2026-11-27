@@ -9959,7 +9959,7 @@ def _remote_ref_rule(sub: str, args: List[str], cwd: Optional[str]) -> Tuple[str
 
 def _release_ref_write(sub: str, name: str) -> bool:  # D-612: tag phiên bản hay glob bung ra được nó
     base = name.removeprefix("refs/tags/")
-    may = _tag_glob(name) or GLOB_LOOSE_RE.search(base) and base[:1] in "vV*?[" and ("*" in base or len(base) > 5)
+    may = _tag_glob(name) or GLOB_LOOSE_RE.search(base) and base[:1] in "vV*?[$" and ("*" in base or len(base) > 5)
     return sub in ("tag", "update-ref", "symbolic-ref") and bool(RELEASE_VERSION_TAG.fullmatch(base) or may)
 
 

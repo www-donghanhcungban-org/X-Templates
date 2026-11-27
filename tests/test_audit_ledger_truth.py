@@ -19,8 +19,19 @@ import guard
 
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER = ROOT / "docs" / "ops" / "AUDIT-STATUS.md"
-# Dạng glob mà bash bung ra `v1.2.0` (AUD-HAR-541); khi guard chặn hết thì bỏ khỏi danh sách này.
-GLOB_TAGS = ("git tag [[=v=]]1.2.0", "git tag ??????+b", "git tag ?*")
+# Dạng glob mà bash bung ra `v1.2.0` (AUD-HAR-541); khi guard chặn hết thì bỏ khỏi danh sách này. Ba dạng đầu đã chặn
+# ở T-5041; sáu dạng sau còn lọt ở cả hai chế độ (nullglob, glob trong đường dẫn ref, refspec push — ghi ở hàng 541).
+GLOB_TAGS = (
+    "git tag [[=v=]]1.2.0",
+    "git tag ??????+b",
+    "git tag ?*",
+    "shopt -s nullglob; git tag zz* v1.2.0",
+    "git update-ref refs/t*/?* HEAD",
+    "git update-ref refs/tag[s]/?* HEAD",
+    "git symbolic-ref refs/t*/?* refs/heads/main",
+    "git push origin HEAD:refs/tags/[[=v=]]1.2.0",
+    "git push origin HEAD:refs/tags/??????+b",
+)
 CONTROL = ("git tag v1", "git tag [!x]?.?.?")  # tag major di động được qua; dạng đã sửa ở #815/#818 phải bị chặn
 
 

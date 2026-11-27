@@ -43,6 +43,13 @@ BAD = (
     "shopt -s nocaseglob; git tag V*",
     *(f"git update-ref refs/tags/{w} HEAD" for w in ("*", "??????", "?*", "*.*")),
     *(f"git push origin HEAD:refs/tags/{w}" for w in ("*", "??????", "?*", "*.*")),
+    "git tag $X?????[0-9]",  # `$X` rỗng: argv `git tag ?????[0-9]` bung ra `v1.2.0`
+    "git tag $X*",
+    'git tag "$X"*',
+    "git tag ${X}*",
+    "git -C . tag $X??????",
+    "git update-ref refs/tags/$X?* HEAD",
+    "git symbolic-ref refs/tags/$X* refs/heads/main",
     "git push origin ??????",
     "git push origin ?*",
 )
