@@ -6,6 +6,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `.claude/settings.json` (T-5081): đăng ký hook `PreSkillShellCommand` (matcher `Bash|PowerShell`, cùng lệnh `pre-bash-guard.sh`, `timeout` 1200 và `onFailure: block` với PreToolUse `Bash`) — lệnh chèn `!`…`` trong skill nay qua guard; cần Claude Code ≥ 2.1.332 (`claude_min_version` đã đủ). `harness-files.md` bỏ "chưa đăng ký"; `xt.yaml` sửa chú thích. Bản đích đã cài nhận mục này khi nâng qua gộp `hooks` của `install.py`. Payload thật của sự kiện còn chờ đối chiếu.
 - `install.py` (T-5080, D-628): bản chép mới/`--force-harness` của `.claude/settings.json` **không còn mang `autoCompactWindow` sang dự án đích** (hằng `UNSHIPPED_SETTINGS_KEYS`, gỡ bằng quyết định mới khi D-613 có số đo `preTokens` và tỉ lệ Gate xanh lần đầu); `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` vẫn mang sang, repo khung vẫn giữ khoá. Khoá đã có ở đích (chủ dự án tự đặt hoặc bản cài cũ) không bị đụng; `--plan` dùng cùng biến đổi. Sửa lại dòng T-5040 bên dưới: bản cài mới không nhận `autoCompactWindow`. `LOOP-CTX-016` ghi rõ. Test `tests/test_hook_precompact_output.py`.
 
 - Đăng ký `T-5082` giới hạn CPU tổng quát cho việc nặng (D-629): khay dùng chung theo máy, mọi tham số là hàm của số nhân (dành `ceil(n/8)` nhân, `max(1, n // 4)` việc đồng thời, chia phần theo số việc đang chạy có sàn và trần), ghi đè bằng `XT_CPU_RESERVE`, `XT_CPU_SLOTS`, `XT_CPU_SHARE=off`; áp cho `dev-task.sh`, lệnh `test_fast` của `xt.yaml` và mẫu, nên cả khung lẫn dự án đích. Chỉ PLAN và lịch §0.5, chưa đổi mã.

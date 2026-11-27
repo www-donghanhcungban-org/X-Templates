@@ -48,12 +48,12 @@ OS/devcontainer có egress allowlist (`LOOP-HARNESS-022`) và việc phiên chí
 - **Lệnh chèn trong skill** (`` !`<lệnh>` `` hay khối ` ```! `, chạy lúc skill nạp — gồm skill người dùng, plugin, dựng
   sẵn như `/security-review`, skill của dự án đích): PreToolUse **không** chạy cho chúng; `allow: Bash` trần nên chỉ
   `deny` của settings đỡ. Sự kiện `PreSkillShellCommand` (matcher `Bash|PowerShell`, `onFailure: block`) chặn được
-  bằng chính `pre-bash-guard.sh` (`tests/test_hook_skill_shell.py`), nhưng **chưa đăng ký** (T-5040): cần Claude Code
-  **≥ 2.1.332** (bản cũ hơn chạy lệnh chèn mà không gọi hook, tệp settings có tên sự kiện này mở hộp thoại lúc khởi động
-  (changelog 2.1.332); docs ghi tên lạ chỉ bị bỏ qua kèm cảnh báo, phần còn lại của tệp vẫn hiệu lực), và công cụ Edit/Write của harness đang dùng còn từ chối ghi
-  sự kiện này vào settings (schema thiếu tên, đo 2026-11-27). Khi đăng ký: cùng lệnh, `timeout` với guard của
-  PreToolUse `Bash`, và `xt.yaml` `claude_min_version` ≥ 2.1.332 (`LOOP-HARNESS-026`; test ghim cả hai). Docs hooks
-  §PreSkillShellCommand, settings §Fix a broken settings file, đọc 2026-11-27.
+  bằng chính `pre-bash-guard.sh` (`tests/test_hook_skill_shell.py`) và **đã đăng ký** ở settings của khung (T-5081):
+  cần Claude Code **≥ 2.1.332** (bản cũ hơn chạy lệnh chèn mà không gọi hook, tệp settings có tên sự kiện này mở hộp
+  thoại lúc khởi động (changelog 2.1.332); docs ghi tên lạ chỉ bị bỏ qua kèm cảnh báo, phần còn lại của tệp vẫn hiệu
+  lực). Cùng lệnh, `timeout` với guard của PreToolUse `Bash`, và `xt.yaml` `claude_min_version` ≥ 2.1.332
+  (`LOOP-HARNESS-026`; test ghim cả hai). Payload thật của sự kiện chưa đối chiếu (test dùng `tool_input.command`).
+  Docs hooks §PreSkillShellCommand, settings §Fix a broken settings file, đọc 2026-11-27.
 - **Hàng rào qua lịch sử git** (AUD-SEC-988): không bị chặn như ghi hàng rào — (a) lệnh dời HEAD cả cây (`checkout
   <rev>`, `switch`, `reset [--hard|--soft] <rev>`, `symbolic-ref HEAD`, `pull`, `merge`) rồi khôi phục từ HEAD mới,
   `git apply`/`am`/`cherry-pick`/`revert -n`, `stash apply` (cả `stash store <commit>`), `git archive <rev> | tar -x`
