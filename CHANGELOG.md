@@ -10,6 +10,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - T-5085 (AUD-XFEAT-058): kiểm i18n đối chiếu cả đối số trong nhánh ICU và báo lỗi khi khoá JSON phẳng trùng khoá lồng.
 
+- T-5088 (AUD-CI-049): workflow kiểm đúng tên archive, biên nhận và `VERSION` tại tag trước khi xác nhận release đã công bố.
+
 - T-5092 (AUD-CODE-069): `loop record` và `pr reviewed` từ chối `--cost ''` trước khi chạy Gate hoặc ghi dấu review. Vẫn có thể bỏ cờ khi chưa đo chi phí.
 
 - T-5084 (AUD-CODE-068): khay CPU áp `XT_RESOURCE_WAIT_TIMEOUT` cả khi chờ khóa và trước khi cấp lease. Hết hạn trả mã 2 và dọn mục chờ.

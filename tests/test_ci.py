@@ -433,10 +433,11 @@ class SupplyChainArtifactsTest(unittest.TestCase):
         bindir = tmp / "bin"
         bindir.mkdir()
         fake = bindir / "gh"
-        # gh giả: chạy biểu thức `--jq` thật (jq) trên JSON trong FAKE_JSON; rỗng = release chưa có hoặc gh lỗi.
+        # gh giả: trả JSON hoặc áp biểu thức --jq của lệnh cũ.
         fake.write_text(
             '#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ "$1" = --jq ]; then expr=$2; fi; shift; done\n'
-            '[ -n "$FAKE_JSON" ] || exit 1\nprintf \'%s\' "$FAKE_JSON" | jq -r "$expr"\n',
+            '[ -n "$FAKE_JSON" ] || exit 1\nif [ -n "$expr" ]; then\n'
+            '  printf \'%s\' "$FAKE_JSON" | jq -r "$expr"\nelse\n  printf \'%s\' "$FAKE_JSON"\nfi\n',
             encoding="utf-8",
         )
         fake.chmod(0o755)
@@ -451,6 +452,10 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             ).stdout.strip()
 
         git("init", "-qb", "main")
+        (repo / "VERSION").write_text("1.2.2\n", encoding="utf-8")
+        git("add", "VERSION")
+        git("commit", "-qm", "older")
+        older = git("rev-parse", "HEAD")
         (repo / "VERSION").write_text("1.2.3\n", encoding="utf-8")
         (repo / "CHANGELOG.md").write_text("## [1.2.3] - 2026-11-21\n", encoding="utf-8")
         git("add", ".")
@@ -466,6 +471,9 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             "released": json.dumps({"isDraft": False, "assets": assets}),
             "draft": json.dumps({"isDraft": True, "assets": assets}),
             "incomplete": json.dumps({"isDraft": False, "assets": assets[:1]}),
+            "unrelated": json.dumps(
+                {"isDraft": False, "assets": [{"name": "other.tar.gz"}, {"name": "other.promotion.json"}]}
+            ),
             "missing": "",
         }
 
@@ -474,6 +482,7 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             out.write_text("", encoding="utf-8")
             env = dict(os.environ, GITHUB_SHA=sha, INPUT_SHA=input_sha, GITHUB_OUTPUT=str(out), RUNNER_TEMP=str(tmp))
             env.update(PATH=f"{bindir}:{os.environ['PATH']}", FAKE_JSON=releases[release])
+            env["GITHUB_REPOSITORY"] = "o/r"
             r = subprocess.run(["bash", "-c", script], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
             return r, out.read_text(encoding="utf-8")
 
@@ -484,11 +493,16 @@ class SupplyChainArtifactsTest(unittest.TestCase):
         # main đi tiếp sau khi phát hành: không có inputs.sha, ứng viên là commit mới, tag ở tổ tiên
         r, out = run("released", input_sha="")
         self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stdout)
-        for state in ("draft", "incomplete", "missing"):
+        for state in ("draft", "incomplete", "missing", "unrelated"):
             for input_sha in (first, ""):
                 r, out = run(state, input_sha=input_sha)
                 self.assertEqual((r.returncode, out), (1, ""), (state, r.stdout))
-                self.assertIn(f"'{state}'", r.stdout)
+                self.assertIn("'incomplete'" if state == "unrelated" else f"'{state}'", r.stdout)
+        git("tag", "-d", "v1.2.3")
+        git("tag", "-a", "v1.2.3", "-m", "v1.2.3", older)
+        r, out = run("released")
+        self.assertEqual((r.returncode, out), (1, ""))
+        self.assertIn("VERSION", r.stdout)
         git("tag", "-d", "v1.2.3")
         git("tag", "-a", "v1.2.3", "-m", "v1.2.3", head)  # tag ở commit con của ứng viên: không phải tổ tiên
         r, out = run("released")
