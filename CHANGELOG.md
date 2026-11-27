@@ -6,6 +6,9 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Đăng ký `T-5082` giới hạn CPU tổng quát cho việc nặng (D-629): khay dùng chung theo máy, mọi tham số là hàm của số nhân (dành `ceil(n/8)` nhân, `max(1, n // 4)` việc đồng thời, chia phần theo số việc đang chạy có sàn và trần), ghi đè bằng `XT_CPU_RESERVE`, `XT_CPU_SLOTS`, `XT_CPU_SHARE=off`; áp cho `dev-task.sh`, lệnh `test_fast` của `xt.yaml` và mẫu, nên cả khung lẫn dự án đích. Chỉ PLAN và lịch §0.5, chưa đổi mã.
+- Mẫu dự án đích `CLAUDE.md`, `AGENTS.md` §8, `xt.yaml` nêu tuyến review (reviewer opus/high, `executor-deep` opus/medium, người viết Opus ≥ high → inconclusive; ADR-0110, D-623, D-625, D-627); `model-tiers.json` giữ `write_code_max_effort: xhigh` (T-5078).
+
 - Guard chặn glob không nháy ở vị trí tên tag của lệnh tạo (`git tag`, `update-ref`, `symbolic-ref`; D-612, T-5041, #861): `git tag *`, `?*`, `??????+b`, `[[=v=]]1.2.0` và dạng mở đầu `$X` trong thư mục có tệp `v1.2.0` không còn lọt; `guard.py` giữ 24 689 dòng. AUD-HAR-541 giữ mở (còn nullglob, glob trong đường dẫn ref, refspec push có glob); AUD-HAR-579 mới (biến rỗng làm lệch vị trí tên); AUD-HAR-571 bác bỏ (git 2.53 tạo tag khi `--sort`/`--format` kèm tên).
 - `RUNBOOK-PR-STEWARD.md` §4 (T-5076, nợ review #855): tag đẩy tay phải kèm release công bố có archive `.tar.gz` và biên nhận `.promotion.json`, nếu không lần đẩy `main` kế chạm GO-NO-GO cùng `VERSION` ra `state=missing` và đỏ; cách đúng là `workflow_dispatch` hoặc cắt bản mới
 - Đăng ký tiếp việc của kế hoạch nâng cấp (D-628): `T-5077` guard chặn `gh pr create` thiếu `--draft`, `T-5078` luật tuyến review vào mẫu dự án đích, `T-5079` cắt bản 3.37.0 (chờ `T-5080`), `T-5080` lọc `autoCompactWindow` khỏi bản chép sang đích, `T-5081` đăng ký `PreSkillShellCommand` (cần Claude Code ≥ 2.1.332). Chỉ PLAN và lịch §0.5, không đổi mã.
