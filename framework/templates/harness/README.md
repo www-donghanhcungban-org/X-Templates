@@ -41,7 +41,7 @@ Edit/Write hoặc chạy lại `install.py --harness`.
 `--harness codex` ngoài `.codex/hooks.json` còn sinh, từ `.claude/` của dự án sau bước harness (nguồn duy nhất):
 `.agents/skills/<tên>/SKILL.md` — bản sao byte của skill khung; `.codex/agents/<tên>.toml` — `name`, `description`,
 `model_reasoning_effort` (từ `effort`), `developer_instructions` (thân tệp, giữ đường `.claude/…`), không `model` (agent
-thừa hưởng model của phiên) trừ khi thêm `--codex-models`: `model` lấy từ `model-tiers.json` theo vai (ADR-0114). Khi nâng khung với model ghim, tiếp tục dùng cờ đó. Chỉ skill/agent khung cài (trừ skill bị `.claude/commands/` che); ghi như file harness:
+thừa hưởng model của phiên) trừ khi thêm `--codex-models`: `model` lấy từ `model-tiers.json` theo vai (ADR-0114). Bộ cài ghi lựa chọn vào manifest và giữ khi cài lại, kể cả khi bot nâng khung. Dùng `--no-codex-models` để trở về thừa hưởng. Chỉ skill/agent khung cài (trừ skill bị `.claude/commands/` che); ghi như file harness:
 chưa có → chép, còn đúng hash lần trước → cập nhật, dự án đã sửa → `kept-own`/`.xtemplates-new`; không ghi/đọc xuyên
 symlink; hash ở `codex_files` của `.xtemplates/manifest.json`; `--plan` liệt kê ở `codex_harness` (kèm `reason` khi bỏ
 qua). Tệp Codex là sản phẩm sinh từ `.claude/`: tệp trùng đầu ra sinh được ghi nhận vào `codex_files` (như tệp harness

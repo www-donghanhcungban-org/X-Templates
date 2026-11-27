@@ -8,6 +8,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - Dự án đích nhận mẫu hồ sơ quy mô và nhu cầu quản trị trong `PROJECT.md`. Factory hướng dẫn xem trước chênh lệch blueprint theo ID trước khi đổi feature, gói ngành hoặc mức.
 
+- T-5083 (AUD-XFEAT-057): nâng khung giữ lựa chọn ghim model Codex. Bản cài cũ lấy lại lựa chọn từ agent hoặc bản đề xuất khớp hash quản lý. Dùng `--no-codex-models` để trở về thừa hưởng.
+
 - Chuẩn bị T-4007: `release-tag.yml` có thể dùng installation token GitHub App giới hạn repo hiện tại với Contents/Workflows write sau khi ứng viên được duyệt; cấu hình Client ID mà mint lỗi hoặc token rỗng thì dừng, chưa cấu hình giữ đường cũ. Runbook hướng dẫn phân biệt Client ID với numeric App ID của ruleset và diễn tập trước khi bật live. **Dự án đích:** nâng workflow và cấu hình App nếu muốn dùng; T-4007 vẫn mở chờ quyền quản trị và áp ruleset live.
 
 - Harness Codex (ADR-0114, D-634) sinh model theo bậc vai Claude Code trong gương của khung. Reviewer luôn `high`, executor thường và executor sâu dùng `medium`. Cổng review nhận diện các ID Codex đã đối chiếu và so bậc trước effort. Dự án đích chọn ghim model bằng `--codex-models`.

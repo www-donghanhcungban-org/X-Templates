@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import hashlib
 import json
 import os
 import shutil
@@ -207,6 +208,32 @@ class UpgradeTest(ProjectFixture):
                 self.assertEqual(dist.install_options(manifest), options)
         self.assertEqual(dist.ADAPTER_HOSTS, {dst: host for host, (_src, dst) in install.ADAPTERS.items()})
 
+    def test_legacy_model_selection_requires_an_unchanged_managed_agent(self):
+        rel = ".codex/agents/executor.toml"
+        agent_path = self.project / rel
+        agent_path.parent.mkdir(parents=True)
+        for body, expected in ((b'model = "test"', True), (b"model = 2", False), (b"invalid TOML", False)):
+            with self.subTest(body=body):
+                agent_path.write_bytes(body)
+                manifest = {"codex_files": {rel: f"sha256:{hashlib.sha256(body).hexdigest()}"}}
+                self.assertIs(dist.codex_models_selected(manifest, self.project), expected)
+                self.assertFalse(dist.codex_models_selected({"codex_files": {rel: "sha256:stale"}}, self.project))
+        self.assertFalse(dist.codex_models_selected({"codex_files": {rel: None}}, self.project))
+        self.assertFalse(dist.codex_models_selected({"codex_models": False}, self.project))
+        pinned = b'model = "test"'
+        proposed = agent_path.with_suffix(".toml.xtemplates-new")
+        proposed.write_bytes(pinned)
+        self.assertTrue(
+            dist.codex_models_selected({"codex_files": {rel: hashlib.sha256(pinned).hexdigest()}}, self.project)
+        )
+        proposed.unlink()
+        agent_path.unlink()
+        agent_path.symlink_to(self.temp / "outside.toml")
+        self.assertFalse(dist.codex_models_selected(manifest, self.project))
+        agent_path.parent.rename(agent_path.parent.with_name("agents-old"))
+        agent_path.parent.symlink_to(agent_path.parent.with_name("agents-old"), target_is_directory=True)
+        self.assertFalse(dist.codex_models_selected(manifest, self.project))
+
 
 class RealInstallerTest(ProjectFixture):
     """Audit delta 3.35.0, reproduced with the framework's own install.py: the bot clone got the framework git hooks, so
@@ -293,3 +320,39 @@ class RealInstallerTest(ProjectFixture):
             self.assertEqual((cwd.name, env["GH_TOKEN"]), ("publish.git", "fixture"))
             self.assertLessEqual(set(env), dist.PUSH_ENV | {"GIT_TERMINAL_PROMPT"})
             self.assertTrue(any(arg.startswith("core.hooksPath=") for arg in argv))
+
+    def test_real_upgrade_keeps_pinned_models_from_a_legacy_manifest(self):
+        result = self.real(
+            self.project,
+            sys.executable,
+            str(ROOT / "scripts/install.py"),
+            ".",
+            "--harness",
+            "codex",
+            "--codex-models",
+            "--no-git-hooks",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest_path = self.project / dist.MANIFEST
+        manifest = json.loads(manifest_path.read_text())
+        original_selection = manifest.pop("codex_models", None)
+        manifest["source"] = {"repo": "test/framework"}
+        manifest_path.write_text(json.dumps(manifest))
+        (self.project / ".xtemplates/VERSION").write_text("1.0.0 (abcdef)\n")
+        agent = ".codex/agents/executor.toml"
+        pinned = (self.project / agent).read_text()
+        self.assertIn("\nmodel = ", pinned)
+        custom = ".codex/agents/reviewer.toml"
+        (self.project / custom).write_text((self.project / custom).read_text() + "# project override\n")
+        self.git(self.project, "add", ".")
+        self.git(self.project, "commit", "-qm", "install Codex before the selection was recorded")
+        self.git(self.project, "push", "-q", str(self.origin), "HEAD:main")
+
+        self.release("1.1.0")
+        self.assertEqual(xt.main(["upgrade", "open-pr"]), 0)
+        ref = "refs/heads/" + dist.UPGRADE_BRANCH
+        self.assertEqual(self.git(self.origin, "show", f"{ref}:{agent}"), pinned.rstrip())
+        self.assertIn("# project override", self.git(self.origin, "show", f"{ref}:{custom}"))
+        upgraded = json.loads(self.git(self.origin, "show", f"{ref}:{dist.MANIFEST}"))
+        self.assertIs(original_selection, True)
+        self.assertIs(upgraded["codex_models"], True)

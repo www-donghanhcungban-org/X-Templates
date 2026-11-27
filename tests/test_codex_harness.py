@@ -278,6 +278,13 @@ class AgentTomlTest(unittest.TestCase):
             with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
                 install.main([tmp, "--plan", "--harness", "codex"])
             self.assertFalse(install.CODEX_MODELS)
+            install.update_manifest_doc(Path(tmp), codex_models=True)
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                install.main([tmp, "--plan", "--harness", "codex"])
+            self.assertTrue(install.CODEX_MODELS)
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                install.main([tmp, "--plan", "--harness", "codex", "--no-codex-models"])
+            self.assertFalse(install.CODEX_MODELS)
 
     def test_frontmatter_variants(self):
         text = "---\r\nname: \"a\"\r\ndescription: 'b: c'\r\n# chú thích cả dòng\r\n\r\ntools:\r\n---\r\nthân\r\n"
@@ -388,6 +395,19 @@ class InstallCodexHarnessTest(unittest.TestCase):
         return {
             p.relative_to(self.target).as_posix(): p.read_bytes() for d in dirs for p in d.rglob("*") if p.is_file()
         }
+
+    def test_interrupted_codex_write_keeps_the_selection_for_retry(self):
+        job = (".claude/agents/executor.md", ".codex/agents/executor.toml", "copied", b"model = 'example'", "")
+        with (
+            mock.patch.object(install, "CODEX_MODELS", True),
+            mock.patch.object(install, "codex_actions", return_value=[job]),
+            mock.patch.object(install, "write_copy", side_effect=OSError("interrupted write")),
+            self.assertRaisesRegex(OSError, "interrupted write"),
+        ):
+            install.install_codex_harness(self.target, ["codex"])
+        manifest = install.load_manifest_doc(self.target)
+        self.assertIs(manifest["codex_models"], True)
+        self.assertNotIn("codex_files", manifest)
 
     def test_plan_install_reinstall(self):
         rc, out, err = self.install("--plan", "--harness", "codex")

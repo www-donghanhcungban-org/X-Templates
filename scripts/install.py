@@ -1096,8 +1096,8 @@ MANIFEST_PATH_LISTS = (
     "packs",
     "source",
     "codex_files",
-)  # file khung ghi ngoài `files` (AUD-HAR-204) + gói đã cài (`packs`, object) + hash tệp Codex sinh (`codex_files`,
-# object, ADR-0082) — giữ qua `write_manifests`
+    "codex_models",
+)  # Giữ thông tin cài ngoài `files` qua các bước ghi lại manifest.
 
 
 def load_manifest_doc(target: Path) -> dict[str, Any]:
@@ -1109,13 +1109,17 @@ def load_manifest_doc(target: Path) -> dict[str, Any]:
     return doc if isinstance(doc, dict) else {}
 
 
-def record_manifest_paths(target: Path, key: str, paths: list[str] | dict[str, Any]) -> None:
-    """Ghi danh sách đường dẫn khung đã ghi (`git_hooks`/`adapters`) — hoặc map đường → hash (`codex_files`) — vào
-    manifest.json, giữ mọi khoá khác."""
+def update_manifest_doc(target: Path, **fields: object) -> None:
+    """Cập nhật các trường của manifest trong cùng lần ghi nguyên tử."""
     doc = load_manifest_doc(target)
-    doc[key] = dict(sorted(paths.items())) if isinstance(paths, dict) else sorted(set(paths))
+    doc.update(fields)
     (target / MANIFEST_V2).parent.mkdir(parents=True, exist_ok=True)
     write_atomic(target / MANIFEST_V2, json.dumps(doc, indent=2, sort_keys=True) + "\n")
+
+
+def record_manifest_paths(target: Path, key: str, paths: list[str] | dict[str, Any]) -> None:
+    """Ghi danh sách đường dẫn hoặc thông tin cài đặt, giữ các trường khác."""
+    update_manifest_doc(target, **{key: paths if isinstance(paths, dict) else sorted(set(paths))})
 
 
 def install_harness(target: Path, force_harness: bool) -> None:
@@ -1710,6 +1714,8 @@ def install_codex_harness(target: Path, hosts: list[str], baseline: dict[str, se
     `baseline` = `codex_baseline` đọc trước bước harness (vắng → không nhận gương có sẵn là bản khung)."""
     if "codex" not in hosts:
         return
+    # Ghi lựa chọn trước tệp agent: lần chạy lại sau lỗi I/O không phải suy từ các hash cũ đã thay đổi.
+    update_manifest_doc(target, codex_models=CODEX_MODELS)
     recorded = codex_recorded(target)
     stats: Counter[str] = Counter()
     hashes: dict[str, str] = {}
@@ -3157,9 +3163,11 @@ def sync_flags_error(args: argparse.Namespace) -> bool:
     """`--sync-codex` chỉ đi một mình (cùng đích là gốc repo khung) — cờ cài khác không có nghĩa ở đó."""
     names = (
         *("new", "idea", "name", "scale", "force_harness", "no_harness", "label", "with_github", "plan"),
-        *("no_git_hooks", "preset", "stage_init", "harness", "pack", "codex_models"),
+        *("no_git_hooks", "preset", "stage_init", "harness", "pack"),
     )
     used = [f"--{n.replace('_', '-')}" for n in names if getattr(args, n) not in (None, False, "")]
+    if args.codex_models is not None:
+        used.append("--codex-models" if args.codex_models else "--no-codex-models")
     if used:
         log(f"✗ --sync-codex không đi cùng {', '.join(used)}")
     return bool(used)
@@ -3212,9 +3220,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--codex-models",
-        action="store_true",
-        help="với --harness codex: ghi `model` cho agent Codex theo bảng bậc (dự án đích chọn bật; "
-        "cài lại cùng cờ để nâng, ADR-0098)",
+        action=argparse.BooleanOptionalAction,
+        help="với --harness codex: bật hoặc tắt ghim model theo vai; bỏ cờ để giữ lựa chọn của lần cài trước (ADR-0114)",
     )
     p.add_argument(
         "--sync-codex",
@@ -3223,7 +3230,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     a = p.parse_args(argv)
     global CODEX_MODELS
-    CODEX_MODELS = a.codex_models
+    CODEX_MODELS = a.codex_models is True
     if sys.implementation.name != "cpython" or sys.version_info[:2] < (3, 13):
         log(f"✗ cần CPython 3.13 trở lên — hiện là {sys.implementation.name} {sys.version.split()[0]}")
         return 2
@@ -3238,6 +3245,9 @@ def main(argv: list[str] | None = None) -> int:
     if bad:
         log(f"✗ --harness: không biết {', '.join(bad)} — chọn trong {', '.join(ADAPTERS)}")
         return 2
+    if a.codex_models is None and "codex" in hosts and not a.new:
+        target = Path(a.target).resolve()
+        CODEX_MODELS = bool(distribution().codex_models_selected(load_manifest_doc(target), target))
     try:
         pack = load_pack(a.pack) if a.pack else None
     except ValueError as exc:
