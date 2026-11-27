@@ -35,11 +35,11 @@ AGENT_KEYS = {"name", "description", "model_reasoning_effort", "developer_instru
 
 
 # Giá trị kỳ vọng viết tay theo 5 agent của khung (không tính lại bằng bộ đọc frontmatter của mã): `effort` khai ở
-# executor-deep, reviewer, reviewer-alt (high); các agent còn lại không khai.
+# reviewer, reviewer-alt (high), executor-deep (medium, D-627); các agent còn lại không khai.
 EXPECTED_EFFORT = {
     "acceptance-author": None,
     "executor": None,
-    "executor-deep": "high",
+    "executor-deep": "medium",
     "executor-mech": None,
     "explore": None,
     "researcher": None,

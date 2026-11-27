@@ -82,6 +82,16 @@ class ModelTiersTest(unittest.TestCase):
             self.assertIn("--author-effort medium", text)
         self.assertTrue((ROOT / "docs" / "adr" / "0110-reviewer-effort-ceiling-and-routing.md").is_file())
 
+    def test_deep_executor_defaults_to_opus_medium_and_pairs_with_reviewer_high(self):
+        # D-627: mặc định của vai là medium (không phải tham số lần gọi); cặp (medium, high) hợp lệ, (high, high) bị từ chối
+        meta = frontmatter(AGENTS["executor-deep"])
+        self.assertEqual((meta["model"], meta["effort"], meta["maxTurns"]), ("opus", "medium", "160"))
+        reviewer = frontmatter(AGENTS["reviewer-alt"])
+        self.assertIsNone(
+            xt.review_capability_error(reviewer["model"], meta["model"], reviewer["effort"], meta["effort"])
+        )
+        self.assertIsNotNone(xt.review_capability_error("opus", "opus", "high", "high"))
+
     def test_main_session_rule(self):
         self.assertEqual(
             TIERS["main_session"],

@@ -1218,3 +1218,10 @@
 - Chọn: Astro (tĩnh) + Decap CMS (lưu vào git, đăng nhập OAuth của git host)
 - Lý do (tiêu chí chất lượng cuối): Tiêu chí (1) đúng và an toàn: site tĩnh không có CSDL/phiên người dùng, bề mặt tấn công nhỏ nhất, CSP bằng hash không buộc render động; Payload có 8 advisory critical từ 2025 (SQLi, RCE) và MFA lõi chưa xác minh, Next.js CSP nonce tắt SSG/ISR; admin tự viết tự gánh CSRF/MFA/XSS rich text. (2) đường lùi: nội dung là tệp trong git nên chuyển sang Payload/Ghost sau không mất dữ liệu. (3) MFA admin (ASVS 6.3.3) giao cho git host (bắt buộc 2FA ở tổ chức) — không ứng viên CMS nào có TOTP gốc đã xác minh. Cái giá: người soạn tin cần tài khoản git host và proxy OAuth tự host; ghi ở ADR-0109.
 - Đường lùi: Đổi sang Payload (Postgres, MFA bằng plugin hoặc proxy xác thực) bằng ADR mới; nội dung Markdown/JSON trong git nhập lại được.
+
+### D-627 · 2026-11-27T02:29:44+00:00 · executor-deep (opus) chạy effort nào để diff việc khó có review sạch hợp lệ dưới trần reviewer opus/high (D-623, D-625)?
+
+- Phương án: (1) Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà · (2) Giữ frontmatter effort high, hạ xuống medium bằng tham số từng lần gọi · (3) Giữ effort high; diff tầng sâu luôn inconclusive
+- Chọn: Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo 2026-11-27: việc khó gọi executor-deep opus ở effort medium. Đặt ở frontmatter vì đó là mặc định máy kiểm được bằng test và doctor, không phụ thuộc người gọi nhớ truyền tham số; cặp opus/medium viết, opus/high rà hợp lệ theo luật reviewer cao hơn người viết (D-161) mà không nới cổng. Phương án 2 dễ quên và lời khai author-effort lệch thực tế; phương án 3 làm lớp bắt buộc review không merge được.
+- Đường lùi: Đổi frontmatter về high bằng D-NNN mới khi trần effort reviewer được nâng hoặc bộ đánh giá G10 cho thấy medium tụt chất lượng.
