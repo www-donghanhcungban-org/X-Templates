@@ -6,6 +6,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Đồng bộ sổ với `main` (T-5062): tick `T-5032`…`T-5037`, `T-5039`, `T-5042`…`T-5049` kèm số PR; AUD-HAR-574 ghi phần đã sửa ở #840, AUD-HAR-541 thêm đường tái hiện `git tag *`; ba hàng nợ review mới AUD-HAR-576 (#849), AUD-HAR-577 (#847), AUD-HAR-578 (#840); AUD-PERF-028 ghi PR #838. Chỉ sổ và PLAN, không đổi mã.
 - `pr-review.yml` bỏ trigger `pull_request_target` (T-5064; GitHub chặn mặc định ở repo public từ 2026-12-02): chỉ còn `workflow_dispatch` với input `pr`, đọc siêu dữ liệu PR qua REST, chỉ chạy từ nhánh mặc định; chú thích reviewer khớp D-623 (opus trở xuống). Workflow vẫn tắt tới khi chủ bật `XT_REVIEWER_ENABLED`.
 - Reviewer: trần effort `high` và bảng tuyến theo người viết (ADR-0110, D-623, D-625; T-5063): `reviewer`/`reviewer-alt` cố định opus/`high`/`maxTurns: 120` (trước: `max`/80), bỏ chỉ dẫn giao kèm model phiên chính; `executor-deep` mặc định opus/`medium` (D-627) nên nhận clean; phiên chính opus ≥ `high` hoặc `executor-deep` bị đè effort ≥ `high` ghi `--inconclusive`; gương Codex sinh lại. Máy cưỡng chế trần là T-5071.
 
