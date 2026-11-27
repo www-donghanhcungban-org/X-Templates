@@ -25,8 +25,8 @@ STUB = WORKFLOWS / "merge-gate.yml"
 RULESET = ROOT / ".github" / "rulesets" / "main.json"
 AGGREGATE = "quality"
 OUTSIDE_QUALITY = {"protection-guard"}  # required check riêng, không phải cổng chất lượng
-# ADR-0036: `pull_request_target` chỉ còn ở reviewer trên GitHub (đang tắt) — GitHub chặn mặc định ở repo public từ 2026-12-02 (dời từ 2026-11-02 — ADR-0035 Ghi chú 2026-11-03).
-PR_TARGET_ALLOWED = {"pr-review.yml"}
+# T-5064: không workflow nào còn `pull_request_target` — GitHub chặn mặc định ở repo public từ 2026-12-02.
+PR_TARGET_ALLOWED: set[str] = set()
 PR_TARGET_RE = re.compile(r"(?<![\w-])pull_request_target(?![\w-])")
 
 
@@ -563,7 +563,8 @@ class MergeGateStubTest(unittest.TestCase):
 
 
 class PullRequestTargetTest(unittest.TestCase):
-    """ADR-0036 §Lý do: ngoài `pr-review.yml` không workflow nào trong `.github/workflows` dùng `pull_request_target`."""
+    """T-5064 (sau ADR-0036): không workflow nào trong `.github/workflows` dùng `pull_request_target`; reviewer chỉ
+    chạy bằng `workflow_dispatch` theo số PR."""
 
     def test_detector_cases(self):
         for text in (
@@ -585,7 +586,17 @@ class PullRequestTargetTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertFalse(uses_pull_request_target(text))
 
-    def test_only_pr_review_uses_pull_request_target(self):
+    def test_pr_review_is_dispatch_only(self):
+        text = (WORKFLOWS / "pr-review.yml").read_text(encoding="utf-8")
+        self.assertNotIn("pull_request_target", text)  # kể cả comment
+        on = text.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+        self.assertEqual(re.findall(r"^  ([a-z_]+):", on, re.M), ["workflow_dispatch"])  # không trigger sự kiện PR nào
+        self.assertNotIn("github.event.pull_request", text)  # siêu dữ liệu PR đọc qua REST theo input
+        self.assertIsNone(re.search(r"^\s+ref:", text, re.M))  # không checkout head PR
+        self.assertIn("github.event.repository.default_branch", text)  # chỉ chạy từ nhánh mặc định
+        self.assertNotIn("fable", text.lower())  # D-623: reviewer chỉ opus trở xuống
+
+    def test_no_workflow_uses_pull_request_target(self):
         files = sorted(p for p in WORKFLOWS.iterdir() if p.suffix in (".yml", ".yaml") and p.is_file())
         self.assertIn(STUB, files)
         for name in PR_TARGET_ALLOWED:  # danh sách cho phép không cũ: file còn và còn dùng thật
