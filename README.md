@@ -187,7 +187,7 @@ Khung có thể tiết kiệm thời gian nhờ dùng lại starter và tài li�
 
 | Bạn gặp | X-Templates giúp |
 |---|---|
-| Không biết dự án còn thiếu gì: bảo mật, log, backup, pháp lý… | ~2.850 yêu cầu có ID (1.549 MUST) cho 14 loại phần mềm và 8 ngành, mỗi mục có cách kiểm và nguồn kèm ngày xác minh |
+| Không biết dự án còn thiếu gì: bảo mật, log, backup, pháp lý… | ~2.850 yêu cầu có ID (1.550 MUST) cho 14 loại phần mềm và 8 ngành, mỗi mục có cách kiểm và nguồn kèm ngày xác minh |
 | Checklist quá dài so với quy mô thật | Ghép theo loại phần mềm + ngành + quy mô S/M/L: `web-app` có 70 MUST ở bản prototype, 473 ở production |
 | "Xong" chỉ là lời nói | `blueprint-status --strict --run` chạy lệnh kiểm của từng mục; `release-check` ra GO/NO-GO cho phát hành |
 | AI agent làm nhanh nhưng dễ phá hoặc khai "xong" sai | `/autopilot` trong Claude Code: mỗi task có bằng chứng máy, mỗi lát một PR, hook chặn thao tác không đảo ngược và lộ bí mật, dừng đúng chỗ cần người |

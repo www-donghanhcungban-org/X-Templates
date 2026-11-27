@@ -12,7 +12,7 @@ trỏ về luật của khung: mục tiêu + link (`WF-REVIEW-002`), bằng ch�
 dụng ghi "không áp dụng — lý do", không xoá mục. Khối chép sang dự án chỉ mô tả dự án, không nhắc khung (`WF-DOC-021`).
 
 ```markdown
-<!-- Tiêu đề PR: `<type>(scope): mô tả` (conventional commit). Mỗi lát code một PR. Mục không áp dụng ghi "không áp dụng — lý do". -->
+<!-- Tiêu đề PR: `<type>(scope): mô tả` (conventional commit). Mỗi lát code một PR; mở nháp, `gh pr ready` chỉ PR số nhỏ nhất (`LOOP-STOP-031`). Mục không áp dụng ghi "không áp dụng — lý do". -->
 
 ## Mục tiêu
 <!-- Vì sao làm. Link SPEC (`S-NNN`), task (`T-NNN`), quyết định (`D-NNN`)/ADR, issue. -->
