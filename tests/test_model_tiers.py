@@ -56,6 +56,42 @@ class ModelTiersTest(unittest.TestCase):
         tools = {t.strip() for t in frontmatter(AGENTS["explore"])["tools"].split(",")}
         self.assertEqual(tools, {"Read", "Glob", "Grep"})  # chỉ đọc, không Bash
 
+    def test_reviewers_are_pinned_to_opus_high_with_120_turns(self):
+        # ADR-0110 (D-623, D-625): trần effort `high`, opus, 120 lượt một lần chạy; không dặn giao model/effort của phiên chính
+        for name in ("reviewer", "reviewer-alt"):
+            with self.subTest(agent=name):
+                meta = frontmatter(AGENTS[name])
+                self.assertEqual(meta["model"], "opus")
+                self.assertEqual(meta["effort"], "high")
+                self.assertEqual(meta["maxTurns"], "120")
+                self.assertNotIn("effort cao nhất", AGENTS[name])
+                self.assertNotIn("giao kèm `model`", AGENTS[name])
+        skills = [
+            (ROOT / d / "skills" / "review" / "SKILL.md").read_text(encoding="utf-8") for d in (".claude", ".agents")
+        ]
+        self.assertEqual(skills[0], skills[1])
+        orch = (ROOT / "framework" / "11-autonomous-loop" / "orchestration-and-subagents.md").read_text(
+            encoding="utf-8"
+        )
+        for text in (*skills, orch):
+            self.assertNotIn("giao kèm `model: fable`", text)
+            self.assertNotIn("effort `max`)", text)
+            self.assertIn("ADR-0110", text)
+        for text in skills:
+            self.assertIn("--inconclusive", text)
+            self.assertIn("--author-effort medium", text)
+        self.assertTrue((ROOT / "docs" / "adr" / "0110-reviewer-effort-ceiling-and-routing.md").is_file())
+
+    def test_deep_executor_defaults_to_opus_medium_and_pairs_with_reviewer_high(self):
+        # D-627: mặc định của vai là medium (không phải tham số lần gọi); cặp (medium, high) hợp lệ, (high, high) bị từ chối
+        meta = frontmatter(AGENTS["executor-deep"])
+        self.assertEqual((meta["model"], meta["effort"], meta["maxTurns"]), ("opus", "medium", "160"))
+        reviewer = frontmatter(AGENTS["reviewer-alt"])
+        self.assertIsNone(
+            xt.review_capability_error(reviewer["model"], meta["model"], reviewer["effort"], meta["effort"])
+        )
+        self.assertIsNotNone(xt.review_capability_error("opus", "opus", "high", "high"))
+
     def test_main_session_rule(self):
         self.assertEqual(
             TIERS["main_session"],
@@ -67,7 +103,9 @@ class ModelTiersTest(unittest.TestCase):
             },
         )
         self.assertIn("D-605", TIERS["main_session"]["top_opt_in"])
-        self.assertLess(xt.EFFORTS.index("xhigh"), xt.EFFORTS.index("max"))  # reviewer `max` cao hơn người viết ≤ xhigh
+        self.assertLess(
+            xt.EFFORTS.index("xhigh"), xt.EFFORTS.index("max")
+        )  # thang effort: `max` vẫn trên `xhigh` (reviewer không dùng, ADR-0110)
 
     def test_mechanical_executor_is_bottom_with_a_capped_budget(self):
         # D-605: việc cơ học có Gate ở bậc nhẹ nhất; đỏ một lần chuyển `executor`, turn thấp để prompt dưới 100K.

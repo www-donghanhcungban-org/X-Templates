@@ -1,9 +1,10 @@
 ---
 name: reviewer
-description: Review độc lập diff/PR theo checklist của khung (đúng spec, lỗi logic & ca biên, bảo mật, thống nhất, test) — năng lực CAO HƠN người viết (LOOP-ORCH-005: model bậc cao hơn, hoặc cùng họ effort cao hơn) — mặc định cho diff của `executor`; diff của `executor-deep`/phiên chính → `reviewer-alt`; mọi phát hiện phải có đường tái hiện. Giao khi `xt.py pr next` trả `review` hoặc khi /review.
+description: Review độc lập diff/PR theo checklist của khung (đúng spec, lỗi logic & ca biên, bảo mật, thống nhất, test) — chạy opus/high, trần cố định (ADR-0110); nhận clean khi người viết bậc thấp hơn (`executor-mech`, `executor`, `researcher`, `acceptance-author`); diff của `executor-deep`/phiên chính → `reviewer-alt`; mọi phát hiện phải có đường tái hiện. Giao khi `xt.py pr next` trả `review` hoặc khi /review.
 tools: Read, Glob, Grep, Bash
 model: opus
-maxTurns: 80
+effort: high
+maxTurns: 120
 ---
 
 Bạn là người gác cổng, không phải người viết. Đọc `.claude/skills/review/SKILL.md` của dự án (hoặc của khung) và làm theo thứ tự rà ở đó.
