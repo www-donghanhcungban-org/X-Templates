@@ -3,7 +3,7 @@ title: Điều phối: subagent, worktree, song song, không lồng
 kind: module
 prefix: LOOP-ORCH
 applies_to: [all]
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Điều phối: subagent, worktree, song song, không lồng
@@ -89,8 +89,10 @@ tổng số đợt và các việc bị chặn. Lệnh đọc sổ giai đoạn 
 Để xem toàn bộ lịch, dùng `--json`. Máy ưu tiên chuỗi phụ thuộc dài khi cách đó giảm được số đợt với cùng giới hạn người và file.
 
 Giới hạn: ≤ 5 subagent đồng thời (stored 23 §2, 03 §5; RAM/IO máy và ngân sách context phiên chính), độ sâu lồng = 1
-(`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` hoặc không cấp tool `Agent` cho subagent — cách thứ hai là cách repo
-này đang dùng: `tools:` của năm agent trong `.claude/agents/` không có `Agent`).
+(`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1` hoặc không cấp tool `Agent` cho subagent). Repo này dùng cả hai: `tools:` của
+tám agent trong `.claude/agents/` không có `Agent`, và khối `env` của `.claude/settings.json` đặt biến bằng `"1"` để đóng
+đường lồng qua agent `general-purpose` (mặc định 3 tầng, thừa hưởng tool `Agent`). Biến từ settings dự án áp sau khi tin
+cậy thư mục hoặc ngay ở `-p`; thread cloud trong Projects và phiên cloud nhiều repo không đọc `env` của repo.
 
 ### Gói giao việc (handoff) tối thiểu
 
@@ -158,7 +160,7 @@ Thiếu `acceptance_criteria` → không giao.
 ## Nguồn
 
 - Harness thật của repo: `.claude/agents/{researcher,executor,executor-deep,reviewer,reviewer-alt}.md` (`tools`, `model`, `maxTurns`; `effort` ở `executor-deep` (medium)/`reviewer`/`reviewer-alt` (high); không có `Agent` trong `tools`) và `AGENTS.md` §8 — đọc 2026-10-24.
-- Claude Code docs — subagents (`tools`, `disallowedTools`, `maxTurns`, `isolation: worktree`): <https://code.claude.com/docs/en/sub-agents> · env `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` (mặc định 3, `1` = tắt lồng): <https://code.claude.com/docs/en/env-vars> — xác minh 2026-10-13 (`research/2026-10-13-claude-code-hooks-skills.md`).
+- Claude Code docs — subagents (`tools`, `disallowedTools`, `maxTurns`, `isolation: worktree`): <https://code.claude.com/docs/en/sub-agents> · env `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH` (mặc định 3, `1` = tắt lồng): <https://code.claude.com/docs/en/env-vars> — xác minh 2026-10-13 (`research/2026-10-13-claude-code-hooks-skills.md`); khối `env` phạm vi mọi file settings, giá trị là chuỗi, settings dự án áp sau khi tin cậy thư mục hoặc ở `-p`: <https://code.claude.com/docs/en/settings-reference> §env, settings §Settings in cloud sessions — đọc 2026-11-26.
 - Anthropic, *How we built our multi-agent research system* (ngữ cảnh tách biệt, chi phí ~15× token, chỉ cho việc rộng): <https://www.anthropic.com/engineering/multi-agent-research-system> — theo `research/2026-10-13-ai-agent-research.md` §2.3 [F].
 - `www-donghanhcungban-org/stored` mục 21 §6 (giới hạn song song, hợp đồng giao diện trước), mục 23 §4.3 (chọn worker 2 trục), §4.4 (subagent không lồng, điều phối = phiên chính), §4.5 (trần 5 đồng thời, mô hình nhánh A/B, thất bại 2× đổi cách, 3× hỏi người) — đọc 2026-10-13.
 - Handoff schema (depth ≤ 3, concurrent ≤ 8, scopes ⊆ parent, `trust_level: untrusted`): `research/2026-10-13-ai-agent-research.md` §2.3 — khung này siết chặt hơn (depth 1, đồng thời ≤ 5) theo stored 23.

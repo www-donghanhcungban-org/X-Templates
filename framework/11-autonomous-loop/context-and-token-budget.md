@@ -3,7 +3,7 @@ title: Ngân sách context/token, compaction, bàn giao phiên
 kind: module
 prefix: LOOP-CTX
 applies_to: [all]
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Ngân sách context/token, compaction, bàn giao phiên
@@ -41,8 +41,8 @@ updated: 2026-11-26
 | 100% | Dừng | Verdict `budget`; không tick task; phiên sau đọc PROGRESS |
 
 **Context** đi đường riêng: đầy → compaction tự nén (PreCompact → `xt.py loop checkpoint` ghi task đang làm, lệnh kiểm
-cuối + exit code, file chưa commit, lỗi lặp vào `.autopilot/state.json`; SessionStart(compact) in lại qua `loop status`)
-rồi chạy tiếp. Áp dụng khi `loop init --single-session` (trần vòng tự tính `max(40, 8 × task chưa làm)`).
+cuối + exit code, file chưa commit, lỗi lặp vào `.autopilot/state.json`, rồi in checkpoint đó ra stdout làm chỉ dẫn cho
+bản tóm tắt nén; SessionStart(compact) in lại qua `loop status`) rồi chạy tiếp. Áp dụng khi `loop init --single-session` (trần vòng tự tính `max(40, 8 × task chưa làm)`).
 
 Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 90% là mốc cảnh báo nếu harness có đo chi phí thật.
 
@@ -58,10 +58,11 @@ Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 9
 
 | Biến | Tác dụng | Ghi chú |
 |---|---|---|
-| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Cửa sổ tính compaction tự động (100 000–1 000 000 token) | Đặt thấp để compaction sớm hơn trên phiên dài |
+| Khoá settings `autoCompactWindow` | Cửa sổ compaction tự động (số nguyên ≥ 100 000 token, mọi file settings) | Repo khung đặt `400000` ở `.claude/settings.json` (D-613); `--autocompact` thắng khoá này trong một phiên |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | Như khoá trên, dạng biến môi trường | Thắng cả `/autocompact`, `--autocompact` lẫn khoá settings — người dùng khó ghi đè theo phiên, nên khung không dùng |
 | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | % context kích compaction (1–100), chỉ hạ, không nâng | Kết hợp PreCompact hook ghi checkpoint |
 | `MAX_THINKING_TOKENS` | Ngân sách token suy nghĩ cố định (extended thinking) | Giới hạn: `=0` **không** tắt được thinking trên Opus 5.5/Sonnet 5.5/Haiku 5.5/Fable (model tự chọn độ sâu theo `effort`) — chỉnh mức suy nghĩ bằng `effort` ở frontmatter agent (`LOOP-CTX-014`), không bằng biến này |
-| PreCompact hook (`manual`/`auto`) | Chạy script trước khi nén; có thể chặn bằng exit 2 | Dùng để ghi PROGRESS trước khi mất chi tiết |
+| PreCompact hook (`manual`/`auto`) | Chạy script trước khi nén; có thể chặn bằng exit 2; exit 0 thì stdout (≤ 10 000 ký tự) là chỉ dẫn cho bản tóm tắt | Ghi checkpoint và in nó ra stdout; không in JSON `decision` (chặn nén) |
 
 ## Checklist
 
@@ -80,7 +81,7 @@ Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 9
 - [ ] `LOOP-CTX-013` **SHOULD** Skill/tài liệu khung nạp theo tầng (progressive disclosure): chỉ `description` thường trực, nội dung khi gọi; SKILL.md < 500 dòng. · Nguồn: Agent Skills spec
 - [ ] `LOOP-CTX-014` **SHOULD** Mức suy nghĩ (`effort`) đặt theo loại task: thấp cho cơ học (format, rename, boilerplate), cao cho thiết kế/debug khó; ghi trong PLAN khi khác mặc định. Đặt ở frontmatter `effort` của subagent (`low`/`medium`/`high`/`xhigh`/`max`, ghi đè effort phiên) thay vì đổi giữa phiên: đổi effort giữa phiên làm mất prompt cache ở hầu hết model (riêng Opus 5.5/Sonnet 5.5/Haiku 5.5/Fable 5.1 qua API key hoặc thuê bao giữ cache theo mặc định; Bedrock/Vertex/gateway thì không), và `MAX_THINKING_TOKENS=0` không tắt được thinking trên model 5.5/Fable. · Nguồn: Claude Code model-config, prompt-caching, sub-agents docs
 - [ ] `LOOP-CTX-015` **MAY** Đo chất lượng theo phiên (tỉ lệ Gate xanh lần đầu, số lần `verify`) so với độ dài phiên; nếu giảm sau N vòng → hạ ngưỡng bàn giao từ 80% xuống thấp hơn.
-- [ ] `LOOP-CTX-016` **MAY** Dùng `CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` để nén sớm trên phiên autopilot dài, kèm PreCompact checkpoint. · Nguồn: Claude Code env-vars docs
+- [ ] `LOOP-CTX-016` **MAY** Nén sớm trên phiên autopilot dài bằng khoá settings `autoCompactWindow` (số nguyên, ưu tiên hơn biến `CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` vì `--autocompact` vẫn ghi đè được theo phiên), kèm PreCompact checkpoint in ra stdout làm chỉ dẫn tóm tắt. Repo khung đặt `400000` (D-613); trước khi mang sang dự án đích, đo `preTokens` của lần nén đầu và tỉ lệ Gate xanh lần đầu (`LOOP-CTX-015`). → Kiểm: `.claude/settings.json` có `autoCompactWindow` là số nguyên ≥ 100000; test `tests/test_hook_precompact_output.py`. · Nguồn: Claude Code settings-reference §autoCompactWindow, model-config §Set the auto-compact window, hooks §PreCompact output (đọc 2026-11-26)
 - [ ] `LOOP-CTX-017` **MUST** Bàn giao chỉ khi chạm ≥ 80% **trần máy** (vòng/giờ/tiền), không vì context: context đầy → compaction có checkpoint rồi làm tiếp; khi bàn giao: chỗ dở + bước kế tiếp + SHA vào PROGRESS, commit + push, không mở task mới. → Kiểm: `.claude/settings.json` có hook `PreCompact`; PROGRESS "Bàn giao phiên" chỉ cập nhật khi `loop status --json` `iterations/max_iterations` ≥ 0.8 hoặc verdict `budget`. · Nguồn: ADR-0009, stored 21 §10
 - [ ] `LOOP-CTX-018` **SHOULD** Autopilot chạy một phiên tới `done`/`done-pending-human` (`loop init --single-session`): xong một mảng → gate → commit → cập nhật PROGRESS rồi làm tiếp trong cùng phiên; trạng thái trên đĩa đủ để phiên chết bất ngờ vẫn "tiếp tục" được. → Kiểm: `state.json` `single_session: true`; số phiên của một PLAN = 1 trừ khi `budget`/phiên chết. · Nguồn: ADR-0009
 - [ ] `LOOP-CTX-019` **SHOULD** Ước lượng token mỗi task khi lập PLAN, nhân 1.5 dự phòng, để đặt `--max-budget-usd`/`--hours`; tổng vượt ngân sách → thu hẹp phạm vi PLAN theo tiêu chí chất lượng cuối (ghi `D-NNN`), không chia phiên; nâng ngân sách tiền là việc của người. → Kiểm: PLAN có dòng ước lượng; D-NNN cho phần cắt. · Nguồn: stored 21 §10, ADR-0008, ADR-0009

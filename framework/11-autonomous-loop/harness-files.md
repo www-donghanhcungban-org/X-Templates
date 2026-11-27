@@ -3,7 +3,7 @@ title: File harness: PLAN · PROGRESS · BLUEPRINT · evidence · state
 kind: module
 prefix: LOOP-HARNESS
 applies_to: [all]
-updated: 2026-11-20
+updated: 2026-11-27
 ---
 
 # File harness: PLAN · PROGRESS · BLUEPRINT · evidence · state
@@ -36,7 +36,7 @@ updated: 2026-11-20
 | `.autopilot/evidence/T-NNN.json` | `task, cmd, cmd_sha256, exit_code, started, finished, head, output_tail` (40 dòng; `zero_tests_red: true` khi Gate exit 0 mà `Ran 0 tests`) | `xt.py loop record` | Không (bằng chứng cục bộ); bằng chứng chia sẻ = link CI/PR | `loop_verdict` so `cmd_sha256` rồi dạng chuẩn của `cmd` với Gate (nháy có nghĩa, chỉ khoảng trắng ngoài nháy tự do) |
 | `xt.yaml` | Khoá `format · lint · typecheck · test · build · format_file` (dev-task chạy; `gate-fast` thêm `format_check · test_fast`, chọn bằng `commit_gate`) + khoá khai báo khác (`install`, `dev`, `e2e`, `format_check`, `coverage`, `migrate`, `init`, `smoke`, `audit`…) cho agent đọc | Người/agent ở G5 | Có | `dev-task.sh gate` đọc được (xem `LOOP-HARNESS-008`) |
 | `AGENTS.md` (+ `CLAUDE.md` chứa `@AGENTS.md`) | Luật agent, lệnh, cấu trúc, điểm dừng | Người | Có | Script so bản gốc trong `docs/agents/` ([`XC-DOCAI-007`](../18-cross-cutting/docs-for-ai-agents.md)) |
-| `.claude/settings.json` + `.claude/hooks/*.sh` | Quyền allow/ask/deny, 4 hook | Người; agent sửa được (ADR-0018 — `strict` thì `ask`), nêu lý do ở commit/PR, tắt/bỏ qua hook bị deny | Có | `bash -n`, test hook |
+| `.claude/settings.json` + `.claude/hooks/*.sh` | Quyền allow/ask/deny, hook, `env` (độ sâu subagent 1), `autoCompactWindow` | Người; agent sửa được (ADR-0018 — `strict` thì `ask`), nêu lý do ở commit/PR, tắt/bỏ qua hook bị deny | Có | `bash -n`, test hook |
 | `docs/adr/`, `docs/SPEC-*.md`, `THREAT-MODEL.md` | Quyết định, đặc tả, mối đe doạ | Agent soạn, người duyệt | Có | Link từ PR `feat:` |
 | `TRAPS.md` (tuỳ chọn) | Bẫy đã mắc thật: triệu chứng → cách rà → chốt chặn → ngày/PR | Agent sau mỗi lỗi lặp | Có | Mỗi `fix:` lặp lại phải trỏ TRAPS |
 
@@ -45,6 +45,15 @@ updated: 2026-11-20
 Hook là lớp chặn sai lầm bằng phân tích tĩnh, không phải ranh giới cách ly (D-015). Lớp đỡ cho các chỗ dưới đây là sandbox
 OS/devcontainer có egress allowlist (`LOOP-HARNESS-022`) và việc phiên chính chạy lại Gate (`loop record`):
 
+- **Lệnh chèn trong skill** (`` !`<lệnh>` `` hay khối ` ```! `, chạy lúc skill nạp — gồm skill người dùng, plugin, dựng
+  sẵn như `/security-review`, skill của dự án đích): PreToolUse **không** chạy cho chúng; `allow: Bash` trần nên chỉ
+  `deny` của settings đỡ. Sự kiện `PreSkillShellCommand` (matcher `Bash|PowerShell`, `onFailure: block`) chặn được
+  bằng chính `pre-bash-guard.sh` (`tests/test_hook_skill_shell.py`), nhưng **chưa đăng ký** (T-5040): cần Claude Code
+  **≥ 2.1.332** (bản cũ hơn chạy lệnh chèn mà không gọi hook, phiên tương tác mở hộp thoại `Unknown hook event` mỗi lần,
+  chỉ bỏ mục đó, phần còn lại của tệp vẫn hiệu lực), và công cụ Edit/Write của harness đang dùng còn từ chối ghi
+  sự kiện này vào settings (schema thiếu tên, đo 2026-11-27). Khi đăng ký: cùng lệnh, `timeout` với guard của
+  PreToolUse `Bash`, và `xt.yaml` `claude_min_version` ≥ 2.1.332 (`LOOP-HARNESS-026`; test ghim cả hai). Docs hooks
+  §PreSkillShellCommand, settings §Fix a broken settings file, đọc 2026-11-27.
 - **Hàng rào qua lịch sử git** (AUD-SEC-988): không bị chặn như ghi hàng rào — (a) lệnh dời HEAD cả cây (`checkout
   <rev>`, `switch`, `reset [--hard|--soft] <rev>`, `symbolic-ref HEAD`, `pull`, `merge`) rồi khôi phục từ HEAD mới,
   `git apply`/`am`/`cherry-pick`/`revert -n`, `stash apply` (cả `stash store <commit>`), `git archive <rev> | tar -x`

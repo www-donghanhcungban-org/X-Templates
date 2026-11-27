@@ -3455,7 +3455,8 @@ class StopAndSessionTest(unittest.TestCase):
         # ADR-0009: PreCompact ghi vị trí; SessionStart(compact) nạp lại qua `loop status`. Không bao giờ chặn nén.
         tmp = self.project_with_loop()
         code, out, err = run_hook("pre-compact.sh", {"hook_event_name": "PreCompact", "trigger": "auto"}, tmp)
-        self.assertEqual((code, out, err), (0, "", ""))
+        self.assertEqual((code, err), (0, ""))
+        self.assertNotIn('"decision"', out)  # stdout = chỉ dẫn tóm tắt (T-5040), không bao giờ chặn nén
         st = json.loads((tmp / ".autopilot" / "state.json").read_text(encoding="utf-8"))
         self.assertEqual((st["checkpoint"]["trigger"], st["checkpoint"]["task"]), ("auto", "T-001"))
         code, out, _ = run_hook("session-start.sh", {"hook_event_name": "SessionStart", "source": "compact"}, tmp)
@@ -3504,7 +3505,7 @@ class StopAndSessionTest(unittest.TestCase):
         tmp = self.project_with_loop()
         sf = tmp / ".autopilot" / "state.json"
         rev = json.loads(sf.read_text(encoding="utf-8"))["rev"]
-        self.assertEqual(run_hook("pre-compact.sh", {"trigger": "manual"}, tmp)[:2], (0, ""))
+        self.assertEqual(run_hook("pre-compact.sh", {"trigger": "manual"}, tmp)[0], 0)
         st = json.loads(sf.read_text(encoding="utf-8"))
         self.assertEqual((st["rev"], st["checkpoint"]["trigger"]), (rev + 1, "manual"))
 
