@@ -1,12 +1,120 @@
 ---
-title: Kế hoạch nâng cấp hợp nhất — tách xt.py/guard.py, review high/120, giao hàng theo bằng chứng (đề xuất)
+title: Kế hoạch nâng cấp hợp nhất — tách xt.py/guard.py, review high/120, giao hàng theo bằng chứng (Revision 4)
 kind: research
 updated: 2026-11-27
 ---
 
-# Kế hoạch nâng cấp hợp nhất (đề xuất, 2026-11-26)
+# Kế hoạch nâng cấp hợp nhất (Revision 4, 2026-11-27)
 
-> **Trạng thái: đề xuất, chưa phải PLAN.** Bản chuyển từ PDF "Kế hoạch nâng cấp hợp nhất" (40 trang, đối chiếu mã ở commit `02480424`). Chưa có task ID đăng ký, chưa sửa mã. Khi triển khai phải ánh xạ vào PLAN đang có (không lập kế hoạch cạnh tranh), giữ task đã xong, và ghi rõ ADR bị thay thế. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
+> **Trạng thái: đã duyệt để thực thi (D-626, 2026-11-27).** §0 là bản hợp nhất hiện hành và **thắng mọi phần khác** của tệp. §1–§37 là căn cứ và lịch sử của ba revision trước (bản chuyển PDF 40 trang, Revision 2, Revision 3): số đo, phân tích và định nghĩa gói/lát ở đó còn dùng; **thứ tự, trạng thái và phạm vi thì theo §0**. Việc thực thi đăng ký ở `docs/autopilot/PLAN-upgrade-2026-11-27.md` và các PLAN đã có. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
+
+## 0. Bản hợp nhất hiện hành — Revision 4 (2026-11-27, `main` `be1bf6b4`)
+
+Lập sau khi ba reviewer độc lập (chỉ đọc) đối chiếu §1–§13, §14–§25, §26–§37 với `origin/main` `be1bf6b4`. Phần "đã kiểm, đúng" và "chưa kiểm" của ba lượt ở §0.8.
+
+### 0.1 Cách đọc
+- **Một lịch duy nhất: §0.5.** Bốn bảng lịch cũ (§6, §12.6, §23, §35) xếp cùng một việc ở bốn chỗ khác nhau (chính sách reviewer: Đợt 0 / PR 3 song song / 0D sau 0C / R2 sau R1) và ba câu cùng tự nhận "thắng khi xung đột". Từ Revision 4 chúng chỉ còn giá trị lịch sử; G01–G12, G12.0–.7, I0–I5, Cửa A–E giữ nguyên **định nghĩa**.
+- **Một nguồn trạng thái: dấu `[x]` trong PLAN và hàng trong sổ audit.** Câu nào trong §1–§37 ghi một PR "đang mở/nháp" hay một lỗi "chưa sửa" thì đối chiếu §0.2.
+- Nguồn ngoài (web) ở §11, §12.5, §37 không được kiểm lại trong Revision 4.
+
+### 0.2 Hiện trạng ở `main` `be1bf6b4` (đo 2026-11-27)
+| Mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| `scripts/xt.py` · `.claude/hooks/guard.py` | 23.668 / 23.668 dòng · 24.689 / 24.689 dòng — **hết ngân sách dòng**; 1.270.558 · 1.391.040 byte; 1.301 · 1.421 `def`; `build_parser` 647 dòng | `tests/test_docs_budget.py:22-23` |
+| PR đã merge sau khi tài liệu viết | #839 (T-5039), #840 (T-5043), #810, #847 (ADR-0107), #849 (ADR-0108), #850 (`FE-RENDER-019…021`), #851 (ADR-0109, D-624) | `git log origin/main` |
+| Lỗi §3: ghi tệp cài bị cụt | **Đã sửa** (#840): `write_copy` qua `write_bytes_atomic`. Còn lại: `guard.py` đã cụt từ bản cài cũ không tự sửa (chỉ `--force-harness`); `rules` trong manifest mất sau lần cài hỏng rồi chạy lại. AUD-HAR-574 còn ghi "mở" | `install.py:451-460`; rà #840 |
+| Lỗi §3: `executor-mech` chưa qua CLI | Còn | `xt.py:1573` `EXEC_TIER_RE`, `:1580`, `:5103`, `:23385` |
+| Lỗi §3: cost lượt Gate đỏ bị bỏ | Còn; thuộc `T-5010` | `xt.py:9689` |
+| Lỗi §3: release gặp tag có sẵn thoát 0 | Còn; **đã có ID `AUD-CI-042`** (chấp nhận, D-554, hạn 2027-01-21) | `release-tag.yml:60-63`, `:128-132` |
+| Lỗi §3: Guard `core` mất ngữ cảnh khi lỗi | Còn; **chưa có ID** | `guard.py:24529-24542`, `:24602-24605` |
+| Cấu hình reviewer | `reviewer`: opus, không khai effort, `maxTurns: 80`; `reviewer-alt`: opus, `effort: max`, `maxTurns: 80`; bản Codex `max`; `agent_toml` không map `maxTurns`; `review/SKILL.md` và mô tả `reviewer-alt` còn dặn "giao kèm model của phiên chính" (trái D-623) | `.claude/agents/`, `install.py:1551` |
+| `pr-review.yml` | Còn `pull_request_target`; job đang tắt (biến kích hoạt rỗng, 5 run gần nhất `skipped`); `--max-turns 40`, không truyền effort; đã có nhánh inconclusive cho diff cắt/thiếu (AUD-CI-016) | workflow `:14`, `:55-57`, `:96-98`, `:114-116` |
+| AUD-HAR-541 (tag glob) | Ca gốc đã chặn; **còn lọt `git tag *`** trong thư mục chỉ có tệp tên `v1.2.0` | rà Revision 4; `T-5041` vẫn cần |
+| Khoá duyệt thiết kế | `evidence_sha256` và cơ chế "sổ tồn tại → khách" đã ở `main`. Nợ review: hồi sinh lời duyệt cũ khi bản 2 dùng tệp bằng chứng khác; nạp `xt_design` qua `pkgutil.resolve_name`/`pydoc.locate` lọt guard | rà #847, #849 |
+| PLAN chưa tick dù đã merge | `T-5035`, `T-5037`, `T-5039`, `T-5042`…`T-5049`, `T-5043` (đối chiếu từng PR trước khi tick) | `PLAN-optimize-2026-11-26*.md` |
+| Sổ audit | 1.187 hàng: 672 đã sửa, 362 mở (5 🟠, 357 🟢), 146 chấp nhận, 7 bác bỏ; 0 🔴 mở | `docs/ops/AUDIT-STATUS.md` |
+| Chính sách merge của repo khung | `merge_review: optional`, `delivery_phase: harden`, `merge_hard_exceptions: auto`; lớp tác động tức thì (guard, hook, workflow — ADR-0095) vẫn đòi review sạch ở head | `xt.yaml:51-64` |
+
+### 0.3 Quyết định hiệu lực
+- **D-610:** không mở PR nâng ở dự án đích. `T-5017` (pilot Hotel Manager) và `T-5018` (nâng năm đích) hoãn; phần máy làm được đã tách ở `T-5024`.
+- **D-623** (chủ dự án chốt 2026-11-26, ghi sổ 2026-11-27): `reviewer-alt` chỉ opus trở xuống; trần effort `high`. Lý do ghi lúc đầu có một câu sai, đã đính chính trong sổ.
+- **D-625 — tuyến review dưới trần `high`.** Luật máy (`review_capability_error`): cùng họ thì effort reviewer phải cao hơn hẳn; khác bậc cùng nhà cung cấp thì so bậc. Với reviewer cao nhất là opus/`high`:
+
+  | Người viết | Reviewer opus/`high` | Tuyến |
+  |---|---|---|
+  | `executor-mech` (haiku), `executor`, `researcher`, `acceptance-author` (sonnet) | bậc cao hơn → nhận | **Mặc định cho diff lớp bắt buộc review** |
+  | `executor-deep` gọi với effort `medium` (tham số lần gọi), khai đúng `--author-effort medium` | cùng họ, `high` > `medium` → nhận | Việc khó của lớp bắt buộc review |
+  | `executor-deep` ở `high`; phiên chính opus tới `xhigh`; phiên chính bậc top | không cao hơn → **từ chối clean** | Vẫn rà để tìm 🔴, ghi `--inconclusive`. Lớp bắt buộc review thì PR đứng ở `missing` và **không merge được** — không gọi là "nợ trả sau" |
+
+  Hệ quả: diff chạm guard, hook, workflow, ngoại lệ cứng do bậc thấp hơn reviewer viết; phiên chính viết đặc tả và ca kiểm trước, không tự viết diff lớp đó. Không sửa lời khai tác giả, không tự nâng reviewer. Lối "(d) ghi nợ rồi trả theo lô" của §12.4 chỉ còn đúng khi `review_deferrable` đúng (pha build, không ngoại lệ cứng); repo khung đang `harden`. Dự án đích đặt `merge_review: required` mà không theo tuyến này sẽ kẹt. Reviewer khác nhà cung cấp để sau, khi bảng bậc ngoài Anthropic hết `verified: false`. Đo lại chất lượng người viết bậc thấp/effort thấp bằng bộ đánh giá G10.
+- **Cần ADR mới (ADR-0110, `T-5063`):** thay phần effort của ADR-0098 §2 **và** câu "reviewer-alt Opus max" của D-605; `maxTurns` 80 → 120 ghi cùng ADR. Cho tới khi ADR-0110 merge, cấu hình hiện hành (`reviewer-alt` effort `max`) còn hiệu lực.
+- **D-624 / ADR-0109:** gói `site-cms-ts` = Astro tĩnh + Decap CMS; việc ở `T-5057…T-5060`.
+- **D-626:** duyệt Revision 4 và PLAN-upgrade.
+
+### 0.4 Điều chỉnh phạm vi so với ba revision trước
+| Đề xuất cũ | Revision 4 | Lý do |
+|---|---|---|
+| §15, §18: module mới `scripts/xt_code_index.py` (`locate/search/context/impact`) | **Không tạo.** G12.6a = mở rộng `scripts/xt_guard_profile.py` (đóng AUD-ARCH-019, thêm alias và symtable; đã có `dependency_edges`, `transitive_closure`, `entry_points`, `--closure`, `--path` chạy được trên `xt.py`) và thêm trường `symbols` tuỳ chọn cho `xt.py context --json` | Trùng công cụ đã có và trái §30.1 ("không viết một analyzer thứ hai"); ánh xạ test đã có ở `test-select` (AST import, lan theo lớp); bề mặt hợp đồng đã có `tests/fixtures/contract-surface.json` |
+| §17: cache bền, SQLite/FTS5, ma trận 19 ca, I1 | **Hoãn.** MVP parse lại từ bytes mỗi lần gọi (compile 261 ms / 308 ms). Chỉ mở cache khi p50 của một lần tra vượt 2 s trên cả hai tệp lớn; §17 và I1 chỉ áp khi cache tồn tại | Chưa có số đo cho thấy cần; không có cache thì không có gì để cũ |
+| §22: so A/B/C trên 24–36 task × ≥ 3 lần × 3 nhánh (216–324 lượt agent) | Chạy **A trên 8 task** trước. Chỉ dựng B khi A trượt ngữ cảnh bắt buộc ở ≥ 2/8 task hoặc tốn ≥ 30 % token cho việc định vị. Ước lượng token × 1,5 trước khi chạy. "Lợi" = trung vị token đọc nguồn giảm ≥ 30 % và độ phủ ngữ cảnh bắt buộc không thấp hơn A | Không có ngân sách và ngưỡng dừng (`LOOP-ORCH-020`) |
+| §16: "manifest tối thiểu có owner" cho module | Sinh từ ba danh sách đã có (`install.py:913`, `xt_pack.py:33`, `typecheck` của `xt.yaml`); không thêm danh sách thứ tư | Một chủ đề một nhà |
+| §16 ví dụ `"encoding":"utf8-byte"` trên span dòng | `"coordinate_system":"line1-incl/col-utf8-byte-excl"` | Khớp quy ước dòng 1-based của chính §16 |
+| §19, §23: C15 chỉ phụ thuộc L05 | C15 sau **C14 và L05** | `framework-optimization.md:236` |
+| §19: baseline parity Guard chụp sau bản sửa `core` | Chụp sau bản sửa `core` **và** `T-5041` (cùng chạm `guard.py` và corpus); một chủ, nối tiếp | Tránh chụp hai lần |
+| §12.4 mục 1: "kèm ADR nới trần (ADR-0092)" | ADR-0092 nới trần **byte**; trần dòng đặt ở `T-5016`, mỗi lần nới có ADR riêng (0103, 0104, 0106) | Dẫn sai |
+| §12.4 mục 2: "phiên chính effort tới `xhigh` — D-558/D-559" | Nguồn là ADR-0098 §2 và D-605 | Dẫn sai |
+| §29.2: thêm inconclusive cho diff cắt/thiếu ở `pr-review.yml` | Đã có (AUD-CI-016); việc còn lại: kết quả dở do model trả về | Đã làm |
+| §29.3: tách đặc quyền workflow review trước hạn 2026-12-02 | Đợt 0 chỉ **gỡ trigger** `pull_request_target` (job đang tắt); thiết kế tách đặc quyền dời tới khi bật lại review trên CI | Việc nhỏ nhất đáp ứng hạn |
+| G04/§4B pilot Hotel Manager; G03 bằng chứng release; R0 "checklist T-4007/T-5020"; `T-5019` | Nhà = `T-5017` (hoãn, D-610); `T-5024`; `T-5024`; `T-5019` gộp vào `T-3989`/`T-3990` | Trùng task đã có |
+
+### 0.5 Lịch thực thi duy nhất
+Mỗi dòng một PR, một nhánh từ `origin/main`. Cột "Viết" theo D-625 (người viết phải dưới bậc reviewer ở lớp bắt buộc review). "0 dòng" = `guard.py`/`xt.py` không tăng dòng. Task mới (`T-5062…T-5073`) ở PLAN-upgrade; task cũ ở PLAN gốc của nó.
+
+| # | Đợt | PR | Task | Tệp chính | Sau | Viết · rà | Gate |
+|---|---|---|---|---|---|---|---|
+| 1 | 0 | Đồng bộ sổ: tick task đã merge, AUD-HAR-574 phần đã sửa, repro mới AUD-HAR-541, ghi nợ review #840/#847/#849 | `T-5062` | `PLAN-optimize-2026-11-26*.md`, `AUDIT-STATUS.md` | — | phiên chính · không | `xt.py audit check docs/ops/AUDIT-STATUS.md`; `tests.test_plan_files` |
+| 2 | 0 | ADR-0110: reviewer `high`/120, opus trở xuống, tuyến D-625 | `T-5063` | `.claude/agents/reviewer*.md`, `review/SKILL.md` (2 gương), `.codex/agents/`, ADR mới | — | `executor` · `reviewer-alt` | `tests.test_model_tiers tests.test_codex_harness`; `xt.py validate` |
+| 3 | 0 | Gỡ `pull_request_target` khỏi `pr-review.yml` (hạn 2026-12-02), sửa chú thích reviewer bậc top | `T-5064` | `.github/workflows/pr-review.yml`, `PROGRESS.md` | — | `executor` · `reviewer-alt` | `xt.py ci-check`; `tests.test_ci` |
+| 4 | 0 | `verify-render` đi vào shadow root (AUD-HAR-567, hạn 2026-12-02) | `T-5065` | `framework/templates/ui-gates/verify-render.mjs` | — | `executor` · `reviewer` | job CI có Chromium (D-603) |
+| 5 | 0 | Settings: `PreSkillShellCommand`, độ sâu subagent | `T-5040` | `.claude/settings.json`, hook | — | `executor` · `reviewer-alt` | Gate của task; thêm `claude_min_version` ≥ 2.1.332 (bản cũ hơn bật hộp thoại lúc khởi động) |
+| 6 | 0 | `release-tag` gặp tag có sẵn: kiểm SHA/kiểu tag và nháp trước `exit 0`; đóng AUD-CI-042 | `T-5066` | `.github/workflows/release-tag.yml` | — | `executor` · `reviewer-alt` | `xt.py ci-check`; `tests.test_release_assets` |
+| 7 | 0 | Bộ kiểm bằng chứng tag-drill/pilot/rollout (phần máy) | `T-5024` | theo task | — | theo task | Gate của task |
+| 8 | 1 | Guard: glob ở vị trí tên tag (thêm ca `git tag *`), 0 dòng | `T-5041` | `guard.py`, corpus | 2 | `executor` · `reviewer-alt` | Gate của task |
+| 9 | 1 | Guard: lỗi runtime ở `core` không rơi về quyết định rỗng; đăng ký AUD trước; 0 dòng | `T-5067` | `guard.py`, corpus, sổ audit | 8 | `executor` · `reviewer-alt` | `tests.test_hooks tests.test_guard_corpus tests.test_autonomy_bench`; có ca tốt đối chứng từng mode |
+| 10 | 1 | Guard: `XT_INPROC_LOADERS` thêm `resolve_name`, `locate`, `importfile`; 0 dòng | `T-5068` | `guard.py`, corpus | 9 | `executor` · `reviewer-alt` | `tests.test_stage_agent_approval tests.test_guard_corpus`; so vi sai guard cũ/mới: 0 lệnh bị nới |
+| 11 | 1 | Chụp baseline parity Guard, rồi tách: bao đóng → loader/fence → cụm đầu | `T-3996` → `T-3987/88` → `T-3989/90` | `.claude/hooks/` | 10 | theo PLAN-guard-split | theo task |
+| 12 | 2 | ADR-0111 (L05) + lát `xt_shard` chỉ di chuyển, hạ trần dòng `xt.py` | `T-5069` | `xt.py`, `scripts/xt_shard.py`, `install.py`, `xt_pack.py`, `xt.yaml`, `test_docs_budget.py` | 2 | `executor` · `reviewer-alt` | `tests.test_ci_shard tests.test_docs_budget tests.test_xt_cli tests.test_install tests.test_pack`; `typecheck`; patch trong test trỏ nơi tra cứu thật |
+| 13 | 2 | Sổ lát: sáu nguồn → cost lượt đỏ → xuất bền | `T-5009` → `T-5010` → `T-5011` | `xt.py`, `xt_flow.py` | 12 | theo task | theo task |
+| 14 | 2 | `executor-mech` qua CLI, đỏ một lần chuyển cấp | `T-5070` | `xt.py` (0 dòng ròng sau #12), test | 12 | `executor` · `reviewer-alt` | `tests.test_xt_cli tests.test_model_tiers`; `xt.py loop next` nhận `exec: mech` |
+| 15 | 2 | Máy cưỡng chế trần reviewer: `pr reviewed` từ chối effort > `high` và bậc top; hook kiểm `tool_input.effort`; `doctor` báo `CLAUDE_CODE_EFFORT_LEVEL` | `T-5071` | `xt.py`, hook, test | 2, 12 | `executor` · `reviewer-alt` | ca `HIGH/HIGH`, `XHIGH/HIGH`, override `max`, biến môi trường đều bị từ chối clean |
+| 16 | 2 | G12.6a: `xt_guard_profile.py` đóng AUD-ARCH-019; `xt.py context --json` thêm `symbols` | `T-5072` | `xt_guard_profile.py`, `xt.py` | 12 (phần `xt.py`) | `executor` · `reviewer` | `tests.test_guard_profile`; `--closure policy_action --json` có hằng khởi tạo |
+| 17 | 3 | Khoá duyệt thiết kế: trả nợ review #847 | `T-5073` | `scripts/xt_design.py`, test, ADR-0107 | — | `executor` · `reviewer-alt` | `tests.test_design_gate`; ca revert sổ với tệp bằng chứng khác phải khoá |
+| 18 | 3 | Gói `site-cms-ts`: starter → CI nghiệm thu → cài → pilot | `T-5057` → `T-5058` → `T-5059` → `T-5060` | `packs/site-cms-ts/`, workflow mới, `install.py` | `T-5059` sau 12 | theo PLAN-site-cms | theo task |
+| 19 | 3 | Starter `web-api-ts` token + ma trận viewport; `verify-render` axe hẹp | `T-5012`, `T-5013` | theo task | 4 | theo task | job CI có Chromium |
+
+**Song song được:** dòng 1–7 với nhau (không chạm tệp nóng; `CHANGELOG.md` rebase khi xung đột); đợt 1 (`guard.py`) với đợt 2 (`xt.py`), mỗi tệp nóng một chủ, nối tiếp trong đợt; dòng 17–19 với đợt 1–2 trừ `T-5059`. **Đường găng:** 2 → 8 → 9 → 10 → 11 (Guard) và 2 → 12 → 13/14/15 (XT). **Hạn đã ghi:** 2026-12-02 (dòng 3, 4), 2026-12-15 (nhóm chấp nhận của bản phát hành), 2026-12-31 (AUD-HAR-572…574), 2027-01-21 (hàng rào guard, D-609, `support_until` gói). Không đặt hạn hoàn tất toàn chương trình; ước lượng lại sau dòng 12.
+
+Các lát sau đó (G12.3 tách miền XT, C15/C16/C21–C24, G05–G11, ADR-0097 P2b…P6) giữ định nghĩa ở §5, §19, §24; chỉ đăng ký task khi dòng 11 và 12 đã merge và có số đo chi phí di chuyển thật của lát đầu.
+
+### 0.6 Việc cần người
+- `T-4007`: ruleset tag live, GitHub App phát hành, **bật release immutability** (`v3.36.0` đang `immutable=false`) → sau đó `T-5020`.
+- `T-5017`, `T-5018`: mở lại khi chủ dự án thay D-610.
+- D-625 là phiên chính tự duyệt để gỡ thế kẹt giữa D-161 và D-623; chủ dự án đổi tuyến (ví dụ nâng trần effort reviewer, hoặc cho reviewer khác nhà cung cấp) thì ghi D-NNN mới trước khi `T-5063` merge.
+
+### 0.7 Điều kiện xong và điều kiện dừng
+- Mỗi PR: Gate ở bảng xanh trong hook commit và CI; lớp bắt buộc review có `pr reviewed --clean` ở đúng head theo D-625; `CHANGELOG.md` khi đổi mục/ID/công cụ; task tick kèm số PR.
+- Đợt 0 xong khi dòng 1–7 merge. Đợt 1 xong khi baseline parity Guard được chụp và lát đầu merge với `guard.py` giảm dòng. Đợt 2 xong khi `LINE_CAPS` của `xt.py` hạ và `T-5010` ghi được cost lượt đỏ.
+- Dừng một lát khi: cùng lỗi đỏ 3 lần; phải nới trần dòng/byte (cần ADR riêng); không có reviewer hợp lệ theo D-625 (ghi `--inconclusive`, `loop defer`, làm lát độc lập kế).
+- Không tuyên bố: tiết kiệm token, chất lượng review tương đương, hay sẵn sàng production khi chưa có số đo cùng bộ tác vụ.
+
+### 0.8 Kết quả rà của Revision 4
+- **Đã kiểm, đúng (ở `be1bf6b4`):** số dòng và trần hai tệp lớn; bốn lỗi §3 còn lại như bảng §0.2; frontmatter reviewer; logic `review_capability_error`; trạng thái `T-3995` xong, `T-3996`, `T-3987…3990`, `T-5009…5011`, `T-5019`, `T-5020`, `T-5040`, `T-5041`, `T-4007` chưa làm; AUD-HAR-541/572/573 mở, 542 đã sửa, AUD-ARCH-019 mở; nội dung ADR-0090/0091/0093/0094/0099 khớp điều tài liệu gán; D-542, D-558, D-559, D-605, D-610, D-620, D-624 có trong sổ; cụm shard/weights 7 hàm (`xt.py:2915-3035`, cộng `cmd_test_weights` `:3018-3047`); `test-select`, `context`, `plan waves --handoff`, `blueprint-status` có; chỉ có gói `web-api-ts`; registry 6 đích (5 bản 3.34.0, 1 bản 3.29.0); `VERSION` 3.36.0.
+- **Chưa kiểm:** mọi nguồn web; số coupling (407 dòng patch / 55 tệp), corpus 4.106 ca, thời gian compile, bao đóng 15.714 dòng; thứ tự ưu tiên effort của Claude Code; ngày cưỡng chế `pull_request_target` trên GitHub Docs (`PLAN-3.13-next-level.md:11` ghi 2026-11-02, `PROGRESS.md` ghi 2026-12-02); ma trận §27; liên kết §37. Không chạy Gate hay CI nào cho các số đo cũ.
+- **Nghi ngờ chưa tái hiện:** race `HEAD_SHA` ở §29.2 (có vẻ vô hại: dấu review gắn head cũ không mở được head mới, `cancel-in-progress: true`).
+
+### 0.9 Ghi chú đầu tệp của ba revision trước (lịch sử; hết hiệu lực về quyền ưu tiên)
+
+> **Bản gốc (2026-11-26): đề xuất, chưa phải PLAN.** Bản chuyển từ PDF "Kế hoạch nâng cấp hợp nhất" (40 trang, đối chiếu mã ở commit `02480424`). Chưa có task ID đăng ký, chưa sửa mã. Khi triển khai phải ánh xạ vào PLAN đang có (không lập kế hoạch cạnh tranh), giữ task đã xong, và ghi rõ ADR bị thay thế. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
 >
 > Bản chuyển này gồm đủ 40 trang PDF (cô đọng; số đo giữ nguyên), §11 kiểm chứng một bài đăng về harness ba agent của Anthropic, và **§12 nghiên cứu lại ở `main` `259ac21c`**: số đo mới, trạng thái năm lỗi và 31 lát, sáu hệ quả PDF chưa nêu, thứ tự Đợt 0 đề xuất. Số ở §2, §3, §8 là của PDF; chỗ nào lệch với `main` thì §12 thắng.
 
@@ -174,6 +282,8 @@ Bằng chứng đóng mỗi lát: manifest chuyển symbol; delta trước/sau (
 Không nhập nhầm chính sách lỗi: pre-edit hiện có đường load lỗi cho qua; Bash thường và merge/API khác nhau — sửa hành vi đó phải là thay đổi policy có nghiệm thu riêng.
 
 ## 6. Thứ tự triển khai và Cửa A–E
+
+> **Revision 4:** bảng đợt dưới đây hết hiệu lực về thứ tự — lịch duy nhất ở §0.5. Định nghĩa Cửa A–E còn dùng.
 | Đợt | Đi trước | Song song được |
 |---|---|---|
 | 0 Tính đúng và cấu hình | G01 high/120, mech; G02 cost; bugfix core; baseline và atomic file | G04 brief/baseline; G05 contract; inventory, fixtures |
@@ -324,17 +434,17 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
 - Trùng phạm vi cần gộp khi lập PLAN: PR nháp #810 (nghiên cứu giảm token) đã đề xuất `omitClaudeMd` cho `explore`/`executor-mech`, đặt độ sâu và số subagent đồng thời bằng biến môi trường, và rà chi phí `reviewer-alt` ở `max` — G01 dùng lại, không viết lần hai.
 
 ### 12.4 Sáu hệ quả mà PDF chưa nêu hoặc cần sửa
-1. **Cả hai tệp lớn không còn dòng nào trong ngân sách.** Mọi sửa G01/G02 chạm `xt.py` và bản sửa lỗi `core` của Guard phải 0 dòng ròng, đặt logic ở module anh em (cách ADR-0106 làm với `xt_design.py`), hoặc kèm ADR nới trần (ADR-0092). Đề xuất đảo thứ tự Đợt 0: **một lát tách giải phóng trần đi trước các bản sửa trong `xt.py`**. Ứng viên theo số đo của PDF: shard/weights (`xt.py` 2914–3017, 121 dòng, 3 tham chiếu ngoài, đã có tên đích `xt_shard` ở ADR-0090) hoặc CSS contrast (269 dòng, không gọi ra ngoài cụm).
+1. **Cả hai tệp lớn không còn dòng nào trong ngân sách.** Mọi sửa G01/G02 chạm `xt.py` và bản sửa lỗi `core` của Guard phải 0 dòng ròng, đặt logic ở module anh em (cách ADR-0106 làm với `xt_design.py`), hoặc kèm ADR nới trần dòng mới (như ADR-0103/0104/0106; ADR-0092 chỉ nới trần byte). Đề xuất đảo thứ tự Đợt 0: **một lát tách giải phóng trần đi trước các bản sửa trong `xt.py`**. Ứng viên theo số đo của PDF: shard/weights (`xt.py` 2914–3017, 121 dòng, 3 tham chiếu ngoài, đã có tên đích `xt_shard` ở ADR-0090) hoặc CSS contrast (269 dòng, không gọi ra ngoài cụm).
 2. **Trần `high` đụng thật vào luật "reviewer cao hơn người viết".** `review_capability_error` (xt.py:17945): khác họ cùng nhà cung cấp → so bậc, effort không bù; cùng họ → effort reviewer phải cao hơn hẳn. Với frontmatter hiện tại:
 
    | Người viết | Reviewer opus/`high` | Kết quả |
    |---|---|---|
    | `explore`, `executor-mech` (haiku) · `executor`, `researcher`, `acceptance-author` (sonnet) | bậc cao hơn | Nhận, không phụ thuộc effort |
    | `executor-deep` (opus, `effort: high`) | cùng họ, high = high | **Bị từ chối clean** |
-   | Phiên chính viết code (opus, effort tới `xhigh` — D-558/D-559) | cùng họ, high ≤ tác giả | **Bị từ chối clean**, trừ khi phiên chính chạy ≤ `medium` |
+   | Phiên chính viết code (opus, effort tới `xhigh` — ADR-0098 §2, D-605) | cùng họ, high ≤ tác giả | **Bị từ chối clean**, trừ khi phiên chính chạy ≤ `medium` |
 
    **Chủ dự án chốt (2026-11-26, D-623): `reviewer-alt` chỉ dùng opus trở xuống** — không dùng bậc `top` cho review, kể cả ở effort ≤ `high`. Cùng với trần `high`, cấu hình cao nhất của reviewer là opus/`high`. Hệ quả: người viết opus muốn có review sạch cùng họ thì phải chạy effort ≤ `medium`. Ba lối còn lại cho diff của `executor-deep` và của phiên chính viết code:
-   - **(d) Mặc định: không ghi clean.** Reviewer opus/`high` vẫn rà và báo phát hiện (🔴 sửa ngay), nhưng lượt đó ghi `pr reviewed --inconclusive`, phần còn lại thành nợ review trả theo lô ở pha harden (ADR-0062). Giữ nguyên năng lực tầng sâu, không nới luật; giá là nợ review tăng đều theo số diff tầng sâu.
+   - **(d) Không ghi clean** (sửa ở Revision 4, D-625): reviewer opus/`high` vẫn rà và báo phát hiện (🔴 sửa ngay), lượt đó ghi `pr reviewed --inconclusive`. Đây **không** phải nợ trả sau: khi `pr next` đòi review (lớp bắt buộc review, hoặc nhánh đích đặt `merge_review: required`) PR đứng ở `missing` và không merge được; nợ chỉ áp khi `review_deferrable` đúng (pha build, không ngoại lệ cứng). Trong ràng buộc D-623 không reviewer Anthropic nào gỡ được, nên tuyến mặc định là hạ bậc phía người viết (§0.3).
    - **(c) Hạ effort thật của người viết xuống `medium`** (`executor-deep`, hoặc phiên chính khi tự viết code): cặp medium/high hợp lệ về máy. Chỉ chuyển sang lối này khi bộ đánh giá G10 cho thấy tầng sâu ở `medium` không tụt chất lượng trên cùng tác vụ; không làm chỉ để cặp hợp lệ.
    - **(b) Reviewer khác nhà cung cấp:** để sau, vì bảng bậc ngoài Anthropic còn `verified: false`.
 
@@ -360,9 +470,11 @@ Thứ tự XT/Guard của phép compile **đảo** giữa hai máy: xác nhận 
 | Bài harness (§11) | Lượt hai xác nhận: "a 16-feature spec spread across ten sprints"; bản Opus 4.6 bỏ sprint, evaluator một lượt cuối; DAW 3 giờ 50 phút, $124,70; không có tên tệp cho sprint contract |
 
 ### 12.6 Đợt 0 sau khi đo lại (đề xuất thứ tự PR; chưa đăng ký task mới)
+
+> **Revision 4:** hết hiệu lực về thứ tự — xem §0.5. PR 1 đã merge (#840); PR 6 có ID AUD-CI-042; PR 3 còn thiếu `.agents/skills/review/SKILL.md` và `pr-review.yml`.
 | # | PR | Tệp chính | Việc đã có nhà | Ràng buộc |
 |---|---|---|---|---|
-| 1 | Hoàn tất ghi nguyên tử bộ cài | `scripts/install.py` | `T-5043`, PR #840 | Đã mở; chỉ cần rà và merge |
+| 1 | Hoàn tất ghi nguyên tử bộ cài | `scripts/install.py` | `T-5043`, PR #840 | Đã merge 2026-11-27 |
 | 2 | Lát tách giải phóng trần `xt.py` (shard/weights → `xt_shard`) | `scripts/xt.py`, module mới, `xt.yaml` (typecheck), `install.py`/`xt_pack.py` (danh sách cài), tests | ADR-0090; G12.2 | Manifest symbol, chuyển patch tới nơi lookup, kiểm bản cài; hạ trần sau khi merge |
 | 3 | Chính sách reviewer `high`/120 | `.claude/agents/reviewer*.md`, `.claude/skills/review/SKILL.md`, `.codex/agents/*` (sinh lại), `tests/test_model_tiers.py`, `test_codex_harness.py`, ADR mới | G01; C12 | Theo quyết định §12.4 mục 2: diff tầng sâu mặc định ghi inconclusive + nợ; kiểm ba điểm của mục 3 |
 | 4 | `executor-mech` qua CLI và chuyển cấp đỏ một lần | module vai (anh em của `xt.py`), `EXEC_TIER_RE`, `EXECUTOR_AGENTS`, PLAN parser, tests | G01; D-605 | Sau PR 2 (cần dư địa dòng) |
@@ -403,6 +515,8 @@ Năm lỗi ở §12.2 của #846 là backlog tính đúng: vai mech chưa qua CL
 **Sửa thứ tự:** §6/§12.6 của #846 có điểm cần làm rõ: các PR sửa XT và Guard bị cap 0; PR tách XT ít coupling có thể đi trước lỗi XT, còn sửa Guard core phải trước khóa baseline parity Guard. Chuẩn bị inventory, kiểm thử và ADR song song; không tự nới cap. T-3987–3990 giữ thứ tự logic và cùng lát tích hợp đủ loader/fence/companion nếu PLAN yêu cầu. Đưa cải thiện token vào G12.6, không đặt thành điều kiện chặn G04–G10.
 
 ## 15. Thiết kế tối giản: chọn theo chi phí toàn vòng đời
+
+> **Revision 4:** không tạo `scripts/xt_code_index.py`; phạm vi thu hẹp ở §0.4 (mở rộng `xt_guard_profile.py` và `xt.py context`).
 
 | Phương án | Đánh giá / điều kiện |
 |---|---|
@@ -448,6 +562,8 @@ Ví dụ JSON (minh họa, không phải kết quả chạy trên repo):
 Dòng 17945 là tham chiếu tại mốc #846; phải đọc lại bytes trước khi dùng để sửa. Chỉ trả đoạn mã khi file hash và range đều hợp lệ. Map xuất Markdown/JSON là projection có schema/revision, không sửa tay; khai báo trách nhiệm/ID ở một nơi hiện hữu hoặc manifest tối thiểu có owner và test. Không ép tạo đủ 8 bảng vật lý khi hai bảng files/symbols đủ cho MVP.
 
 ## 17. Độ mới, cache và an toàn dữ liệu
+
+> **Revision 4:** cache bền hoãn (§0.4); mục này và I1 chỉ áp khi cache tồn tại.
 
 **Không dùng riêng Git SHA.** Agent thường sửa chưa commit; checkout và worktree có thể cùng HEAD khác bytes. Snapshot gồm danh tính worktree (Git dir/root thực), HEAD hoặc unborn, tập path trong scope, digest bytes từng file, phiên bản extractor/schema/rules. Sử dụng danh sách Git dạng NUL để không lỗi path có dấu/khoảng trắng/newline; mặc định tracked + untracked không ignore đã được scope cho phép; loại `.git`, worktree lồng, vendor, build, binary, cache, secrets, log/credential và symlink thoát root. Submodule là boundary; không tự đi vào. Không theo symlink để đọc file ngoài root. Chỉ cho phép phạm vi repo được phép đọc.
 
@@ -512,6 +628,8 @@ Giữ không lồng subagent theo AGENTS; T-5040 depth=1 và PreSkillShellComman
 
 ## 22. Đo hiệu quả và điều kiện chuyển giai đoạn
 
+> **Revision 4:** so A/B/C có ngưỡng dừng và ngân sách ở §0.4.
+
 Không cam kết giảm 60% token, 30% tiền hoặc tiến độ 8–12 tuần khi chưa có baseline. Chốt ngưỡng từ số đo sau lát đầu; mục tiêu thử nghiệm có thể là giảm token đọc nguồn 30–60% nhưng không bỏ sót required context. Đo **cả pipeline**: index build/refresh/query, token tool output, cache hits, attempts, cost, wall time, time-to-green, CI runner-minutes, lỗi lọt, sửa lại, review debt. Thời gian compile ở §12.1 đảo thứ tự giữa hai máy; không suy p95 hook từ compile. G02 thu cost cả lần đỏ/hủy/retry, chống đếm trùng, unknown không bằng 0.
 
 **Protocol A/B/C:** A = công cụ hiện hữu `rg`/blueprint-status/test-select; B = AST map/locate; C = B + dependency/context pack + cache (sau MVP). Cùng base/head, fixture, yêu cầu, host/model/effort, policy và ngân sách; ngẫu nhiên/counterbalance thứ tự, tách cold/warm, ghi cache state; lặp đủ để báo median/p95 cùng cỡ mẫu, dùng tối thiểu 3 lần/task cho tín hiệu ban đầu (không suy độ tin cậy thống kê từ mẫu nhỏ). 24–36 task từ lỗi thực/AUD/review đỏ, có holdout; nhóm tìm symbol, sửa module, đổi config review, closure Guard, test-select, installed-copy, dirty rename, conflict/compaction. Đo recall required context/test, precision/top-k, success theo suite độc lập, false positive/negative, `pass^k` ca critical và chi phí trên task được nghiệm thu. So solo/harness ở cùng quality; thử loại thành phần không còn cần mỗi đổi model. Không đánh đổi missed critical lấy giảm token.
@@ -528,6 +646,8 @@ Không cam kết giảm 60% token, 30% tiền hoặc tiến độ 8–12 tuần 
 Ngưỡng repo không đổi: coverage 100% line+branch, mypy strict 3.13, C901 ≤10, Gate-fast + full CI, cap file/group. Fitness function mới ở chế độ báo trước khi ratchet, dựa trên baseline SCC/fan-in/out, số file nóng và boundary; không ngưỡng 500 dòng cứng ép tách tùy tiện. Tăng cap chỉ qua ADR. Các chỉ số I0–I5 là nhãn nghiệm thu đề xuất, không phải Gate/task ID đã có.
 
 ## 23. Backlog hợp nhất và thứ tự thực hiện (thay lịch §6/§12.6 khi xung đột)
+
+> **Revision 4:** thứ tự 0A–3B hết hiệu lực — xem §0.5; định nghĩa lát G12.x và I0–I5 còn dùng. C15 sau C14 và L05; `T-5040` không chạm tệp nóng nên thuộc đợt 0.
 
 | Đợt / lát | Đầu ra, phụ thuộc, owner và cổng đóng |
 |---|---|
@@ -581,6 +701,8 @@ G01–G12 giữ hợp đồng gốc (vai, cost, giao hàng, pilot, quyết đị
 **Kết luận:** giải phóng trần bằng một lát tách thật; làm bản đồ mã nguồn tối thiểu dùng được ngay, rồi mở rộng khi số đo chứng minh. Không chỉ ghi chú số dòng; không thêm hạ tầng quá sớm; không giảm quyền kiểm soát. Sau khi chủ dự án cho phép triển khai, cập nhật PLAN đang có bằng quy trình repo và tiến hành từng PR nhỏ có bằng chứng.
 
 ## 26. Kiểm toán lại toàn khung — Revision 3 (27/11/2026)
+
+> **Revision 4:** hiện trạng ở §0.2 thắng các mục dưới đây (nhiều PR ghi 'mở/nháp' đã merge).
 
 **Phạm vi và quyết định.** Đây là lượt tái đánh giá toàn phạm vi kiến trúc, không phải chứng nhận đã audit từng dòng. Mốc chính: main 045622d7484203e9e849f8f509243fdc2f88d663; mốc đề xuất: PR #846 head 343881165e3b0352d2b0069d80990853be5aaa29 (có D-623). Đọc cây Git đầy đủ (không truncated), README, cấu hình Gate/CI, một số module thực thi, hợp đồng, PLAN, ADR, sổ audit, registry, baseline giao hàng, PR đang mở và API GitHub. Phần thay đổi sau 259ac21c có hai commit #849 và #850. Kết quả kỹ thuật trước đây được kế thừa có ghi mốc; lượt này chưa chạy Gate, full CI, mutation, kiểm thử xâm nhập, benchmark hoặc pilot mới. Hai blob XT/Guard lớn không đọc đủ qua connector ở lượt này; không tuyên bố đã rà từng dòng. Không sửa PLAN đang chạy, không đăng ký ID mới, không đổi code, quyền, cấu hình hoặc đích. Các mục §26–37 là delta của G01–G12; khi xung đột về hiện trạng/thứ tự, dùng §26–37, còn bất biến đã chốt ở §1–25 và D-610/D-623 giữ hiệu lực.
 
@@ -677,6 +799,8 @@ T-4007: chủ quản trị xác nhận live tag rule, danh tính phát hành gi�
 
 ### 29.3. Hạn 02/12/2026 — tách đặc quyền workflow review
 
+> **Revision 4:** đợt 0 chỉ gỡ trigger (`T-5064`); thiết kế tách đặc quyền dời tới khi bật lại review trên CI.
+
 PROGRESS.md đã ghi bỏ pull_request_target khỏi pr-review.yml trước 02/12; GitHub Docs xác nhận chính sách mặc định với repo public bị ảnh hưởng bắt đầu cưỡng chế ngày này. Trạng thái policy riêng của repo và biến XT_REVIEWER_ENABLED không đọc được trong lượt này; baseline cũ có run review skipped, không suy trạng thái live. Ưu tiên rà trước hạn. So sánh hai tuyến: review chỉ đọc chạy ngoài workflow do phiên/tài khoản có quyền (đơn giản khi không cần chạy CI reviewer) hoặc workflow tách privilege (job/dispatch được kiểm quyền, chỉ đọc diff như dữ liệu và checkout mã trusted default branch; khâu publish chỉ nhận kết quả cấu trúc đã xác minh head). Không checkout/chạy mã PR trong môi trường có secret; workflow_run cũng là đặc quyền, không mặc nhiên an toàn; artifact/output từ PR không được thực thi. Giữ danh tính độc lập, token tối thiểu, không ghi secret, fail nếu thiếu bằng chứng; fork chỉ báo theo quyền hiện có. Thiết kế, test bằng fixture rồi mới chuyển; nếu cần admin/secret giữ pending-human. Không xin bật lại pull_request_target mặc định chỉ để CI xanh.
 
 ## 30. Tối ưu kiến trúc, test và CI theo chi phí toàn vòng đời
@@ -735,6 +859,8 @@ SPEC-app và scripts/xt_app/server.py đã có app local (127.0.0.1, Host/Origin
 Quản trị tri thức: từng requirement/standard/procedure giữ ID và source, ngày/phiên bản đọc, effective date/phạm vi, owner, review_due; kiểm source sống cho quyết định có ảnh hưởng lớn. Không nhân bản văn bản pháp luật hay tạo một danh mục song song; registry projection đọc một nguồn. NIST SSDF 1.1 SP 800-218 vẫn Final, 1.2 Rev.1 ở trang NIST là Draft tại lượt đọc; chỉ dùng đối chiếu phương pháp, không đổi chuẩn mặc định vì draft. Hợp đồng approval/policy/guard/CI/pack cập nhật thì invalidation đúng dependency, không dùng stale proof. Research, audit và PLAN có bản đang dùng + archive chỉ đọc giữ ID/links/provenance (C23); PROGRESS giữ 8 KiB và SessionStart <=9.800 ký tự theo ADR-0091, chỉ pointer/delta/next action, không nạp toàn sổ audit/blueprint/plan. Agent tiếp tục sau compaction theo checkpoint, không bắt đọc toàn bộ doc. Sổ 362 mục mở ưu tiên bằng impact/expiry, phân loại false positive/accepted/known issue/reproduce needed; evidence không có ghi rõ, không sửa trạng thái tự động chỉ bằng suy đoán.
 
 ## 35. Kế hoạch thực hiện hợp nhất: giữ G01–G12, thứ tự theo rủi ro và dependency
+
+> **Revision 4:** bảng R0–R6 hết hiệu lực về thứ tự — xem §0.5 (có task ID, tệp, phụ thuộc, Gate cho từng PR). #840, #847, #851 đã merge.
 
 Các mã R0–R6 dưới đây chỉ là đợt triển khai đề xuất, không phải task ID mới. §23 và §24 vẫn là nhà các lát G12.0–.7, I0–I5 và 31 lát; bảng này chỉ điều chỉnh thứ tự và nối phần đánh giá toàn hệ. Đóng từng PR, một owner mỗi path nóng, không lập một mega-PR; mở worktree độc lập khi files/contract không giao; cổng hiện có không hạ. Trước thực thi, lấy main mới, reconcile PR/PLAN/AUD/ADR và quyết định thật. Các PR đang mở có thể thay đổi, kiểm lại.
 
