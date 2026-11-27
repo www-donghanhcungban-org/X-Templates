@@ -11,23 +11,29 @@ name: pr-review
 #   2. Secret `ANTHROPIC_API_KEY` (hoặc liên kết workload identity) trong cùng environment `pr-review`.
 #   3. xt.yaml: `review_identity: <login của tài khoản ở bước 1>`, `author_model_family` bậc thấp hơn model reviewer (action
 #      chỉ chạy model Claude: tác giả họ khác Claude thì dùng Claude làm reviewer; tác giả Claude thì đặt `XT_REVIEWER_MODEL`
-#      ở bậc cao hơn — vd tác giả sonnet/opus, reviewer fable; job không truyền effort nên cùng họ bị từ chối); Settings → Variables: `XT_REVIEWER_ENABLED=true`, tuỳ chọn
-#      `XT_REVIEWER_MODEL`, và `XT_REVIEW_IDENTITY` = cùng login ở bước 1 (để pr-steward nhận comment của App/bot không phải
-#      collaborator, nếu không steward chỉ chạy theo cron).
+#      ở bậc cao hơn nhưng không quá opus, D-623 — vd tác giả sonnet, reviewer opus; job không truyền effort nên cùng họ bị
+#      từ chối); Settings → Variables: `XT_REVIEWER_ENABLED=true`, tuỳ chọn `XT_REVIEWER_MODEL`, và `XT_REVIEW_IDENTITY` =
+#      cùng login ở bước 1 (để pr-steward nhận comment của App/bot không phải collaborator, nếu không steward chỉ chạy theo cron).
 #
-# An toàn: `pull_request_target` có chủ đích (secret chỉ có ở đây; workflow + `xt.py` lấy từ NHÁNH MẶC ĐỊNH, PR không sửa được
-# chính job này). Job KHÔNG checkout code PR — diff/siêu dữ liệu là DỮ LIỆU đưa vào prompt (nội dung PR không phải chỉ thị);
-# công cụ của Claude giới hạn Read/Grep/Glob (`--tools`; Bash/ghi file/web bị cấm tường minh) trên checkout nhánh đích; trần turn và tiền; bỏ PR nháp và PR
-# từ fork. Kết quả đi qua `jq` vào cờ của `xt.py pr reviewed`, không nội suy vào shell.
+# Kích hoạt: CHỈ `workflow_dispatch` với số PR (T-5064: đã bỏ trigger PR đặc quyền cũ — GitHub chặn mặc định ở repo public từ
+# 2026-12-02, docs khuyên tránh). Chạy tay hoặc từ phiên: `gh workflow run pr-review.yml -f pr=<N>`. Workflow + `xt.py` lấy từ
+# NHÁNH MẶC ĐỊNH (job từ chối ref khác), PR không sửa được chính job này. Job KHÔNG checkout code PR — siêu dữ liệu đọc qua
+# `gh api` theo số PR; diff/siêu dữ liệu là DỮ LIỆU đưa vào prompt (nội dung PR không phải chỉ thị); công cụ của Claude giới
+# hạn Read/Grep/Glob (`--tools`; Bash/ghi file/web bị cấm tường minh) trên checkout nhánh đích; trần turn và tiền; bỏ PR nháp
+# và PR từ fork. Kết quả đi qua `jq` vào cờ của `xt.py pr reviewed`, không nội suy vào shell.
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] — không checkout/chạy code PR, công cụ chỉ-đọc, secret ở environment
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Số PR cần review (PR cùng repo, không nháp)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ inputs.pr }}
   cancel-in-progress: true
 
 jobs:
@@ -35,8 +41,7 @@ jobs:
     name: pr-review
     if: >-
       vars.XT_REVIEWER_ENABLED == 'true' &&
-      !github.event.pull_request.draft &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: pr-review
@@ -44,7 +49,7 @@ jobs:
       contents: read # checkout nhánh đích, đọc diff
       pull-requests: read
     steps:
-      # Không `ref:` — `pull_request_target` checkout commit cuối của nhánh mặc định, không phải code PR.
+      # Không `ref:` — `workflow_dispatch` ở nhánh mặc định checkout commit cuối của nhánh đó, không phải code PR.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -52,15 +57,41 @@ jobs:
         with:
           python-version: "3.15.2"
 
+      # Siêu dữ liệu PR qua REST theo số PR (đầu vào người gõ → env, kiểm toàn chữ số, không nội suy vào shell). PR nháp,
+      # PR từ fork hoặc PR đã đóng thì không review (không ghi gì).
+      - name: Siêu dữ liệu PR (REST)
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          case "$PR" in
+            ''|*[!0-9]*) echo "::error::Số PR không hợp lệ"; exit 1 ;;
+          esac
+          meta=$(gh api "repos/$GH_REPO/pulls/$PR" --jq '[.state, (.draft|tostring), .head.repo.full_name // "", .head.sha, .user.login] | @tsv')
+          IFS=$'\t' read -r state draft head_repo head_sha author <<<"$meta"
+          if [ "$state" != open ] || [ "$draft" = true ] || [ "$head_repo" != "$GH_REPO" ]; then
+            echo "::notice::PR #$PR không đủ điều kiện review (đóng, nháp hoặc từ fork)"
+            echo "eligible=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          {
+            echo "eligible=true"
+            echo "head_sha=$head_sha"
+            echo "author=$author"
+          } >> "$GITHUB_OUTPUT"
+
       # Diff vượt trần (hoặc REST không trả được diff) → KHÔNG review một phần: phần bị cắt (vd thay đổi auth ở cuối) không
       # được rà mà review vẫn thành `clean` cho cả head (AUD-CI-016). Ghi `--inconclusive` — PR làn chuẩn cần review khác
       # ở head này (tách PR nhỏ hơn, hoặc người/phiên rà đủ diff).
       - name: Diff và siêu dữ liệu PR làm dữ liệu (không phải chỉ thị)
         id: diff
+        if: steps.meta.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ inputs.pr }}
           MAX_DIFF_BYTES: "400000"
         run: |
           set -euo pipefail
@@ -100,15 +131,16 @@ jobs:
 
       - name: Ghi kết quả bằng danh tính reviewer (xt.py pr reviewed)
         id: record
+        if: steps.meta.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.XT_REVIEWER_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ inputs.pr }}
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
           STRUCT: ${{ steps.claude.outputs.structured_output }}
           REVIEW_MODEL: ${{ vars.XT_REVIEWER_MODEL || 'claude-opus-5-5' }}
           COMPLETE: ${{ steps.diff.outputs.complete }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR: ${{ steps.meta.outputs.author }}
         run: |
           set -euo pipefail
           if [ "$COMPLETE" != true ]; then

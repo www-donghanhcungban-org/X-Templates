@@ -6,6 +6,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `pr-review.yml` bỏ trigger `pull_request_target` (T-5064; GitHub chặn mặc định ở repo public từ 2026-12-02): chỉ còn `workflow_dispatch` với input `pr`, đọc siêu dữ liệu PR qua REST, chỉ chạy từ nhánh mặc định; chú thích reviewer khớp D-623 (opus trở xuống). Workflow vẫn tắt tới khi chủ bật `XT_REVIEWER_ENABLED`.
 - Reviewer: trần effort `high` và bảng tuyến theo người viết (ADR-0110, D-623, D-625; T-5063): `reviewer`/`reviewer-alt` cố định opus/`high`/`maxTurns: 120` (trước: `max`/80), bỏ chỉ dẫn giao kèm model phiên chính; `executor-deep` mặc định opus/`medium` (D-627) nên nhận clean; phiên chính opus ≥ `high` hoặc `executor-deep` bị đè effort ≥ `high` ghi `--inconclusive`; gương Codex sinh lại. Máy cưỡng chế trần là T-5071.
 
 - Kế hoạch nâng cấp hợp nhất — Revision 4 (D-625, D-626): `research/2026-11-26-unified-upgrade-plan.md` thêm §0 là bản hiện hành (một lịch duy nhất thay bốn bảng lịch cũ, hiện trạng đo lại ở `main`, thu hẹp Code Intelligence thành mở rộng `xt_guard_profile.py` và `xt.py context`, tuyến review dưới trần `high`); PLAN mới `docs/autopilot/PLAN-upgrade-2026-11-27.md` đăng ký `T-5062`…`T-5073` cho việc chưa có nhà. Chưa đổi mã hay cấu hình.
