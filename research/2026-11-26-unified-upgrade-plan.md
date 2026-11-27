@@ -92,6 +92,9 @@ Mỗi dòng một PR, một nhánh từ `origin/main`. Cột "Viết" theo D-625
 | 17 | 3 | Khoá duyệt thiết kế: trả nợ review #847 | `T-5073` | `scripts/xt_design.py`, test, ADR-0107 | — | `executor` · `reviewer-alt` | `tests.test_design_gate`; ca revert sổ với tệp bằng chứng khác phải khoá |
 | 18 | 3 | Gói `site-cms-ts`: starter → CI nghiệm thu → cài → pilot | `T-5057` → `T-5058` → `T-5059` → `T-5060` | `packs/site-cms-ts/`, workflow mới, `install.py` | `T-5059` sau 12 | theo PLAN-site-cms | theo task |
 | 19 | 3 | Starter `web-api-ts` token + ma trận viewport; `verify-render` axe hẹp | `T-5012`, `T-5013` | theo task | 4 | theo task | job CI có Chromium |
+| 20 | 0 | `LOOP-STOP-031` dạng tài liệu: mọi PR nháp, chỉ PR số nhỏ nhất bật CI (ADR-0105 chưa có máy) | `T-5074` | `stop-points-and-escalation.md`, AGENTS.md, mẫu AGENTS, skill `/autopilot` | — | `executor` · `reviewer` | `cmp` hai gương skill; `tests.test_docs_budget tests.test_codex_harness` |
+| 21 | 0 | Runbook steward §4: tag tay phải kèm release | `T-5076` | `docs/ops/RUNBOOK-PR-STEWARD.md` | — | `executor` · không | `check-links.py`; `changelog-check` |
+| 22 | 2 | Máy hàng merge FIFO theo số PR (ADR-0105) | `T-5075` | `scripts/xt_merge_queue.py`, `xt.py` (0 dòng ròng), `xt.yaml` | 12, 20 | `executor` · `reviewer-alt` | `tests.test_merge_queue`; `typecheck`; steward có/không `XT_STEWARD_TOKEN` |
 
 **Song song được:** dòng 1–7 với nhau (không chạm tệp nóng; `CHANGELOG.md` rebase khi xung đột); đợt 1 (`guard.py`) với đợt 2 (`xt.py`), mỗi tệp nóng một chủ, nối tiếp trong đợt; dòng 17–19 với đợt 1–2 trừ `T-5059`. **Đường găng:** 2 → 8 → 9 → 10 → 11 (Guard) và 2 → 12 → 13/14/15 (XT). **Hạn đã ghi:** 2026-12-02 (dòng 3, 4), 2026-12-15 (nhóm chấp nhận của bản phát hành), 2026-12-31 (AUD-HAR-572…574), 2027-01-21 (hàng rào guard, D-609, `support_until` gói). Không đặt hạn hoàn tất toàn chương trình; ước lượng lại sau dòng 12.
 
