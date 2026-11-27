@@ -13,12 +13,11 @@ import subprocess
 import sys
 import tempfile
 import threading
-import unittest
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
-from unittest import mock
+from unittest import TestCase, main, mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -51,7 +50,7 @@ def current_umask() -> int:
     return mask
 
 
-class WriteBytesAtomicTest(unittest.TestCase):
+class WriteBytesAtomicTest(TestCase):
     def setUp(self) -> None:
         self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         self.path = self.tmp / "hook.sh"
@@ -72,6 +71,42 @@ class WriteBytesAtomicTest(unittest.TestCase):
         self.assertNotEqual(self.path.stat().st_ino, inode)  # tệp mới thay tệp cũ, không ghi đè tại chỗ
         install.write_bytes_atomic(self.path, b"", mode=0o755)
         self.assertEqual((self.path.read_bytes(), stat.S_IMODE(self.path.stat().st_mode)), (b"", 0o755))
+
+    def test_read_only_target_is_replaced_and_keeps_its_mode(self) -> None:
+        """Tệp đích 0444 (ghi được thư mục cha) được thay, giữ quyền cũ — `write_bytes` cũ ném PermissionError."""
+        self.path.write_bytes(b"cu")
+        self.path.chmod(0o444)
+        install.write_bytes_atomic(self.path, b"moi")
+        self.assertEqual((self.path.read_bytes(), stat.S_IMODE(self.path.stat().st_mode)), (b"moi", 0o444))
+        self.assertEqual(tmp_leftovers(self.tmp), [])
+
+    def test_writable_file_in_read_only_parent_raises_permission_error(self) -> None:
+        """Tệp ghi được nhưng thư mục cha không ghi được: không tạo được tệp tạm → PermissionError mang tên đích."""
+        sub = self.tmp / "ro"
+        sub.mkdir()
+        target = sub / "f.txt"
+        target.write_bytes(b"cu")
+        sub.chmod(0o555)
+        self.addCleanup(sub.chmod, 0o755)
+        if os.access(sub, os.W_OK):  # chạy bằng root: quyền thư mục không chặn được
+            self.skipTest("tiến trình bỏ qua quyền thư mục (root)")
+        with self.assertRaises(PermissionError) as caught:
+            install.write_bytes_atomic(target, b"moi")
+        self.assertEqual(caught.exception.filename, str(target))
+        self.assertEqual(target.read_bytes(), b"cu")
+
+    def test_temp_file_is_created_owner_only(self) -> None:
+        """Tệp tạm mở 0600 rồi mới nới theo quyền cuối: không có khoảng hở tệp tạm đọc/ghi được cho nhóm/người khác."""
+        modes: list[int] = []
+        real_fchmod = os.fchmod
+
+        def spy(fd: int, mode: int) -> None:
+            modes.append(stat.S_IMODE(os.fstat(fd).st_mode))
+            real_fchmod(fd, mode)
+
+        with mock.patch.object(install.os, "fchmod", side_effect=spy):
+            install.write_bytes_atomic(self.path, b"x")
+        self.assertEqual(modes, [0o600])
 
     def test_replace_failure_keeps_old_file_and_names_destination(self) -> None:
         self.path.write_bytes(b"ban cu")
@@ -135,14 +170,14 @@ class WriteBytesAtomicTest(unittest.TestCase):
         payloads = [bytes([65 + i]) * (512 * 1024) for i in range(3)]
         install.write_bytes_atomic(self.path, payloads[0])
         seen: set[bytes] = set()
-        errors: list[BaseException] = []
+        errors: list[Exception] = []
         done = threading.Event()
 
         def writer(data: bytes) -> None:
             try:
                 for _ in range(15):
                     install.write_bytes_atomic(self.path, data)
-            except BaseException as exc:  # thread không ném ra test: gom lại để kiểm
+            except Exception as exc:  # thread không ném ra test: gom lại để kiểm (ngắt chỉ tới luồng chính)
                 errors.append(exc)
 
         def reader() -> None:
@@ -164,7 +199,7 @@ class WriteBytesAtomicTest(unittest.TestCase):
         self.assertEqual(tmp_leftovers(self.tmp), [])
 
 
-class InstallInterruptedWriteTest(unittest.TestCase):
+class InstallInterruptedWriteTest(TestCase):
     def setUp(self) -> None:
         self.target = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         subprocess.run(["git", "init", "-q", str(self.target)], check=True)
@@ -245,7 +280,7 @@ class InstallInterruptedWriteTest(unittest.TestCase):
         self.assertEqual(foreign.read_bytes(), b"#!/bin/sh\nexit 0\n")
 
 
-class WriteSitesAtomicTest(unittest.TestCase):
+class WriteSitesAtomicTest(TestCase):
     """Mọi điểm ghi của T-5043 đi qua `write_bytes_atomic` (lỗi `os.replace` → tệp cũ nguyên, không rác)."""
 
     def setUp(self) -> None:
@@ -287,4 +322,4 @@ class WriteSitesAtomicTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

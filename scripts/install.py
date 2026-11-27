@@ -243,6 +243,17 @@ def write_atomic(path: Path, text: str, keep_mode: bool = False) -> None:
         raise
 
 
+def _read_umask() -> int:
+    """Umask của tiến trình, đọc một lần lúc nạp mô-đun (còn một luồng): `os.umask` là đọc-bằng-ghi nên gọi giữa các luồng
+    thì tạm đặt umask khác và tệp luồng khác tạo trong lúc đó sai quyền."""
+    mask = os.umask(0o077)
+    os.umask(mask)
+    return mask
+
+
+PROCESS_UMASK = _read_umask()
+
+
 def write_bytes_atomic(path: Path, data: bytes, mode: int | None = None, add_mode: int = 0) -> None:
     """Ghi `data` vào tệp của dự án đích qua tệp tạm cùng thư mục (`.<tên>.<ngẫu nhiên>.tmp`) rồi `os.replace`: hết đĩa,
     EFBIG hay ngắt trước khi đổi tên để lại bản cũ nguyên vẹn, không bao giờ tệp cụt/rỗng (T-5043); tệp tạm bị dọn khi
@@ -255,11 +266,13 @@ def write_bytes_atomic(path: Path, data: bytes, mode: int | None = None, add_mod
     tmp = path.with_name(f".{path.name}.{os.urandom(6).hex()}.tmp")
     created = False
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)  # O_EXCL: không mở lại tệp/liên kết có sẵn
+        fd = os.open(
+            tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+        )  # chặt trước, nới bằng fchmod; O_EXCL: không mở lại tệp có sẵn
         created = True
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
-            base = mode if mode is not None else old if old is not None else os.fstat(fd).st_mode & 0o7777
+            base = mode if mode is not None else old if old is not None else 0o666 & ~PROCESS_UMASK
             os.fchmod(fd, base | add_mode)
         os.replace(tmp, path)
     except BaseException as exc:
