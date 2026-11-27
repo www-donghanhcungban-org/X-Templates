@@ -41,6 +41,37 @@ class ReleaseAssetsTest(unittest.TestCase):
         self.assertIn("steps.receipt.outputs.file", block)
         self.assertIn("GH_TOKEN: ${{ github.token }}", block)
 
+    def test_app_token_is_scoped_and_required_when_enabled(self):
+        mint = find(self.blocks, "actions/create-github-app-token@")
+        check = find(self.blocks, 'test -n "$APP_TOKEN"')
+        checkout = find(self.blocks, "actions/checkout@")
+        self.assertLess(mint, check)
+        self.assertLess(check, checkout)
+        app = self.blocks[mint]
+        for line in (
+            "if: vars.XT_RELEASE_APP_CLIENT_ID != ''",
+            "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc",
+            "client-id: ${{ vars.XT_RELEASE_APP_CLIENT_ID }}",
+            "private-key: ${{ secrets.XT_RELEASE_APP_PRIVATE_KEY }}",
+            "owner: ${{ github.repository_owner }}",
+            "repositories: ${{ github.event.repository.name }}",
+            "permission-contents: write",
+            "permission-workflows: write",
+        ):
+            self.assertIn(line, app)
+        self.assertIn("if: vars.XT_RELEASE_APP_CLIENT_ID != ''", self.blocks[check])
+        self.assertIn("steps.release-app.outputs.token", self.blocks[check])
+        self.assertIn("exit 1", self.blocks[check])
+        self.assertIn(
+            "steps.release-app.outputs.token || secrets.XT_RELEASE_TOKEN || github.token", self.blocks[checkout]
+        )
+        self.assertNotIn("continue-on-error", self.text)
+        job = self.text.split("\n  tag:\n", 1)[1].split("    steps:", 1)[0]
+        self.assertIn("needs.approve.outputs.approved == 'true'", job)
+        self.assertIn("    environment:\n      name: xt-release\n      deployment: false\n", job)
+        for needle in ("gh release create", "gh release view"):
+            self.assertIn("GH_TOKEN: ${{ github.token }}", self.blocks[find(self.blocks, needle)])
+
     def test_bytes_are_verified_before_publishing(self):
         block = self.blocks[find(self.blocks, "gh release create")]
         order = [block.index(s) for s in ("gh release create", "gh release download", "sha256sum", "--draft=false")]

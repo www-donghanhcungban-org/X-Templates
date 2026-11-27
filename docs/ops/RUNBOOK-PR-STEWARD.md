@@ -92,10 +92,23 @@ Workflow bị sửa hỏng: revert commit qua PR; dự án đích chạy lại `
 
 ## 4. Đẩy tag phát hành (`release-tag.yml`)
 
-Workflow `release-tag.yml` tự chạy khi `VERSION` đổi trên `main` (từ 3.24.0, ADR-0047; `workflow_dispatch` là đường lùi — steward merge bằng `GITHUB_TOKEN` không kích `push`, nên steward tự dispatch nó ghim commit merge, AUD-HAR-124) và đẩy tag bằng `GITHUB_TOKEN`; GitHub từ chối khi commit đích đổi file workflow so với tag trước
+Workflow `release-tag.yml` tự chạy khi `VERSION` đổi trên `main` (ADR-0047). Khi steward merge bằng `GITHUB_TOKEN`, nó gọi `workflow_dispatch` với SHA merge (AUD-HAR-124).
+
+Repo chưa cấu hình GitHub App phát hành dùng `GITHUB_TOKEN` mặc định để đẩy tag. GitHub từ chối khi commit đích đổi file workflow so với tag trước
 ("refusing to allow a GitHub App to create or update workflow … without workflows permission", AUD-CI-014). Sửa: đặt secret
 tuỳ chọn `XT_RELEASE_TOKEN` (fine-grained PAT, chỉ repo này: `contents: write` + `workflows: write`); workflow dùng nó ở bước
 checkout, thiếu thì rơi về `GITHUB_TOKEN`. Thiếu secret mà commit có đổi workflow (lần đầu sau 3.24.0 chính là trường hợp này — `release-tag.yml` đổi): run tự động đỏ, người đẩy tag tay
 (`git tag -a vX.Y.Z -m vX.Y.Z <sha> && git push origin vX.Y.Z`) — nhưng tag tay **phải kèm release đã công bố có archive `.tar.gz` và biên nhận `.promotion.json`**: bước `candidate` của `release-tag.yml` (từ T-5066) thấy tag đã có thì đòi release ở trạng thái `released`; thiếu release thì lần đẩy `main` kế chạm `docs/ops/GO-NO-GO*.md` hoặc `VERSION` cùng phiên bản ra `state=missing` (hoặc `draft`/`incomplete`) và đỏ. Cách đúng: chạy `workflow_dispatch` của `release-tag.yml` (đường lùi, input `sha`; khi chưa có tag, workflow tạo tag rồi dựng release có archive và biên nhận), hoặc cắt bản mới (tăng `VERSION`). Xoay/thu hồi như `XT_STEWARD_TOKEN` (§2).
+
 Một push lên `main` chứa ≥ 2 commit đổi `VERSION` (merge không squash) chỉ tag commit ngọn của push (`GITHUB_SHA`); gắn tag cho
 commit còn lại bằng `workflow_dispatch` với input `sha` = commit đó (AUD-DOC-086).
+
+### GitHub App phát hành (chuẩn bị T-4007)
+
+Để dùng danh tính có thể được ruleset tag cho phép tạo tag, chủ repo tạo và cài GitHub App chỉ cho repo cần phát hành, cấp **Contents: write** và **Workflows: write**, rồi chấp nhận các quyền được yêu cầu. Khai repository variable `XT_RELEASE_APP_CLIENT_ID` bằng **Client ID** của App. Tạo Actions Environment `xt-release`, chọn **Selected branches and tags** và thêm rule loại **Branch** với tên chính xác `main`, không thêm rule cho tag. Trong environment đó đặt environment secret `XT_RELEASE_APP_PRIVATE_KEY` bằng nội dung khoá riêng PEM hợp lệ do GitHub tạo cho chính App đó (không dùng token, đường dẫn tệp hay App ID làm khoá). Chủ repo kiểm tra và gỡ secret cùng tên ở cấp repository nếu đã tồn tại, để không có đường lấy khoá ngoài environment. Job khai `deployment: false`: vẫn nhận environment secret và chịu quy tắc branch, không tạo deployment. Client ID dùng để action xác thực; ruleset bypass cần **numeric App ID** của cùng App, là một giá trị khác. Không điền ID mẫu vào ruleset.
+
+Repo dùng Actions allowlist cần cho phép `actions/create-github-app-token` tại SHA ghim trong workflow ngay cả khi chưa khai Client ID, vì runner chuẩn bị action trước khi xét `if`.
+
+Job `tag` chỉ mint installation token sau khi `approve` thành công, giới hạn token đúng repo hiện tại và hai quyền trên; dùng token này cho checkout/push; thao tác release vẫn dùng `GITHUB_TOKEN`. Nếu đã khai Client ID mà thiếu/sai khoá, App chưa cài hoặc mint trả token rỗng thì job thất bại, không chuyển sang PAT. Khi chưa khai Client ID, checkout giữ `XT_RELEASE_TOKEN` rồi `GITHUB_TOKEN` như cũ; thao tác release dùng `GITHUB_TOKEN` như cũ. Thu hồi khoá và xoá variable để quay lại đường cũ; kiểm ruleset tương ứng trước khi đổi danh tính.
+
+Trước khi bật trên repo thật, dùng App và khoá riêng cho repo thử với cùng workflow, phạm vi quyền và ruleset. Kiểm các ca khoá sai hoặc token rỗng, đường cũ khi chưa khai Client ID, và một lần phát hành thử đủ annotated tag, attestation, archive và biên nhận. Khoá App production chỉ lưu trong environment `xt-release` của repo phát hành thật. Sau diễn tập, chủ repo xác minh App ID và phạm vi cài production, áp ruleset tạo tag cho App production, giữ ruleset sửa và xoá không bypass, rồi kiểm lần phát hành live. T-4007 còn khâu cấu hình và xác minh live.

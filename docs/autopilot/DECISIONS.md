@@ -1295,3 +1295,10 @@
 - Chọn: Giữ XT_CPU_SLOTS là trần và XT_JOBS là cách dành chỗ cho thêm việc khi workload phù hợp
 - Lý do (tiêu chí chất lượng cuối): Giữ hành vi đã kiểm ở #865. Trên 14 CPU, lịch 8 + 4 tận dụng hết 12 CPU, lịch 4 + 4 + 4 dùng được khi các việc tự khai XT_JOBS=4. Đổi mặc định sẽ hạ phần cấp khi chỉ có một việc từ 8 xuống 4; chưa có số đo workload thật trên WSL2 để biện minh.
 - Đường lùi: Xét lại nếu số đo workload trên WSL2 cho thấy giảm thời gian hoàn thành nhiều việc mà vẫn đáp ứng độ trễ của gate đi đầu.
+
+### D-637 · 2026-11-27T16:09:17+00:00 · Chuyển danh tính tạo tag của T-4007 thế nào để triển khai ruleset mà vẫn giữ hợp đồng bản cài?
+
+- Phương án: (1) Cho workflow dùng GitHub App theo cấu hình repo, lỗi rõ khi đã bật App nhưng không cấp được token; giữ đường đang dùng ở repo chưa bật · (2) Thay ngay toàn bộ đường tạo tag bằng GitHub App bắt buộc trên khung và mọi dự án đích
+- Chọn: Cho workflow dùng GitHub App theo cấu hình repo, lỗi rõ khi đã bật App nhưng không cấp được token; giữ đường đang dùng ở repo chưa bật
+- Lý do (tiêu chí chất lượng cuối): Ruleset chỉ cho một App tạo tag. Cần chuẩn bị và diễn tập App trên đúng repo trước khi áp luật live, đồng thời bản cài cũ chưa có App vẫn cần đi qua đúng cổng release hiện hành.
+- Đường lùi: Trước khi áp ruleset có thể bỏ biến Client ID để trở về đường cũ. Sau khi áp ruleset, thay hoặc khôi phục App được phép cùng lúc với cấu hình workflow.
