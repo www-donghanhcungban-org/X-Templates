@@ -22,6 +22,34 @@ updated: 2026-11-26
 - Quy mô: <S | M | L> — lý do: <người dùng thật? tiền thật? dữ liệu nhạy cảm?>
 - Blueprint: `python3 .xtemplates/scripts/xt.py compose --profile <p> [--industry <i>] --scale <S|M|L> --out BLUEPRINT.md`
 
+### Cấu hình ghép blueprint
+
+Mỗi khối là một đơn vị phát hành. Điền trước khi ghép và giữ ghi chú ở ngoài khối. `null` đánh dấu mục chưa xác minh. `pack` có thể là `null` khi chỉ dùng Core.
+
+~~~json
+{
+  "schema": 1,
+  "unit": null,
+  "owner": null,
+  "review_on": null,
+  "profile": null,
+  "industries": [],
+  "features": [],
+  "pack": null,
+  "use": null,
+  "data_class": null,
+  "money": null,
+  "multi_team": null,
+  "contract_sla": null,
+  "external_audit": null,
+  "scale": null,
+  "reason": null,
+  "admin": null
+}
+~~~
+
+Nếu có người vận hành, điền `admin` với `mode` (`existing`, `cms`, `business`, `combined`), `tool`, `operator`, `tasks`, `data_scope`, `high_impact_actions`, `risk_owner`, `recovery` và `review_on`. Với từng tác vụ, ghi vai trò, đối tượng và kết quả cần kiểm. Khi chưa khảo sát, giữ `admin: null`. Nếu không có tác vụ quản trị, lưu kết luận và lý do trong phần phạm vi.
+
 ## 1. Vấn đề & người dùng
 - Vấn đề (1–2 câu, không chứa giải pháp): <ai, trong tình huống nào, đau ở đâu>
 - Người dùng mục tiêu: <nhóm cụ thể, không "mọi người">

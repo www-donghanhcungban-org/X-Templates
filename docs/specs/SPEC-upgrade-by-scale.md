@@ -23,7 +23,7 @@ Kết quả cần bàn giao là một luồng người khác có thể chạy l�
 
 ### 2.1 Hồ sơ đầu vào
 
-Đề xuất ghi một khối JSON có nhãn “Cấu hình ghép blueprint” trong `PROJECT.md`. Factory và người vận hành đọc cùng khối này; chỉ cập nhật khối có nhãn và giữ phần ghi chú khác của chủ dự án. Mỗi đơn vị phát hành có một hồ sơ. Repo cũ chưa có khối vẫn ghép được bằng CLI hiện hành. Lần tiếp nhận đầu, factory lấy profile/ngành/tính năng từ blueprint cũ nếu đọc được, trình diff để chủ sở hữu xác nhận trước khi thay.
+Ghi một khối JSON dưới mục “Cấu hình ghép blueprint” trong `PROJECT.md` cho mỗi đơn vị phát hành. Factory và người vận hành đọc cùng khối này, cập nhật đúng khối của đơn vị và giữ ghi chú của chủ dự án. Repo cũ chưa có khối vẫn ghép được bằng CLI hiện hành. Lần tiếp nhận đầu, factory lấy profile/ngành/tính năng từ blueprint cũ nếu đọc được, trình diff để chủ sở hữu xác nhận trước khi thay. Các giá trị `null` trong mẫu dành cho dữ kiện chưa xác minh, trừ lựa chọn dùng Core được ghi bằng `pack: null`. Bàn giao live chỉ tiến khi các dữ kiện ảnh hưởng mức hoặc quyền đã được xác nhận.
 
 | Nhóm trường | Kiểu và giá trị | Quy tắc |
 |---|---|---|
@@ -31,6 +31,7 @@ Kết quả cần bàn giao là một luồng người khác có thể chạy l�
 | Yêu cầu | `profile` là một ID có trong khung; `industries` và `features` là mảng ID; `pack` là ID hoặc null | Kiểm ID theo danh mục tại phiên bản ghim. Chuẩn hóa danh sách theo thứ tự ổn định và bỏ trùng. Pack phải tương thích với stack và host để chạy. |
 | Rủi ro | `use` = sandbox/live, `data_class` = synthetic/operational/sensitive, `money`, `multi_team`, `contract_sla`, `external_audit` là boolean hoặc null | Null nghĩa là cần xác minh. Có thể dựng mẫu với dữ liệu giả; để phát hành cần có kết luận cho mọi giá trị ảnh hưởng mức hoặc quyền. |
 | Quyết định | `scale` = S/M/L, `reason` là chuỗi không rỗng | Lưu lý do chọn mức. Dùng một quyết định mới khi dữ liệu, người dùng hoặc phạm vi ảnh hưởng thay đổi. |
+| Quản trị | `admin` vắng, `null` hoặc đối tượng theo [mẫu PROJECT](../../framework/templates/PROJECT.md) | Vắng hoặc `null` là chưa khảo sát. Nếu khảo sát cho thấy không có tác vụ quản trị, ghi lý do trong phạm vi. Kết quả chọn công cụ hoặc pack được ghi trong hồ sơ, quyền được cấp qua quy trình hiện hành. |
 
 Ví dụ hợp lệ của một đơn vị sắp phục vụ nhân viên nội bộ:
 
@@ -52,7 +53,7 @@ Thứ tự đánh giá: nhiều đội cùng phát triển, SLA ký hoặc kiể
 
 Trong repo mới, dùng `--new --pack … --idea … --scale …` khi có pack phù hợp. Bootstrap hiện lấy profile đầu của pack. Sau bootstrap, factory gọi lại `compose` với **đủ** profile, industry, feature và scale của hồ sơ. Khi stack chưa có pack phù hợp, cài Core rồi ghép profile; danh mục chỉ được ghi hỗ trợ chạy sau khi có bằng chứng. Trong repo cũ, hiện diff trước khi ghi blueprint. Giữ cách gọi CLI trực tiếp để đội tiếp nhận vẫn dùng được khung khi factory vắng mặt. [Đường bootstrap](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/scripts/install.py#L2990-L3020) · [Factory](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/.claude/skills/factory/SKILL.md)
 
-Đề xuất cho factory so bộ cờ sắp dùng với hồ sơ trước khi ghi. Nếu thấy mất ngành, mất feature hoặc giảm mức, hiển thị các ID đổi mức và yêu cầu lý do cho thay đổi đó. Đặt lý do trong hồ sơ quyết định rồi mới ghép. `compose` hiện chỉ cảnh báo khi bỏ feature. Quy trình factory này bảo vệ việc dùng thiếu cờ trong một lần chạy lại. Ở S, feature chưa nâng mục chuyên sâu lên MUST; ở M chỉ các mục đã được ánh xạ mới nâng. Cấu hình ký phát hành và trần quyền agent giữ cơ chế hiện có. [Quy tắc feature](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/docs/adr/0030-essential-items-not-capped-at-m.md#L31-L51) · [Quyền ký theo quy mô](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/docs/specs/SPEC-factory-scale.md#L16-L42)
+Factory so bộ cờ sắp dùng với hồ sơ trước khi ghi. Khi tiếp nhận hoặc đổi cách ghép, sao chép blueprint và backlog sang thư mục tạm với nguyên tên tệp, ghép lại vào bản tạm, rồi so theo ID. Nếu mất ngành, mất feature hoặc giảm mức, hiển thị các ID đổi mức và lưu lý do đã duyệt trước khi ghép vào đường dẫn cũ. Đây là bước của factory, còn `compose` trực tiếp phát cảnh báo khi bỏ feature. Ở S, feature chưa nâng mục chuyên sâu lên MUST. Ở M, chỉ các mục đã được ánh xạ mới nâng. Quyền ký phát hành và trần quyền agent được xét tại các cổng hiện hành. [Quy tắc feature](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/docs/adr/0030-essential-items-not-capped-at-m.md#L31-L51) · [Quyền ký theo quy mô](https://github.com/www-donghanhcungban-org/X-Templates/blob/6adbd4ade5a2a4188c6c3404740f1913e40ea60d/docs/specs/SPEC-factory-scale.md#L16-L42)
 
 | Ca chấp nhận | Thao tác | Kết quả quan sát |
 |---|---|---|

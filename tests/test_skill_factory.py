@@ -38,6 +38,12 @@ class FactoryEntryTest(unittest.TestCase):
             self.assertEqual((original["stage"], original["status"]), (1, "active"))
             project = (target / "PROJECT.md").read_text(encoding="utf-8")
             self.assertIn(idea, project)
+            _, profile_example, remainder = project.split("~~~", 2)
+            settings = json.loads(profile_example.removeprefix("json\n"))
+            self.assertEqual(settings["schema"], 1)
+            for field in ("profile", "use", "data_class", "money", "scale", "admin"):
+                self.assertIsNone(settings[field], field)
+            self.assertIn("## 10. Câu hỏi mở", remainder)
             install("--harness", "codex")
             self.assertEqual(json.loads(command(cli, "stage", "status", "--json"))["stage"], original)
             self.assertEqual((target / "PROJECT.md").read_text(encoding="utf-8"), project)
@@ -116,6 +122,8 @@ class FactoryEntryTest(unittest.TestCase):
                     "xt_flow.py --json",
                     "stage status --json",
                     "plan waves --plan <PLAN> --max 4 --handoff",
+                    "Cấu hình ghép blueprint",
+                    "compose --out <bản-tạm>",
                 ],
             ),
             (
