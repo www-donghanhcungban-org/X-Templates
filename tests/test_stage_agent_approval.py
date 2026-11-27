@@ -438,6 +438,67 @@ class XtInProcessGuardTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
 
+    # ADR-0108 (D-622): `xt_design` (sổ khách duyệt thiết kế, ADR-0106) nạp trong tiến trình như `xt` — mọi lần nạp đều
+    # chặn, kể cả script chỉ đọc (đọc sổ: `xt.py stage design-check --json`). Hàm ghi `update` và hằng `STATUSES`/
+    # `REPLAY`/`LEDGER` không có chữ rủi ro: review PR #849 tái hiện script dưới ghi được lời duyệt (rc 0, sổ `approved`,
+    # `tests/test_design_gate.py` chạy thật) khi luật từng cho qua script đọc `xt_design`.
+    DESIGN_FORGE = (
+        "import sys; sys.path.insert(0, 'scripts'); import pathlib, xt, xt_design as d\n"
+        "d.update(xt, pathlib.Path('.'), lambda l: {**l, 'status': d.STATUSES[2], 'submitted': None, 'history':"
+        " [*l['history'], {'event': list(d.REPLAY)[2], 'sha': l['submitted']['sha'], 'by': 'chu', 'note': 'ok',"
+        " 'at': '2026-11-27'}]})\n"
+    )
+    DENY_DESIGN = (
+        "python3 - <<'PY'\n" + DESIGN_FORGE + "PY",
+        "python3 - <<'PY'\nimport sys; sys.path.insert(0, 'scripts'); import pathlib, xt\n"
+        "from xt_design import update, STATUSES, REPLAY\n"
+        "update(xt, pathlib.Path('.'), lambda l: {**l, 'status': STATUSES[2], 'submitted': None, 'history':"
+        " [*l['history'], {'event': list(REPLAY)[2], 'sha': l['submitted']['sha'], 'by': 'chu', 'note': 'ok',"
+        " 'at': '2026-11-27'}]})\nPY",
+        "python3 -c \"import sys, json, pathlib; sys.path.insert(0,'scripts'); import xt, xt_design as d;"
+        " xt.write_atomic(pathlib.Path(d.LEDGER), json.dumps({'schema': 1}))\"",
+        "python3 -c \"import sys, pathlib; sys.path.insert(0,'scripts'); import xt, xt_design as d;"
+        " d.update(xt, pathlib.Path('.'), lambda l: d.submit(xt, l, 'a' * 40, 'x.png'))\"",
+        # Chỉ đọc vẫn chặn: luật không phân biệt được đọc với ghi khi tên ghi không có chữ rủi ro
+        "python3 -c \"import sys; sys.path.insert(0,'scripts'); import xt, xt_design as d; print(d.problem(xt, {}))\"",
+        "python3 - <<'PY'\nimport sys; sys.path.insert(0, 'scripts')\nimport xt_design\nprint(xt_design.LEDGER)\nPY",
+        'python3 -c "from scripts.xt_design import LEDGER; print(LEDGER)"',
+        "python3 - <<'PY'\nimport sys; sys.path.insert(0, 'scripts')\nimport xt, xt_design as d\n"
+        "d.update(xt, '.', lambda led: d.approve(xt, led, 'abcdef1', 'chu', 'ok'))\nPY",
+        "python3 -c \"import sys; sys.path.insert(0,'scripts'); from xt_design import approve; approve(1, 2, 3, 4, 5)\"",
+        'python3 -c "import scripts.xt_design as d; d.approve(1, 2, 3, 4, 5)"',
+        'python3 -c "from scripts import xt_design; xt_design.approve(1, 2, 3, 4, 5)"',
+        "python3 -c \"import importlib; importlib.import_module('xt_design')\"",
+        "python3 -c \"import importlib; importlib.import_module('scripts.xt_design')\"",
+        "PYTHONPATH=scripts python3 -m runpy xt_design",
+        "python3 -c \"import runpy; runpy.run_path('scripts/xt_design.py')\"",
+        "python3 -c \"import importlib.util as u; u.spec_from_file_location('m', 'scripts/xt_design.py')\"",
+        'python3 <<< "import xt_design; xt_design.approve(1, 2, 3, 4, 5)"',
+        "python3 -c 'import xt_design; xt_design.approve(' 2>/dev/null",  # không phải Python hợp lệ: luật chữ
+    )
+    ALLOW_DESIGN = (
+        # Đối chứng: thư viện đọc của `xt` không nhắc `xt_design` vẫn qua (Kiểm PM-PLAN-001, D-377)
+        "python3 -c \"import sys; sys.path.insert(0,'scripts'); import xt, pathlib; print(xt.parse_plan(pathlib.Path("
+        "'PLAN.md')))\"",
+        "python3 -c \"import sys; sys.path.insert(0,'scripts'); from xt import parse_plan; print(parse_plan('x'))\"",
+        "python3 scripts/xt.py stage design-check",
+        "python3 scripts/xt.py stage design-check --json",
+        "python3 -m runpy json.tool docs/autopilot/DESIGN.json",
+        'python3 -c "import xt_designer; xt_designer.run()"',
+    )
+
+    def test_in_process_xt_design_denied(self):
+        for cmd in self.DENY_DESIGN:
+            with self.subTest(cmd=cmd):
+                out = self.decide(cmd)
+                self.assertEqual((out.get("decision"), out.get("code")), ("deny", "STAGE_APPROVE"))
+                self.assertIn("xt_design", str(out.get("reason")))
+        for cmd in self.ALLOW_DESIGN:
+            with self.subTest(cmd=cmd):
+                self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
+        self.assertTrue(guard._xt_inproc_text("from scripts.xt_design import read"))
+        self.assertFalse(guard._xt_inproc_text("import xt_designer"))
+
     def test_python_scan_helpers(self):
         self.assertFalse(guard._xt_inproc_python("x = (", 0))  # không phải Python: luật chữ, không nạp xt
         self.assertTrue(guard._xt_inproc_python("exec('exec(\"exec(1)\")')", guard.XT_INPROC_DEPTH))  # quá sâu: chặt
