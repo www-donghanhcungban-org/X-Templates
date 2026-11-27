@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Hậu kiểm #865 (ADR-0115) cần cây tiến trình Linux thật, SIGTERM và lease trên đĩa, ngoài schema quyết định của corpus. Ca hồi quy: `python3 -m unittest tests.test_cpu_share.LiveCliTest.test_cancel_keeps_lease_until_grandchild_finishes`.",
+   "ids": [
+    "AUD-HAR-580"
+   ]
+  },
+  {
    "reason": "D-588: lần đọc đầu, chính sách checkout, tác vụ phụ, watch và cache nhiều host cần Git checkout thật cùng nhiều phản hồi REST liên tiếp; kiểm trong tests.test_merge_target_binding bằng GitHub CLI giả, ngoài schema quyết định đơn của corpus",
    "ids": [
     "AUD-HAR-515",

@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5082: khay Linux chuyển tín hiệu huỷ tới nhóm lệnh và giữ lease tới khi nhóm dừng (ADR-0115, AUD-HAR-580). D-636 giữ trần số việc hiện tại (AUD-HAR-581).
+
 - T-5082 (rà #865, D-633): tài liệu khớp mã — `XT_CPU_SLOTS`/`slots` là trần trên, mặc định khay cấp tối đa 2 việc nặng cùng lúc (ADR-0113, README, `LOOP-ORCH-025`); việc đầu hàng được ưu tiên nhưng vẫn chờ khi hết ngân sách; ADR-0112 ghi các điểm bị ADR-0113 thay; lease có PID quá lớn coi như đã chết thay vì văng traceback; thông báo "khay CPU không dùng được" gợi ý `XT_CPU_SHARE=off`; nợ AUD-HAR-581 theo dõi hành vi `slots`.
 
 - T-5082: sửa test pytest khi khay chỉ cấp một worker — giữ đúng lệnh tuần tự `pytest -q` thay vì đòi `-n 1`; ghi nợ AUD-HAR-580 về SIGTERM chỉ chuyển tới tiến trình con trực tiếp, còn tiến trình cháu sống sau khi lease bị nhả.
