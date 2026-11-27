@@ -39,6 +39,33 @@ class AcTraceTest(unittest.TestCase):
         self.put("tests/test_a.py", 'def test_ac_1():\n    """AC-1"""\n# AC-2\n')
         self.assertEqual(self.run_check([spec]), [])
 
+    def test_markdown_code_ids_need_test_references(self) -> None:
+        spec = self.put("s.md", "- `AC-1` có test\n| **`AC-2`** | chưa có test |\n- `AC-3 chưa đóng\n- `AC-4-extra`\n")
+        self.put("tests/test_a.py", "# AC-1\n")
+        self.assertEqual(self.run_check([spec]), [("s.md", 2, "ACT001")])
+
+    def test_markdown_code_ids_use_matching_delimiters_and_accept_spacing(self) -> None:
+        self.put("tests/test_a.py", "# AC-2\n")
+        for delimiter in ("`", "``", "```"):
+            for padding in ("", " "):
+                with self.subTest(delimiter=delimiter, padding=padding):
+                    valid = f"{delimiter}{padding}AC-1{padding}{delimiter}"
+                    tested = f"{delimiter}{padding}AC-2{padding}{delimiter}"
+                    broken = f"{delimiter}{padding}AC-3{padding}{delimiter}`"
+                    spec = self.put("s.md", f"- **{valid}**\n| {tested} |\n- {broken}\n")
+                    self.assertEqual(self.run_check([spec]), [("s.md", 1, "ACT001")])
+
+    def test_template_acceptance_scenarios_are_detected(self) -> None:
+        root = Path(__file__).resolve().parent.parent
+        spec = root / "framework" / "templates" / "SPEC.md"
+        self.put("tests/test_a.py", "# chưa có test cho các ca trong mẫu\n")
+        found = kind_ac_trace.check([spec], {"tests": str(self.base / "tests")})
+        self.assertEqual([f.code for f in found], ["ACT001"] * 3)
+        text = spec.read_text(encoding="utf-8")
+        for criterion, finding in enumerate(found, 1):
+            self.assertIn(f"AC-{criterion:03d}", finding.message)
+            self.assertIn(f"### S-{criterion:03d}", text)
+
     def test_missing_test_and_unknown_mention(self) -> None:
         spec = self.put("s.md", "* AC-1 có\n  AC-2 thiếu\nxAC-3 và AC-3x không phải định nghĩa\n")
         self.put("tests/a.go", "// AC-1 AC-1 AC-7\nxAC-5 AC-5x AC-5-6\n")
