@@ -8,6 +8,8 @@ updated: 2026-11-25
 
 Đọc ngày 2026-11-25 từ tài liệu chính thức. Mức bằng chứng: **(a)** trang chính thức đọc trực tiếp; **(b)** tóm tắt qua trung gian hoặc nguồn thứ cấp; **(c)** chưa xác minh. Chưa có số đo token/chi phí trên chính dự án (xem §5).
 
+> **Cập nhật 2026-11-27** (sau review): đề xuất ở §5.4 (rà `reviewer-alt` ở `max`) đã được thay bằng quyết định trần `high` ở `research/2026-11-26-unified-upgrade-plan.md` §12.4; §5.6 và §8.3.2 (`PreSkillShellCommand`, biến độ sâu/đồng thời subagent) đã có việc T-5040 ở `PLAN-optimize-2026-11-26-b.md` — không mở việc trùng. Cổng commit đỏ nay trả tóm tắt ≤ 8 000 ký tự (#839, T-5039); output Bash thô khác vẫn vào context. Độ sâu mặc định 3 (2.1.219) và tối đa 20 subagent đồng thời (2.1.217) đã đọc nguyên văn changelog: mức bằng chứng **(a)**.
+
 ## 1. Kết luận
 
 - Không có cải tiến nào buộc đổi khung ngay. Phần đáng làm là chỉnh cấu hình giảm token và cập nhật số liệu cho dự án đích.
