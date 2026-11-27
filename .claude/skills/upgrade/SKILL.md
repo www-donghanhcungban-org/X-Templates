@@ -17,7 +17,7 @@ toolchain, `020` major tự làm khi L3), `<FW>/12-security/supply-chain.md`. Ph
    pre-release). Loại alpha/beta/rc/canary/nightly/`-dev`. Ghi ngày phát hành; bản ra < `cooldown` ngày (mặc định 3) thì chờ.
 3. Ghi bảng: thành phần · hiện tại · ổn định mới nhất · loại (patch/minor/major) · nguồn + ngày.
 
-## 2. Nâng theo nhóm nhỏ (mỗi nhóm một PR)
+## 2. Nâng theo nhóm nhỏ (mỗi nhóm một PR nháp — `LOOP-STOP-031`)
 4. Thứ tự: bản vá bảo mật → patch/minor gom theo hệ sinh thái → từng major một PR riêng → runtime sau cùng.
 5. Đổi bản bằng công cụ của hệ sinh thái (`npm install x@ver`, `uv lock --upgrade-package`, `pip-compile --generate-hashes`…),
    **cập nhật lockfile và hash**; action/image ghim lại theo SHA/digest của bản mới (`BASE-DEP-008`), comment ghi tag.
