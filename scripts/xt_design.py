@@ -44,6 +44,7 @@ INIT = " · chưa có vòng để hoãn task: `xt.py loop init --plan <PLAN>` tr
 UI_TAG_RE = re.compile(r"\bui\s*:\s*yes\b", re.I)  # trong nhóm ngoặc của dòng task; hoa thường lệch vẫn khoá (chặt hơn)
 CLIENT = "khách"
 HUMAN_ONLY = "chỉ người — chủ dự án chạy ở terminal riêng, ngoài phiên agent; agent không tự duyệt thiết kế (ADR-0106)"
+STICKY = f"sổ {LEDGER} đã có — dòng khai không nới được (ADR-0108)"
 
 
 class DesignError(Exception):
@@ -277,10 +278,20 @@ def _entries(text: str) -> list[tuple[str, str]]:
 
 
 def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
-    """(dự án khai khách duyệt thiết kế, ghi chú). Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không.
-    Giá trị khác (`khách hàng` → `khách`; rỗng/lạ, `không` kèm chữ `khách`, nhãn không tách bằng `:`/`|`, dòng khác
-    `không` trong code fence → kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment
-    HTML đọc như dòng thường."""
+    """(dự án khai khách duyệt thiết kế, ghi chú). Sổ `DESIGN.json` đã có (kể cả hỏng, rỗng, symlink gãy) → khách bất
+    kể `PROJECT.md`: dự án từng trình thì không rút khai báo được (ADR-0108). Chưa có sổ → theo dòng khai."""
+    client, note = _declared_line(base)
+    ledger = base / LEDGER
+    if client or not (ledger.exists() or ledger.is_symlink()):
+        return client, note
+    return True, STICKY
+
+
+def _declared_line(base: Path) -> tuple[bool, str]:
+    """Theo dòng khai ở `PROJECT.md`. Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không. Giá trị khác
+    (`khách hàng` → `khách`; rỗng/lạ, `không` kèm chữ `khách`, nhãn không tách bằng `:`/`|`, dòng khác `không` trong
+    code fence → kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment HTML đọc như
+    dòng thường."""
     p = base / PROJECT_FILE
     if not p.exists():
         return False, ""
