@@ -5,16 +5,19 @@ công bố; không ghi đè, không xoá; tag đã có thì chỉ báo trạng t
 from __future__ import annotations
 
 import re
+import sys
 import unittest
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_ci import ci_jobs, job_key
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github" / "workflows" / "release-tag.yml"
 
 
-def steps(text: str) -> list[str]:
-    """Các bước của job `tag` (từ `  tag:` tới hết tệp), mỗi bước một khối bắt đầu ở `      - `."""
-    job = text.split("\n  tag:\n", 1)[1]
+def steps(job: str) -> list[str]:
+    """Mỗi bước là một khối bắt đầu ở `      - `."""
     return [b for b in re.split(r"\n(?=      - )", job) if b.startswith("      - ")]
 
 
@@ -27,7 +30,8 @@ def find(blocks: list[str], needle: str) -> int:
 class ReleaseAssetsTest(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
-        self.blocks = steps(self.text)
+        self.jobs = ci_jobs(self.text)
+        self.blocks = steps(self.jobs["tag"])
 
     def test_draft_release_holds_archive_and_receipt_after_tag_push(self):
         push = find(self.blocks, "git push origin")
@@ -42,14 +46,15 @@ class ReleaseAssetsTest(unittest.TestCase):
         self.assertIn("GH_TOKEN: ${{ github.token }}", block)
 
     def test_app_token_is_scoped_and_required_when_enabled(self):
-        mint = find(self.blocks, "actions/create-github-app-token@")
-        check = find(self.blocks, 'test -n "$APP_TOKEN"')
-        checkout = find(self.blocks, "actions/checkout@")
+        job = self.jobs["tag-app"]
+        blocks = steps(job)
+        mint = find(blocks, "actions/create-github-app-token@")
+        check = find(blocks, 'test -n "$APP_TOKEN"')
+        checkout = find(blocks, "actions/checkout@")
         self.assertLess(mint, check)
         self.assertLess(check, checkout)
-        app = self.blocks[mint]
+        app = blocks[mint]
         for line in (
-            "if: vars.XT_RELEASE_APP_CLIENT_ID != ''",
             "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc",
             "client-id: ${{ vars.XT_RELEASE_APP_CLIENT_ID }}",
             "private-key: ${{ secrets.XT_RELEASE_APP_PRIVATE_KEY }}",
@@ -59,16 +64,43 @@ class ReleaseAssetsTest(unittest.TestCase):
             "permission-workflows: write",
         ):
             self.assertIn(line, app)
-        self.assertIn("if: vars.XT_RELEASE_APP_CLIENT_ID != ''", self.blocks[check])
-        self.assertIn("steps.release-app.outputs.token", self.blocks[check])
-        self.assertIn("exit 1", self.blocks[check])
-        self.assertIn(
-            "steps.release-app.outputs.token || secrets.XT_RELEASE_TOKEN || github.token", self.blocks[checkout]
-        )
-        self.assertNotIn("continue-on-error", self.text)
-        job = self.text.split("\n  tag:\n", 1)[1].split("    steps:", 1)[0]
-        self.assertIn("needs.approve.outputs.approved == 'true'", job)
+        for step in blocks[: checkout + 1]:
+            self.assertNotIn("\n        if:", step)
+        self.assertIn("APP_TOKEN: ${{ steps.release-app.outputs.token }}", blocks[check])
+        self.assertIn("exit 1", blocks[check])
+        self.assertRegex(blocks[checkout], r"(?m)^          token: \$\{\{ steps\.release-app\.outputs\.token \}\}$")
+        self.assertNotIn("XT_RELEASE_TOKEN", job)
         self.assertIn("    environment:\n      name: xt-release\n      deployment: false\n", job)
+
+    def test_tag_jobs_are_exclusive_and_legacy_skips_app_environment_and_action(self):
+        legacy = self.jobs["tag"]
+        app = self.jobs["tag-app"]
+        for job, operator in ((legacy, "=="), (app, "!=")):
+            self.assertEqual(job_key(job, "needs"), "approve")
+            self.assertEqual(
+                job_key(job, "if"),
+                f"needs.approve.outputs.approved == 'true' && vars.XT_RELEASE_APP_CLIENT_ID {operator} ''",
+            )
+        self.assertNotIn("\n    environment:", legacy)
+        self.assertNotIn("actions/create-github-app-token@", legacy)
+        self.assertNotIn("XT_RELEASE_APP_PRIVATE_KEY", legacy)
+        checkout = find(self.blocks, "actions/checkout@")
+        self.assertEqual(checkout, 0)
+        self.assertIn("token: ${{ secrets.XT_RELEASE_TOKEN || github.token }}", self.blocks[checkout])
+        self.assertIn(
+            "    concurrency: &release-concurrency\n"
+            "      group: release-tag-v${{ needs.approve.outputs.version }}\n"
+            "      cancel-in-progress: false\n",
+            legacy,
+        )
+        self.assertEqual(job_key(app, "concurrency"), "*release-concurrency")
+
+    def test_app_reuses_release_steps_in_order(self):
+        anchors = re.findall(r"(?m)^      - &([\w-]+)$", self.jobs["tag"])
+        self.assertEqual(len(anchors), len(self.blocks) - 1)
+        app_blocks = steps(self.jobs["tag-app"])
+        checkout = find(app_blocks, "actions/checkout@")
+        self.assertEqual([block.strip() for block in app_blocks[checkout + 1 :]], [f"- *{name}" for name in anchors])
         for needle in ("gh release create", "gh release view"):
             self.assertIn("GH_TOKEN: ${{ github.token }}", self.blocks[find(self.blocks, needle)])
 
@@ -127,12 +159,13 @@ class ReleaseAssetsTest(unittest.TestCase):
         self.assertIn("--pattern '*.tar.gz' --pattern '*.promotion.json'", block)
 
     def test_job_has_contents_write_and_nothing_wider(self):
-        job = self.text.split("\n  tag:\n", 1)[1].split("    steps:", 1)[0]
-        perms = re.search(r"permissions:\n((?:      \w[\w-]*: \w+\n)+)", job)
+        job = self.jobs["tag"].split("    steps:", 1)[0]
+        perms = re.search(r"permissions: &release-permissions\n((?:      \w[\w-]*: \w+\n)+)", job)
         self.assertIsNotNone(perms)
         self.assertEqual(
             sorted(perms[1].split()), sorted("attestations: write contents: write id-token: write".split())
         )
+        self.assertEqual(job_key(self.jobs["tag-app"], "permissions"), "*release-permissions")
 
     def test_release_steps_are_pinned_to_the_job_gate(self):
         for needle in ("gh release create", "gh release view"):
