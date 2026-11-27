@@ -76,7 +76,7 @@ template và `AGENTS.md` chỉ tóm tắt và liên kết, không chép bảng/n
 12. **Lát xong → một PR** ([`LOOP-DESIGN-020`](loop-design.md), ADR-0014; nhánh riêng từ nhánh đích mới nhất, chồng lên PR
     chưa merge nếu phụ thuộc): `PROGRESS.md` (≤ 8 KB) vào commit cuối của lát → cổng commit `gate-fast`; CI là cổng đầy đủ
     (ADR-0041, ADR-0056; chỉ được đẩy một nhánh hoặc PR đáy còn chờ → lát kế làm ở nhánh/worktree cục bộ, mở PR sau khi PR đáy
-    merge — [`LOOP-DESIGN-029`](loop-design.md)) → đẩy **một lần**, mở PR → `<XT> pr next --pr <N>`, làm đúng `do`; `<XT> merge-watch --pr <N>`
+    merge — [`LOOP-DESIGN-029`](loop-design.md)) → đẩy **một lần**, mở PR nháp (`--draft`; chỉ PR số nhỏ nhất `gh pr ready` — [`LOOP-STOP-031`](stop-points-and-escalation.md)) → `<XT> pr next --pr <N>`, làm đúng `do`; `<XT> merge-watch --pr <N>`
     chạy nền và khi thoát in sẵn kết quả `pr next`; mỗi khi PR đổi (push, CI, review) lại `pr next`. Reviewer **chỉ khi** `pr next` trả
     `review` — năng lực cao hơn người viết ([`LOOP-ORCH-005`](orchestration-and-subagents.md); không kết luận được →
     `<XT> pr reviewed --inconclusive` rồi giao reviewer khác); ghi `<XT> pr reviewed` theo lệnh máy in (đăng lên PR để

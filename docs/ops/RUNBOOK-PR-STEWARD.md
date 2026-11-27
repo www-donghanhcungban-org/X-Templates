@@ -88,6 +88,8 @@ Khôi phục: `gh workflow enable pr-steward.yml` → `gh workflow run pr-stewar
 auto-merge"). Sau tắt dài ngày PR cũ có thể tụt nhánh: cập nhật (steward có token hoặc `gh pr update-branch`) rồi review lại ở head mới.
 Workflow bị sửa hỏng: revert commit qua PR; dự án đích chạy lại `install.py` để chép bản chuẩn.
 
+> Hiện steward vẫn merge PR không nháp khi CI xanh; luật nháp/hàng đợi `LOOP-STOP-031` mới là kỷ luật (máy: `T-5075`, `T-5077`).
+
 ## 4. Đẩy tag phát hành (`release-tag.yml`)
 
 Workflow `release-tag.yml` tự chạy khi `VERSION` đổi trên `main` (từ 3.24.0, ADR-0047; `workflow_dispatch` là đường lùi — steward merge bằng `GITHUB_TOKEN` không kích `push`, nên steward tự dispatch nó ghim commit merge, AUD-HAR-124) và đẩy tag bằng `GITHUB_TOKEN`; GitHub từ chối khi commit đích đổi file workflow so với tag trước
