@@ -3,7 +3,7 @@ title: Ngân sách context/token, compaction, bàn giao phiên
 kind: module
 prefix: LOOP-CTX
 applies_to: [all]
-updated: 2026-11-22
+updated: 2026-11-26
 ---
 
 # Ngân sách context/token, compaction, bàn giao phiên
@@ -68,7 +68,7 @@ Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 9
 - [ ] `LOOP-CTX-001` **MUST** SessionStart chỉ nạp 4 mục của `PROGRESS.md` (Đang làm · Tiếp theo · Quyết định · Bàn giao phiên) để phiên sau tiếp tục; định dạng và độ tươi theo [`LOOP-HARNESS-004`](harness-files.md)/[`LOOP-HARNESS-005`](harness-files.md). → Kiểm: chạy `session-start.sh` với PROGRESS mẫu chỉ in 4 mục đó (cắt ở 8 KB) và tổng `additionalContext` ≤ 9 800 ký tự kể cả khi autopilot đang chạy (vượt 10 000 thì Claude Code thay cả chuỗi bằng đường dẫn tệp và 2 000 ký tự đầu); PROGRESS bị cắt (trần 8 KB hoặc ngân sách tổng) thì có dấu "đã cắt phần cuối" (AUD-HAR-471); khối Autopilot ≤ 2 400 ký tự kể cả khi dòng đầu của `loop status` rất dài và vẫn còn dòng checkpoint (AUD-HAR-473). · Nguồn: stored 03 §6; `.claude/hooks/session-start.sh`
 - [ ] `LOOP-CTX-002` **MUST** Mỗi lần chạy headless hoặc `loop init` khai trần: `--max-iterations`/`--hours` và (headless) `--max-turns` + `--max-budget-usd`. → Kiểm: `.autopilot/state.json` có `max_iterations`, `deadline`; JSON headless có `total_cost_usd`. · Nguồn: [`loop-design.md`](loop-design.md)
 - [ ] `LOOP-CTX-003` **MAY** Ngừng dùng 2026-10-15 — thay bằng `LOOP-CTX-017` (ADR-0009: context lớn không còn là lý do bàn giao; compaction có checkpoint thay thế).
-- [ ] `LOOP-CTX-004` **MUST@L** Không `cat` file > 1 MB hoặc đổ output lệnh > 40 dòng vào context; lọc bằng script rồi đọc phần cần. → Kiểm: `.claude/settings.json`/hook chặn `cat` file lớn hoặc quy ước trong `AGENTS.md`; `xt.py loop record` giữ `output_tail` 40 dòng. · Nguồn: stored 03 §8b
+- [ ] `LOOP-CTX-004` **MUST@L** Không `cat` file > 1 MB hoặc đổ output lệnh > 40 dòng vào context; lọc bằng script rồi đọc phần cần. → Kiểm: `.claude/settings.json`/hook chặn `cat` file lớn hoặc quy ước trong `AGENTS.md`; `xt.py loop record` giữ `output_tail` 40 dòng; cổng commit đỏ (`pre-bash-guard.sh`) ghi cả output vào `<thư mục git>/xt-commit-gate.log` và chỉ trả bước đỏ + khối lỗi + đuôi ≤ 40 dòng + đường dẫn log, ≤ 8 000 ký tự — test `tests/test_hook_gate_output.py`. · Nguồn: stored 03 §8b
 - [ ] `LOOP-CTX-005` **MUST@L** Kế hoạch lập một lần và ghi `PLAN.md`; mỗi vòng chỉ đọc task kế tiếp, không lập lại kế hoạch. → Kiểm: `git log` của `PLAN.md` chỉ đổi dấu tick/ghi chú sau cổng duyệt; thay đổi danh sách task phải có lý do trong PROGRESS. · Nguồn: old framework `models-and-automation.md` §5
 - [ ] `LOOP-CTX-006` **MUST** Mọi thứ cần cho phiên sau nằm trong repo (PLAN, PROGRESS, SPEC, ADR, evidence hoặc link CI), không phụ thuộc trí nhớ phiên trước. → Kiểm: phiên mới với chỉ `AGENTS.md` + PROGRESS tiếp tục được đúng task (test bằng phiên thật). · Nguồn: stored 03 §6
 - [ ] `LOOP-CTX-007` **MAY** Ngừng dùng 2026-10-14 — gộp vào [`XC-DOCAI-006`](../18-cross-cutting/docs-for-ai-agents.md): `AGENTS.md`/`CLAUDE.md` của dự án ≤ 200 dòng, chi tiết để trong module và link tới.

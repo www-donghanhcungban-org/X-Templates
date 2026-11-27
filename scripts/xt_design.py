@@ -1,11 +1,11 @@
 """Khách duyệt thiết kế (ADR-0106, D-619): sổ `docs/autopilot/DESIGN.json` và khoá task giao diện của vòng.
 
-Dự án khai `Duyệt thiết kế: khách` ở `PROJECT.md` → task PLAN có thẻ `ui: yes` không được giao (`loop next`, `plan waves
---handoff`) hay nhận bằng chứng (`loop record`) tới khi người duyệt đúng bản thiết kế đã trình (`stage approve --design`). Agent trình bản
+Dự án khai `Duyệt thiết kế: khách` ở `PROJECT.md` → task PLAN có thẻ `ui: yes` không được giao (`loop next`, `plan
+waves` có hay không `--handoff`) hay nhận bằng chứng (`loop record`) tới khi người duyệt đúng bản thiết kế đã trình (`stage approve --design`). Agent trình bản
 (`stage design-submit`), không bao giờ tự duyệt — kể cả khi `stage_approval: agent`. Sổ chỉ `xt.py stage …` ghi (guard:
 evidence); sổ hỏng → mọi lệnh đọc nó chặn. `core` là module `xt` (helper khoá, git, giờ), truyền vào để không import vòng.
-ADR-0107: lời duyệt gắn với hash nội dung tệp bằng chứng (`evidence_sha256`), sổ đã có `history` thì khoá không phụ
-thuộc `PROJECT.md` nữa.
+ADR-0107: lời duyệt gắn với hash nội dung tệp bằng chứng (`evidence_sha256`). ADR-0108: sổ đã có (kể cả hỏng) thì dự
+án là khách, dòng khai ở `PROJECT.md` không nới được khoá.
 """
 
 from __future__ import annotations
@@ -26,16 +26,30 @@ SCHEMA = 1
 STATUSES = ("none", "awaiting_approval", "approved")
 PROJECT_FILE = "PROJECT.md"
 # Dòng khai nhận theo NHÃN trên dòng đã chuẩn hoá (`_clean`): đầu dòng bỏ dấu markdown (danh sách `-*+`/`1.`/`1)`,
-# trích dẫn `>`, bảng `|`, tiêu đề `#`, ô `[x]`, nhấn `*`/`_`/`~`, dấu backtick); nhãn rồi `:` (hoặc `|` của bảng); nhóm 1 = phần sau.
-DECLARE_RE = re.compile(r"(?:\s|[-+*>|#_`~]|\d+[.)]|\[[^\]]?\])*duyệt\s*thiết\s*kế[\s*_`~]*[:|][\s*_`~]*(.*)")
+# trích dẫn `>`, bảng `|`, tiêu đề `#`, ô `[x]`, nhấn `*`/`_`/`~`, `[` của link, dấu backtick, mở comment `<!--`); nhóm 1
+# = phần sau nhãn. Nhánh `[x]` đứng trước `[` đơn và vòng lặp possessive (`*+`): hai nhánh chồng nhau từng quay lui mũ
+# (`[[]` lặp, CodeQL py/redos); `d` chỉ có trong token `[d]` và luôn đứng trước `]` (không trước `u`), nên không
+# nhả lại cũng không làm mất lần khớp nào.
+# SEP_RE: phần sau nhãn phải là `:` (hoặc `|` của bảng), chỉ cách bởi dấu nhấn; nhóm 1 = giá trị. Sau `:` không bỏ `~`
+# (gạch bỏ): `~~không~~ …` ra giá trị rỗng → khách.
+LABEL_RE = re.compile(r"(?:\s|\[[^\]]?\]|[-+*>|#_`~\[]|\d+[.)]|<!--)*+duyệt\s*thiết\s*kế(.*)")
+SEP_RE = re.compile(r"[\s*_`~]*[:|][\s*_`]*(.*)")
 VALUE_RE = re.compile(r"[^\W_]+")  # giá trị = chữ đầu tiên (cắt ở khoảng trắng, dấu câu, `—`)
+CLIENT_WORD_RE = re.compile(
+    r"(?<![^\W_])khach(?![^\W_])"
+)  # trên chữ đã bỏ dấu (`_plain`); `_` là dấu nhấn, không là chữ
+LINE_BREAK_RE = re.compile(r"\r\n|\r|\n")  # ngắt dòng của markdown; đoạn sau U+2028, NEL, VT, FF…: `_line_entries`
+FENCE_OPEN_RE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")  # CommonMark: thụt ≤ 3 cách (tab = thụt 4 → không phải rào)
+FENCE_CLOSE_RE = re.compile(r" {0,3}(`{3,}|~{3,})[ \t]*")
 HUMAN = "không"
 DEFER = " · việc khác trong lúc chờ: `xt.py loop defer --task <ID> --reason …` rồi làm tiếp"
+INIT = " · chưa có vòng để hoãn task: `xt.py loop init --plan <PLAN>` trước, rồi làm việc khác trong lúc chờ"
 # Thẻ `ui:` trong nhóm ngoặc của dòng task: mọi giá trị khác `no` (kể cả rỗng, `true`, `có`) là giao diện (chặt hơn)
 UI_TAG_RE = re.compile(r"\bui\s*:(?!\s*no\b)", re.I)
 HASH_RE = re.compile(r"[0-9a-f]{64}")  # `evidence_sha256`: sha256 nội dung tệp bằng chứng lúc trình (ADR-0107)
 CLIENT = "khách"
 HUMAN_ONLY = "chỉ người — chủ dự án chạy ở terminal riêng, ngoài phiên agent; agent không tự duyệt thiết kế (ADR-0106)"
+STICKY = f"sổ {LEDGER} đã có — dòng khai không nới được (ADR-0108)"
 
 
 class DesignError(Exception):
@@ -202,17 +216,31 @@ def _clean(line: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", shown.casefold()).split())
 
 
-def _unfenced(core: ModuleType, text: str) -> list[str]:
-    """Dòng (đã `_clean`) ngoài code fence ``` / ~~~ (ví dụ trong tài liệu không phải khai báo)."""
-    kept: list[str] = []
-    fence: str | None = None
-    for line in map(_clean, text.splitlines()):
-        m = core.FENCE_RE.match(line)
-        if m and (fence is None or m.group(1) == fence):
-            fence = None if fence else str(m.group(1))
-        elif fence is None:
-            kept.append(line)
-    return kept
+def _fence_open(line: str) -> str:
+    """Rào mở (```…/~~~…) của dòng; '' = không phải rào. Rào backtick có info string chứa backtick không phải rào."""
+    m = FENCE_OPEN_RE.fullmatch(line)
+    return "" if not m or (m[1][0] == "`" and "`" in m[2]) else str(m[1])
+
+
+def _closes(line: str, fence: str) -> bool:
+    """Rào đóng theo CommonMark: cùng ký tự, dài ≥ rào mở, sau đó chỉ khoảng trắng (không info string)."""
+    m = FENCE_CLOSE_RE.fullmatch(line)
+    return m is not None and m[1][0] == fence[0] and len(m[1]) >= len(fence)
+
+
+def _lines(text: str) -> list[tuple[str, bool]]:
+    """(dòng markdown gốc, nằm trong code fence ``` / ~~~ kể cả dòng rào). Rào nhận trên dòng gốc như CommonMark (ký tự
+    vô hình trước ``` → không phải rào); rào không đóng thì kéo tới hết tệp."""
+    out: list[tuple[str, bool]] = []
+    fence = ""
+    for raw in LINE_BREAK_RE.split(text):
+        if fence:
+            fence = "" if _closes(raw, fence) else fence
+            out.append((raw, True))
+        else:
+            fence = _fence_open(raw)
+            out.append((raw, bool(fence)))
+    return out
 
 
 def _value(rest: str) -> str:
@@ -220,34 +248,76 @@ def _value(rest: str) -> str:
     return word[0] if word else ""
 
 
+def _plain(text: str) -> str:
+    """Chữ bỏ dấu (`khách` → `khach`) để tìm chữ `khách` không phân biệt dấu."""
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+def _entry(rest: str) -> tuple[str, str]:
+    """(giá trị, ghi chú lý do coi như `khách`) của một dòng khai; `rest` = phần sau nhãn."""
+    sep = SEP_RE.match(rest)
+    if not sep:
+        return CLIENT, f"dòng `duyệt thiết kế{rest}` không tách nhãn và giá trị bằng `:` hay `|`"
+    value = _value(sep[1])
+    if value == HUMAN and CLIENT_WORD_RE.search(_plain(sep[1])):
+        return CLIENT, f"giá trị `{sep[1]}` có chữ `{CLIENT}`"
+    return value, "" if value in (CLIENT, HUMAN) else f"giá trị lạ `{value}`"
+
+
+def _declares(raw: str) -> list[tuple[str, str]]:
+    """[(giá trị, ghi chú)] nếu dòng `raw` (đã `_clean`) mở đầu bằng nhãn, không thì []."""
+    m = LABEL_RE.match(_clean(raw))
+    return [_entry(m[1])] if m else []
+
+
+def _line_entries(raw: str, fenced: bool) -> list[tuple[str, str]]:
+    """Dòng khai của một dòng markdown: chính dòng đó, GỘP HỢP mỗi đoạn `raw.splitlines()` có giá trị khác `không`
+    (U+2028/2029, VT, FF, NEL, FS/GS/RS: markdown không ngắt, `splitlines()` ngắt — đoạn nào là dòng khai vẫn tính).
+    Đoạn `không` bỏ qua vì không đổi kết quả: thêm dòng khai không bao giờ mở khoá. Code fence chỉ GIẤU dòng giá trị
+    `không` (ví dụ như mẫu `PROJECT.md`)."""
+    pieces = raw.splitlines()
+    found = _declares(raw) + [e for p in pieces if len(pieces) > 1 for e in _declares(p) if e[0] != HUMAN]
+    where = f"dòng `{_clean(raw)}` trong code fence vẫn tính" if fenced else ""
+    return [(value, note or where) for value, note in found if not (fenced and value == HUMAN)]
+
+
+def _entries(text: str) -> list[tuple[str, str]]:
+    """(giá trị, ghi chú) mọi dòng khai. Dòng trong rào có giá trị khác `không` vẫn tính kèm ghi chú (fail-closed: rào
+    quên đóng hay rào trong comment HTML/`<pre>` không giấu được dòng khai thật). Nhờ vậy đọc rào sai chỉ đổi ghi chú,
+    không bao giờ nới khoá."""
+    return [e for raw, fenced in _lines(text) for e in _line_entries(raw, fenced)]
+
+
 def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
-    """(dự án khai khách duyệt thiết kế, ghi chú). Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không.
-    Giá trị khác (`khách hàng` → `khách`; rỗng/lạ kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn)."""
+    """(dự án khai khách duyệt thiết kế, ghi chú). Sổ `DESIGN.json` đã có (kể cả hỏng, rỗng, symlink gãy) → khách bất
+    kể `PROJECT.md`: dự án từng trình thì không rút khai báo được (ADR-0108). Chưa có sổ → theo dòng khai."""
+    client, note = _declared_line(base)
+    ledger = base / LEDGER
+    if client or not (ledger.exists() or ledger.is_symlink()):
+        return client, note
+    return True, STICKY
+
+
+def _declared_line(base: Path) -> tuple[bool, str]:
+    """Theo dòng khai ở `PROJECT.md`. Vắng `PROJECT.md`/dòng khai → không; giá trị đúng `không` → không. Giá trị khác
+    (`khách hàng` → `khách`; rỗng/lạ, `không` kèm chữ `khách`, nhãn không tách bằng `:`/`|`, dòng khác `không` trong
+    code fence → kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment HTML đọc như
+    dòng thường."""
     p = base / PROJECT_FILE
     if not p.exists():
         return False, ""
     try:
-        text = p.read_text(encoding="utf-8")
+        text = p.read_text(encoding="utf-8-sig")  # BOM đầu tệp không phải nội dung (rào ngay sau BOM vẫn là rào)
     except (OSError, UnicodeDecodeError) as exc:
         return True, f"không đọc được {PROJECT_FILE} ({exc}) — coi như khai `Duyệt thiết kế: {CLIENT}`"
-    values = [_value(m[1]) for line in _unfenced(core, text) if (m := DECLARE_RE.match(line))]
-    if len(set(values)) > 1:
-        return True, f"{PROJECT_FILE} khai `Duyệt thiết kế` mâu thuẫn — coi như `{CLIENT}`; sửa còn một dòng"
-    if not values or values[0] == HUMAN:
+    entries = _entries(text)
+    why = next((f" ({n})" for _, n in entries if n), "")
+    if len({v for v, _ in entries}) > 1:
+        return True, f"{PROJECT_FILE} khai `Duyệt thiết kế` mâu thuẫn{why} — coi như `{CLIENT}`; sửa còn một dòng"
+    if not entries or entries[0][0] == HUMAN:
         return False, ""
-    odd = (
-        f"{PROJECT_FILE} khai `Duyệt thiết kế` giá trị lạ `{values[0]}` — coi như `{CLIENT}`; ghi `{CLIENT}`/`{HUMAN}`"
-    )
-    return True, "" if values[0] == CLIENT else odd
-
-
-def client_mode(core: ModuleType, base: Path, led: Doc) -> tuple[bool, str]:
-    """Như `declared`, nhưng sổ đã có `history` (từng trình) thì vẫn là khách dù `PROJECT.md` đổi sang `không` hay bị
-    xoá: agent không tắt khoá bằng cách sửa tệp khai; chỉ người xoá sổ bằng commit mới tắt (ADR-0107)."""
-    client, note = declared(core, base)
-    if client or not led["history"]:
-        return client, note
-    return True, f"{LEDGER} đã có lịch sử trình — khoá giữ dù {PROJECT_FILE} không khai `{CLIENT}`; chỉ người xoá sổ"
+    fix = f" — coi như `{CLIENT}`; ghi `Duyệt thiết kế: {CLIENT}` hoặc `: {HUMAN}`"
+    return True, f"{PROJECT_FILE} khai `Duyệt thiết kế`{why}{fix}" if why else ""
 
 
 def file_sha256(base: Path, rel: str) -> str:
@@ -276,25 +346,28 @@ def _drift(base: Path, sub: Doc) -> str:
 
 def lock_reason(core: ModuleType, base: Path) -> str:
     """Lý do task giao diện bị khoá; '' = không khoá (không khai khách, hoặc bản đã duyệt còn đúng hash nội dung). Sổ có
-    mà hỏng → khoá (không biết đã từng trình chưa). Sổ `approved` hợp lệ: `history[-2]` là `submit` của bản đã duyệt."""
+    (kể cả hỏng) → khách theo `declared` (ADR-0108), sổ hỏng → khoá. Sổ `approved` hợp lệ: `history[-2]` là `submit`
+    của bản đã duyệt, khoá mở chỉ khi tệp bằng chứng còn đúng hash của lần trình đó (ADR-0107)."""
+    client, note = declared(core, base)
+    if not client:
+        return ""
+    tail = f" ({note})" if note else ""
     try:
         led = read(core, base)
     except DesignError as exc:
-        return str(exc)
-    client, note = client_mode(core, base, led)
-    if not client:
-        return ""
-    head = f"task giao diện (`ui: yes`) chờ khách duyệt thiết kế{f' ({note})' if note else ''} — "
+        return f"{exc}{tail}"
+    head = f"task giao diện (`ui: yes`) chờ khách duyệt thiết kế{tail} — "
     if led["status"] == "approved":
         drift = _drift(base, led["history"][-2])
         return head + drift if drift else ""
+    exit_hint = DEFER if (core.read_state(base) or {}).get("plan") else INIT  # chưa `loop init`: `loop defer` cũng rc 2
     if led["status"] == "awaiting_approval":
         sha = led["submitted"]["sha"][:12]
-        wait = f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106){DEFER}"
+        wait = f"chờ người duyệt bản {sha}: `xt.py stage approve --design --sha {sha} --note …` (ADR-0106){exit_hint}"
         return head + (_drift(base, led["submitted"]) or wait)
     return (
         head
-        + f"trình mockup: `xt.py stage design-submit --evidence <tệp>` rồi chờ người `stage approve --design`{DEFER}"
+        + f"trình mockup: `xt.py stage design-submit --evidence <tệp>` rồi chờ người `stage approve --design`{exit_hint}"
     )
 
 
@@ -308,12 +381,22 @@ def is_ui(core: ModuleType, task: Doc) -> bool:
 
 
 def hold(core: ModuleType, base: Path, ready: list[Doc]) -> tuple[list[Doc], dict[str, str]]:
-    """(task còn giao được, {task giao diện bị giữ: lý do}) cho `loop next` và `plan waves --handoff` (chặn như defer)."""
+    """(task còn giao được, {task giao diện bị giữ: lý do}) cho `loop next` và `plan waves` (chặn như defer)."""
     ui = [t for t in ready if is_ui(core, t)]
     why = lock_reason(core, base) if ui else ""
     if not why:
         return ready, {}
     return [t for t in ready if t not in ui], {str(t["id"]): why for t in ui}
+
+
+def waves(core: ModuleType, base: Path, tasks: list[Doc], deferred: Doc, limit: int) -> Doc:
+    """`plan waves` không `--handoff`: task giao diện bị giữ vào `blocked` kèm lý do khoá (lan sang task `sau:` nó)
+    bằng cùng `hold` và cùng cách ghi lý do như `--handoff`."""
+    held = hold(core, base, tasks)[1]
+    out: Doc = core.plan_waves(tasks, {**deferred, **held}, limit)
+    for block in out["blocked"]:
+        block["reason"] = held.get(block["id"], block["reason"])
+    return out
 
 
 def defer_held(core: ModuleType, base: Path, st: Doc) -> Doc:
@@ -349,7 +432,7 @@ def _check(core: ModuleType, base: Path, as_json: bool) -> int:
     except DesignError as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 2
-    client, note = client_mode(core, base, led)
+    client, note = declared(core, base)
     reason = lock_reason(core, base)
     if as_json:
         out = {"ledger": LEDGER, "client": client, "note": note, "design": led, "ok": not reason, "reason": reason}

@@ -3864,6 +3864,22 @@ class HarnessCheckTest(TmpDirCase):
         self.assertIn("✓ settings", out)
         self.assertIn("✓ agents", out)
 
+    def test_harness_guard_loads_guard_once_and_matches_per_command(self):
+        with unittest.mock.patch.object(xt, "guard_blocks", wraps=xt.guard_blocks) as batch:
+            self.assertEqual(xt._harness_guard(ROOT), "")
+        batch.assert_called_once()
+        with unittest.mock.patch.dict(os.environ, {"XT_GUARD_POLICY": ""}):
+            single = [bool(xt.guard_block(c, ROOT, [ROOT / xt.GUARD_FILE])) for c in xt.HARNESS_DENY]
+        self.assertTrue(all(single))
+
+    def test_harness_guard_names_every_missed_command_in_order(self):
+        whys = [""] * len(xt.HARNESS_DENY)
+        whys[1] = "chặn"
+        with unittest.mock.patch.object(xt, "guard_blocks", return_value=whys):
+            out = xt._harness_guard(ROOT)
+        missed = [c for i, c in enumerate(xt.HARNESS_DENY) if i != 1]
+        self.assertEqual(out, "không chặn: " + ", ".join(missed))
+
     def test_harness_check_red_rows(self):
         agents = self.tmp / ".claude" / "agents"
         (agents / "b.md").write_text("---\nname: b\nmodel: sonnet\n---\n", encoding="utf-8")  # thiếu tools:

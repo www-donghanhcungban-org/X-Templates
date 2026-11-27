@@ -1,7 +1,7 @@
 # ADR-0107: Lời khách duyệt thiết kế gắn với hash nội dung bằng chứng
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-26 (D-620).
-- **Liên quan:** [ADR-0106](0106-client-design-approval-gate.md) (sổ `DESIGN.json`, khoá task `ui`; ADR này bổ sung §3–§5 và đóng "Giới hạn đã biết" về dòng khai), [ADR-0058](0058-product-stages-machine-lock.md).
+- **Liên quan:** [ADR-0106](0106-client-design-approval-gate.md) (sổ `DESIGN.json`, khoá task `ui`; ADR này bổ sung §3–§5), [ADR-0108](0108-design-gate-guard-and-sticky-declaration.md) (đóng "Giới hạn đã biết" về dòng khai trước ADR này; Quyết định 4 dưới đây dùng cơ chế của nó — xem §Quan hệ với ADR-0108), [ADR-0058](0058-product-stages-machine-lock.md).
 
 ## Bối cảnh
 
@@ -17,8 +17,18 @@ Bản #843 vá lỗ 1 lần đầu bằng "SHA đã duyệt là tổ tiên của
 1. `stage design-submit` ghi `evidence_sha256` — SHA-256 (64 hex thường) nội dung tệp bằng chứng ở cây làm việc lúc trình (cây sạch nên bằng nội dung ở HEAD) — vào `submitted` và vào sự kiện `submit` của `history`. Phát lại `history` đòi trường này; sổ thiếu hay sai dạng là **sổ hỏng** (fail-closed: mọi lệnh đọc sổ chặn, task `ui` khoá). `schema` giữ `1` vì tính năng chưa phát hành.
 2. Khoá chỉ mở khi `status == "approved"` **và** tệp bằng chứng hiện tại (tệp thường, không symlink, đọc từ cây làm việc) có đúng hash của lần `submit` đã được duyệt. Lệch hay tệp mất → khoá, lý do "bản bằng chứng … đã đổi sau khi trình/duyệt" chỉ cách trả đúng nội dung hoặc `stage design-reopen` rồi trình lại. Kiểm không gọi git. SHA commit lúc trình giữ trong sổ để dẫn chứng, không dùng để khoá.
 3. `stage approve --design` kiểm hash **trong khoá** `state.lock` và từ chối khi bằng chứng đã đổi sau khi trình — người duyệt đúng nội dung đã trình.
-4. Sổ `DESIGN.json` đã có `history` → coi là đã khai `khách`, bất kể `PROJECT.md`: đổi dòng khai sang `không` hay xoá tệp không tắt khoá. Chỉ người xoá sổ bằng commit mới tắt. Sổ có mà hỏng → khoá kể cả khi `PROJECT.md` không khai (không biết đã từng trình chưa). Dự án không có sổ và không khai: hành vi không đổi.
+4. Dòng khai không tắt được khoá khi sổ đã có: đổi dòng khai sang `không` hay xoá `PROJECT.md` không mở task `ui`; chỉ người xoá sổ bằng commit mới tắt. Bản đầu của ADR này dùng điều kiện "sổ có `history`"; khi hợp nhất với `main` thì dùng **đúng một** cơ chế là `declared()` của ADR-0108 §2 ("sổ tồn tại, kể cả hỏng, rỗng hay symlink gãy → khách", ghi chú `STICKY`). Điều kiện đó chặt hơn: sổ hợp lệ mà `history` rỗng cũng là khách. Sổ có mà hỏng thì khoá kể cả khi `PROJECT.md` không khai. Dự án không có sổ và không khai: hành vi không đổi.
 5. Kèm theo (cùng lát, không đổi luật): verdict `loop` coi task `ui` đang bị giữ như `loop defer` (chỉ trong bộ nhớ, không ghi state) nên không dẫn agent vào task sẽ bị `loop record` từ chối; chỉ còn chúng → `done-pending-human` kèm lý do khoá. Thẻ `ui:` mọi giá trị khác `no` (kể cả rỗng, `true`, `có`) là giao diện. Lý do chặn `STAGE_APPROVE` của guard nói rõ `--design` không bao giờ được qua (chỉ đổi chữ, giữ số dòng).
+
+## Quan hệ với ADR-0108
+
+ADR-0108 (D-622) lên `main` trước ADR này. Hai ADR đóng cùng lỗ "sửa `PROJECT.md` mở khoá" theo hai cách: ADR-0108 dựa trên sự tồn tại của sổ, bản đầu của ADR này dựa trên `history`. Khi hợp nhất, mã chỉ giữ một cách là `declared()` của ADR-0108; hàm `client_mode` của bản đầu bị bỏ. ADR này thêm lớp thứ hai, độc lập với dòng khai: khi đã là khách, lời duyệt chỉ có hiệu lực nếu tệp bằng chứng còn đúng `evidence_sha256` (Quyết định 1–3). Hai lớp cộng lại cho thứ tự kiểm sau trong `lock_reason`:
+
+1. `declared()`: không khai và chưa có sổ → không khoá.
+2. Sổ hỏng → khoá.
+3. `approved` → mở chỉ khi hash khớp.
+
+Phần guard của ADR-0108 (chặn mọi lần nạp `xt_design` trong tiến trình) giữ nguyên. ADR này chỉ đổi chữ lý do `STAGE_APPROVE`, không đổi số dòng.
 
 ## Phương án đã xét
 

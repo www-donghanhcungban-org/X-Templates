@@ -6276,7 +6276,7 @@ def _harness_guard(base: Path) -> str:
     if not path.is_file() or _syntax_error(path):
         return f"không có hoặc lỗi cú pháp: {GUARD_FILE}"
     with _env_patch("XT_GUARD_POLICY", ""):
-        missed = [c for c in HARNESS_DENY if not guard_block(c, base, [path])]
+        missed = [c for c, why in zip(HARNESS_DENY, guard_blocks(list(HARNESS_DENY), base, [path])) if not why]
     return "không chặn: " + ", ".join(missed) if missed else ""
 
 
@@ -10921,7 +10921,8 @@ def _plan_waves(args: argparse.Namespace, base: Path) -> int:
             print(f"✗ {exc}", file=sys.stderr)
             return 2
         return 0
-    out = plan_waves(parse_plan(plan), _deferred(st or {}), args.max)
+    design, todo = design_module(), (parse_plan(plan), _deferred(st or {}), args.max)  # ADR-0106: giữ như --handoff
+    out = design.waves(sys.modules[__name__], base, *todo) if design else plan_waves(*todo)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
@@ -19346,7 +19347,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     fixed: List[str] = []
     if args.fix and runtime is None:
         fixed, failed = doctor_fix(findings)
-        findings = doctor_findings(base, args.framework, offline=offline) + failed
+        findings = (doctor_findings(base, args.framework, offline=offline) if fixed or failed else findings) + failed
     errors = sum(f.level == "error" for f in findings)
     if args.json:  # hợp đồng máy đọc: {"ok", "base", "version", "fixed", "findings": [{code, level, msg, fixable}]}
         rows = [{"code": f.code, "level": f.level, "msg": f.msg, "fixable": f.fix is not None} for f in findings]
