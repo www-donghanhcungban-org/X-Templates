@@ -1120,3 +1120,80 @@
 - Chọn: Mở rộng _tag_glob theo cú pháp lớp ký tự và đoạn chỉ gồm glob, nới trần guard 8 dòng (ADR-0104)
 - Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chặn các dạng bash bung ra vX.Y.Z đã đo, không chặn oan refspec dùng chung _tag_glob; giữ đường lùi
 - Đường lùi: Hoàn nguyên commit; trần guard về 24664
+
+### D-608 · 2026-11-26T05:20:03+00:00 · Duyệt PLAN tối ưu khung đợt 1 (PLAN-optimize-2026-11-26): làm lát nào trước trong 31 lát nghiên cứu đề xuất
+
+- Phương án: (1) Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau · (2) Làm thẳng ba đòn bẩy lớn nhất trước (nén sớm 400K, trần thông báo cổng đỏ, tách guard) dù chạm hàng rào đang kẹt trần dòng · (3) Chỉ ghi nghiên cứu, không sửa gì đợt này
+- Chọn: Đợt 1 gồm các lát không chạm tệp nóng (test fuzz, ánh xạ test-select, kiểm kiểu settings, check-links, registry, sổ đo) chạy song song worktree; lát chạm guard.py, xt.py, settings.json mở PLAN riêng sau
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn trước: lát đợt 1 chỉ thêm test hoặc sửa công cụ ngoài hàng rào, parity đã đo; giữ đường lùi bằng PR nhỏ; lát chạm hàng rào cần ADR và số đo sau khi đợt 1 nhả trần trọng số
+- Đường lùi: Hoàn nguyên từng PR squash; PLAN đợt sau chưa mở nên không có gì phải gỡ
+
+### D-609 · 2026-11-26T05:20:04+00:00 · X-Scanner (lõi 3.29.0) và X-Agents (lõi 2.0.0) có nâng lên 3.36.0 trong đợt này không
+
+- Phương án: (1) Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở · (2) Nâng cả hai cùng đợt với năm repo ở 3.34.0
+- Chọn: Giữ bản, ghi ngoại lệ có hạn 2027-01-21 trong registry kèm điều kiện mở
+- Lý do (tiêu chí chất lượng cuối): X-Scanner có cổng trần 1 048 576 B mỗi tệp trong khi xt.py 1 259 177 B và guard.py 1 384 897 B nên PR nâng chắc chắn đỏ; X-Agents từ 2.0.0 đổi 283 tệp, 3 hook tự sửa phải gộp tay, guard đổi từ hỏi người sang không hỏi nên cần PLAN di trú riêng tại repo đó
+- Đường lùi: Xoá ngoại lệ trong registry và mở PR nâng khi một trong ba điều kiện mở đạt
+
+### D-610 · 2026-11-26T05:34:13+00:00 · Phạm vi đợt tối ưu và danh sách dự án đích sau chỉ đạo của chủ dự án 2026-11-26
+
+- Phương án: (1) Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609 · (2) Giữ canary X-Company và ngoại lệ X-Agents như D-608/D-609
+- Chọn: Chỉ sửa trong repo khung (cả mã khung và mẫu cài cho đích), hoãn mọi PR nâng ở dự án đích; loại X-Agents khỏi danh sách dự án đích (registry, TARGETS), thay phần X-Agents của D-609
+- Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo trực tiếp: trước mắt tối ưu dự án khung, chưa nâng đích, loại X-Agents; giữ đường lùi vì không có thay đổi nào ở repo đích (canary dừng trước khi đẩy nhánh)
+- Đường lùi: Thêm lại dòng X-Agents vào registry và TARGETS; mở lại task canary T-5038 trong PLAN đợt sau
+
+### D-611 · 2026-11-26T06:15:16+00:00 · C12: mở rộng luật 'bản sửa xanh giả/âm tính giả kèm bộ sinh biến thể; lớp lỗi có ≥ 2 PR nối thì đổi sang danh sách đóng' từ guard sang mọi công cụ cổng
+
+- Phương án: (1) Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5 · (2) Giữ phạm vi guard như ghi nhớ hiện tại
+- Chọn: Mở rộng sang mọi công cụ cổng và hàng rào (guard, verify-render, check-links, static-check…), ghi vào skill /complete bước 4–5
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: chuỗi #819→#820→#821 (verify-render) và #815→#818 (guard) cho thấy cùng mẫu vá lặp ở công cụ ngoài guard; luật chỉ đòi thêm test, không nới cổng
+- Đường lùi: Xoá vế (c) khỏi skill /complete, giữ hai vế đầu
+
+### D-612 · 2026-11-26T06:15:16+00:00 · C06: chặn tag phiên bản viết bằng glob ở vị trí tên tag thế nào để đóng cả lớp AUD-HAR-541 mà guard.py không tăng dòng
+
+- Phương án: (1) Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d · (2) Tiếp tục vá theo từng mẫu glob đã đo (như #815, #818) · (3) Chấp nhận lỗ, chờ ruleset tag phía máy chủ (T-4007)
+- Chọn: Mọi ký tự glob không nháy ở vị trí tên tag của dạng tạo (git tag <tên>, update-ref refs/tags/<tên>) thì deny; không chạm refspec; đối chứng không chặn oan -l/-n/--contains/--merged/--points-at/-d
+- Lý do (tiêu chí chất lượng cuối): Đúng và an toàn: 70/1 500 lệnh sinh ra vẫn lọt sau hai lần vá mẫu; danh sách đóng đóng cả lớp; tên tag có glob không nháy không có ca dùng hợp lệ khi tạo tag; giữ trần dòng (0 dòng ròng) nên không cần ADR nới trần; thay phần đã bác ở D-607
+- Đường lùi: Hoàn nguyên commit; quay lại luật _tag_glob của ADR-0104
+
+### D-613 · 2026-11-26T06:15:17+00:00 · C04: ngưỡng nén sớm phiên chính
+
+- Phương án: (1) autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích · (2) Giữ mặc định của Claude Code · (3) Đặt qua biến môi trường CLAUDE_CODE_AUTO_COMPACT_WINDOW
+- Chọn: autoCompactWindow 400000 ở settings dự án, chỉ khi tài liệu sống xác nhận khoá có hiệu lực ở cấp dự án; kèm pre-compact.sh in chỉ dẫn tóm tắt; đo preTokens và tỉ lệ Gate xanh lần đầu trước khi đưa sang mẫu đích
+- Lý do (tiêu chí chất lượng cuối): Mô phỏng trên chuỗi lượt thật giảm 55 % cache-read phiên chính (cận trên); khoá settings là đường lùi rẻ nhất (xoá một khoá), biến môi trường thắng cả cờ CLI nên kém đường lùi; chưa xác minh thì không thêm khoá
+- Đường lùi: Xoá khoá autoCompactWindow khỏi .claude/settings.json
+
+### D-614 · 2026-11-26T07:57:57+00:00 · Luật merge PR theo yêu cầu chủ dự án 2026-11-26 (merge từ nhỏ lên lớn theo số PR, bỏ draft, main chỉ gộp vào PR nhỏ nhất để giải xung đột rồi chờ merge) — cơ chế nào cho khung và dự án đích
+
+- Phương án: (1) Hàng FIFO theo số PR do khung tự làm: một cổng chung xt_merge_queue.gate trong merge-check/pr next/merge-watch/steward; chỉ PR đầu hàng được update/merge, PR khác wait 'chờ tới lượt'; PR nháp, đỏ, cần người, ngoại lệ cứng, chồng nhánh hoặc kẹt quá 120 phút thì ra hàng; khoá merge_queue đọc ở xt.yaml nhánh đích, mặc định fifo; đường lùi merge_queue: off · (2) Merge queue gốc của GitHub (ruleset Require merge queue + merge_group) · (3) FIFO tuyệt đối: PR nhỏ nhất đỏ hay chờ người thì cả hàng đứng · (4) Giữ như cũ, chỉ kỷ luật phiên agent
+- Chọn: Hàng FIFO theo số PR do khung tự làm: một cổng chung xt_merge_queue.gate trong merge-check/pr next/merge-watch/steward; chỉ PR đầu hàng được update/merge, PR khác wait 'chờ tới lượt'; PR nháp, đỏ, cần người, ngoại lệ cứng, chồng nhánh hoặc kẹt quá 120 phút thì ra hàng; khoá merge_queue đọc ở xt.yaml nhánh đích, mặc định fifo; đường lùi merge_queue: off
+- Lý do (tiêu chí chất lượng cuối): Đúng ý chủ dự án và an toàn: guard tự chặn merge chen qua MERGE_INELIGIBLE, ghim head giữ nguyên (ADR-0036); merge queue gốc không dùng được vì chủ repo là tài khoản User, PUT merge ghim head không hỗ trợ queue và queue gốc xếp theo lúc vào hàng chứ không theo số; FIFO tuyệt đối làm hotel-manager và x-shop đứng khoảng 10 ngày vì PR đỏ treo từ 16/11; đo hôm nay 13 lượt update-branch thừa trên 8 PR (khoảng 1 390 phút-job), hàng FIFO giảm N(N+1)/2 lượt CI về N
+- Đường lùi: Commit merge_queue: off vào xt.yaml nhánh đích; hoặc hoàn nguyên các PR ADR-0105
+
+### D-615 · 2026-11-26T09:58:25+00:00 · Chủ dự án 2026-11-26 yêu cầu lập PLAN bù ba chỗ hở khi đối chiếu khung với một yêu cầu site giới thiệu công ty (Figma, animation, admin tin tức, SEO/Index, bảo mật, bàn giao): (a) không có gói site + CMS, (b) thiếu mục kiểm SEO kỹ thuật JSON-LD/sitemap/Search Console, (c) không có bước duyệt thiết kế trước khi code. Phạm vi và thứ tự nào?
+
+- Phương án: (1) Ba lát theo rủi ro tăng dần: SEO kỹ thuật (chỉ tài liệu + test) → bước duyệt thiết kế và hợp đồng bàn giao file thiết kế (khung không sinh file Figma) → gói site-cms-ts mở bằng nghiên cứu + ADR rồi mới viết mã; pilot cuối bằng chính yêu cầu mẫu · (2) Làm gói site-cms-ts trước vì là chỗ hở lớn nhất, gộp SEO và duyệt thiết kế vào gói · (3) Chỉ bổ sung tài liệu (mục kiểm SEO, bước duyệt thiết kế, hướng dẫn chọn CMS), không làm gói
+- Chọn: Ba lát theo rủi ro tăng dần: SEO kỹ thuật (chỉ tài liệu + test) → bước duyệt thiết kế và hợp đồng bàn giao file thiết kế (khung không sinh file Figma) → gói site-cms-ts mở bằng nghiên cứu + ADR rồi mới viết mã; pilot cuối bằng chính yêu cầu mẫu
+- Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: mục kiểm SEO và bước duyệt thiết kế áp cho mọi dự án, không chỉ dự án dùng gói — nhốt vào gói (phương án 2) bỏ sót dự án tự chọn stack; gói cần chọn stack từ nguồn sống trước (P2) nên không thể đi đầu. (2) đường lùi: hai lát đầu chỉ tài liệu + test, revert một PR; gói là thư mục riêng theo ADR-0068. (3) bền/test được: gói có nghiệm thu CI + mutants như web-api-ts. Phương án 3 rẻ nhưng để dự án site công ty tiếp tục rơi vào web-api-ts nhiều tenant (sai hồ sơ). Sinh file Figma bị loại: không có API ghi node thiết kế ổn định (chưa xác minh — T-5052 kiểm), khung chỉ định hợp đồng duyệt và bàn giao.
+- Đường lùi: Xoá hoặc sửa PLAN-site-cms-2026-11-26.md bằng PR; chưa có mã. Khi gói đã merge: gỡ thư mục packs/site-cms-ts + workflow, dự án đích đã cài giữ starter (của dự án).
+
+### D-617 · 2026-11-26T10:25:01+00:00 · Vá mặc định lệch khi khung nhận site giới thiệu công ty có admin tin tức (chủ dự án 2026-11-26: 'phân tích rồi chọn đúng tiêu chuẩn phù hợp'). Đo bằng compose: /factory --new luôn dùng gói web-api-ts (nhiều tenant); bảng hồ sơ đẩy site có đăng nhập biên tập về web-app (SEO PRF-WEB-012 chỉ SHOULD); ở S/M không mục sàn nào bắt MFA admin, chống brute force, lọc HTML biên tập; UX-VISUAL-001 dẫn WCAG 2.3.3 như thể bắt buộc trong khi đó là AAA. Mức nào cho sàn quản trị?
+
+- Phương án: (1) Sàn theo ASVS 5.0: mục hồ sơ static-site MUST (mọi quy mô) cho phần ASVS L1 của ranh giới quản trị — CSRF 3.5.x, brute force 6.3.1, không tài khoản mặc định 6.3.2, lọc HTML biên tập 1.3.1, truy vấn tham số hoá 1.2.4; mục MUST@M cho phần L2 — MFA 6.3.3, hết hạn phiên 7.3.1/7.3.2; web-app thêm MUST@M MFA + phiên cho tài khoản quản trị; factory chọn gói theo profiles; sửa trích dẫn UX-VISUAL-001 ghi rõ AAA và lý do khung chặt hơn · (2) Mọi mục (cả MFA, phiên) MUST ở mọi quy mô · (3) Không thêm mục sàn; dựa vào --feature auth và ADR-0030
+- Chọn: Sàn theo ASVS 5.0: mục hồ sơ static-site MUST (mọi quy mô) cho phần ASVS L1 của ranh giới quản trị — CSRF 3.5.x, brute force 6.3.1, không tài khoản mặc định 6.3.2, lọc HTML biên tập 1.3.1, truy vấn tham số hoá 1.2.4; mục MUST@M cho phần L2 — MFA 6.3.3, hết hạn phiên 7.3.1/7.3.2; web-app thêm MUST@M MFA + phiên cho tài khoản quản trị; factory chọn gói theo profiles; sửa trích dẫn UX-VISUAL-001 ghi rõ AAA và lý do khung chặt hơn
+- Lý do (tiêu chí chất lượng cuối): (1) đúng: mức bám nguyên văn ASVS 5.0 (L1 là mức tối thiểu cho mọi app ra Internet; MFA và timeout phiên là L2) — phương án 2 ép L2 lên MVP S trái chuẩn, phương án 3 sai vì ADR-0030 chỉ nâng ở M, S vẫn trống và trần MAX_ESSENTIAL của authn-authz đã đủ 4; /complete ghép lại M trước khi phát hành nên MFA thành MUST đúng lúc có người dùng thật. (2) đường lùi: mục mới, ID mới, không đổi ID cũ; revert một PR. (3) không chép luật: mục hồ sơ trỏ về nhà SEC-WEB-007, BE-AUTH-003/005/013. UX-VISUAL-001 giữ MUST (cách hiểu chặt hơn, tiêu chí 1) nhưng ghi đúng mức AAA. Nguồn: ASVS v5.0.0 5.0/en (đọc 2026-11-26), NIST SP 800-63B-4 final, WCAG 2.2, Google Search Central.
+- Đường lùi: Revert PR fix/site-defaults; mục PRF-STATIC-018/019, PRF-WEB-020 bị gỡ thì đánh MAY + Ngừng dùng theo conventions (không tái dùng ID).
+
+### D-619 · 2026-11-26T14:17:14+00:00 · Chủ dự án 2026-11-26 duyệt quy trình cho dự án làm cho khách: chào giá trước G0, và khách duyệt thiết kế (Figma/Penpot) là điểm dừng bắt buộc trước khi code UI. Cơ chế nào để máy chặn được?
+
+- Phương án: (1) Sổ riêng docs/autopilot/DESIGN.json (sổ bằng chứng của guard); lệnh xt.py stage design-submit/design-reopen/design-check; duyệt bằng xt.py stage approve --design --sha --note — luôn chỉ người (guard chặn mọi stage approve có cờ ngoài --sha/--note, đã thử bằng payload giả 2026-11-26; xt.py từ chối phiên agent); loop next/record chặn task (ui: yes) khi PROJECT.md khai 'Duyệt thiết kế: khách' mà bản thiết kế mới nhất chưa duyệt; logic ở module mới xt_design.py, nới trần dòng xt.py qua ADR · (2) Gắn sự kiện thiết kế vào sổ giai đoạn STAGE.json · (3) Chỉ tài liệu + loop defer, không máy chặn
+- Chọn: Sổ riêng docs/autopilot/DESIGN.json (sổ bằng chứng của guard); lệnh xt.py stage design-submit/design-reopen/design-check; duyệt bằng xt.py stage approve --design --sha --note — luôn chỉ người (guard chặn mọi stage approve có cờ ngoài --sha/--note, đã thử bằng payload giả 2026-11-26; xt.py từ chối phiên agent); loop next/record chặn task (ui: yes) khi PROJECT.md khai 'Duyệt thiết kế: khách' mà bản thiết kế mới nhất chưa duyệt; logic ở module mới xt_design.py, nới trần dòng xt.py qua ADR
+- Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: duyệt của khách là việc người theo định nghĩa — phương án 2 cho agent tự duyệt khi stage_approval: agent và phải sửa bộ phát lại lịch sử sổ giai đoạn; phương án 3 trái P1, agent tự viết tệp duyệt được. Figma không có trạng thái duyệt đọc được qua REST (Dev Mode status chỉ là nhãn, không người duyệt — đọc 2026-11-26) nên bằng chứng duyệt phải ở sổ của khung. (2) đường lùi: dự án không khai 'Duyệt thiết kế: khách' không đổi gì. (3) dùng lại lớp chặn của ADR-0058, guard chỉ thêm tên sổ vào EVIDENCE_LEDGERS.
+- Đường lùi: Revert PR; dự án đang khai 'Duyệt thiết kế: khách' bỏ dòng đó hoặc chuyển 'không'; DESIGN.json giữ làm hồ sơ.
+
+### D-622 · 2026-11-26T22:24:06+00:00 · Nợ 6 của review PR 844 (ADR-0106): (a) luật guard AUD-SEC-498 chỉ nhận import xt, chưa nhận import xt_design, nên script trình thông dịch nạp xt_design.approve trong tiến trình lọt guard; (b) dòng khai Duyệt thiết kế chỉ đọc ở cây làm việc, nên sửa thành không sau khi đã design-submit thì mở khoá được. Sửa thế nào, ở mức nào?
+
+- Phương án: (1) (a) nhận cả xt_design ở _xt_imports và XT_INPROC_NAME_RE bằng sửa tại chỗ (không thêm dòng guard.py, không nới trần); (b) khi docs/autopilot/DESIGN.json tồn tại (kể cả hỏng, rỗng) thì dự án coi là khách bất kể PROJECT.md; ghi ADR-0108 thay các giới hạn tương ứng của ADR-0106 · (2) Như phương án 1 nhưng (b) còn đòi PROJECT.md ở nhánh chính của remote cũng khai khách (như ADR-0069), tức đọc PROJECT.md từ origin/main bằng git show · (3) Không sửa mã, chỉ giữ nguyên giới hạn đã ghi ở ADR-0106
+- Chọn: (a) nhận cả xt_design ở _xt_imports và XT_INPROC_NAME_RE bằng sửa tại chỗ (không thêm dòng guard.py, không nới trần); (b) khi docs/autopilot/DESIGN.json tồn tại (kể cả hỏng, rỗng) thì dự án coi là khách bất kể PROJECT.md; ghi ADR-0108 thay các giới hạn tương ứng của ADR-0106
+- Lý do (tiêu chí chất lượng cuối): (1) đúng/an toàn: (a) cùng hiệu ứng duyệt thay khách mà guard đã chặn cho import xt; sửa tại chỗ giữ trần dòng guard.py; (b) đóng đúng lỗ reviewer tái hiện (sửa PROJECT.md chưa commit thành không khi đang chờ duyệt) mà không phụ thuộc mạng hay remote. Phương án 2 mạnh hơn nhưng phụ thuộc git remote, tăng bề mặt lỗi (offline, clone nông, worktree) — để sau nếu có số liệu; phương án 3 để hở lỗ đã tái hiện. (2) đường lùi: hai sửa nhỏ độc lập, revert một PR; không đổi ID. (3) kiểm được bằng test; không thêm phụ thuộc.
+- Đường lùi: Revert PR; luật guard và declared() về như ADR-0106; ADR-0108 đổi trạng thái thành Bị thay.

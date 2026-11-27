@@ -5,6 +5,8 @@
   cập nhật nhánh (REST `update-branch` ghim `expected_head_sha`), review sạch mang sang head merge base không đổi tập thay đổi; D-062: không bật auto-merge khi nhánh đích không có check bắt buộc; thay một phần bởi ADR-0036 (2026-10-21): steward không bật
   auto-merge (D-062/D-063 hết đối tượng), chỉ merge ghim head khi `merge-check` = `merge` và tắt auto-merge do người bật;
   `workflow_run` chỉ còn `CI`
+- **Trạng thái bổ sung:** bổ sung bởi [ADR-0105](0105-merge-queue-by-pr-number.md) (2026-11-26, D-614): hàng merge FIFO theo
+  số PR, chỉ PR đầu hàng được `update`/`merge`; quyết định ở trên không đổi
 - **Trạng thái triển khai:** Đã triển khai — `scripts/xt.py` (`pr steward`, `pr reviewed` đăng kết quả lên PR,
   `published_reviews`, `with_published`), `.github/workflows/pr-steward.yml` (cài vào dự án đích bằng
   `install.py --with-github`), test `tests/test_merge.py` `PrStewardTest`, mục `LOOP-STOP-029`
