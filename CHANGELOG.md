@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Mẫu dự án đích `CLAUDE.md`, `AGENTS.md` §8, `xt.yaml` nêu tuyến review (reviewer opus/high, `executor-deep` opus/medium, người viết Opus ≥ high → inconclusive; ADR-0110, D-623, D-625, D-627); `model-tiers.json` giữ `write_code_max_effort: xhigh` (T-5078).
+
 - `RUNBOOK-PR-STEWARD.md` §4 (T-5076, nợ review #855): tag đẩy tay phải kèm release công bố có archive `.tar.gz` và biên nhận `.promotion.json`, nếu không lần đẩy `main` kế chạm GO-NO-GO cùng `VERSION` ra `state=missing` và đỏ; cách đúng là `workflow_dispatch` hoặc cắt bản mới
 - Đăng ký tiếp việc của kế hoạch nâng cấp (D-628): `T-5077` guard chặn `gh pr create` thiếu `--draft`, `T-5078` luật tuyến review vào mẫu dự án đích, `T-5079` cắt bản 3.37.0 (chờ `T-5080`), `T-5080` lọc `autoCompactWindow` khỏi bản chép sang đích, `T-5081` đăng ký `PreSkillShellCommand` (cần Claude Code ≥ 2.1.332). Chỉ PLAN và lịch §0.5, không đổi mã.
 - Thêm `LOOP-STOP-031` **MUST@L** (T-5074; ADR-0105, chưa có máy cưỡng chế — `T-5075`, `T-5077`): PR luôn mở nháp, chỉ PR số nhỏ nhất cùng nhánh đích `gh pr ready`, PR đáy chưa merge thì không mở PR lát kế; `LOOP-DESIGN-020`/`LOOP-DESIGN-029` chỉnh khớp; cập nhật `AGENTS.md`, mẫu `AGENTS.md`, skill `/autopilot` `/gate` `/factory` `/optimize` `/complete` `/audit` `/upgrade` (và gương), README vòng tự hành, mẫu PR, RUNBOOK
