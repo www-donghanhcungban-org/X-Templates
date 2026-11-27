@@ -317,41 +317,99 @@ const settle = (el) => {
 };
 
 // Chạy trong trang: vùng nhìn thấy cắt chữ theo chiều ngang (tối đa 20), tên theo `path`. `cut`: một đoạn chữ vắt qua mép
-// hộp cắt (chắc chắn mất chữ). `hidden`: chữ nằm hẳn ngoài hộp (carousel hay nội dung ẩn có chủ ý) nên cần người xem.
+// hộp cắt (chắc chắn mất chữ). `hidden`: chữ nằm hẳn ngoài hộp (carousel hay nội dung ẩn có chủ ý) nên cần người xem;
+// ảnh/video/canvas/svg thò ra khỏi hộp cũng chỉ là `hidden` (cắt ảnh thường có chủ ý, ví dụ ảnh nền phủ khung).
+// Duyệt cả shadow root MỞ (đệ quy); shadow `closed` không đọc được từ trang nên phía gọi đếm và báo not_measured.
 // Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và `text-overflow: ellipsis`.
+// Trả `{ found, shadowMeasured }`: số phần tử trong shadow root mở đã được xét.
 const findClipped = (path) => {
   const found = [];
-  const visible = (n) => getComputedStyle(n).display === 'contents' && n.parentElement ? visible(n.parentElement)
+  let shadowMeasured = 0;
+  const MEDIA = ['img', 'video', 'canvas', 'svg'];
+  const parentOf = (n) => n.parentElement ?? n.getRootNode().host ?? null;
+  const visible = (n) => getComputedStyle(n).display === 'contents' && parentOf(n) ? visible(parentOf(n))
     : n.checkVisibility({ opacityProperty: true, visibilityProperty: true });
-  for (const el of document.querySelectorAll('*')) {
+  const name = (el) => {
+    const root = el.getRootNode();
+    if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
+    return path(el) ?? el.localName;
+  };
+  function* elements(root, inShadow) {
+    for (const el of root.querySelectorAll('*')) {
+      if (inShadow) shadowMeasured++;
+      yield el;
+      if (el.shadowRoot) yield* elements(el.shadowRoot, true);
+    }
+  }
+  // Nút chữ và phần tử media dưới `node`, đi qua shadow root mở của từng host.
+  function* leaves(node) {
+    for (const child of [...(node.shadowRoot?.childNodes ?? []), ...node.childNodes]) {
+      if (child.nodeType === Node.TEXT_NODE) yield child;
+      else if (child.nodeType === Node.ELEMENT_NODE) {
+        if (MEDIA.includes(child.localName)) yield child;
+        yield* leaves(child);
+      }
+    }
+  }
+  for (const el of elements(document, false)) {
     const s = getComputedStyle(el);
     if (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis') continue;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1 || el.scrollWidth <= el.clientWidth + 1) continue;
     if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
     const box = el.getBoundingClientRect();
     let kind = null;
-    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let seen = 0;
-    for (let node = walker.nextNode(); node && kind !== 'cut'; node = walker.nextNode()) {
-      if (!node.textContent.trim()) continue;
+    for (const node of leaves(el)) {
+      if (kind === 'cut') break;
+      const isMedia = node.nodeType === Node.ELEMENT_NODE;
+      if (!isMedia && !node.textContent.trim()) continue;
       if (++seen > 500) { // quét chưa hết: không im lặng cho qua
         kind ??= 'hidden';
         break;
       }
-      if (!visible(node.parentElement)) continue;
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      for (const rect of range.getClientRects()) {
+      if (!visible(isMedia ? node : parentOf(node))) continue;
+      const rects = [];
+      if (isMedia) rects.push(node.getBoundingClientRect());
+      else {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        rects.push(...range.getClientRects());
+      }
+      for (const rect of rects) {
         // Cả mép phải lẫn mép trái (chữ RTL tràn sang trái): vắt qua mép là `cut`, nằm hẳn ngoài là `hidden`.
         if (rect.width <= 0 || (rect.right <= box.right + 1 && rect.left >= box.left - 1)) continue;
-        kind = rect.left < box.right - 1 && rect.right > box.left + 1 ? 'cut' : (kind ?? 'hidden');
+        const straddles = rect.left < box.right - 1 && rect.right > box.left + 1;
+        kind = straddles && !isMedia ? 'cut' : (kind ?? 'hidden');
       }
     }
-    if (kind) found.push({ element: path(el) ?? el.localName, kind });
+    if (kind) found.push({ element: name(el), kind });
     if (found.length === 20) break;
   }
-  return found;
+  return { found, shadowMeasured };
 };
+
+// Đếm host có shadow root `closed` (trang không đọc được; CDP thấy). Trả null nếu CDP không dùng được.
+async function countClosedShadows(page) {
+  let session;
+  try {
+    session = await page.context().newCDPSession(page);
+    const { root } = await session.send('DOM.getDocument', { depth: -1, pierce: true });
+    let closed = 0;
+    const walk = (node) => {
+      for (const shadow of node.shadowRoots ?? []) {
+        if (shadow.shadowRootType === 'closed') closed++;
+        walk(shadow);
+      }
+      for (const child of [...(node.children ?? []), ...(node.contentDocument ? [node.contentDocument] : [])]) walk(child);
+    };
+    walk(root);
+    return closed;
+  } catch {
+    return null;
+  } finally {
+    await session?.detach().catch(() => {});
+  }
+}
 
 async function auditContrast(page, scope, results, limit) {
   const counts = new Map(STATES.map((state) => [state, tally()]));
@@ -415,10 +473,18 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
     // Reflow (WCAG 1.4.10) ở khổ hẹp: vùng `overflow:hidden|clip` mà nội dung rộng hơn khung thì phần thừa bị cắt chứ
     // không cuộn, nên `scrollWidth` của gốc không thấy. Cắt chữ có chủ ý bằng `text-overflow:ellipsis` thì bỏ qua.
     if (scope.width <= REFLOW_WIDTH) {
-      for (const { element, kind } of await page.evaluate(`(${findClipped})(${elementPath})`)) {
+      const { found, shadowMeasured } = await page.evaluate(`(${findClipped})(${elementPath})`);
+      for (const { element, kind } of found) {
         const clipped = { ...scope, state: 'default', check: 'reflow', element };
         if (kind === 'cut') recordViolation(results, clipped, 'chữ bị cắt ngang bởi overflow:hidden');
-        else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ), cần người xem');
+        else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem');
+      }
+      // Shadow root đóng không đo được: không coi là đạt (not_measured); người xem hoặc khai ngoại lệ `shadow[closed]`.
+      const closed = await countClosedShadows(page);
+      console.log(`REFLOW ${scopeText({ ...scope, state: 'default' })} shadow_measured=${shadowMeasured} shadow_closed_not_measured=${closed ?? 'unknown'}`);
+      if (closed === null || closed > 0) {
+        const detail = closed === null ? 'not_measured: không đếm được host shadow đóng (CDP)' : `not_measured: ${closed} host có shadow root đóng, chữ bị cắt bên trong không đo được`;
+        recordUnknown(results, tally(), { ...scope, state: 'default', check: 'reflow', element: 'shadow[closed]' }, detail);
       }
     }
     await auditContrast(page, scope, results, settings.limit);
