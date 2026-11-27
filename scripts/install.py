@@ -44,12 +44,13 @@ Dùng:
   --stage-init: dự án mới — tạo sổ giai đoạn sản phẩm docs/autopilot/STAGE.json (giai đoạn 1, ADR-0058) khi chưa có; không
                 cờ thì không tạo. Sau cài luôn kiểm sổ bằng `xt.py stage status` (sổ có sẵn giữ nguyên).
   (chạy từ bản clone của X-Templates; hoặc: python3 -c "$(curl ...)" KHÔNG được khuyến khích — tải về, kiểm checksum rồi chạy)
-Thoát 0 = ổn; 1 = bootstrap/doctor hỏng; 2 = lỗi tham số/đích.
+Thoát 0 = ổn; 1 = bootstrap/doctor hỏng hoặc lỗi ghi giữa chừng (in tệp và cách khôi phục); 2 = lỗi tham số/đích.
 """
 
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -242,6 +243,46 @@ def write_atomic(path: Path, text: str, keep_mode: bool = False) -> None:
         raise
 
 
+def _read_umask() -> int:
+    """Umask của tiến trình, đọc một lần lúc nạp mô-đun (còn một luồng): `os.umask` là đọc-bằng-ghi nên gọi giữa các luồng
+    thì tạm đặt umask khác và tệp luồng khác tạo trong lúc đó sai quyền."""
+    mask = os.umask(0o077)
+    os.umask(mask)
+    return mask
+
+
+PROCESS_UMASK = _read_umask()
+
+
+def write_bytes_atomic(path: Path, data: bytes, mode: int | None = None, add_mode: int = 0) -> None:
+    """Ghi `data` vào tệp của dự án đích qua tệp tạm cùng thư mục (`.<tên>.<ngẫu nhiên>.tmp`) rồi `os.replace`: hết đĩa,
+    EFBIG hay ngắt trước khi đổi tên để lại bản cũ nguyên vẹn, không bao giờ tệp cụt/rỗng (T-5043); tệp tạm bị dọn khi
+    lỗi. Quyền: `mode` nếu có, không thì quyền tệp cũ, chưa có tệp thì như `open()` (0666 trừ umask); `add_mode` cộng
+    thêm (bit chạy của hook). Đích là symlink → từ chối, không thay liên kết của dự án cũng không ghi xuyên nó (thư mục
+    cha qua liên kết do bên gọi kiểm, `parent_symlink`). Lỗi I/O ném lại `OSError` mang tên tệp đích để `main` báo."""
+    if path.is_symlink():
+        raise OSError(errno.ELOOP, "đích là symlink, không ghi qua liên kết", str(path))
+    old = path.stat().st_mode & 0o7777 if path.exists() else None
+    tmp = path.with_name(f".{path.name}.{os.urandom(6).hex()}.tmp")
+    created = False
+    try:
+        fd = os.open(
+            tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+        )  # chặt trước, nới bằng fchmod; O_EXCL: không mở lại tệp có sẵn
+        created = True
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            base = mode if mode is not None else old if old is not None else 0o666 & ~PROCESS_UMASK
+            os.fchmod(fd, base | add_mode)
+        os.replace(tmp, path)
+    except BaseException as exc:
+        if created:
+            tmp.unlink(missing_ok=True)
+        if isinstance(exc, OSError):
+            raise OSError(exc.errno, exc.strerror or str(exc), str(path)) from exc
+        raise
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -414,11 +455,9 @@ def write_copy(src: Path, dst: Path, status: str, data: bytes) -> None:
         link = next((p for p in (dst, *dst.parents) if p.is_symlink()), dst)  # nêu liên kết, không chỉ file đích
         log(f"  ⚠ bỏ qua symlink {link} (không ghi qua liên kết){'' if link == dst else f' → {dst}'}")
     elif status == "updated-new":
-        dst.with_name(dst.name + ".xtemplates-new").write_bytes(data)
+        write_bytes_atomic(dst.with_name(dst.name + ".xtemplates-new"), data)
     elif status in ("copied", "updated"):
-        dst.write_bytes(data)
-        if src.suffix == ".sh":
-            dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+        write_bytes_atomic(dst, data, add_mode=stat.S_IXUSR | stat.S_IXGRP if src.suffix == ".sh" else 0)
 
 
 def copy_if_absent(
@@ -1182,10 +1221,11 @@ def git_hooks_path_error(target: Path, no_harness: bool, no_git_hooks: bool) -> 
 
 def git_hook_action(dst: Path) -> str:
     """Quyết định (không ghi) cho một git hook: 'copied' (chưa có) | 'updated' (hook khung, khác bản mới) | 'kept' (hook
-    khung, giống bản mới) | 'kept-own' (hook không mang dấu khung — của dự án, husky, pre-commit… — hay symlink)."""
+    khung, giống bản mới) | 'kept-own' (hook không mang dấu khung — của dự án, husky, pre-commit… — hay symlink). Hook
+    0 byte là bản ghi hỏng (lần cài bị ngắt), không phải hook của dự án → 'copied' (T-5043)."""
     if dst.is_symlink():
         return "kept-own"
-    if not dst.exists():
+    if not dst.exists() or dst.stat().st_size == 0:
         return "copied"
     if GIT_HOOK_MARK not in dst.read_text(encoding="utf-8", errors="replace"):
         return "kept-own"
@@ -1268,8 +1308,7 @@ def install_git_hooks(target: Path) -> None:
                 f"  git hook {name}: dự án đã có hook riêng — giữ nguyên; gộp tay `.xtemplates/framework/templates/git-hooks/{name}`"
             )
             continue
-        shutil.copy2(SRC / "framework" / "templates" / "git-hooks" / name, dst)
-        dst.chmod(0o755)
+        write_bytes_atomic(dst, (SRC / "framework" / "templates" / "git-hooks" / name).read_bytes(), mode=0o755)
         ours.append(shown_path(target, dst, hooks))
         log(f"  git hook {name}: cài ({dst})")
     record_manifest_paths(target, "git_hooks", ours)
@@ -1315,7 +1354,7 @@ def merge_gemini_settings(dst: Path, src: Path) -> str:
     data = gemini_merged(dst, src)
     if data is None:
         return "kept"
-    dst.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    write_bytes_atomic(dst, (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
     return "merged"
 
 
@@ -1881,7 +1920,7 @@ def gitignore_missing(dst: Path, src: Path) -> list[str]:
 def merge_gitignore(dst: Path, src: Path) -> None:
     text = dst.read_text(encoding="utf-8")
     lead = "" if not text or text.endswith("\n") else "\n"
-    dst.write_text(text + lead + "\n".join(gitignore_missing(dst, src)) + "\n", encoding="utf-8")
+    write_bytes_atomic(dst, (text + lead + "\n".join(gitignore_missing(dst, src)) + "\n").encode("utf-8"))
 
 
 def managed_action(target: Path, rel: str, src: Path, files: dict[str, str], mode: str) -> tuple[str, bytes]:
@@ -2031,7 +2070,7 @@ def install_pack_yaml(target: Path, pid: str, mode: str, values: dict[str, str])
     if own is None:
         return
     apply, kept = pack_yaml_split(own, values)
-    path.write_bytes(yaml_set_keys(own, apply).encode("utf-8"))
+    write_bytes_atomic(path, yaml_set_keys(own, apply).encode("utf-8"))
     log(f"  gói {pid}/xt.yaml: đặt {len(apply)} khoá ({', '.join(apply) or 'không có'})")
     for key, pair in kept.items():
         log(f"  ⚠ gói {pid}/xt.yaml: giữ `{key}: {pair['own']}` của dự án — gói đề nghị {json.dumps(pair['pack'])}")
@@ -2357,7 +2396,7 @@ def ensure_gitignore(target: Path) -> None:
             log("  .gitignore: thêm " + ", ".join(missing))
     else:
         body = "".join(f"{ln}\n" for ln in GITIGNORE_LINES)
-        gi.write_text(f"{GITIGNORE_NOTE}\n{body}", encoding="utf-8")
+        write_bytes_atomic(gi, f"{GITIGNORE_NOTE}\n{body}".encode("utf-8"))
         log("  .gitignore: tạo mới")
 
 
@@ -3194,18 +3233,32 @@ def main(argv: list[str] | None = None) -> int:
             a.no_git_hooks,
             pack,
         )
-    return install(
-        Path(a.target),
-        a.force_harness,
-        a.no_harness,
-        a.label,
-        a.with_github,
-        a.preset,
-        a.stage_init,
-        hosts,
-        a.no_git_hooks,
-        pack,
+    try:
+        return install(
+            Path(a.target),
+            a.force_harness,
+            a.no_harness,
+            a.label,
+            a.with_github,
+            a.preset,
+            a.stage_init,
+            hosts,
+            a.no_git_hooks,
+            pack,
+        )
+    except OSError as exc:
+        return write_failed(exc)
+
+
+def write_failed(exc: OSError) -> int:
+    """Lỗi I/O giữa lần cài (hết đĩa, quyền, EFBIG): nói tệp đang ghi và cách khôi phục thay vì traceback thô (T-5043)."""
+    log(f"✗ install dừng giữa chừng khi ghi {exc.filename or '(không rõ tệp)'}: {exc.strerror or exc}")
+    log(
+        "  Khôi phục: xử lý nguyên nhân (đĩa đầy, quyền, giới hạn cỡ tệp) rồi chạy lại đúng lệnh install.py — tệp ghi qua "
+        "tệp tạm nên bản cũ còn nguyên, lần chạy lại hội tụ. Tệp đã cụt từ bản installer cũ: `--force-harness` hoặc "
+        "`git checkout -- <tệp>`."
     )
+    return 1
 
 
 if __name__ == "__main__":

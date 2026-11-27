@@ -2289,7 +2289,8 @@ def _verdict_blueprint(base: Path, st: Dict[str, Any]) -> Dict[str, Any]:
 def loop_verdict(base: Optional[Path] = None) -> Dict[str, Any]:
     """Tính verdict CHỈ từ artifact trên đĩa. Model không tự khai 'xong'."""
     base = base or project_dir()
-    st = read_state(base) or {}  # không có state ≡ chưa bật: `_verdict_loop_state` trả inactive
+    st, design = read_state(base) or {}, design_module()  # không state ≡ chưa bật: `_verdict_loop_state` trả inactive
+    st = design.defer_held(sys.modules[__name__], base, st) if design else st  # ADR-0106: task bị giữ ≡ chờ người
     v = _verdict_loop_state(st, base) or _verdict_plan(base, st) or _verdict_blueprint(base, st)
     return _with_pending_human(v, base, st) if v["verdict"] == "done" else v
 
@@ -3357,8 +3358,7 @@ def loop_record(
             file=sys.stderr,
         )
         return 2
-    locked = stage_plan_problem(base, str(st.get("plan"))) if st.get("plan") else ""
-    design = design_module()  # task `ui: yes` khi khách chưa duyệt thiết kế (ADR-0106)
+    locked, design = stage_plan_problem(base, str(st.get("plan"))) if st.get("plan") else "", design_module()
     locked = locked or (design.record_problem(sys.modules[__name__], base, st, task) if design else "")
     if locked:  # không nhận bằng chứng cho task của giai đoạn khoá (ADR-0058)
         print(f"✗ {locked}", file=sys.stderr)
@@ -6276,7 +6276,7 @@ def _harness_guard(base: Path) -> str:
     if not path.is_file() or _syntax_error(path):
         return f"không có hoặc lỗi cú pháp: {GUARD_FILE}"
     with _env_patch("XT_GUARD_POLICY", ""):
-        missed = [c for c in HARNESS_DENY if not guard_block(c, base, [path])]
+        missed = [c for c, why in zip(HARNESS_DENY, guard_blocks(list(HARNESS_DENY), base, [path])) if not why]
     return "không chặn: " + ", ".join(missed) if missed else ""
 
 
@@ -10921,7 +10921,8 @@ def _plan_waves(args: argparse.Namespace, base: Path) -> int:
             print(f"✗ {exc}", file=sys.stderr)
             return 2
         return 0
-    out = plan_waves(parse_plan(plan), _deferred(st or {}), args.max)
+    design, todo = design_module(), (parse_plan(plan), _deferred(st or {}), args.max)  # ADR-0106: giữ như --handoff
+    out = design.waves(sys.modules[__name__], base, *todo) if design else plan_waves(*todo)
     if args.json:
         print(json.dumps(out, ensure_ascii=False))
     else:
@@ -19346,7 +19347,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     fixed: List[str] = []
     if args.fix and runtime is None:
         fixed, failed = doctor_fix(findings)
-        findings = doctor_findings(base, args.framework, offline=offline) + failed
+        findings = (doctor_findings(base, args.framework, offline=offline) if fixed or failed else findings) + failed
     errors = sum(f.level == "error" for f in findings)
     if args.json:  # hợp đồng máy đọc: {"ok", "base", "version", "fixed", "findings": [{code, level, msg, fixable}]}
         rows = [{"code": f.code, "level": f.level, "msg": f.msg, "fixable": f.fix is not None} for f in findings]
