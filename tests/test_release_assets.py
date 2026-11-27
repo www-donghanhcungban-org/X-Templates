@@ -71,7 +71,11 @@ class ReleaseAssetsTest(unittest.TestCase):
             "\n          fi\n", 1
         )[0]
         exit0 = branch.index("exit 0")
-        for needle in ('"refs/tags/v$v^{commit}")" != "$target"', 'git cat-file -t "refs/tags/v$v"', "gh release view"):
+        for needle in (
+            'git merge-base --is-ancestor "$tag_commit" "$target"',
+            'git cat-file -t "refs/tags/v$v"',
+            "gh release view",
+        ):
             self.assertLess(branch.index(needle), exit0, needle)
         self.assertIn('echo "state=released"', branch[:exit0])
         # mọi `exit 0` của bước ứng viên đều có ghi `state=` ngay trước đó

@@ -62,8 +62,11 @@ jobs:
           awk -v header="## [$v]" '$0 == header || index($0, header " ") == 1 {found=1} END {exit !found}' "$RUNNER_TEMP/CHANGELOG.md"
           if git show-ref --verify --quiet "refs/tags/v$v"; then
             # Tag đã có (chạy lại sau lượt dở, hoặc đã phát hành): đối chiếu SHA, kiểu tag, rồi trạng thái release TRƯỚC khi thoát.
-            if test "$(git rev-parse "refs/tags/v$v^{commit}")" != "$target"; then
-              echo "::error::Tag v$v trỏ commit khác ứng viên $target. Không đẩy lại; cắt bản mới (tăng VERSION)."
+            # Tag ở commit phát hành, main đã đi tiếp: bình thường. Chỉ đỏ khi commit của tag không phải tổ tiên của ứng viên
+            # (checkout fetch-depth 0 có đủ lịch sử).
+            tag_commit=$(git rev-parse "refs/tags/v$v^{commit}")
+            if ! git merge-base --is-ancestor "$tag_commit" "$target"; then
+              echo "::error::Tag v$v trỏ $tag_commit, không phải tổ tiên của ứng viên $target. Không đẩy lại; cắt bản mới (tăng VERSION)."
               exit 1
             fi
             if test "$(git cat-file -t "refs/tags/v$v")" != tag; then
@@ -72,10 +75,10 @@ jobs:
             fi
             state=$(gh release view "v$v" --json isDraft,assets --jq 'if .isDraft then "draft" elif ([.assets[].name | select(endswith(".tar.gz"))] | length) >= 1 and ([.assets[].name | select(endswith(".promotion.json"))] | length) >= 1 then "released" else "incomplete" end' 2>/dev/null || echo missing)
             if test "$state" != released; then
-              echo "::error::v$v có tag đúng SHA nhưng release ở trạng thái '$state' (nháp, thiếu archive hay biên nhận, hoặc chưa có). Không dựng lại archive vì digest sẽ khác bản đã attest: chủ repo kiểm release rồi công bố, hoặc cắt bản mới (tăng VERSION)."
+              echo "::error::v$v có tag (ở $tag_commit) nhưng release ở trạng thái '$state' (draft = nháp; incomplete = thiếu archive hay biên nhận; missing = chưa có hoặc token contents: read không thấy bản nháp). Không dựng lại archive vì digest sẽ khác bản đã attest: chủ repo kiểm release rồi công bố, hoặc cắt bản mới (tăng VERSION)."
               exit 1
             fi
-            echo "::notice::v$v đã phát hành: tag đúng SHA, release công bố đủ archive và biên nhận. Giữ nguyên tag."
+            echo "::notice::v$v đã phát hành: tag ở tổ tiên của ứng viên, release công bố đủ archive và biên nhận. Giữ nguyên tag."
             echo "state=released" >> "$GITHUB_OUTPUT"
             echo "version=$v" >> "$GITHUB_OUTPUT"
             exit 0
