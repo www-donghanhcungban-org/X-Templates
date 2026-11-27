@@ -6,6 +6,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `verify-render` kiểm cắt chữ khi reflow đi vào shadow root mở và báo ảnh thò ra khỏi khung cắt (AUD-HAR-567, T-5065): báo cáo thêm dòng `REFLOW … shadow_measured=N shadow_closed_not_measured=M`, host shadow đóng báo `not_measured` thay vì đạt; pseudo `content: ""` và cuộn lồng còn mở.
 - `pr-review.yml` bỏ trigger `pull_request_target` (T-5064; GitHub chặn mặc định ở repo public từ 2026-12-02): chỉ còn `workflow_dispatch` với input `pr`, đọc siêu dữ liệu PR qua REST, chỉ chạy từ nhánh mặc định; chú thích reviewer khớp D-623 (opus trở xuống). Workflow vẫn tắt tới khi chủ bật `XT_REVIEWER_ENABLED`.
 - Reviewer: trần effort `high` và bảng tuyến theo người viết (ADR-0110, D-623, D-625; T-5063): `reviewer`/`reviewer-alt` cố định opus/`high`/`maxTurns: 120` (trước: `max`/80), bỏ chỉ dẫn giao kèm model phiên chính; `executor-deep` mặc định opus/`medium` (D-627) nên nhận clean; phiên chính opus ≥ `high` hoặc `executor-deep` bị đè effort ≥ `high` ghi `--inconclusive`; gương Codex sinh lại. Máy cưỡng chế trần là T-5071.
 
