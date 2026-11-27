@@ -60,6 +60,18 @@ PCT_RE = re.compile(r"[0-9]{1,4}(?:\.[0-9]{1,3})?")
 AVG10_RE = re.compile(r"^some\b.*?\bavg10=([0-9]{1,3}(?:\.[0-9]+)?)(?:\s|$)", re.M)
 FORWARD = frozenset({"SIGINT", "SIGTERM", "SIGHUP"})
 DEPTH = 64  # trần độ sâu khi lần ngược tiến trình cha
+LOCK_POLL = 0.05
+
+
+class AdmissionExpired(ValueError):
+    """Hết hạn chờ trước khi khay cấp lease."""
+
+
+def remaining(deadline: float, why: str) -> float:
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise AdmissionExpired(f"hết thời gian chờ tài nguyên: {why}")
+    return left
 
 
 def log(msg: str) -> None:
@@ -296,17 +308,32 @@ def tray_dir(env: Mapping[str, str]) -> Path:
     return root / "xt-cpu"
 
 
-@contextmanager
-def locked(d: Path) -> Iterator[None]:
-    """Khoá độc quyền của khay (`flock`: tiến trình chết thì hệ tự nhả)."""
+def acquire(fd: int, deadline: float | None) -> None:
     fcntl = importlib.import_module("fcntl")
+    if deadline is None:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        return
+    while True:
+        remaining(deadline, "khay CPU đang bị khoá")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            time.sleep(min(LOCK_POLL, remaining(deadline, "khay CPU đang bị khoá")))
+        else:
+            remaining(deadline, "khay CPU đang bị khoá")
+            return
+
+
+@contextmanager
+def locked(d: Path, deadline: float | None = None) -> Iterator[None]:
+    """Khoá độc quyền của khay (`flock`: tiến trình chết thì hệ tự nhả)."""
     d.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = d.lstat()
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
         raise ValueError(f"quyền thư mục khay CPU không hợp lệ: {d}")
     fd = os.open(d / LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        acquire(fd, deadline)
         yield
     finally:
         os.close(fd)
@@ -404,14 +431,16 @@ def attempt(
     measure: Callable[[int], float | None],
     requested: int | None = None,
     memory: tuple[int, int] | None = None,
+    deadline: float | None = None,
 ) -> Job | str:
     """Một lần xin vào khay (dưới khoá): Job khi nhận, lý do khi phải chờ."""
     me = os.getpid()
-    with locked(d):
+    with locked(d, deadline):
         jobs = load(d, JOB, proc)
         parents = ancestors(me, proc)
         for active in jobs:
             if active["pid"] in parents:
+                ensure_admission_time(deadline)
                 return Job((), min(active["jobs"], requested or active["jobs"]), nested=True)
         waits = [e for e in load(d, WAIT, proc) if e["pid"] != me]
         head_waiting = any(e.get("head") is True for e in waits)
@@ -437,6 +466,7 @@ def attempt(
         if not cpus:
             put(d, f"{WAIT}{me}.json", entry)
             return why
+        ensure_admission_time(deadline)
         k = len(cpus)
         put(d, f"{JOB}{me}.json", {**entry, "cpus": list(cpus), "jobs": k, "usable": sh.usable, "memory_mib": cost * k})
         (d / f"{WAIT}{me}.json").unlink(missing_ok=True)
@@ -444,6 +474,11 @@ def attempt(
             f"việc nặng: {k} tiến trình trên {len(cpus)}/{sh.n} nhân (dành {sh.reserve}; {len(jobs) + 1}/{sh.slots} việc)"
         )
         return Job(cpus, k)
+
+
+def ensure_admission_time(deadline: float | None) -> None:
+    if deadline is not None:
+        remaining(deadline, "khay CPU chưa cấp lease")
 
 
 def admit(
@@ -455,7 +490,7 @@ def admit(
     measure: Callable[[int], float | None] = pressure,
     sleep: Callable[[float], None] = time.sleep,
 ) -> Job:
-    """Chờ tới khi khay nhận: thử lại lùi dần (1 s, nhân đôi, trần 30 s), không hạn thời gian (BASE-GATE-005)."""
+    """Thử lại lùi dần (1 s, nhân đôi, trần 30 s) với hạn chờ tuỳ chọn."""
     limits, wait, last = thresholds(env), FIRST_WAIT, ""
     requested = user_jobs(env)
     cost = env_int(env, "XT_RESOURCE_RAM_PER_WORKER", 1)
@@ -463,21 +498,19 @@ def admit(
     memory = (cost, 512 if reserve is None else reserve) if cost else None
     timeout = env_int(env, "XT_RESOURCE_WAIT_TIMEOUT", 1)
     deadline = time.monotonic() + timeout if timeout else None
-    while True:
-        got = attempt(d, sh, head, limits, proc, measure, requested, memory)
-        if isinstance(got, Job):
-            return got
-        if got != last:
-            log(f"chờ khay: {got}")
-            last = got
-        if deadline is not None:
-            left = deadline - time.monotonic()
-            if left <= 0:
-                (d / f"{WAIT}{os.getpid()}.json").unlink(missing_ok=True)
-                raise ValueError(f"hết thời gian chờ tài nguyên: {got}")
-            wait = min(wait, left)
-        sleep(wait)
-        wait = min(wait * 2, MAX_WAIT)
+    try:
+        while True:
+            got = attempt(d, sh, head, limits, proc, measure, requested, memory, deadline)
+            if isinstance(got, Job):
+                return got
+            if got != last:
+                log(f"chờ khay: {got}")
+                last = got
+            sleep(wait if deadline is None else min(wait, remaining(deadline, got)))
+            wait = min(wait * 2, MAX_WAIT)
+    except AdmissionExpired:
+        (d / f"{WAIT}{os.getpid()}.json").unlink(missing_ok=True)
+        raise
 
 
 def plain(cmd: Sequence[str], env: Mapping[str, str]) -> int:

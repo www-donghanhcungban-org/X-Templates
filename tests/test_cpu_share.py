@@ -498,10 +498,45 @@ class TrayTest(unittest.TestCase):
 
     def test_wait_timeout_clears_queue_entry(self):
         self.other(os.getppid(), jobs=12)
-        with mock.patch.object(cs.time, "monotonic", side_effect=[1, 1, 2]):
+        with mock.patch.object(cs.time, "monotonic", side_effect=[1, 1, 1, 2]):
             with self.assertRaisesRegex(ValueError, "hết thời gian chờ"):
                 cs.admit({"XT_RESOURCE_WAIT_TIMEOUT": "1"}, self.sh, True, self.d, self.proc, sleep=lambda _: None)
         self.assertFalse((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
+
+    def test_admission_expires_while_tray_is_locked(self):
+        now = [1.0]
+
+        def expire(_):
+            now[0] = 2.0
+
+        with (
+            cs.locked(self.d),
+            mock.patch.object(cs.time, "monotonic", side_effect=lambda: now[0]),
+            mock.patch.object(cs.time, "sleep", side_effect=expire) as pause,
+            self.assertRaisesRegex(ValueError, "hết thời gian chờ"),
+        ):
+            cs.admit({"XT_RESOURCE_WAIT_TIMEOUT": "1"}, self.sh, False, self.d)
+        pause.assert_called_once_with(cs.LOCK_POLL)
+        self.assertFalse((self.d / f"{cs.JOB}{os.getpid()}.json").exists())
+
+    def test_expired_cpu_measurement_prevents_lease(self):
+        self.other(os.getppid(), cpus=[2], jobs=1)
+        now = [1.0]
+
+        def measure(_):
+            now[0] = 2.0
+            return 0.0
+
+        with mock.patch.object(cs.time, "monotonic", side_effect=lambda: now[0]):
+            with self.assertRaisesRegex(ValueError, "hết thời gian chờ"):
+                cs.admit({"XT_RESOURCE_WAIT_TIMEOUT": "1"}, self.sh, False, self.d, self.proc, measure)
+        self.assertFalse((self.d / f"{cs.JOB}{os.getpid()}.json").exists())
+        self.assertFalse((self.d / f"{cs.WAIT}{os.getpid()}.json").exists())
+
+    def test_admission_can_grant_lease_before_deadline(self):
+        result = cs.admit({"XT_RESOURCE_WAIT_TIMEOUT": "1"}, self.sh, False, self.d, self.proc)
+        self.assertGreater(result.jobs, 0)
+        self.assertTrue((self.d / f"{cs.JOB}{os.getpid()}.json").exists())
 
     def test_invalid_lease_fields_and_symlinked_registry_fail_closed(self):
         for data in ({"jobs": 0}, {"jobs": 1, "usable": False}, {"jobs": 1, "memory_mib": -1}):

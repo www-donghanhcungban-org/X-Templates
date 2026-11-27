@@ -8,6 +8,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - T-5092 (AUD-CODE-069): `loop record` và `pr reviewed` từ chối `--cost ''` trước khi chạy Gate hoặc ghi dấu review. Vẫn có thể bỏ cờ khi chưa đo chi phí.
 
+- T-5084 (AUD-CODE-068): khay CPU áp `XT_RESOURCE_WAIT_TIMEOUT` cả khi chờ khóa và trước khi cấp lease. Hết hạn trả mã 2 và dọn mục chờ.
+
 - T-5094 (AUD-XFEAT-062): `ac-trace` nhận mã tiêu chí trong code span Markdown ở đầu dòng. Bảng trong mẫu SPEC nối mã `AC-xxx` với kịch bản `S-NNN` và test.
 
 - Dự án đích nhận mẫu hồ sơ quy mô và nhu cầu quản trị trong `PROJECT.md`. Factory hướng dẫn xem trước chênh lệch blueprint theo ID trước khi đổi feature, gói ngành hoặc mức.
