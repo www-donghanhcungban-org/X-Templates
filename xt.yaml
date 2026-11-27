@@ -68,7 +68,8 @@ max_rethink: 1
 # (LOOP-HARNESS-027).
 ai_attribution: forbid
 # Hook dùng `onFailure: block` (có từ Claude Code 2.1.295 — changelog, xác minh 2026-10-23); khoá `autoCompactWindow` của
-# settings dự án được phiên khởi từ tiến trình làm nóng sẵn đọc từ 2.1.329; hook `PreSkillShellCommand` (guard cho lệnh
-# chèn trong skill) cần 2.1.332 (changelog + docs hooks, đọc 2026-11-27; T-5040, D-613); doctor cảnh báo bản cũ hơn
-# (LOOP-HARNESS-026, T-2408).
+# settings dự án được phiên khởi từ tiến trình làm nóng sẵn đọc từ 2.1.329 (changelog 2.1.329 sửa lỗi bỏ qua khoá này ở
+# `.claude/settings.json` dự án; xác minh 2026-11-27); hook `PreSkillShellCommand` (guard cho lệnh chèn trong skill) cần
+# 2.1.332 (changelog + docs hooks, đọc 2026-11-27; T-5040, D-613) — sàn nâng theo hook dù sự kiện CHƯA đăng ký ở
+# settings của khung (xem harness-files.md); doctor cảnh báo bản cũ hơn (LOOP-HARNESS-026, T-2408).
 claude_min_version: 2.1.332

@@ -1239,3 +1239,10 @@
 - Chọn: Mặc định của vai là effort medium (frontmatter executor-deep và gương Codex); việc khó giao executor-deep opus/medium, reviewer opus/high rà
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án chỉ đạo 2026-11-27: việc khó gọi executor-deep opus ở effort medium. Đặt ở frontmatter vì đó là mặc định máy kiểm được bằng test và doctor, không phụ thuộc người gọi nhớ truyền tham số; cặp opus/medium viết, opus/high rà hợp lệ theo luật reviewer cao hơn người viết (D-161) mà không nới cổng. Phương án 2 dễ quên và lời khai author-effort lệch thực tế; phương án 3 làm lớp bắt buộc review không merge được.
 - Đường lùi: Đổi frontmatter về high bằng D-NNN mới khi trần effort reviewer được nâng hoặc bộ đánh giá G10 cho thấy medium tụt chất lượng.
+
+### D-628 · 2026-11-27T05:15:33+00:00 · autoCompactWindow 400000 ở .claude/settings.json (T-5040, D-613): dự án đích nhận khoá này khi cài mới trước khi có số đo preTokens và tỉ lệ Gate xanh. Xử lý thế nào?
+
+- Phương án: (1) Chấp nhận ở repo khung; lọc khoá khỏi bản chép sang đích ở install.py (task mới T-5080) cho tới khi đo xong; khoá việc cắt bản T-5079 chờ T-5080 · (2) Chấp nhận cả ở đích như hiện tại (install.py chép nguyên settings) · (3) Bỏ khoá khỏi .claude/settings.json của khung, chỉ ghi khuyến nghị trong tài liệu
+- Chọn: Chấp nhận ở repo khung; lọc khoá khỏi bản chép sang đích ở install.py (task mới T-5080) cho tới khi đo xong; khoá việc cắt bản T-5079 chờ T-5080
+- Lý do (tiêu chí chất lượng cuối): D-613 và LOOP-CTX-016 đều đặt điều kiện đo trước khi mang sang dự án đích; reviewer độc lập xếp việc này là 🟠 vì subagent không tự quyết định phạm vi. Tiêu chí (1) cách hiểu chặt hơn: khung dùng thử nén sớm ở chính repo khung (đo được ngay), đích không nhận cho tới khi có số. Phương án 2 bỏ điều kiện của D-613; phương án 3 mất khả năng đo ở repo khung. (2) đường lùi: lọc là một khoá trong install.py, gỡ bằng một PR. Cái giá: một task nhỏ chạm install.py và việc cắt bản phụ thuộc nó.
+- Đường lùi: Bỏ lọc khi D-613 được đo đạt (preTokens, tỉ lệ Gate xanh lần đầu), ghi D-NNN mới.

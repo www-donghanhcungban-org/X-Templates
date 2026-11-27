@@ -3505,7 +3505,9 @@ class StopAndSessionTest(unittest.TestCase):
         tmp = self.project_with_loop()
         sf = tmp / ".autopilot" / "state.json"
         rev = json.loads(sf.read_text(encoding="utf-8"))["rev"]
-        self.assertEqual(run_hook("pre-compact.sh", {"trigger": "manual"}, tmp)[0], 0)
+        code, out, _ = run_hook("pre-compact.sh", {"trigger": "manual"}, tmp)
+        self.assertEqual(code, 0)
+        self.assertNotIn('"decision"', out)  # stdout là chỉ dẫn tóm tắt, không bao giờ chặn nén
         st = json.loads(sf.read_text(encoding="utf-8"))
         self.assertEqual((st["rev"], st["checkpoint"]["trigger"]), (rev + 1, "manual"))
 

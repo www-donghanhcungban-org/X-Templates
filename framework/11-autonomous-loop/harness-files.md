@@ -49,8 +49,8 @@ OS/devcontainer có egress allowlist (`LOOP-HARNESS-022`) và việc phiên chí
   sẵn như `/security-review`, skill của dự án đích): PreToolUse **không** chạy cho chúng; `allow: Bash` trần nên chỉ
   `deny` của settings đỡ. Sự kiện `PreSkillShellCommand` (matcher `Bash|PowerShell`, `onFailure: block`) chặn được
   bằng chính `pre-bash-guard.sh` (`tests/test_hook_skill_shell.py`), nhưng **chưa đăng ký** (T-5040): cần Claude Code
-  **≥ 2.1.332** (bản cũ hơn chạy lệnh chèn mà không gọi hook, phiên tương tác mở hộp thoại `Unknown hook event` mỗi lần,
-  chỉ bỏ mục đó, phần còn lại của tệp vẫn hiệu lực), và công cụ Edit/Write của harness đang dùng còn từ chối ghi
+  **≥ 2.1.332** (bản cũ hơn chạy lệnh chèn mà không gọi hook, tệp settings có tên sự kiện này mở hộp thoại lúc khởi động
+  (changelog 2.1.332); docs ghi tên lạ chỉ bị bỏ qua kèm cảnh báo, phần còn lại của tệp vẫn hiệu lực), và công cụ Edit/Write của harness đang dùng còn từ chối ghi
   sự kiện này vào settings (schema thiếu tên, đo 2026-11-27). Khi đăng ký: cùng lệnh, `timeout` với guard của
   PreToolUse `Bash`, và `xt.yaml` `claude_min_version` ≥ 2.1.332 (`LOOP-HARNESS-026`; test ghim cả hai). Docs hooks
   §PreSkillShellCommand, settings §Fix a broken settings file, đọc 2026-11-27.
