@@ -873,6 +873,12 @@
    ]
   },
   {
+   "reason": "GitHub Actions chọn job phát hành theo Client ID và áp environment, danh sách action ở cấp job. Hồi quy cấu hình ở tests.test_release_assets kiểm đường cũ, đường App và thứ tự các bước dùng chung.",
+   "ids": [
+    "AUD-CI-048"
+   ]
+  },
+  {
    "reason": "Độ dài additionalContext của hook SessionStart và hàng field-workflow của admin-plan là đầu ra của hook/công cụ, không phải quyết định cho hoặc chặn mô phỏng bằng corpus. tests.test_hooks.SessionStartUtf8Test ghim len(additionalContext) ≤ 10000; tests.test_ops_setup_edges và tests.test_admin_plan ghim field_workflow_status.",
    "ids": [
     "AUD-CI-040",

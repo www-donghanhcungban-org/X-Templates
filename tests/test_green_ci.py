@@ -35,12 +35,12 @@ class GreenCiTest(unittest.TestCase):
         self.assertIn("pack-npm-audit", reason)
 
     def test_all_non_pushing_checkouts_disable_persist_credentials(self):
-        """AUD-CI-007: mọi bước actions/checkout tắt persist-credentials, trừ job `tag` của release-tag.yml cần đẩy tag."""
+        """AUD-CI-007: chỉ hai job `tag` và `tag-app` của release-tag.yml giữ credential để đẩy tag."""
         for wf in sorted((GITHUB / "workflows").glob("*.yml")):
             text = wf.read_text(encoding="utf-8")
             checkouts = len(re.findall(r"uses:\s+actions/checkout@", text))
             disabled = len(re.findall(r"persist-credentials:\s+false\b", text))
-            expected = checkouts - (1 if wf.name == "release-tag.yml" else 0)
+            expected = checkouts - (2 if wf.name == "release-tag.yml" else 0)
             self.assertEqual(disabled, expected, f"{wf.name}: {disabled}/{expected} persist-credentials: false")
 
 
