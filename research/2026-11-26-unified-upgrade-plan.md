@@ -99,7 +99,8 @@ Mỗi dòng một PR, một nhánh từ `origin/main`. Cột "Viết" theo D-625
 | 24 | 0 | Lọc `autoCompactWindow` khỏi bản chép sang đích (D-628) | `T-5080` | `scripts/install.py`, tests | — | `executor` · `reviewer` | `tests.test_install`; mypy |
 | 25 | 0 | Đăng ký `PreSkillShellCommand` (cần Claude Code ≥ 2.1.332) | `T-5081` | `.claude/settings.json`, `harness-files.md` | sau #858; cần phiên mới | người/phiên ≥ 2.1.332 · `reviewer-alt` | `tests.test_hook_skill_shell`; xác minh payload thật |
 | 26 | 1 | Guard chặn `gh pr create` thiếu `--draft` (cưỡng chế `LOOP-STOP-031`) | `T-5077` | `guard.py` (0 dòng ròng), corpus | 10, 20 | `executor` · `reviewer-alt` | `tests.test_hooks`; vi sai 0 lệnh bị nới |
-| 27 | — | Cắt bản 3.37.0 để đích nhận hai luật | `T-5079` | `VERSION`, `CHANGELOG.md`, GO-NO-GO | 20, 23, 24, 8–10 | phiên chính · không | `xt.py release-check` GO |
+| 27 | — | Cắt bản 3.37.0 để đích nhận hai luật | `T-5079` | `VERSION`, `CHANGELOG.md`, GO-NO-GO | 20, 23, 24, 28, 8–10 | phiên chính · không | `xt.py release-check` GO |
+| 28 | 0 | Giới hạn CPU tổng quát theo số nhân (khay dùng chung), khung và đích (D-629) | `T-5082` | `scripts/xt_cpu_share.py`, `dev-task.sh`, `xt.yaml` + mẫu | 24 | `executor-deep` (opus/medium) · `reviewer-alt` | `tests.test_cpu_share` (bảng 1/2/4/14/64 nhân); hai gate đồng thời không vượt phần dùng được |
 
 **Song song được:** dòng 1–7 với nhau (không chạm tệp nóng; `CHANGELOG.md` rebase khi xung đột); đợt 1 (`guard.py`) với đợt 2 (`xt.py`), mỗi tệp nóng một chủ, nối tiếp trong đợt; dòng 17–19 với đợt 1–2 trừ `T-5059`. **Đường găng:** 2 → 8 → 9 → 10 → 11 (Guard) và 2 → 12 → 13/14/15 (XT). **Hạn đã ghi:** 2026-12-02 (dòng 3, 4), 2026-12-15 (nhóm chấp nhận của bản phát hành), 2026-12-31 (AUD-HAR-572…574), 2027-01-21 (hàng rào guard, D-609, `support_until` gói). Không đặt hạn hoàn tất toàn chương trình; ước lượng lại sau dòng 12.
 
