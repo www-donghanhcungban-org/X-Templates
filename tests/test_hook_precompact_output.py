@@ -168,18 +168,82 @@ class CompactSettingsTest(unittest.TestCase):
         self.assertEqual(s["env"]["CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"], "1")  # LOOP-ORCH-001
         self.assertNotIn("CLAUDE_CODE_AUTO_COMPACT_WINDOW", s["env"])  # biến thắng cả --autocompact (LOOP-CTX-016)
 
-    def test_fresh_install_target_gets_keys_and_hook(self):
+    def install(self, target: Path, *extra: str) -> str:
         sys.path.insert(0, str(ROOT / "scripts"))
         import install
 
+        out = io.StringIO()
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out):
+            self.assertEqual(install.main([str(target), "--label", "test", *extra]), 0)
+        return out.getvalue()
+
+    def target_dir(self) -> Path:
         target = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, target, True)
-        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(install.main([str(target), "--label", "test"]), 0)
-        s = json.loads((target / ".claude" / "settings.json").read_text(encoding="utf-8"))
-        self.assertEqual((s["autoCompactWindow"], s["env"]), (400000, {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1"}))
+        return target
+
+    def settings_of(self, target: Path) -> dict:
+        return json.loads((target / ".claude" / "settings.json").read_text(encoding="utf-8"))
+
+    def test_fresh_install_target_filters_auto_compact_keeps_env_and_hook(self):
+        """D-628: đích chưa nhận `autoCompactWindow` tới khi D-613 được đo đạt; khung vẫn giữ (test trên)."""
+        target = self.target_dir()
+        self.install(target)
+        s = self.settings_of(target)
+        self.assertNotIn("autoCompactWindow", s)
+        self.assertEqual(s["env"], {"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "1"})
+        self.assertIn("hooks", s)
         hook = target / ".claude" / "hooks" / "pre-compact.sh"
         self.assertEqual(hook.read_bytes(), HOOK.read_bytes())
+        self.assertIn("autoCompactWindow", json.loads((ROOT / ".claude" / "settings.json").read_text("utf-8")))
+
+    def test_own_permissions_and_force_harness_also_filter(self):
+        target = self.target_dir()
+        (target / "xt.yaml").write_text("harness_permissions: own\n", encoding="utf-8")
+        self.install(target)
+        s = self.settings_of(target)
+        self.assertEqual(("autoCompactWindow" in s, "permissions" in s), (False, False))
+        plain = self.target_dir()
+        self.install(plain)
+        self.install(plain, "--force-harness")
+        self.assertNotIn("autoCompactWindow", self.settings_of(plain))
+
+    def test_existing_project_key_kept_and_reinstall_adds_none(self):
+        """Khoá do chủ dự án (hoặc bản cài cũ) đặt sẵn ở đích: giữ nguyên giá trị; cài lại không thêm khoá nào."""
+        owned = self.target_dir()
+        (owned / ".claude").mkdir()
+        (owned / ".claude" / "settings.json").write_text(
+            json.dumps({"autoCompactWindow": 250000, "permissions": {"allow": []}}), encoding="utf-8"
+        )
+        self.install(owned)
+        self.assertEqual(self.settings_of(owned)["autoCompactWindow"], 250000)
+        self.install(owned)
+        self.assertEqual(self.settings_of(owned)["autoCompactWindow"], 250000)
+        fresh = self.target_dir()
+        self.install(fresh)
+        self.install(fresh)
+        self.assertNotIn("autoCompactWindow", self.settings_of(fresh))
+
+    def test_plan_matches_real_install(self):
+        import install
+
+        target = self.target_dir()
+        out = io.StringIO()
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out):
+            self.assertEqual(install.main([str(target), "--plan"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["settings"]["action"], "copied")
+        self.assertFalse((target / ".claude").exists())
+        self.install(target)
+        out = io.StringIO()
+        with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out):
+            self.assertEqual(install.main([str(target), "--plan"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["settings"]["action"], "kept")
+
+    def test_target_settings_unchanged_bytes_without_filtered_key(self):
+        import install
+
+        text = '{"a":   1}\n'
+        self.assertEqual(install.target_settings(text), text)
 
 
 if __name__ == "__main__":
