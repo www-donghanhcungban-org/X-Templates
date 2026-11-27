@@ -1,7 +1,7 @@
 ---
 title: Kế hoạch nâng cấp hợp nhất — tách xt.py/guard.py, review high/120, giao hàng theo bằng chứng (đề xuất)
 kind: research
-updated: 2026-11-26
+updated: 2026-11-27
 ---
 
 # Kế hoạch nâng cấp hợp nhất (đề xuất, 2026-11-26)
@@ -9,6 +9,8 @@ updated: 2026-11-26
 > **Trạng thái: đề xuất, chưa phải PLAN.** Bản chuyển từ PDF "Kế hoạch nâng cấp hợp nhất" (40 trang, đối chiếu mã ở commit `02480424`). Chưa có task ID đăng ký, chưa sửa mã. Khi triển khai phải ánh xạ vào PLAN đang có (không lập kế hoạch cạnh tranh), giữ task đã xong, và ghi rõ ADR bị thay thế. **D-610** (hoãn nâng dự án đích) vẫn hiệu lực.
 >
 > Bản chuyển này gồm đủ 40 trang PDF (cô đọng; số đo giữ nguyên), §11 kiểm chứng một bài đăng về harness ba agent của Anthropic, và **§12 nghiên cứu lại ở `main` `259ac21c`**: số đo mới, trạng thái năm lỗi và 31 lát, sáu hệ quả PDF chưa nêu, thứ tự Đợt 0 đề xuất. Số ở §2, §3, §8 là của PDF; chỗ nào lệch với `main` thì §12 thắng.
+
+> **Revision 27/11/2026:** bổ sung §14–§25 về X-Code Intelligence, bản đồ mã nguồn theo working tree, độ mới, tách lõi, chính sách reviewer, harness và backlog. Khi có xung đột, §14–§25 ưu tiên hơn §1–§13 (đặc biệt lịch §6/§12.6); giữ G01–G12, Cửa A–E, D-610 và các task/ADR hiện có. Đây vẫn là đề xuất nghiên cứu, chưa phải PLAN, chưa triển khai mã.
 
 ## 1. Ba quyết định chính
 1. **Tách theo trách nhiệm và phụ thuộc.** Một chương trình thống nhất, chia module có hợp đồng rõ; kế thừa ADR-0090/0091/0093, registry, cơ chế quyết định; bảo toàn loader, CLI, bản cài, bộ kiểm.
@@ -381,3 +383,197 @@ Kho `www-donghanhcungban-org/X-Templates`, commit `02480424f6c27a767a0dcceba6a32
 - **Bài Anthropic về harness (đọc 2026-11-26):** [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps) (2026-03-24); [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) (2025-11-26); [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents) (2024-12-19, mẫu evaluator-optimizer).
 - **Đọc thêm ở §12 (2026-11-26):** Claude Code [sub-agents](https://code.claude.com/docs/en/sub-agents), [env-vars](https://code.claude.com/docs/en/env-vars), [hooks](https://code.claude.com/docs/en/hooks); [Python versions](https://devguide.python.org/versions/); GitHub [immutable releases GA](https://github.blog/changelog/2025-10-28-immutable-releases-are-now-generally-available/); [WCAG 2.2 errata](https://www.w3.org/WAI/WCAG22/errata/), [WCAG 3.0 Working Draft](https://www.w3.org/TR/wcag-3.0/).
 - **Tài liệu kỹ thuật (đọc 2026-11-26; đối chiếu lại với runtime khi triển khai):** CPython 3.13 [command line](https://docs.python.org/3.13/using/cmdline.html), [unittest.mock — where to patch](https://docs.python.org/3.13/library/unittest.mock.html#where-to-patch), [os.replace](https://docs.python.org/3.13/library/os.html#os.replace), [zipapp](https://docs.python.org/3.13/library/zipapp.html); GitHub [immutable releases](https://docs.github.com/en/code-security/supply-chain-security/immutable-releases); [WCAG 2.2](https://www.w3.org/TR/WCAG22/); [DTCG Format 2025.10](https://www.designtokens.org/tr/2025.10/format/); Anthropic [demystifying evals for AI agents](https://www.anthropic.com/research/demystifying-evals-for-ai-agents) và [effective context engineering](https://www.anthropic.com/research/effective-context-engineering-for-ai-agents); OpenTelemetry [GenAI conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md), [sampling](https://opentelemetry.io/docs/concepts/sampling/); [Web Vitals](https://web.dev/articles/vitals); Claude Code [custom subagents](https://code.claude.com/docs/en/sub-agents).
+
+## 14. Chốt phương án và trạng thái tại mốc đối chiếu
+
+**Chọn modular monolith có bộ lập bản đồ mã nguồn chỉ đọc, nạp ngữ cảnh theo nhu cầu và Gate an toàn tách biệt.** Lập bản đồ tối thiểu trước hoặc cùng lát tách nhỏ đầu tiên; không chờ toàn bộ X-Code Intelligence mới giải phóng cap. Giữ cơ chế kiểm chứng hiện hữu; mở rộng công cụ theo bằng chứng. X-Code Intelligence là tên năng lực trong G12, không phải dự án/service mới hay một framework thứ hai.
+
+| Dữ kiện | Trạng thái khi đọc 27/11/2026 |
+|---|---|
+| PR #846 | Mở, chưa merge; 1 file nghiên cứu, +383 dòng; head 75314a6a. API trả không có review/comment tại thời điểm đọc. Tuyên bố CI xanh là bằng chứng được PR báo cáo, chưa chạy lại. |
+| `main` | 259ac21c, timestamp commit 26/11 22:46:39 UTC (27/11 05:46:39 VN). HEAD trùng mốc nghiên cứu; không suy ra trạng thái sau lần đọc. |
+| `xt.py` / `guard.py` | 23.668/23.668 và 24.689/24.689 dòng theo §12.1 của PR; cả hai hết dư địa. Không lấy số 23.643 của PDF làm hiện trạng. |
+| #840 / T-5043 | Mở, chưa merge: ghi nguyên tử, sửa hook 0 byte; PR báo 215 test đạt và coverage mã mới. Rà diff/CI/head rồi hoàn tất tại đúng task. |
+| #810 | Mở, nghiên cứu token/harness; nối G01, G02, G12.6, không viết nghiên cứu song song. |
+
+Năm lỗi ở §12.2 của #846 là backlog tính đúng: vai mech chưa qua CLI; chi phí lượt đỏ; installer ghi cụt (#840); release tag thoát sớm; core fallback sai ngữ cảnh. Không khẳng định đã sửa hay đã tái hiện lại ở lượt này. Phân biệt đọc mã tại mốc cũ, tái hiện cô lập của PDF, và trạng thái API mới. 14/31 lát đã merge theo §12.3; PLAN chưa đồng bộ dấu tick. Khi mở việc, xác minh PR/commit, Gate và task tương ứng chứ không chỉ dựa vào tiêu đề PR.
+
+**Sửa thứ tự:** §6/§12.6 của #846 có điểm cần làm rõ: các PR sửa XT và Guard bị cap 0; PR tách XT ít coupling có thể đi trước lỗi XT, còn sửa Guard core phải trước khóa baseline parity Guard. Chuẩn bị inventory, kiểm thử và ADR song song; không tự nới cap. T-3987–3990 giữ thứ tự logic và cùng lát tích hợp đủ loader/fence/companion nếu PLAN yêu cầu. Đưa cải thiện token vào G12.6, không đặt thành điều kiện chặn G04–G10.
+
+## 15. Thiết kế tối giản: chọn theo chi phí toàn vòng đời
+
+| Phương án | Đánh giá / điều kiện |
+|---|---|
+| Ghi chú tay `dòng 100–300` trong file | Không chọn. Drift ngay khi chèn/xóa; tăng LOC; chỉ ghi ranh giới trách nhiệm bằng ID/tên symbol. |
+| `rg`/Git + map AST sinh theo yêu cầu | Chọn làm MVP. Không cần daemon, database server, model hoặc gói ngoài; có đường fallback trực tiếp. |
+| SQLite stdlib, FTS5 tùy khả năng runtime | Chọn có điều kiện sau MVP: index gia tăng dùng khi đo được lợi ích. SQLite chỉ lưu cache tái tạo được; FTS5 không phải nguồn chân lý. |
+| LSP/SCIP, Tree-sitter, LibCST | Hoãn. Có ích cho tham chiếu đa ngôn ngữ hoặc refactor giữ định dạng; chỉ dùng qua adapter tùy chọn khi chứng minh khoảng trống và có ADR/phụ thuộc phù hợp. |
+| Vector DB, plugin động, microservice | Không chọn. Không có số đo đòi hỏi; tăng trust surface, chi phí cài, mất khả năng offline. |
+
+**Bất biến:** repo quy định chỉ stdlib, CPython ≥3.13, typecheck `mypy --strict --python-version 3.13`, C901 ≤10, 100% coverage dòng và nhánh. ADR-0090 có số phiên bản 3.15 từ lịch sử; áp dụng ADR-0094 và `scripts/AGENTS.md` hiện hành, không hạ sàn/cổng. Không thêm `LibCST`, `tree-sitter`, embedding, dịch vụ trả phí ở MVP. FTS5 có thể không được build trong SQLite của host; kiểm khả năng thực tế và fallback truy vấn metadata/tìm kiếm văn bản. Không nạp plugin từ repo đích.
+
+**Kiến trúc đích (tên minh họa):** `scripts/xt_code_index.py` hoặc package anh em `xt_intelligence/` sau khi có nhu cầu chia; `xt_guard_profile.py` đã có `closure_report`, `dependency_edges`, `entry_points`, `transitive_closure` và tests — tái sử dụng phần dùng chung theo hợp đồng, không thay một công cụ đúng bằng công cụ mới. Tránh chồng với `xt.py blueprint-status`, `test-select`, `xt_guard_profile.py`, `scripts/check-links.py`, registry và `.autopilot/` state. Code mới đặt ngoài hai file nóng, CLI adapter sau khi có cap. Module dùng tại dự án đích phải được khai vào installer, typecheck, coverage, pack manifest; internal-only chưa copy sang đích.
+
+Luồng: Git inventory + bytes snapshot → AST/symtable + nhận diện contract → index/graph/cache → truy vấn read-only → gói ngữ cảnh có provenance → Agent đọc và kiểm nguồn → Gate/test độc lập → ledger. **Không có cạnh ngược từ index vào quyết định quyền của Guard.** Không import/exec code cần phân tích, không dùng model để tự suy quyền, không đưa cache vào trusted loader.
+
+## 16. Hợp đồng ánh xạ: 8 lớp, một nguồn sự thật
+
+| Lớp | Nguồn / nội dung tối thiểu |
+|---|---|
+| Repository | Git root, worktree ID, base/head, revision, phạm vi index, owner, file digest. |
+| Module | Đường dẫn, trách nhiệm được duyệt, bề mặt công khai, file owner và ADR liên quan. |
+| Symbol | Qualified name, kind, phạm vi lexical, vị trí, hash đoạn, decorator, chữ ký, occurrence. |
+| Dependency | Import/alias, call, read/write, decorator, base class, registry/callback, edge có provenance. |
+| Capability | ID BLUEPRINT/SPEC/LOOP/command/skill → entry point, rule, module; khai báo có kiểm. |
+| Test | Test ID, file, selector, nơi lookup mock, contract/fixture; loại liên kết explicit/inferred/observed. |
+| Contract | ID ADR, schema version, PLAN, policy, loader/pack/installer, public surface; tham chiếu không nhân bản. |
+| Impact | Tập ảnh hưởng theo base/head + worktree, hướng cạnh, độ tin cậy, lý do, unknown và fallback. |
+
+**Dữ liệu đề xuất:** schema_version, extractor_version, worktree_key, snapshot_digest, file_id, path (relative POSIX-normalized), raw_sha256, parser_status, symbol_id, qualified_name, kind, lexical_parent, span, segment_sha256. Khóa symbol = path chuẩn + qualified name + kind + disambiguator lexical cho định nghĩa trùng/conditional; không lấy số dòng làm ID. Rename/move có thể đổi ID: ghi `moved_from` nếu xác minh bằng diff/chữ ký/hash, nếu không thì deleted+added. Không dùng `symtable.get_id()` như khóa bền qua phiên.
+
+**Phạm vi dòng:** trả 1-based inclusive line; cột UTF-8 byte và end-exclusive; ghi rõ coordinate_system. Dùng `tokenize.detect_encoding` hoặc `tokenize.open`, `ast.get_source_segment`, tính span decorator, type alias, async, method/nested function và definition trùng. Không dùng slice chuỗi Unicode với byte offsets. Dòng vật lý cho cap vẫn theo `len(raw.splitlines())`, không dùng tọa độ AST thay test budget. Missing end range, lỗi decode/parse, conflict markers → partial/unknown, không phát sinh range giả.
+
+Ví dụ JSON (minh họa, không phải kết quả chạy trên repo):
+
+```json
+{"symbol_id":"scripts/xt.py::review_capability_error::function",
+ "snapshot":"sha256:<manifest>","file_sha256":"<raw bytes hash>",
+ "span":{"start_line":17945,"end_line":null,"encoding":"utf8-byte"},
+ "status":"historical_unverified","source":"PR846 §12.4",
+ "links":[{"kind":"policy","target":"ADR-0098","confidence":"declared"}]}
+```
+
+Dòng 17945 là tham chiếu tại mốc #846; phải đọc lại bytes trước khi dùng để sửa. Chỉ trả đoạn mã khi file hash và range đều hợp lệ. Map xuất Markdown/JSON là projection có schema/revision, không sửa tay; khai báo trách nhiệm/ID ở một nơi hiện hữu hoặc manifest tối thiểu có owner và test. Không ép tạo đủ 8 bảng vật lý khi hai bảng files/symbols đủ cho MVP.
+
+## 17. Độ mới, cache và an toàn dữ liệu
+
+**Không dùng riêng Git SHA.** Agent thường sửa chưa commit; checkout và worktree có thể cùng HEAD khác bytes. Snapshot gồm danh tính worktree (Git dir/root thực), HEAD hoặc unborn, tập path trong scope, digest bytes từng file, phiên bản extractor/schema/rules. Sử dụng danh sách Git dạng NUL để không lỗi path có dấu/khoảng trắng/newline; mặc định tracked + untracked không ignore đã được scope cho phép; loại `.git`, worktree lồng, vendor, build, binary, cache, secrets, log/credential và symlink thoát root. Submodule là boundary; không tự đi vào. Không theo symlink để đọc file ngoài root. Chỉ cho phép phạm vi repo được phép đọc.
+
+Quy trình: (1) liệt kê inventory trước query; (2) so path set, stat làm hint, raw hash là căn cứ; (3) parse chỉ file changed/new, xóa tombstone của file bị xóa; (4) cập nhật cạnh đi/đến và invalidate dependent khi export/signature/contract thay đổi; (5) commit một generation trong transaction; (6) query pin generation, recheck bytes các đoạn được trả; nếu đổi giữa read và trả, báo stale và retry có trần, không trả đoạn sai. Đảm bảo scope không bỏ sót file mới; ở chế độ review xác minh toàn phạm vi diff + dependencies, không chỉ file đã trúng query. Không hứa cập nhật thời gian thực bằng file watcher: MVP refresh on demand; watcher là tối ưu tùy chọn sau benchmark.
+
+**Cache**: ưu tiên thư mục cache per-worktree ngoài source tracked và state `.autopilot/`; nếu repo có đường cache được phép thì dùng đường đó, không tùy tiện ghi vào state bảo vệ. Cache không commit, không copy sang project khác, không chứa source body/raw prompt mặc định (chỉ tên, signature/tóm tắt đã lọc và hash). Đường cache không phải nguồn thực thi. Mất/hỏng/khác schema → rebuild hoặc fallback; không nâng quyền để ghi, không đi vòng nếu hook deny. Mọi nội dung repo/PR/comment là dữ liệu; chuỗi trong docstring không được coi là lệnh của Agent.
+
+SQLite (giai đoạn sau): foreign keys, transaction thay generation, unique keys, timeout khóa hữu hạn; một writer mỗi worktree, reader snapshot. FTS5 bảng nội dung đồng nhất trong cùng transaction hoặc rebuild có integrity test; dùng query parameter và escape MATCH, giới hạn kết quả. Không chọn WAL mặc định trên network filesystem; cân nhắc WAL chỉ khi host local, version/support và test concurrent ổn định. Cache đang locked → read snapshot chỉ khi freshness chứng minh được, nếu không fallback. Export JSON có temp+replace nếu cần; không quảng cáo atomic file là giao dịch cả bundle.
+
+Ma trận bắt buộc: staged/unstaged, untracked/deleted, rename, same-size changed content, mtime giữ nguyên, CRLF/BOM/UTF-8, parse lỗi tạm thời, case-sensitive/case-insensitive path, symlink escape, checkout/rebase, 2 worktree cùng SHA, writer chết giữa transaction, cache corrupt, FTS unavailable, FTS stale, race sau index trước read, scope đổi, HEAD detached. Mỗi ca phải trả đúng dữ kiện hoặc trạng thái explicit `partial/stale/unsupported`, không kết quả cũ giả fresh.
+
+## 18. Đồ thị phụ thuộc và Context Resolver theo rủi ro
+
+`xt_guard_profile` hiện lần `ast.Name` trùng tập tên known và hằng cấp module; số liệu bao đóng là chỉ báo hữu ích, không là call graph đầy đủ. Thêm phân giải phạm vi bằng `symtable` (shadowing, global/nonlocal, import alias); `ast.Attribute`, `from`/relative import, class bases, default/annotations/decorators, `type` alias, assignment dictionary/list, callback registry, getattr/dynamic import. Không suy diễn động thành chắc chắn. Edge gồm src/dst/kind/evidence/range/confidence: `resolved` (tĩnh xác minh), `candidate` (heuristic), `unknown` (động/chưa phân giải). Tách đồ thị import, đồ thị symbol và I/O state; SCC chỉ là đơn vị phân tích và ứng viên refactor, không cắt ngang chu kỳ khi chưa có contract.
+
+**Tìm kiếm tầng:** exact ID và symbol (gồm aliases) → path/keyword → FTS tùy host → truy ngược callers/callees một bước và contract/test → mở rộng có ngân sách theo lý do. Không trả toàn bộ closure 15.714 dòng mặc định. Context pack bắt đầu từ mục tiêu, diff/head + revision policy, phạm vi file owner, symbol và nguồn, tests, unknown và đường đọc tiếp. Không lặp toàn bộ AGENTS/PROGRESS/BLUEPRINT vào mỗi gói. Luật AGENTS áp dụng theo path vẫn phải đọc đúng; tôn trọng ADR-0091: PROGRESS 8.192 byte, hook ≤9.800 ký tự, Autopilot ≤2.400 ký tự; giữ LOOP-CTX-004 (không cat file >1MB), C02 (excerpt ≤8.000 ký tự + full log). Không nạp map toàn repo mỗi SessionStart/PreCompact. Cache tóm tắt không thay source, reviewer tự đọc diff/head và kiểm nguồn.
+
+**Gợi ý lệnh, chưa là API:** bắt đầu một CLI chỉ đọc riêng trong module anh em, `python3 scripts/xt_code_index.py locate|search|context|impact --json` (có thể chỉ `locate`/`search` ở MVP). `--scope`, `--base`, `--head`, `--max-items`, `--max-bytes`; trả schema_version, snapshot, status, items, unknowns, omitted_count, next_action. Sau kiểm cost/quality, một namespace `xt.py code ...` hoặc đường tool hiện có; không tạo cả `xt index` và `xt code` nếu chưa có nhu cầu. `refresh`/`verify`/`doctor` dùng nội bộ; cập nhật README, CHANGELOG, tests và ADR khi thêm command thật.
+
+**Test Map/Impact:** ưu tiên mapping đã khai hoặc bài test tham chiếu trực tiếp; quan sát coverage nếu có artifact đúng phiên bản. Hợp nhất với `test-select` hiện hữu; không thay Gate bằng gợi ý index. Diff base→head (rename/delete), file dirty và schema/loader/pack thay đổi phải mở rộng tới callers, consumers, test, installed-copy và các cổng liên quan. Dynamic/unknown, thay shared contract hoặc Guard → conservative fallback test suite/required Gate theo policy. Dùng golden tasks so recall bắt buộc, không chấm chỉ số lượng file nhỏ.
+
+## 19. Kế hoạch tách XT và Guard theo từng PR
+
+**XT:** theo ADR-0090, giữ CLI `main(argv)`, `Core(Protocol)` và test AST đối chiếu thuộc tính. Mỗi module có owner, API, lỗi/exit code và side effects rõ; không truyền toàn bộ state qua `dict` hoặc biến global mới. Đầu tiên đo lại shard/weights (7 hàm, 121 dòng định nghĩa tại mốc PDF; 3 tham chiếu ngoài) và CSS contrast (24 hàm, 269 dòng; thấp coupling); chọn một lát không phá `perf trial` và không tranh `xt.py`. Giải phóng cap để sửa G01/G02; sau merge hạ trần theo số dòng thực. Tiếp test-selection/C16, scan/C15 (phụ thuộc L05), doctor, loop/PR; đưa release/compose vào module hiện có khi hợp đồng khớp. Parser/register miền đi sau. Không tạo file `legacy_core`/`utils` khổng lồ. Dài hạn facade 100–150 dòng là mục tiêu có điều kiện, không là cổng ép refactor.
+
+**Guard:** ADR-0093 đang chốt shared → remote → còn lại; #846 đề xuất shared + Edit trước do closure nhỏ. **C14 cần ADR mới thay phần thứ tự và xác nhận T-3996 trước khi đổi.** Không tự coi quyết định đã duyệt. Core/decision đã có `Decision`, `CodedReason`, `apply_policy`; tách theo closure và incoming callers, không xây policy DSL. Sửa bug fallback `core` riêng (0 net line hoặc ADR theo luật); chốt expected behavior, ca tốt/lỗi đối chứng trước baseline. Sau đó hoàn thành T-3987/3988/3989/3990 theo PLAN: source-only, allowlist cố định, eager-load, namespace theo instance, protection/fence + install + typecheck/coverage trong lát đủ chạy. Nếu thiếu/lỗi companion, giữ fail-closed cho đường hiện có; thay fail-open pre-edit là quyết định riêng, không trộn extraction. MCP/commit-msg sau closure; giữ SCC Bash đệ quy giai đoạn đầu. Không dùng normal import, bytecode cache hay lazy load nếu chưa có ADR và kiểm fail-closed tương ứng. Không né cơ chế Guard hạn chế script tự do đọc/ghi chính nó (D-105); dùng tool đọc đã cho phép, test và review; bị deny thì ghi blocked.
+
+**Phiếu mỗi lát:** scope file và symbol trước/sau; incoming/outgoing edges + state owner; đổi call sites/mocks tại nơi lookup thật (PR #846 nêu ~404 dòng patch XT/52 file và 112 patch Guard/36 file, phương pháp đếm khác PDF); `perf trial` blob, artifact `.pyz`/tarball, install, fence, schema/CLI; parity base↔head theo raw + policy; cap giảm ròng, test Gate, review độc lập ở head, revert commit riêng. Một chủ owner cho file nóng, rebase/đối chiếu lại evidence theo head; các lát khác không sửa cùng path. Không ghi 100% parity chung nếu chỉ có 4.106 ca corpus.
+
+**Guard matrix:** năm loader `_lib.sh::py_run`, `PY_LOADER`, `xt_adapter.load_guard`, `xt._load_guard`, `BenchEnv.module`; source bytes, thiếu companion, lỗi parse, mixed bundle, CWD/PYTHONPATH khác, pre-existing pyc, 2 instance/2 version, fence, fresh install/upgrade/downgrade. Raw/policy cả mặc định và strict, mã lý do, output NUL/JSON, exit/stdout/stderr, log/IO một lần; snapshot hoặc record/replay fixture cô lập, không chạy lại action thật. Giữ autonomy-bench, fuzz, green_shell/gh, signoff2_scripts, audit_dot4_har, mutation mapping và full CI. Không tăng tốc bằng giảm kiểm hoặc đổi luật.
+
+## 20. Reviewer và vòng lặp Agent: chính sách phải thực thi được
+
+Giữ yêu cầu chủ dự án: `reviewer` và `reviewer-alt` effort mặc định/tối đa `high`; `maxTurns: 120` mỗi lần gọi (80→120); `reviewer-alt` chỉ Opus trở xuống; cả hai không vượt bậc reviewer đã được phép. Giữ REVIEW_ROUNDS=1, max_rethink mặc định 1, retry/poll/timeout/ngân sách tiền/giờ độc lập. Không biến 120 thành 120 PR review hoặc reset ngân sách bằng resume: ghi tổng attempts/turns có quan sát, head và phần còn thiếu, tiếp tục theo chính sách, không dùng partial để approve.
+
+**G01:** nguồn `.claude/agents/reviewer*.md`, `/review`, registry model tiers, `review_capability_error`, adapter host/gương `.agents`/`.codex` và bản cài cùng revision. #846 xác nhận `reviewer-alt` đang `max`, `reviewer` thiếu effort, Codex generator chưa map `maxTurns` (install.py `agent_toml`). Không thêm TOML key chưa có schema. Kiểm effective effort ở session env, invocation, frontmatter, ledger `pr reviewed`; Claude Code ưu tiên env → invocation → frontmatter → session theo §12.4; xác minh lại trên phiên bản host cụ thể. Nếu không chứng minh trần có hiệu lực → unsupported/pending, không launch như lượt hợp lệ. Bản ghi requested/effective effort, model/tier, nguồn config, head, policy revision, phạm vi đã đọc, stop reason, turns nếu host báo, cost coverage.
+
+| Tác giả / reviewer | Xử lý đề xuất theo #846 |
+|---|---|
+| Bậc thấp / bậc cao trong phạm vi, reviewer high | Đủ điều kiện năng lực theo policy, vẫn cần độc lập và đúng head. |
+| Cùng họ medium / high | Có thể hợp lệ; không đánh đồng với verdict clean. |
+| Opus high hoặc xhigh / Opus high | Không đủ điều kiện clean theo rule hiện tại; vẫn báo phát hiện, inconclusive + nợ theo ADR-0062 nếu quy trình cho phép. |
+| Reviewer khác nhà cung cấp | Chỉ khi policy và năng lực đã xác minh; bảng ngoài Anthropic `verified:false` theo #846 nên chưa dùng để lách. |
+| Review bắt buộc ở head hoặc lớp immediate-effect | Không được thay review đủ điều kiện bằng nợ/inconclusive để merge. Defer, xử lý độc lập, hoặc chọn tác giả/route hợp lệ. |
+
+**Giải xung đột tiến độ:** không hạ effort tác giả sâu mặc định để làm cặp hợp lệ. G10 benchmark cặp medium/high trên tập task sâu và critical trước khi quyết; nếu không đạt, giữ tác giả sâu, gắn nợ đúng risk tier; PR thuộc Guard/installer/gate immediate-effect tuân ADR-0095/0096 và `pr next` nguyên trạng. ADR mới thay đúng phần effort/route của ADR-0098, không sửa lịch sử hoặc nới reviewer top. Ma trận test: default rõ, env/override xhigh/max, model vượt bậc, high/high, unknown, 119/120/121, hết lượt partial, resume, stale head, install fresh/upgrade, Codex/host unsupported. Trần là yêu cầu hiệu lực, không chỉ frontmatter đẹp.
+
+## 21. Harness: tiến từ đúng việc đến hiệu quả, không nhân bản Agent
+
+Đọc lại bài Anthropic 24/03/2026: bài gốc dùng planner/generator/evaluator; đánh giá frontend theo design quality, originality, craft, functionality; báo cáo thí nghiệm cụ thể, không định luật 3 agent/6 giờ. Bản thử model mới hơn giảm cấu trúc sprint và dùng evaluator cuối run. Tiếp thu đúng §11 của #846: bộ kiểm độc lập, bàn giao có cấu trúc, evaluator cần hiệu chuẩn; không chép prompt bên ngoài. Nguồn context engineering 29/09/2025 hỗ trợ nạp dữ kiện đúng lúc, không yêu cầu kho vector hoặc reset phiên bắt buộc.
+
+| Tầng tác vụ | Cách điều phối đề xuất |
+|---|---|
+| Cơ học, phạm vi nhỏ, Gate rõ | executor-mech sau sửa G01; locate+test-map, một executor; review theo risk tier. |
+| Thông thường | Executor + review độc lập khi policy yêu cầu; handoff bằng ID/diff/test. |
+| Khó, nhiều miền, UI mới | Planner/acceptance-author độc lập → executor/deep → evaluator đúng phạm vi; review code và outcome tách riêng. |
+| Guard, release, tiền/quyền/dữ liệu | Mandatory constraints, Gate/receipt/independent review hiện có; index không giảm quyền kiểm. |
+
+Giữ không lồng subagent theo AGENTS; T-5040 depth=1 và PreSkillShellCommand kiểm hiệu lực host, #810 giới hạn song song/omitClaudeMd chỉ trial và không bỏ luật áp dụng. Không đổi 400K context default mọi host trước C04 đạt; không đưa map đầy đủ vào PROGRESS. Compaction dùng checkpoint/handoff theo ADR-0009; reset toàn phiên là thí nghiệm G10, chỉ dùng khi có bằng chứng và không vi phạm quyết định hiện hành. Tận dụng C13 blueprint-status, C02 log excerpt và cache prefix ổn định, đo usage thật gồm cache read/write nếu host cung cấp.
+
+**Nghiệm thu sản phẩm:** giữ G04–G09: facts/constraints và decision lock, registry tối thiểu, UI/UX theo tác vụ; evaluator dùng đúng bản dựng và bộ trial gắn option/build, không trộn độ đẹp với nghiệp vụ. Executor đề xuất cách kiểm chứng trước code; acceptance-author độc lập duyệt/khóa suite, giữ F-121, ca critical sai cố ý. G07 giữ rubric bốn trục (design quality, originality, craft, functionality), từng trục có ngưỡng sau hiệu chuẩn với người; trước hiệu chuẩn, model grader chỉ là tín hiệu chứ không là Gate. Tiêu chí kỹ thuật WCAG 2.2 AA, outcome và field vẫn tách riêng. G10 giữ pilot một nghiệp vụ mới trên một pack; Hotel Manager là ứng viên, không dùng lại lọc tầng như tính năng mới; quyền production theo T-5020, nếu D-610 chưa cho phép thì chỉ dev/prototype, cửa D pending. Bài thử UI và phục hồi dữ liệu phải có nguồn thực, không tạo receipt giả. Mở rộng G11 canary đúng digest và cửa sổ quan sát; không rollout dự án đích khi D-610 còn hiệu lực.
+
+## 22. Đo hiệu quả và điều kiện chuyển giai đoạn
+
+Không cam kết giảm 60% token, 30% tiền hoặc tiến độ 8–12 tuần khi chưa có baseline. Chốt ngưỡng từ số đo sau lát đầu; mục tiêu thử nghiệm có thể là giảm token đọc nguồn 30–60% nhưng không bỏ sót required context. Đo **cả pipeline**: index build/refresh/query, token tool output, cache hits, attempts, cost, wall time, time-to-green, CI runner-minutes, lỗi lọt, sửa lại, review debt. Thời gian compile ở §12.1 đảo thứ tự giữa hai máy; không suy p95 hook từ compile. G02 thu cost cả lần đỏ/hủy/retry, chống đếm trùng, unknown không bằng 0.
+
+**Protocol A/B/C:** A = công cụ hiện hữu `rg`/blueprint-status/test-select; B = AST map/locate; C = B + dependency/context pack + cache (sau MVP). Cùng base/head, fixture, yêu cầu, host/model/effort, policy và ngân sách; ngẫu nhiên/counterbalance thứ tự, tách cold/warm, ghi cache state; lặp đủ để báo median/p95 cùng cỡ mẫu, dùng tối thiểu 3 lần/task cho tín hiệu ban đầu (không suy độ tin cậy thống kê từ mẫu nhỏ). 24–36 task từ lỗi thực/AUD/review đỏ, có holdout; nhóm tìm symbol, sửa module, đổi config review, closure Guard, test-select, installed-copy, dirty rename, conflict/compaction. Đo recall required context/test, precision/top-k, success theo suite độc lập, false positive/negative, `pass^k` ca critical và chi phí trên task được nghiệm thu. So solo/harness ở cùng quality; thử loại thành phần không còn cần mỗi đổi model. Không đánh đổi missed critical lấy giảm token.
+
+| Gate đề xuất | Bằng chứng bắt buộc |
+|---|---|
+| I0 Inventory | 100% definition trong tập fixture đã chỉ định (kể lỗi/unsupported); location đối chiếu bytes; version rõ. |
+| I1 Freshness | 0 stale được gắn fresh trong fault matrix; update/full rebuild tương đương trên canonical export, không lẫn worktree. |
+| I2 Retrieval | Không bỏ required symbols/contract/test trong golden critical; unknown kích fallback; reviewer tự xác minh. |
+| I3 Extraction | Move-only parity 100% trên corpus khóa, full Gate, no new import cycle, budget giảm, installed-copy và rollback kiểm. |
+| I4 Efficiency | Không giảm tỷ lệ task pass/critical pass^k; số token/time/cost đủ nguồn, latency không vượt ngưỡng khóa sau baseline; nếu không lợi thì giữ MVP. |
+| I5 Expansion | Adapter đa ngôn ngữ/pack/host có acceptance riêng, security/privacy review, ADR và phạm vi được phép. |
+
+Ngưỡng repo không đổi: coverage 100% line+branch, mypy strict 3.13, C901 ≤10, Gate-fast + full CI, cap file/group. Fitness function mới ở chế độ báo trước khi ratchet, dựa trên baseline SCC/fan-in/out, số file nóng và boundary; không ngưỡng 500 dòng cứng ép tách tùy tiện. Tăng cap chỉ qua ADR. Các chỉ số I0–I5 là nhãn nghiệm thu đề xuất, không phải Gate/task ID đã có.
+
+## 23. Backlog hợp nhất và thứ tự thực hiện (thay lịch §6/§12.6 khi xung đột)
+
+| Đợt / lát | Đầu ra, phụ thuộc, owner và cổng đóng |
+|---|---|
+| 0A - Xác minh backlog | Reconcile 31 lát bằng main/PR/PLAN. Rà #840/T-5043 và #810; tiếp tục G03 atomic tại PR đã mở, không làm lại. G04 brief, G05 contract có thể song song. |
+| 0B - G12.0 / .6a | Đo lại hai file; map AST tối thiểu, closure/callers, source ranges, hash và tests. Dùng `xt_guard_profile`, `rg`, `test-select`; công cụ riêng stdlib, không tăng cap. I0/I1 subset. |
+| 0C - G12.1/.2 | Quyết định L05, phiếu lát shard hoặc contrast; characterize, move-only, full Gate/install/perf trial. Merge rồi hạ cap XT. Chặn sửa G01/G02 cần dư địa. |
+| 0D - G01 | Đăng quyết định và ADR reviewer high/120, max Opus theo chính sách; route, source/host/ledger. Test G01 mech sau 0C. Không nới gate khi thiếu reviewer. |
+| 0E - G03/G02 | Core bugfix riêng, 0 net/ADR; release retry đúng trạng thái; cost lượt đỏ T-5009→5010→5011 sau 0C; T-5040 theo C03/C04, T-5041 theo C06. Một owner mỗi file nóng. |
+| 1A - G12.6b | Source Index freshness + test/contract mapping; triển khai cache chỉ sau đo MVP, I0–I2; package nội bộ trước. Không chặn XT extraction bởi FTS. |
+| 1B - G12.3 | XT test-select/C16, scan/C15 sau L05, doctor/loop/PR/compose/release; each slice qua I3. L02 trọng số/tripwire theo số đo. |
+| 1C - G12.4/.5 | T-3996 xác định closure + ADR C14 nếu đổi thứ tự; sau core bugfix baseline, T-3987–3990 loader/fence/install và cụm đầu đủ chạy. Sau đó MCP/commit/Bash SCC theo parity. |
+| 2A - G12.6c | Resolver/context/impact, handoff, benchmark A/B/C và code/contract map, I2/I4; nối G02 cost và G10 eval. Chỉ mở CLI/skill chính thức sau đo. |
+| 2B - G05–G09 | Registry, UX, suite độc lập, adapter factory, bản cài; đi cùng lịch lõi, không đợi facade nhỏ. Cửa B/C giữ nguyên. |
+| 3A - G10/G11 | Pilot và phục hồi đúng scope, rollout chỉ theo D-610 và quyền đã giao; xét G10 đầy đủ mới đóng D, canary mới đóng E. |
+| 3B - G12.7 | Retire shims, archive giữ ID, hạ cap; cân nhắc đa ngôn ngữ sau I5. Không gộp retire, policy change, performance fast path vào một PR. |
+
+Các ký hiệu 0A–3B và G12.6a–c là lát đề xuất, không thay task ID. **Đường găng**: inventory/contract → lát giải phóng cap XT → mech/cost; độc lập: core bugfix → baseline Guard → ADR/closure/loader/fence/extraction. G01 review policy có thể chuẩn bị song song, nhưng ledger/launch chạm XT/Guard cần owner và cap. Cửa A–E giữ như §6; bổ sung checklist I0–I5 cho G12, không biến nó thành Cửa F toàn chương trình. Trước khi lập PLAN, chủ phiên duyệt theo ADR-0008, ghi D-NNN thực, đối chiếu files/sau/topo/exec, ngân sách và quyền; không tự ghi state `.autopilot/`.
+
+**Độ ưu tiên:** P0 = tính đúng, baseline, source index tối thiểu, review policy và giải phóng cap; P1 = tách theo closure, resolver, mapping test, host contract; P2 = cache nâng cao, rank/adapter đa ngôn ngữ, benchmark mở rộng, retire. Không áp deadline giả: ước lượng từ lead time PR đầu, độ phức tạp/coupling và CI; chỉ một lát một PR, revert được.
+
+## 24. Đồng bộ 31 lát và tiêu chí bàn giao
+
+Theo #846 §12.3 ở `main` 259ac21c (trạng thái theo lịch sử merge do PR ghi, chưa xác nhận từng Gate ở lượt này):
+
+| Nhóm | Lát / task và xử lý |
+|---|---|
+| 14 đã merge | L00 T-5032 #830; L01 T-5033 #829; L03 T-5034 #825; L04 T-5035 #828; L06 T-5036 #827; C01 T-5037 #826; C02 T-5039 #839; C07 T-5049 #836; C08 T-5047 #835; C09 T-5042 #832; C10 T-5048 #838; C11 T-5045 #831; C12 T-5046 #833; C13 T-5044 #834. Không tạo lại. Kiểm Gate và cập nhật dấu tick bằng đường hợp lệ. |
+| 1 đang mở | C05 T-5043 #840: review/CI/head → merge theo policy. |
+| 16 chưa merge theo #846 | L02, L05; C03/C04 (T-5040), C06 (T-5041), C14–C24. C03/C04 dùng #810; C14/G12.4; C15/L05/C16; C17/C18/G03; C19/D-610; C20/C04; C21 đo sau L01/C08; C22/L05; C23/C24/G12.7. |
+
+G01–G12 giữ hợp đồng gốc (vai, cost, giao hàng, pilot, quyết định, capability, UX, nghiệm thu, tích hợp, eval, rollout, lõi). G12.0–.7 giữ nguyên số; bổ sung .6a index tối thiểu, .6b snapshot/cache/map, .6c resolver/impact/eval; không tạo 10 mã cạnh tranh. I0–I5 đặt vào acceptance từng lát. Mỗi PR có phiếu inventory (base/head; số dòng, bytes, coupling); hợp đồng (CLI/state/schema/guard/pack); manifest symbol đổi; Gate output + exit code + artifact; benchmark phù hợp; review đủ điều kiện và đúng head; đường lùi. Release chỉ ghi khi bytes/receipt đúng, tag cũ được kiểm commit và trạng thái; immutable releases là việc admin T-4007, T-5020 theo quyền; không giả đạt Cửa A/D khi chưa đủ. Giữ AUD/HAR/ADR/PLAN có một nguồn, link tới thay vì chép.
+
+**Definition of Done của toàn chương trình:** (1) owner và PLAN/ADR được duyệt; (2) năm lỗi được sửa/đóng có test hoặc pending lý do; (3) reviewer effective high/120 theo host, unsupported không được ghi clean; (4) map đúng bytes, không fresh giả, nguồn/unknown có truy vết; (5) mỗi lát XT/Guard đạt parity, bản cài, full Gate, review, rollback và cap ratchet; (6) G02 đủ nguồn chi phí; (7) quyết định/UX/acceptance/pilot/field/recovery đúng phạm vi; (8) tác vụ/host/đích chỉ mở rộng theo chứng cứ và D-610. Các mốc hiệu năng và số module cuối khóa sau pilot, không đánh dấu đạt trước.
+
+## 25. Kiểm chứng, nguồn và phần chưa làm
+
+**Đã làm trong lượt 27/11:** đọc metadata, file nghiên cứu 383 dòng và các phần §1–§13 của PR #846 theo head đã ghim; đọc trạng thái main, #840, #810; đối chiếu ADR-0090/0091/0093, AGENTS, PLAN guard/optimize, `context-and-token-budget.md` và `xt_guard_profile.py` (các nguồn đọc qua connector). Đọc bản PDF 40 trang và giữ nó nguyên vẹn ở Phần B. Nghiên cứu tài liệu kỹ thuật chính thức; phân biệt bằng chứng hiện tại, bằng chứng lịch sử PR và thiết kế mới. Đọc trực tiếp frontmatter hai reviewer: cả hai maxTurns 80, reviewer thiếu effort, reviewer-alt effort max; đọc trực tiếp dependency_edges của xt_guard_profile, xác nhận chỉ xấp xỉ theo tên và bỏ tự gọi. Fetch raw toàn bộ xt.py/guard.py bị connector từ chối do kích thước, nên số dòng, closure và năm lỗi lấy từ PR #846/PDF, không nhận là phép đo mới. Không chạy lại 47/215 test của repo hay full CI. Trong lượt nghiên cứu trước khi cập nhật tài liệu này, chưa thay đổi repo, PR, cấu hình hoặc bản phát hành. Commit cập nhật đề xuất chỉ thay đổi tài liệu nghiên cứu.
+
+**Spike kỹ thuật cô lập, không chạy mã X-Templates:** CPython 3.13.5, SQLite 3.46.1 trong container; 5 kiểm tra nhỏ đều đạt: (a) byte offset AST với chuỗi tiếng Việt cho slice ký tự sai, `ast.get_source_segment` đúng; (b) `symtable` nhận parameter che tên hàm global; (c) FTS5 external-content mới insert mà chưa đồng bộ trả 0, rebuild trả 1; (d) transaction rollback giữ row; (e) hash khác khi nội dung thay cùng kích thước. Đây là minh họa rủi ro và khả năng stdlib, không phải benchmark repo hay test hệ index đã triển khai. Runtime host thực tế phải kiểm lại.
+
+**Nguồn repo ghim** (đọc ngày 27/11/2026):
+
+- [PR #846](https://github.com/www-donghanhcungban-org/X-Templates/pull/846) · [tài liệu tại head](https://github.com/www-donghanhcungban-org/X-Templates/blob/75314a6aa6c34f86884d777303b8d73fa47ddad5/research/2026-11-26-unified-upgrade-plan.md).
+- [Main 259ac21c](https://github.com/www-donghanhcungban-org/X-Templates/tree/259ac21ca160ad05a7b91a780667b06f7366c016) · [PR #840](https://github.com/www-donghanhcungban-org/X-Templates/pull/840) · [PR #810](https://github.com/www-donghanhcungban-org/X-Templates/pull/810).
+- [ADR-0090](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/docs/adr/0090-split-guard-and-xt-monoliths.md) · [ADR-0091](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/docs/adr/0091-progress-hook-cap-and-split-constraints.md) · [ADR-0093](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/docs/adr/0093-guard-split-order-and-sibling-loader.md).
+- [PLAN guard split](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/docs/autopilot/PLAN-guard-split-2026-11-22.md) · [PLAN optimize-b](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/docs/autopilot/PLAN-optimize-2026-11-26-b.md) · [profile tool](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/scripts/xt_guard_profile.py).
+- [Context/token budget](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/framework/11-autonomous-loop/context-and-token-budget.md) · [scripts/AGENTS](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/scripts/AGENTS.md) · [AGENTS](https://github.com/www-donghanhcungban-org/X-Templates/blob/259ac21ca160ad05a7b91a780667b06f7366c016/AGENTS.md).
+
+**Nguồn kỹ thuật đọc thêm ngày 27/11/2026:** [CPython AST 3.13](https://docs.python.org/3.13/library/ast.html) · [symtable 3.13](https://docs.python.org/3.13/library/symtable.html) · [sqlite3 3.13](https://docs.python.org/3.13/library/sqlite3.html) · [FTS5](https://sqlite.org/fts5.html) · [WAL](https://sqlite.org/wal.html) · [Git ls-files](https://git-scm.com/docs/git-ls-files) · [SCIP protocol](https://github.com/scip-code/scip/blob/main/scip.proto) · [Anthropic context engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) · [Anthropic long-running harness](https://www.anthropic.com/engineering/harness-design-long-running-apps). Các nguồn host/release/WCAG/OTel ở §13 của #846 được giữ, chưa xác minh lại toàn bộ ở lượt này.
+
+**Kết luận:** giải phóng trần bằng một lát tách thật; làm bản đồ mã nguồn tối thiểu dùng được ngay, rồi mở rộng khi số đo chứng minh. Không chỉ ghi chú số dòng; không thêm hạ tầng quá sớm; không giảm quyền kiểm soát. Sau khi chủ dự án cho phép triển khai, cập nhật PLAN đang có bằng quy trình repo và tiến hành từng PR nhỏ có bằng chứng.
