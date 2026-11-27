@@ -124,13 +124,13 @@ jobs:
   tag:
     name: tag
     needs: approve
-    if: needs.approve.outputs.approved == 'true'
-    concurrency:
+    if: needs.approve.outputs.approved == 'true' && vars.XT_RELEASE_APP_CLIENT_ID == ''
+    concurrency: &release-concurrency
       group: release-tag-v${{ needs.approve.outputs.version }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
+    permissions: &release-permissions
       contents: write
       id-token: write
       attestations: write
@@ -139,7 +139,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.XT_RELEASE_TOKEN || github.token }}
-      - name: Tạo archive và annotated tag
+      # Dùng chung các bước phát hành với tag-app để hai đường có cùng xử lý và thứ tự.
+      - &release-archive
+        name: Tạo archive và annotated tag
         id: tag
         env:
           TARGET: ${{ needs.approve.outputs.target }}
@@ -175,11 +177,13 @@ jobs:
           name="${GITHUB_REPOSITORY#*/}-v$V"
           git archive --format=tar.gz --prefix="$name/" -o "$RUNNER_TEMP/$name.tar.gz" "$TARGET"
           echo "archive=$RUNNER_TEMP/$name.tar.gz" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - &release-attest-archive
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: steps.tag.outputs.archive != ''
         with:
           subject-path: ${{ steps.tag.outputs.archive }}
-      - name: Ghi biên nhận promotion gắn với đúng archive
+      - &release-receipt
+        name: Ghi biên nhận promotion gắn với đúng archive
         id: receipt
         if: steps.tag.outputs.archive != ''
         env:
@@ -193,11 +197,13 @@ jobs:
           printf '{"repo":"%s","tag":"v%s","commit":"%s","sha256":"%s","promotion":"approved"}\n' \
             "${GITHUB_REPOSITORY,,}" "$V" "$TARGET" "$digest" > "$receipt"
           echo "file=$receipt" >> "$GITHUB_OUTPUT"
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - &release-attest-receipt
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: steps.receipt.outputs.file != ''
         with:
           subject-path: ${{ steps.receipt.outputs.file }}
-      - name: Đẩy tag
+      - &release-push
+        name: Đẩy tag
         if: steps.tag.outputs.archive != ''
         env:
           V: ${{ needs.approve.outputs.version }}
@@ -209,7 +215,8 @@ jobs:
       # T-4017: lưu đúng bytes đã attest để nơi dùng tải về kiểm (T-4018) thay vì dựng lại archive. Release nháp có đủ archive và
       # biên nhận, tải lại và đối chiếu digest, rồi mới công bố; công bố xong assets bị khoá nếu repo bật immutable releases
       # (cài đặt quản trị — không tự suy từ tên tệp). Không ghi đè, không xoá: sửa thì phát hành phiên bản mới.
-      - name: Lưu archive và biên nhận vào release nháp, kiểm đúng bytes rồi công bố
+      - &release-publish
+        name: Lưu archive và biên nhận vào release nháp, kiểm đúng bytes rồi công bố
         if: steps.tag.outputs.archive != ''
         env:
           GH_TOKEN: ${{ github.token }}
@@ -231,7 +238,8 @@ jobs:
           # Nơi dùng so biên nhận từng byte (xt_distribution): tải về phải trùng đúng tệp đã attest, không chỉ trường sha256.
           cmp -s "$RECEIPT" "$dir"/*.promotion.json
           gh release edit "$tag" --draft=false
-      - name: Báo trạng thái release của tag đã phát hành trước đó
+      - &release-status
+        name: Báo trạng thái release của tag đã phát hành trước đó
         if: steps.tag.outputs.archive == ''
         env:
           GH_TOKEN: ${{ github.token }}
@@ -245,3 +253,43 @@ jobs:
             exit 1
           fi
           echo "::notice::v$V đã có release công bố đủ tệp."
+
+  tag-app:
+    name: tag-app
+    needs: approve
+    if: needs.approve.outputs.approved == 'true' && vars.XT_RELEASE_APP_CLIENT_ID != ''
+    concurrency: *release-concurrency
+    # Chỉ job App yêu cầu environment và tải action mint token.
+    environment:
+      name: xt-release
+      deployment: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: *release-permissions
+    steps:
+      - name: Tạo token GitHub App phát hành
+        id: release-app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.XT_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.XT_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+      - name: Kiểm token GitHub App
+        env:
+          APP_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          test -n "$APP_TOKEN" || { echo "::error::Không tạo được token GitHub App phát hành."; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.release-app.outputs.token }}
+      - *release-archive
+      - *release-attest-archive
+      - *release-receipt
+      - *release-attest-receipt
+      - *release-push
+      - *release-publish
+      - *release-status
