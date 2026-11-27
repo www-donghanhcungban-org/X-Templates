@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Truy vết AC đo tệp Markdown, mẫu SPEC và mã test. Ca lỗi cùng các biến thể Markdown: `python3 -m unittest tests.test_check_ac_trace tests.test_static_check`.",
+   "ids": [
+    "AUD-XFEAT-062"
+   ]
+  },
+  {
    "reason": "Hồi quy cần cài rồi nâng repo thật qua manifest và argv của bot, ngoài adapter quyết định của autonomy-bench. Gate: `python3 -m unittest tests.test_codex_harness tests.test_upgrade_bot`.",
    "ids": [
     "AUD-XFEAT-057"
