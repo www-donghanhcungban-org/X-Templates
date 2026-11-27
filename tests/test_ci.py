@@ -307,18 +307,23 @@ class GateFanOutTest(unittest.TestCase):
         self.assertIn("--fail-under=100", test)
 
     def test_fast_parallelism_preserved(self):
-        # Tách nproc ra biến trước số học: số job và đường lùi khi nproc lỗi giữ như lệnh trước P0.
+        # Tách nproc ra biến trước số học: số job và đường lùi khi nproc lỗi giữ như lệnh trước P0. Từ T-5082 (ADR-0112)
+        # -P do khay CPU cấp; tắt khay (XT_CPU_SHARE=off — cũng là đường của khay hỏng) phải ra đúng số cũ.
         before = '"$(( ("$(nproc 2>/dev/null || echo 2)" + 1) / 2 ))"'
         command = xt._xt_keys(ROOT)["test_fast"]
-        setup = command.partition(" && ")[0]
+        setup = command.partition(" && python3 scripts/xt.py test-select")[0]
+        self.assertIn("scripts/xt_cpu_share.py jobs", setup)
         match = re.search(r" -P (.*) -n 1 python3 -m unittest$", command)
         self.assertIsNotNone(match)
         after = match[1]
+        env = {**os.environ, "XT_CPU_SHARE": "off"}
         for cpus in (1, 2, 3, 4, 5, 8, 16, 63, 64, 127, 128, 1024, None):
             with self.subTest(cpus=cpus):
                 stub = "return 1" if cpus is None else f"printf '%s' {cpus}"
                 source = f"nproc() {{ {stub}; }}; printf '%s\\n' {before}; {setup}; printf '%s\\n' {after}"
-                got = subprocess.run(["bash", "-c", source], capture_output=True, text=True, timeout=5, check=True)
+                got = subprocess.run(
+                    ["bash", "-c", source], capture_output=True, text=True, timeout=60, check=True, cwd=ROOT, env=env
+                )
                 expected = str(((2 if cpus is None else cpus) + 1) // 2)
                 self.assertEqual(got.stdout.splitlines(), [expected, expected])
 

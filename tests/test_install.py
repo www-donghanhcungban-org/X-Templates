@@ -49,6 +49,7 @@ class InstallTest(unittest.TestCase):
             "xt_scale.py",
             "xt_field.py",
             "xt_toolcfg.py",
+            "xt_cpu_share.py",
         )
         self.assertTrue(all((root / "scripts" / name).is_file() for name in helpers))
         project_file = self.target / "product.py"

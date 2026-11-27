@@ -84,6 +84,18 @@ if [ -z "$TASK" ]; then
   exit 2
 fi
 
+# Khay CPU dùng chung theo máy (T-5082, ADR-0112): `gate`/`gate-fast` cục bộ chạy lại chính script dưới
+# `xt_cpu_share.py run` — chờ khay nhận, đăng ký, XT_JOBS (khi chưa đặt), ghim nhân, `nice`; XT_CPU_HEAD=1 = PR đầu hàng.
+# Không bọc khi: đã ở trong khay (XT_CPU_SHARE_ID), XT_CPU_SHARE=off, đang ở CI (biến `CI`; XT_CPU_SHARE=on bật lại),
+# vắng mô-đun hay python không chạy được nó (chạy như cũ). `run` trả đúng mã thoát của script.
+CPU_SHARE="$(dirname "$0")/xt_cpu_share.py"
+cpu_share_wrap() { # $@=đối số của script → exec lại trong khay, hoặc trả về để chạy như cũ
+  [ -z "${XT_CPU_SHARE_ID:-}" ] && [ "${XT_CPU_SHARE:-}" != off ] && [ -f "$CPU_SHARE" ] || return 0
+  [ "$("$FRAMEWORK_PYTHON" -I "$CPU_SHARE" probe 2>/dev/null)" = xt-cpu-share-ok ] || return 0
+  exec "$FRAMEWORK_PYTHON" -I "$CPU_SHARE" run -- bash "$0" "$@"
+}
+case "$TASK" in gate | gate-fast) cpu_share_wrap "$@" ;; esac
+
 # --- 1) Lệnh KHAI BÁO (escape hatch cho mọi dự án đặc thù) --------------------
 yaml_has() { [ -f "$YAML" ] && grep -Eq "^$1:" "$YAML"; }
 strip_comment() { # bỏ comment YAML: `#` ở đầu giá trị hoặc sau khoảng trắng, ngoài nháy (AUD-HAR-025)
@@ -140,7 +152,14 @@ node_has_script() {
 }
 
 ncpu() { nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2; }
-test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần 4×số nhân), rác/không đặt → `auto`; log khi DT_HINT=1
+cpu_share_jobs() { # phần của khay CPU (`xt_cpu_share.py jobs`, T-5082); khay tắt/vắng/hỏng hay in lạ → `auto`
+  local j=""
+  [ "${XT_CPU_SHARE:-}" != off ] && [ -f "$CPU_SHARE" ] &&
+    j="$("$FRAMEWORK_PYTHON" -I "$CPU_SHARE" jobs --fallback auto 2>/dev/null)"
+  if [[ "$j" =~ ^[1-9][0-9]{0,5}$ ]]; then printf '%s' "$j"; else printf 'auto'; fi
+}
+test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần 4×số nhân), rác → `auto`, không đặt → phần của
+  # khay CPU (`auto` khi khay tắt/vắng); log khi DT_HINT=1
   local j="${XT_JOBS:-}" cap
   cap=$(( $(ncpu) * 4 ))
   if [[ "$j" =~ ^[1-9][0-9]{0,5}$ ]]; then
@@ -150,8 +169,11 @@ test_jobs() { # số tiến trình pytest-xdist: XT_JOBS nguyên dương (trần
     fi
     printf '%s' "$j"; return 0
   fi
-  [ -n "$j" ] && [ "${DT_HINT:-}" = 1 ] && log "XT_JOBS='$j' không phải số nguyên dương — dùng mặc định (auto)"
-  printf 'auto'
+  if [ -n "$j" ]; then
+    [ "${DT_HINT:-}" = 1 ] && log "XT_JOBS='$j' không phải số nguyên dương — dùng mặc định (auto)"
+    printf 'auto'; return 0
+  fi
+  cpu_share_jobs
 }
 pytest_xdist_off() { # 0 = tắt xdist có chủ ý: PYTEST_DISABLE_PLUGIN_AUTOLOAD, PYTEST_ADDOPTS hoặc cấu hình pytest ở ROOT có `no:xdist`
   [ -n "${PYTEST_DISABLE_PLUGIN_AUTOLOAD:-}" ] && return 0

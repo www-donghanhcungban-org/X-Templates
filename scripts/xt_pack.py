@@ -41,6 +41,7 @@ ARTIFACT_SCRIPTS = (
     "xt_field.py",
     "xt_design.py",
     "xt_toolcfg.py",
+    "xt_cpu_share.py",
 )
 PACKAGES = ("xt_app", "xt_checks")
 SHEBANG = b"#!/usr/bin/env python3\n"
