@@ -97,7 +97,7 @@ class AutonomyBenchRepoTest(unittest.TestCase):
         """AUD-HAR-448: lưu trữ dời theo đợt (ghi chú `>` chen giữa bảng) — ID bắt buộc = MỌI dòng 🔴/🟠 `đã sửa` của sổ
         và sổ lưu trữ (đếm bằng regex thô, không qua `md_tables`); gỡ một ID nằm sau ghi chú khỏi `scope.json` của bản
         sao corpus → bench báo chưa phủ, exit 1 (ca chạy được thay bằng `pass` — chỉ đo độ phủ)."""
-        row = re.compile(r"^\| (AUD-[A-Z]+-\d+) \| (?:🔴|🟠) \| đã sửa \|", re.M)
+        row = re.compile(r"^\| (AUD-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+) \| (?:🔴|🟠) \| đã sửa \|", re.M)
         ledgers = [ROOT / xt.AUDIT_STATUS_DEFAULT, ROOT / xt.AUDIT_ARCHIVE_DEFAULT]
         raw = [i for p in ledgers for i in row.findall(p.read_text(encoding="utf-8"))]
         need = xt.autonomy_required(ROOT, "không-có.md", xt.AUDIT_STATUS_DEFAULT)["audit"]

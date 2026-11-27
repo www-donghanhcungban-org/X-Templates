@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Reflow cần Chromium thật đo vùng cắt ở 320 px với viền và lề clip, ngoài các adapter quyết định của corpus. Ca đạt, lỗi và không đo được: `node --test tests_e2e/verify_render.test.mjs`.",
+   "ids": [
+    "AUD-A11Y-004"
+   ]
+  },
+  {
    "reason": "Hậu kiểm #865 (ADR-0115) cần cây tiến trình Linux thật, SIGTERM và lease trên đĩa, ngoài schema quyết định của corpus. Ca hồi quy: `python3 -m unittest tests.test_cpu_share.LiveCliTest.test_cancel_keeps_lease_until_grandchild_finishes`.",
    "ids": [
     "AUD-HAR-580"
