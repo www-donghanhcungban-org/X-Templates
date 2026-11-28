@@ -92,8 +92,11 @@ chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương ph
 - 320 CSS px là ngưỡng reflow WCAG 2.2 SC 1.4.10. 280 CSS px là phép thử căng của khung. Ở khổ ≤ 400 px, vùng
   `overflow:hidden|clip` cắt chữ giữa dòng là vi phạm `reflow`; chữ nằm hẳn ngoài khung cắt (carousel hay nội dung ẩn có
   chủ ý) báo `UNMEASURED` để người xem và khai ngoại lệ (`check: reflow`). Bỏ qua điều khiển form, chữ ẩn thị giác (`clip`,
-  hộp ≤ 1 px) và `text-overflow: ellipsis`. Chỉ xét chiều ngang trong tài liệu chính: cắt theo chiều dọc, cuộn lồng và
-  nội dung trong iframe chưa được kiểm. Cổng đi vào shadow root mở (báo `REFLOW … shadow_measured=N`); host có shadow
+  hộp ≤ 1 px) và phần chữ cắt có `text-overflow: ellipsis`. Vùng `overflow-x: auto|scroll` có nội dung cần cuộn ngang
+  báo `UNMEASURED`, kể cả `body` khi tự cuộn độc lập. Tràn ngang của viewport được đo ở tài liệu gốc. Pseudo
+  `::before` hoặc `::after` có nội dung rỗng và nét vẽ trong vùng cắt đang tràn cũng báo `UNMEASURED` để xem thủ công.
+  Trong tối đa 20 chẩn đoán vùng reflow mỗi viewport và theme, các vi phạm cắt chữ đã đo được xếp trước.
+  Phép kiểm chỉ xét chiều ngang trong tài liệu chính. Cổng đi vào shadow root mở (báo `REFLOW … shadow_measured=N`); host có shadow
   `closed` không đo được nên báo `UNMEASURED … not_measured` (phần tử `shadow[closed]`, khai ngoại lệ được), không coi là
   đạt. Ảnh/video/canvas/svg thò ra khỏi khung cắt báo `UNMEASURED` (cắt ảnh thường có chủ ý).
 - Ý tưởng cổng đo trên bản render tham khảo `plugin87/ux-ui-agent-skills` (MIT) qua stored 06 §7d. Mã viết cho khung.

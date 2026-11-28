@@ -316,14 +316,16 @@ const settle = (el) => {
   return infinite;
 };
 
-// Chạy trong trang: vùng nhìn thấy cắt chữ theo chiều ngang (tối đa 20), tên theo `path`. `cut`: một đoạn chữ vắt qua mép
-// hộp cắt (chắc chắn mất chữ). `hidden`: chữ nằm hẳn ngoài hộp (carousel hay nội dung ẩn có chủ ý) nên cần người xem;
-// ảnh/video/canvas/svg thò ra khỏi hộp cũng chỉ là `hidden` (cắt ảnh thường có chủ ý, ví dụ ảnh nền phủ khung).
+// Chạy trong trang: reflow theo chiều ngang, tên theo `path`. Chữ vắt qua mép hộp cắt là `cut`.
+// Cuộn lồng, nội dung giả có nét vẽ, chữ nằm ngoài hộp và media bị cắt cần kiểm thủ công.
+// Giới hạn 20 chẩn đoán ưu tiên các vi phạm đã đo, kể cả khi xuất hiện sau các vùng chưa đo được.
 // Duyệt cả shadow root MỞ (đệ quy); shadow `closed` không đọc được từ trang nên phía gọi đếm và báo not_measured.
 // Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và `text-overflow: ellipsis`.
 // Trả `{ found, shadowMeasured }`: số phần tử trong shadow root mở đã được xét.
-const findClipped = (path) => {
-  const found = [];
+const findReflow = (path) => {
+  const limit = 20;
+  const cuts = [];
+  const unknown = [];
   let shadowMeasured = 0;
   const MEDIA = ['img', 'video', 'canvas', 'svg'];
   const parentOf = (n) => n.parentElement ?? n.getRootNode().host ?? null;
@@ -334,6 +336,36 @@ const findClipped = (path) => {
     if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
     return path(el) ?? el.localName;
   };
+  const addUnknown = (el, kind) => {
+    if (unknown.length < limit) unknown.push({ element: name(el), kind });
+  };
+  const isViewportScroller = (el, style) => {
+    if (el === document.documentElement || el === document.scrollingElement) return true;
+    if (el !== document.body) return false;
+    const root = getComputedStyle(document.documentElement);
+    // CSS chuyển overflow từ body lên viewport khi gốc để overflow visible và không có containment.
+    const contained = (s) => s.contain !== 'none' || s.contentVisibility !== 'visible' ||
+      !['normal', 'scroll-state'].includes(s.containerType);
+    return root.overflowX === 'visible' && root.overflowY === 'visible' && !contained(root) && !contained(style);
+  };
+  // Chromium tuần tự hoá màu đã tính thành rgb(a) hoặc hàm màu CSS có alpha sau dấu slash.
+  const paints = (color) => !/^(?:transparent|rgba\([^)]*,\s*0(?:\.0+)?\)|[\w-]+\([^)]*\/\s*0(?:\.0+)?%?\))$/.test(color);
+  const stroke = (width, style, color) => parseFloat(width) > 0 && !['none', 'hidden'].includes(style) && paints(color);
+  const hasPaintedPseudo = (el) => {
+    for (const pseudo of ['::before', '::after']) {
+      const style = getComputedStyle(el, pseudo);
+      if (style.content !== '""' || ['none', 'contents'].includes(style.display) ||
+          style.visibility !== 'visible' || Number(style.opacity) === 0) continue;
+      if (!visible(el)) return false;
+      const shadowColors = style.boxShadow.match(/[\w-]+\([^)]*\)/g) ?? [];
+      if (paints(style.backgroundColor) || style.backgroundImage !== 'none' || shadowColors.some(paints) ||
+          stroke(style.outlineWidth, style.outlineStyle, style.outlineColor) ||
+          ['Top', 'Right', 'Bottom', 'Left'].some((side) => stroke(
+            style[`border${side}Width`], style[`border${side}Style`], style[`border${side}Color`],
+          ))) return true;
+    }
+    return false;
+  };
   function* elements(root, inShadow) {
     for (const el of root.querySelectorAll('*')) {
       if (inShadow) shadowMeasured++;
@@ -341,22 +373,29 @@ const findClipped = (path) => {
       if (el.shadowRoot) yield* elements(el.shadowRoot, true);
     }
   }
-  // Nút chữ và phần tử media dưới `node`, đi qua shadow root mở của từng host.
-  function* leaves(node) {
+  // Duyệt nút chữ, media và phần tử có thể sinh pseudo qua shadow root mở của từng host.
+  function* contents(node) {
     for (const child of [...(node.shadowRoot?.childNodes ?? []), ...node.childNodes]) {
       if (child.nodeType === Node.TEXT_NODE) yield child;
       else if (child.nodeType === Node.ELEMENT_NODE) {
-        if (MEDIA.includes(child.localName)) yield child;
-        yield* leaves(child);
+        yield child;
+        yield* contents(child);
       }
     }
   }
   for (const el of elements(document, false)) {
     const s = getComputedStyle(el);
-    if (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis') continue;
+    const scrollable = ['auto', 'scroll'].includes(s.overflowX);
+    const clips = ['hidden', 'clip'].includes(s.overflowX) && s.textOverflow !== 'ellipsis';
+    if (!scrollable && !clips) continue;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
-    if (el.scrollWidth <= el.clientWidth + 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
+    const overflow = el.scrollWidth - el.clientWidth;
+    if (scrollable ? overflow <= 0 : overflow <= 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
     if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
+    if (scrollable) {
+      if (!isViewportScroller(el, s)) addUnknown(el, 'scroll');
+      continue;
+    }
     const box = el.getBoundingClientRect();
     // clientLeft gồm viền trái và scrollbar bên trái (RTL); clientWidth là chiều rộng mép cắt.
     // Quy đổi về toạ độ viewport như Range, kể cả scale/zoom trên phần tử hoặc tổ tiên.
@@ -374,8 +413,7 @@ const findClipped = (path) => {
       axisAligned = matrix.is2D && matrix.a > 0 && matrix.d > 0 && matrix.b === 0 && matrix.c === 0;
     }
     if (!axisAligned) {
-      found.push({ element: name(el), kind: 'hidden' });
-      if (found.length === 20) break;
+      addUnknown(el, 'hidden');
       continue;
     }
     const scaleX = box.width / el.offsetWidth;
@@ -387,8 +425,7 @@ const findClipped = (path) => {
       const lengths = parts.filter((part) => /^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(part));
       const boxes = parts.filter((part) => ['padding-box', 'border-box', 'content-box'].includes(part));
       if (lengths.length > 1 || boxes.length > 1 || lengths.length + boxes.length !== parts.length || (!lengths.length && !boxes.length)) {
-        found.push({ element: name(el), kind: 'hidden' });
-        if (found.length === 20) break;
+        addUnknown(el, 'hidden');
         continue;
       }
       if (boxes[0] === 'border-box') {
@@ -398,8 +435,7 @@ const findClipped = (path) => {
         const paddingLeft = Number.parseFloat(s.paddingLeft);
         const paddingRight = Number.parseFloat(s.paddingRight);
         if (!Number.isFinite(paddingLeft) || !Number.isFinite(paddingRight)) {
-          found.push({ element: name(el), kind: 'hidden' });
-          if (found.length === 20) break;
+          addUnknown(el, 'hidden');
           continue;
         }
         left += paddingLeft * scaleX;
@@ -409,11 +445,14 @@ const findClipped = (path) => {
       left -= margin;
       right += margin;
     }
-    let kind = null;
+    let kind = overflow > 1 && hasPaintedPseudo(el) ? 'pseudo' : null;
     let seen = 0;
-    for (const node of leaves(el)) {
+    for (const node of contents(el)) {
       if (kind === 'cut') break;
-      const isMedia = node.nodeType === Node.ELEMENT_NODE;
+      const isElement = node.nodeType === Node.ELEMENT_NODE;
+      const isMedia = isElement && MEDIA.includes(node.localName);
+      if (isElement && !kind && overflow > 1 && hasPaintedPseudo(node)) kind = 'pseudo';
+      if (isElement && !isMedia) continue;
       if (!isMedia && !node.textContent.trim()) continue;
       if (++seen > 500) { // quét chưa hết: không im lặng cho qua
         kind ??= 'hidden';
@@ -434,10 +473,12 @@ const findClipped = (path) => {
         kind = straddles && !isMedia ? 'cut' : (kind ?? 'hidden');
       }
     }
-    if (kind) found.push({ element: name(el), kind });
-    if (found.length === 20) break;
+    if (kind === 'cut') {
+      cuts.push({ element: name(el), kind });
+      if (cuts.length === limit) break;
+    } else if (kind) addUnknown(el, kind);
   }
-  return { found, shadowMeasured };
+  return { found: [...cuts, ...unknown.slice(0, limit - cuts.length)], shadowMeasured };
 };
 
 // Đếm host có shadow root `closed` (trang không đọc được; CDP thấy). Trả null nếu CDP không dùng được.
@@ -522,14 +563,18 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
     if (overflow > 0) {
       recordViolation(results, { ...scope, state: 'default', check: 'reflow', element: 'html' }, `tràn ngang +${overflow}px`);
     }
-    // Reflow (WCAG 1.4.10) ở khổ hẹp: vùng `overflow:hidden|clip` mà nội dung rộng hơn khung thì phần thừa bị cắt chứ
-    // không cuộn, nên `scrollWidth` của gốc không thấy. Cắt chữ có chủ ý bằng `text-overflow:ellipsis` thì bỏ qua.
+    // Reflow (WCAG 1.4.10) ở khổ hẹp: cuộn lồng và vùng cắt không hiện trong số đo tràn ngang của gốc.
     if (scope.width <= REFLOW_WIDTH) {
-      const { found, shadowMeasured } = await page.evaluate(`(${findClipped})(${elementPath})`);
+      const { found, shadowMeasured } = await page.evaluate(`(${findReflow})(${elementPath})`);
+      const details = {
+        scroll: 'vùng cuộn ngang trong trang, cần người xem',
+        pseudo: 'nội dung giả rỗng có nét vẽ trong vùng tràn bị cắt, cần người xem',
+        hidden: 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem',
+      };
       for (const { element, kind } of found) {
         const clipped = { ...scope, state: 'default', check: 'reflow', element };
         if (kind === 'cut') recordViolation(results, clipped, 'chữ bị cắt ngang bởi overflow:hidden');
-        else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem');
+        else recordUnknown(results, tally(), clipped, details[kind]);
       }
       // Shadow root đóng không đo được: không coi là đạt (not_measured); người xem hoặc khai ngoại lệ `shadow[closed]`.
       const closed = await countClosedShadows(page);
