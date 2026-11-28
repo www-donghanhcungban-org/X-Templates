@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import errno
 import io
+import json
 import os
 import resource
 import signal
@@ -204,6 +205,123 @@ class InstallInterruptedWriteTest(TestCase):
         self.target = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         subprocess.run(["git", "init", "-q", str(self.target)], check=True)
         self.hooks = self.target / ".git" / "hooks"
+
+    def test_retry_after_settings_publish_keeps_rule_provenance(self) -> None:
+        for mode in ("fresh", "merge", "own"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as scratch:
+                root = Path(scratch)
+                clean = root / "clean"
+                retry = root / "retry"
+                for target in (clean, retry):
+                    (target / ".xtemplates").mkdir(parents=True)
+                    if mode != "fresh":
+                        settings = target / ".claude" / "settings.json"
+                        settings.parent.mkdir()
+                        settings.write_text(json.dumps({"permissions": {"allow": ["Read(README.md)"]}}))
+                    if mode == "own":
+                        (target / "xt.yaml").write_text("harness_permissions: own\n")
+
+                install.install_harness(clean, False)
+                with mock.patch.object(install, "write_manifests", side_effect=OSError(errno.ENOSPC, "simulated")):
+                    with self.assertRaises(OSError):
+                        install.install_harness(retry, False)
+                install.install_harness(retry, False)
+                self.assertEqual(install.load_rules(retry), install.load_rules(clean))
+                self.assertNotIn("Read(README.md)", install.load_rules(retry)["allow"])
+                self.assertEqual(install.load_manifest_doc(retry), install.load_manifest_doc(clean))
+                install.install_harness(retry, False)
+                self.assertEqual(install.load_rules(retry), install.load_rules(clean))
+
+    def test_settings_transition_uses_only_the_published_snapshot(self) -> None:
+        settings = self.target / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        expected = b'{"permissions":{"allow":["Read(README.md)"]}}'
+        prior = {key: [] for key in install.RULE_KEYS}
+        rules = {**prior, "allow": ["Read(README.md)"]}
+        install.stage_settings_rules(self.target, expected, rules, prior)
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        settings.write_bytes(b"{}")
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        settings.write_bytes(expected)
+        install.write_manifests(self.target, {}, prior)
+        self.assertEqual(install.recover_settings_rules(self.target), rules)
+        install.update_manifest_doc(
+            self.target,
+            **{install.PENDING_SETTINGS: {"settings_hash": install.hash_label(install.sha256(expected)), "rules": []}},
+        )
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        install.stage_settings_rules(self.target, expected, {"allow": rules["allow"]}, prior)
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+
+    def test_interruption_before_second_snapshot_keeps_first_confirmed_rules(self) -> None:
+        with (
+            mock.patch.object(Path, "read_bytes", return_value=b'{"fixture":1}'),
+            mock.patch.object(Path, "is_symlink", return_value=False),
+            mock.patch.object(Path, "is_file", return_value=True),
+        ):
+            first = {key: ["Read(README.md)"] if key == "allow" else [] for key in install.RULE_KEYS}
+            empty = {key: [] for key in install.RULE_KEYS}
+            install.stage_settings_rules(self.target, b'{"fixture":1}', first, empty)
+            confirmed = install.recover_settings_rules(self.target)
+            self.assertEqual(confirmed, first)
+            install.stage_settings_rules(self.target, b'{"fixture":2}', empty, confirmed)
+            self.assertEqual(install.recover_settings_rules(self.target), first)
+            self.assertEqual(install.load_rules(self.target), first)
+
+    def test_failed_force_copy_of_identical_settings_does_not_claim_existing_rules(self) -> None:
+        prior = {key: [] for key in install.RULE_KEYS}
+        with (
+            mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
+            mock.patch.object(install, "write_copy", side_effect=OSError(errno.ENOSPC, "simulated")),
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFREG)),
+            mock.patch.object(Path, "read_bytes", return_value=b"{}"),
+        ):
+            with self.assertRaises(OSError):
+                install.install_settings(self.target, True, install.Counter(), prior)
+            self.assertEqual(install.recover_settings_rules(self.target), prior)
+
+    def test_force_replacement_can_proceed_without_reading_prior_bytes(self) -> None:
+        prior = {key: [] for key in install.RULE_KEYS}
+        with (
+            mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
+            mock.patch.object(install, "write_copy") as write,
+            mock.patch.object(install, "stage_settings_rules") as stage,
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFREG)),
+            mock.patch.object(Path, "read_bytes", side_effect=PermissionError(errno.EACCES, "simulated")),
+        ):
+            self.assertEqual(install.install_settings(self.target, True, install.Counter(), prior), install.our_rules())
+            write.assert_called_once()
+            stage.assert_not_called()
+
+    def test_provenance_does_not_read_a_nonregular_settings_entry(self) -> None:
+        settings = self.target / ".claude" / "settings.json"
+        prior = {key: [] for key in install.RULE_KEYS}
+        install.stage_settings_rules(self.target, b"{}", prior, prior)
+        with (
+            mock.patch.object(Path, "is_file", return_value=False),
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFIFO)),
+            mock.patch.object(Path, "read_bytes") as read,
+        ):
+            self.assertFalse(install.settings_change_provable(settings, b"{}"))
+            self.assertEqual(install.recover_settings_rules(self.target), prior)
+            read.assert_not_called()
+
+    def test_unavailable_settings_metadata_is_not_proof_of_absence(self) -> None:
+        settings = mock.Mock(spec=Path)
+        settings.lstat.side_effect = PermissionError(errno.EACCES, "simulated")
+        self.assertFalse(install.settings_change_provable(settings, b"{}"))
+        settings.read_bytes.assert_not_called()
+
+    def test_resume_keeps_confirmed_rules_if_settings_cannot_be_read(self) -> None:
+        previous = {key: ["Read(previous.md)"] if key == "allow" else [] for key in install.RULE_KEYS}
+        empty = {key: [] for key in install.RULE_KEYS}
+        install.stage_settings_rules(self.target, b"{}", empty, previous)
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "read_bytes", side_effect=PermissionError(errno.EACCES, "simulated")) as read,
+        ):
+            self.assertEqual(install.recover_settings_rules(self.target), previous)
+            read.assert_called_once()
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
