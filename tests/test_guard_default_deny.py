@@ -215,6 +215,26 @@ class DefaultDenyTest(unittest.TestCase):
                 self.assertEqual(decide(f"{find} | xargs rm -f", app)["code"], guard.BUDGET)
                 self.assertEqual(decide(f"{find} -delete", app)["code"], "HOOK_BYPASS")
 
+    def test_find_link_traversal_requires_bounded_readable_tree(self):
+        _, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        docs = app / "notes/adr"
+        below_maxdepth = docs / "archive"
+        below_maxdepth.mkdir(parents=True)
+        (docs / "draft.md").touch()
+        cli_cache = app / ".xtemplates/scripts/__pycache__"
+        cli_cache.mkdir()
+        (below_maxdepth / "cli-cache").symlink_to(cli_cache, target_is_directory=True)
+        source = "find -L notes -maxdepth 2 -path '*/adr/*.md'"
+        pipeline = f"{source} | xargs sed -i s/a/b/"
+        self.assertEqual(decide(pipeline, app)["decision"], "")
+        self.assertEqual(decide(f"{source} -delete", app)["decision"], "")
+        with mock.patch.object(guard, "OUTSIDE_SCAN_MAX", 1):
+            self.assertEqual(decide(pipeline, app)["code"], guard.BUDGET)
+            self.assertEqual(decide(f"{source} -delete", app)["code"], "HOOK_BYPASS")
+        (docs / "cli-cache").symlink_to(cli_cache, target_is_directory=True)
+        self.assertEqual(decide(pipeline, app)["code"], guard.BUDGET)
+        self.assertEqual(decide(f"{source} -delete", app)["code"], "HOOK_BYPASS")
+
     def test_value_class_is_budget_with_rewrite_hint(self):
         for cmd in (*DENY["a-value"][:10], DENY["b-runner"][2], *DENY["c-xargs"][2:5]):
             with self.subTest(cmd=cmd):
