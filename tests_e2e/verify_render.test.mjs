@@ -403,14 +403,12 @@ test('overflow clip geometry boxes without an explicit length use zero margin', 
   assert.match(result.stdout, /check=reflow element="#edge" — chữ bị cắt/);
 });
 
-test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
+test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, ellipsis passes', async (t) => {
   const clipped = await fixture(t, page({ markup: wideBox('clip', 'overflow:hidden;width:200px') }));
   const result = await clipped.run(['--strict', '--widths', '320']);
   status(result, 1);
   assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — chữ bị cắt/m);
   assert.doesNotMatch(result.stdout, /^✗ .*viewport=1280x800 .*check=reflow/m);
-  const scrollable = await fixture(t, page({ markup: wideBox('scroll', 'overflow:auto;width:200px') }));
-  status(await scrollable.run(['--widths', '320']), 0);
   const ellipsis = await fixture(t, page({ markup: '<p id="e" style="overflow:hidden;width:200px;white-space:nowrap;text-overflow:ellipsis">a very long single line of text that will be cut with an ellipsis</p>' }));
   status(await ellipsis.run(['--widths', '320']), 0);
 });
@@ -525,6 +523,127 @@ test('a missing Chromium executable makes the real gate fail UNMEASURED', async 
   status(result, 2);
   assert.match(result.stderr, /UNMEASURED.*không chạy hết cổng/);
   assert.doesNotMatch(result.stdout, /^✓/m);
+});
+
+test('reflow reports only horizontal overflow in nested scrolling regions', async (t) => {
+  const sample = await fixture(t, page({
+    markup: '<section>' +
+      '<div id="auto" tabindex="0" role="region" aria-label="auto scrolling" style="overflow-x:auto;width:200px"><div style="width:400px;height:20px"></div></div>' +
+      '<div id="scroll" tabindex="0" role="region" aria-label="forced scrolling" style="overflow-x:scroll;width:200px"><div style="width:400px;height:20px"></div></div>' +
+      '<div id="vertical" tabindex="0" role="region" aria-label="vertical content" style="overflow:auto;width:200px;height:40px"><p style="height:160px">Short text</p></div>' +
+      '<div id="fits" style="overflow-x:scroll;width:200px">Short text</div></section>',
+  }));
+  const advisory = await sample.run(['--widths', '320']);
+  status(advisory, 0);
+  for (const id of ['auto', 'scroll']) {
+    assert.match(advisory.stdout, new RegExp(`^UNMEASURED .*check=reflow element="#${id}" — .*cuộn ngang`, 'm'));
+  }
+  assert.doesNotMatch(advisory.stdout, /check=reflow element="#(?:vertical|fits)"/);
+  assert.doesNotMatch(advisory.stdout, /check=reflow element="html"/);
+  status(await sample.run(['--strict', '--widths', '320']), 1);
+  const file = await sample.exceptions(['auto', 'scroll'].map((id) => exception(sample.target, {
+    check: 'reflow', element: '#' + id, reason: 'The table requires horizontal scrolling', evidence: 'reviews/reflow.md',
+  })));
+  status(await sample.run(['--strict', '--widths', '320', '--exceptions', file]), 0);
+});
+
+test('an independently scrolling body is UNMEASURED while viewport overflow is measured once', async (t) => {
+  const sample = (rootCss) => page({
+    css: `body { width: 200px; overflow-x: auto; } main { width: 500px; } ${rootCss}`,
+  }).replace('<body>', '<body id="body-scroll" tabindex="0">');
+  for (const rootCss of ['html { overflow: hidden; }', 'body { contain: layout; }']) {
+    const independent = await fixture(t, sample(rootCss));
+    const result = await independent.run(['--strict', '--widths', '320']);
+    status(result, 1);
+    assert.match(result.stdout, /^UNMEASURED .*check=reflow element="#body-scroll" — .*cuộn ngang/m);
+    assert.doesNotMatch(result.stdout, /check=reflow element="html"/);
+  }
+
+  for (const rootCss of ['', 'body { container-type: scroll-state; }', 'html { overflow-x: scroll; } body { overflow-x: visible; }']) {
+    const propagated = await fixture(t, sample(rootCss));
+    const result = await propagated.run(['--strict', '--widths', '320']);
+    status(result, 1);
+    assert.match(result.stdout, /^✗ .*check=reflow element="html" — tràn ngang/m);
+    assert.doesNotMatch(result.stdout, /^UNMEASURED .*check=reflow/m);
+  }
+});
+
+test('empty generated content in overflowing clips is UNMEASURED only with visible paint', async (t) => {
+  const styles = [
+    ['background', 'background-color: #143;'],
+    ['outline', 'outline: 4px solid #143;'],
+    ['shadow', 'box-shadow: 0 0 2px transparent, 1px 0 3px #143;'],
+    ['nested-paint', 'border: 1px solid #143;'],
+    ['transparent', 'background-color: rgb(15 53 20 / 0);'],
+    ['transparent-outline', 'outline: 4px solid rgb(15 53 20 / 0);'],
+    ['transparent-shadow', 'box-shadow: 0 0 2px transparent, inset 2px 0 5px color(srgb 1 0 0 / 0);'],
+    ['transparent-border', 'border: 1px solid transparent;'],
+    ['no-outline', 'outline: none; outline-color: #143;'],
+    ['hidden-paint', 'background-color: #143; opacity: 0;'],
+    ['non-generated', 'content: none; background-color: #143;'],
+    ['no-overflow', 'width: 80px; background-color: #143;'],
+  ];
+  const sample = await fixture(t, page({
+    css: '.clip { width: 120px; overflow: hidden; }' +
+      '.clip::before, #nested-paint span::after { content: ""; display: block; width: 240px; height: 16px; }' +
+      '#nested-paint::before { content: none; }' +
+      styles.map(([id, rules]) => `${id === 'nested-paint' ? '#nested-paint span::after' : '#' + id + '::before'} { ${rules} }`).join(''),
+    markup: styles.map(([id]) => `<div class="clip" id="${id}">${id === 'nested-paint' ? '<span></span>' : ''}</div>`).join(''),
+  }));
+  const advice = await sample.run(['--widths', '320']);
+  status(advice, 0);
+  const diagnostics = advice.stdout.split('\n').filter((line) => line.includes('check=reflow'));
+  assert.equal(diagnostics.length, 4, advice.stdout);
+  for (const [id] of styles.slice(0, 4)) {
+    assert.match(advice.stdout, new RegExp(`^UNMEASURED .*check=reflow element="#${id}" — .*nội dung giả`, 'm'));
+  }
+  status(await sample.run(['--strict', '--widths', '320']), 1);
+});
+
+test('measured cuts take precedence over earlier UNMEASURED results within the 20 diagnostic limit', async (t) => {
+  const image = `<img alt="" src="${SAMPLE_IMAGE}" width="400" height="20">`;
+  const clips = Array.from({ length: 21 }, (_, index) => `<div id="image-${index}" style="width:120px;overflow:hidden">${image}</div>`);
+  const sample = await fixture(t, page({ markup: clips.join('') + wideBox('actual-cut', 'width:120px;overflow:hidden') }));
+  const result = await sample.run(['--widths', '320']);
+  status(result, 1);
+  const diagnostics = result.stdout.split('\n').filter((line) => line.includes('check=reflow'));
+  assert.equal(diagnostics.length, 20, result.stdout);
+  assert.match(diagnostics[0], /^✗ .*check=reflow element="#actual-cut" — chữ bị cắt/);
+});
+
+test('painted pseudo remains relevant with overridden visibility, ellipsis and an inset content-box clip', async (t) => {
+  const sample = await fixture(t, page({
+    css: '.clip { width: 100px; overflow: hidden; }' +
+      '.clip::before { content: ""; display: block; width: 160px; height: 16px; background: #143; }' +
+      '#visibility { visibility: hidden; } #visibility::before { visibility: visible; }' +
+      '#ellipsis { text-overflow: ellipsis; }' +
+      '#content-edge { overflow: clip; overflow-clip-margin: content-box; padding: 20px; }' +
+      '#content-edge::before { width: 110px; }',
+    markup: '<div class="clip" id="visibility"></div>' +
+      '<div class="clip" id="ellipsis"></div><div class="clip" id="content-edge"></div>',
+  }));
+  const advice = await sample.run(['--widths', '320']);
+  status(advice, 0);
+  for (const id of ['visibility', 'ellipsis', 'content-edge']) {
+    assert.match(advice.stdout, new RegExp(`^UNMEASURED .*check=reflow element="#${id}" — .*nội dung giả`, 'm'));
+  }
+  status(await sample.run(['--strict', '--widths', '320']), 1);
+});
+
+test('transparent gradients and empty image layers do not count as pseudo paint', async (t) => {
+  const sample = await fixture(t, page({
+    css: '.clip { width: 100px; overflow: hidden; }' +
+      '.clip::after { content: ""; display: block; width: 160px; height: 16px; }' +
+      '#clear-gradient::after { background-image: none, linear-gradient(45deg, transparent, color(display-p3 1 0 0 / 0)), radial-gradient(transparent, transparent); }' +
+      '#no-images::after { background-image: none, none; }' +
+      '#painted-gradient::after { background-image: none, linear-gradient(transparent, #143); }',
+    markup: '<div class="clip" id="clear-gradient"></div>' +
+      '<div class="clip" id="no-images"></div><div class="clip" id="painted-gradient"></div>',
+  }));
+  const advice = await sample.run(['--widths', '320']);
+  status(advice, 0);
+  assert.doesNotMatch(advice.stdout, /check=reflow element="#(?:clear-gradient|no-images)"/);
+  assert.match(advice.stdout, /^UNMEASURED .*check=reflow element="#painted-gradient" — .*nội dung giả/m);
 });
 
 const shadowPage = (mode, html, style = 'overflow:hidden;width:200px') => page({
