@@ -279,6 +279,19 @@ class InstallInterruptedWriteTest(TestCase):
                 install.install_settings(self.target, True, install.Counter(), prior)
             self.assertEqual(install.recover_settings_rules(self.target), prior)
 
+    def test_force_replacement_can_proceed_without_reading_prior_bytes(self) -> None:
+        prior = {key: [] for key in install.RULE_KEYS}
+        with (
+            mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
+            mock.patch.object(install, "write_copy") as write,
+            mock.patch.object(install, "stage_settings_rules") as stage,
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "read_bytes", side_effect=PermissionError(errno.EACCES, "simulated")),
+        ):
+            self.assertEqual(install.install_settings(self.target, True, install.Counter(), prior), install.our_rules())
+            write.assert_called_once()
+            stage.assert_not_called()
+
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
         with redirect_stderr(err), redirect_stdout(io.StringIO()):

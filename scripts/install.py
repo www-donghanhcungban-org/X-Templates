@@ -989,7 +989,7 @@ def recover_settings_rules(target: Path) -> dict[str, list[str]]:
         return previous
     try:
         digest = hash_label(sha256(settings.read_bytes()))
-    except FileNotFoundError:
+    except OSError:
         return previous
     rules = pending.get("rules")
     if digest != pending.get("settings_hash") or not isinstance(rules, dict):
@@ -997,6 +997,16 @@ def recover_settings_rules(target: Path) -> dict[str, list[str]]:
     if any(not isinstance(rules.get(key), list) for key in RULE_KEYS):
         return previous
     return {key: [rule for rule in rules[key] if isinstance(rule, str)] for key in RULE_KEYS}
+
+
+def settings_change_provable(settings: Path, data: bytes) -> bool:
+    """Chỉ lưu mốc mới nếu xác minh được việc công bố sẽ thay nội dung settings."""
+    try:
+        return settings.read_bytes() != data
+    except FileNotFoundError:
+        return True
+    except OSError:
+        return False
 
 
 def install_settings(
@@ -1040,7 +1050,7 @@ def install_settings(
     if r == "copied":
         rules = dict.fromkeys(RULE_KEYS, []) if own else our_rules()
         # Nếu nội dung đã giống hệt, hash không chứng minh thao tác copy đã xảy ra.
-        if not settings.is_file() or settings.read_bytes() != data:
+        if settings_change_provable(settings, data):
             stage_settings_rules(target, data, rules, prov)
     write_copy(src, settings, r, data)
     stats[r] += 1
