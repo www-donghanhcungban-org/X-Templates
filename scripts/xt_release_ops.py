@@ -273,11 +273,16 @@ def rehearsal(core: Core, base: Path, args: argparse.Namespace) -> Doc:
     dev = current(core, base, "dev")
     if not dev or not matches(candidate, dev.get("subject")):
         raise ValueError("biên nhận dev chưa xác nhận đúng nội dung và artifact")
-    url = core._xt_keys(base).get("url_dev", "")
+    local_cfg = core._xt_keys(base)
+    url = local_cfg.get("url_dev", "")
     if dev.get("url") != url or dev_health(url) != candidate["digest"]:
         raise ValueError("digest phục vụ ở URL dev cục bộ không khớp")
     origin = ops_setup.Origin(core, base)
     ready = ops_setup.target(origin, args.env)
+    local_pass = ops_setup.target_env_pass(core, local_cfg)
+    ready["target_env_pass_matches"] = local_pass is not None and local_pass == ops_setup.target_env_pass(
+        core, origin.cfg or {}
+    )
     ready["declared_secret_names"] = origin.cfg is not None and ops_setup.deploy_secret_status(origin, origin.cfg) in (
         ops_setup.OK,
         ops_setup.SKIP,

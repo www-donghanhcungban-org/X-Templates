@@ -42,7 +42,7 @@ class RehearsalTest(GithubFixture, TmpRepoCase):
         self.url = f"http://127.0.0.1:{self.server.server_port}"
         head = self.commit_files(
             {
-                "xt.yaml": f"deploy_envs: dev\nrelease_artifacts: package.bin\nurl_dev: {self.url}\n",
+                "xt.yaml": f"deploy_envs: dev\ndeploy_env_pass:\nrelease_artifacts: package.bin\nurl_dev: {self.url}\n",
                 ".gitignore": "package.bin\n",
                 "VERSION": "1.2.0\n",
                 "app.txt": "version A",
@@ -152,11 +152,17 @@ class RehearsalTest(GithubFixture, TmpRepoCase):
         code, doc = check()
         self.assertEqual((code, doc["handoff"]), (0, "ready_for_pipeline_review"), doc)
         self.assertFalse(doc["deployed_to_target"])
+        adapter = "deploy_envs: dev prod\n" + "".join(
+            f"{key}_prod: ./adapter {key}\n" for key in ("deploy", "smoke", "digest", "rollback")
+        )
         for key, changes in [
             ("ancestor", {compare: {"status": "diverged"}}),
             ("remote_grant", {plan: encode("- grant: deploy | env=staging")}),
             ("protected_signoff", {f"contents/{signature}?ref={head}": encode(signed.replace("| GO |", "| NO-GO |"))}),
             ("declared_secret_names", {"actions/secrets?per_page=100&page=1": {"secrets": []}}),
+            ("target_adapter", {rules: encode(adapter)}),
+            ("target_adapter", {rules: encode(adapter + "deploy_env_pass: null\n")}),
+            ("target_env_pass_matches", {rules: encode(adapter + "deploy_env_pass: EXAMPLE_SETTING\n")}),
             (
                 "target_adapter",
                 {

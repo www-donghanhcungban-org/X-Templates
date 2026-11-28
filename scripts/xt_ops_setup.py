@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import quote
 
 import xt_distribution
@@ -23,6 +23,7 @@ Doc = dict[str, Any]
 
 
 class Core(Protocol):
+    deploy_env_pass: Callable[[Mapping[str, str]], tuple[str, ...] | None]
     DEFER_ID_RE: re.Pattern[str]
     DEPLOY_ENV_NAME: re.Pattern[str]
     DeployError: type[Exception]
@@ -157,6 +158,13 @@ class Origin:
         return None
 
 
+def target_env_pass(core: Core, cfg: Mapping[str, str]) -> tuple[str, ...] | None:
+    try:
+        return core.deploy_env_pass(cfg)
+    except core.DeployError:
+        return None
+
+
 def target(origin: Origin, env: str) -> dict[str, bool]:
     cfg = origin.cfg or {}
     names = cfg.get("deploy_envs", "").split()
@@ -166,7 +174,8 @@ def target(origin: Origin, env: str) -> dict[str, bool]:
     raw = origin.file("docs/autopilot/PLAN.md")
     grants = origin.core.parse_grants(raw or "")
     grant = raw is not None and not origin.core.grant_violations(grants, "deploy", {"env": env})
-    return {"target_adapter": bool(declared and origin.sha), "remote_grant": grant}
+    valid_env = env == "dev" or target_env_pass(origin.core, cfg) is not None
+    return {"target_adapter": bool(declared and origin.sha and valid_env), "remote_grant": grant}
 
 
 def state(check: bool) -> str:
