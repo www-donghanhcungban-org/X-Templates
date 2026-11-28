@@ -7,6 +7,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 ## [Unreleased]
 
 - T-5096 (AUD-HAR-541): đích ref hoặc refspec có namespace chữ rõ như `refs/notes/` và `refs/heads/` đi qua luật Git chung. Đích tag và namespace chưa xác định tiếp tục được kiểm theo luật tag phát hành.
+- T-5101 (AUD-HAR-579, AUD-HAR-541): guard xét các vị trí tên có thể dịch chuyển khi biến hoặc glob làm thay đổi số lượng đối số của `git tag`, `git update-ref` và `git symbolic-ref`. Bộ kiểm sổ xác nhận chặn cả chín ca glob đã ghi nhận.
 
 - `loop ci-triage` giữ tối đa 600 ký tự mỗi dòng bằng chứng đã che dữ liệu. Dòng dài giữ đầu và cuối. Mở lại một run cũ cũng rút gọn bản ghi, giữ nguyên chữ ký tính trên dòng đầy đủ và bộ đếm.
 
