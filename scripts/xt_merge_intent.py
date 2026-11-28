@@ -2,94 +2,19 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import re
 import shlex
-import sys
 import urllib.parse
 from contextlib import contextmanager
 from contextvars import ContextVar
-from pathlib import Path
-from typing import Any, Callable, ContextManager, Iterator, NamedTuple
+from typing import Any, Callable, Iterator, NamedTuple
 
 HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
 HOST = rf"{HOST_LABEL}(?:\.{HOST_LABEL})*"
 SLUG = r"[A-Za-z0-9_-][A-Za-z0-9_.-]*/(?!\.{1,2}(?![A-Za-z0-9_.-]))[A-Za-z0-9_.-]+"
 PR_URL_BASE = rf"https://(?P<host>{HOST})/(?P<repo>{SLUG})/pull/(?P<pr>[1-9][0-9]*)"
 PR_URL = re.compile(rf"{PR_URL_BASE}/?\Z", re.ASCII)
-
-
-def merged_checkpoint(selector: str, pull: dict[str, Any]) -> dict[str, str | int]:
-    """Bản ghi tối thiểu để khôi phục mốc merge, bỏ qua nội dung PR."""
-    intent = MergeIntent.from_pull(pull)
-    if intent is None or intent.target.pull_url(intent.pr).lower() != selector.rstrip("/").lower():
-        raise ValueError("phản hồi PR khác đích đã ghim")
-    if pull.get("state") != "closed" or pull.get("merged") is not True:
-        raise ValueError("GitHub chưa xác nhận merge")
-    base = pull.get("base")
-    branch = base.get("ref") if isinstance(base, dict) else None
-    sha = pull.get("merge_commit_sha")
-    if not isinstance(branch, str) or not branch or not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
-        raise ValueError("thiếu nhánh đích hoặc SHA merge")
-    return {"schema": 1, "pr": selector.rstrip("/").lower(), "base": branch, "head": intent.expected_head, "merge": sha}
-
-
-def recover_merge_checkpoint(path: Path, confirmed: dict[str, str | int]) -> dict[str, str | int] | None:
-    """Đối chiếu mốc đã lưu với GitHub trước khi nạp; bước kế vẫn cần đọc lại hàng PR."""
-    if path.is_symlink():
-        raise OSError("checkpoint là symlink")
-    try:
-        snapshot = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    if snapshot != confirmed:
-        raise ValueError("checkpoint khác mốc merge đã xác minh")
-    return confirmed
-
-
-def record_merge_checkpoint(
-    selector: str,
-    fetch: Callable[..., list[Any]],
-    lock: ContextManager[None],
-    directory: Callable[[], Path],
-    write: Callable[[Path, str], None],
-) -> bool:
-    """Đọc GitHub trước khi giữ khoá. Cùng kho state chỉ ghi một lần cho mỗi PR."""
-    match = PR_URL.fullmatch(selector)
-    if not match:
-        raise ValueError("thiếu đích PR đã ghim")
-    values = fetch(f"repos/{match['repo']}/pulls/{match['pr']}", host=match["host"])
-    if len(values) != 1 or not isinstance(values[0], dict):
-        raise ValueError("không có phản hồi PR duy nhất")
-    point = merged_checkpoint(selector, values[0])
-    key = hashlib.sha256(str(point["pr"]).encode()).hexdigest()
-    with lock:
-        path = directory() / f"context-merge-{key}.json"
-        if recover_merge_checkpoint(path, point) is not None:
-            return False
-        write(path, json.dumps(point, ensure_ascii=False) + "\n")
-    return True
-
-
-def observe_merge_checkpoint(
-    decision: dict[str, Any],
-    selector: str,
-    fetch: Callable[..., list[Any]],
-    lock: ContextManager[None],
-    directory: Callable[[], Path],
-    write: Callable[[Path, str], None],
-    read_error: type[Exception],
-) -> None:
-    if decision["verdict"] != "closed" or "PR đã MERGED" not in decision["reasons"][0]:
-        return
-    try:
-        record_merge_checkpoint(selector, fetch, lock, directory, write)
-    except (OSError, ValueError, read_error) as exc:
-        print(f"[xt checkpoint] không lưu được mốc merge: {type(exc).__name__}", file=sys.stderr)
-
-
 PR_USER_URL = re.compile(
     rf"{PR_URL_BASE}(?:/(?:files|changes|commits|checks)(?:/[a-f0-9]+)?)?/?(?:[?#][^\s]*)?\Z", re.ASCII
 )

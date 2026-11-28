@@ -17148,7 +17148,7 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
     thì agent được đánh thức, không tốn token mỗi lượt hỏi. Exit: 0 đã merge/`merge`, 1 cần hành động (review/update/fix/human/
     đóng không merge), 2 lỗi đọc PR `WATCH_ERROR_LIMIT` lần liền, 3 hết `--max-minutes` mà PR vẫn chờ, 141 bên đọc đóng ống."""
     _sibling_imports()
-    from xt_merge_intent import observe_merge_checkpoint, watch_selector
+    from xt_merge_intent import watch_selector
 
     deadline, selector = time.monotonic() + args.max_minutes * 60, args.pr
     errors = 0
@@ -17165,10 +17165,6 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
             errors = 0
             print(f"[{stamp}] {d['verdict'].upper()} · PR #{d['pr']} — {'; '.join(d['reasons'])}", flush=True)
             if d["verdict"] != "wait":
-                if getattr(args, "observe_context", False):
-                    observe_merge_checkpoint(
-                        d, selector, _gh_api, _state_lock(project_dir()), state_write_dir, write_atomic, PrInputError
-                    )
                 return _watch_final(d, selector)
         if time.monotonic() + args.interval > deadline:
             print(f"[{stamp}] hết {args.max_minutes} phút mà PR vẫn chờ — chạy lại merge-watch", flush=True)
@@ -23233,7 +23229,6 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--pr", help="số/URL/nhánh của PR (mặc định PR của nhánh hiện tại)")
     pw.add_argument("--interval", type=int, default=30, help="giây giữa hai lần kiểm (mặc định 30)")
     pw.add_argument("--max-minutes", type=int, default=240, help="tổng thời gian chờ tối đa (mặc định 240)")
-    pw.add_argument("--observe-context", action="store_true", help="lưu checkpoint cục bộ sau merge đã xác nhận")
     pw.set_defaults(fn=cmd_merge_watch)
     pg = sub.add_parser(
         "grant-check", help="việc production có nằm trong Ủy quyền production của PLAN.md không (ADR-0022)"
