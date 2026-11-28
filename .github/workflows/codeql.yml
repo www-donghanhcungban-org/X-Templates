@@ -1,12 +1,17 @@
 name: CodeQL
 
-# SAST cho mã Python của công cụ khung (scripts/, tests/) + quét định kỳ hằng tuần.
+# SAST cho mã Python của khung + quét định kỳ hằng tuần.
 # Dự án thật cài khung nên có workflow CodeQL riêng theo ngôn ngữ của mình (12-security/appsec-web).
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+    paths:
+      - "**.py"
+      - "**.pyi"
+      - .github/codeql/**
+      - .github/workflows/codeql.yml
   schedule:
     - cron: "23 3 * * 1"
 
