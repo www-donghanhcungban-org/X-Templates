@@ -92,7 +92,7 @@ Lệnh:
   grant-check GROUP [KHOÁ=GIÁ_TRỊ ...] [--plan F] [--json]
                                 Việc production có nằm trong mục Ủy quyền production của PLAN.md không (exit 0 =
                                 trong ủy quyền; 1 = ngoài → loop defer; thiếu mục = ngoài).
-  merge-watch [--pr PR] [--interval 30] [--max-minutes 240]
+  merge-watch [--pr PR] [--interval 30] [--max-minutes 240] [--observe-context]
                                 Gọi merge-check mỗi `interval` giây tới khi verdict ≠ wait (exit 0 = đã merge/merge,
                                 1 = cần hành động, 2 = lỗi đọc PR 3 lần liền, 3 = hết giờ); chạy nền, không tốn token.
   doctor [--fix] [--json]       Audit khung đã cài trước /autopilot (Python/git, hook + file hook, skill, AGENTS/CLAUDE,
@@ -17132,12 +17132,16 @@ def _watch_pr_next(pr: Optional[str]) -> None:
         print("pr next → " + out.getvalue().strip().replace("\n", "\n  "), flush=True)
 
 
-def _watch_final(d: Dict[str, Any], selector: str) -> int:
+def _watch_final(d: Dict[str, Any], selector: str, observe_context: bool) -> int:
     """In bước kế (+ kết quả `pr next` khi PR còn mở) và trả exit khi verdict ≠ wait: 0 = PR đã merge hoặc đủ điều kiện
     merge, 1 = cần hành động/người."""
     if d["next"]:
         print(f"→ {d['next']}", flush=True)
     merged = d["verdict"] == "closed" and "PR đã MERGED" in d["reasons"][0]
+    if merged and observe_context:
+        from xt_merge_intent import observe_merge
+
+        observe_merge(sys.modules[__name__], d)
     if d["verdict"] != "closed":
         _watch_pr_next(selector)
     return 0 if merged or d["verdict"] == "merge" else 1
@@ -17165,7 +17169,7 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
             errors = 0
             print(f"[{stamp}] {d['verdict'].upper()} · PR #{d['pr']} — {'; '.join(d['reasons'])}", flush=True)
             if d["verdict"] != "wait":
-                return _watch_final(d, selector)
+                return _watch_final(d, selector, args.observe_context)
         if time.monotonic() + args.interval > deadline:
             print(f"[{stamp}] hết {args.max_minutes} phút mà PR vẫn chờ — chạy lại merge-watch", flush=True)
             return 3
@@ -23229,6 +23233,7 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--pr", help="số/URL/nhánh của PR (mặc định PR của nhánh hiện tại)")
     pw.add_argument("--interval", type=int, default=30, help="giây giữa hai lần kiểm (mặc định 30)")
     pw.add_argument("--max-minutes", type=int, default=240, help="tổng thời gian chờ tối đa (mặc định 240)")
+    pw.add_argument("--observe-context", action="store_true", help="lưu mốc merge cục bộ sau khi GitHub báo đã merge")
     pw.set_defaults(fn=cmd_merge_watch)
     pg = sub.add_parser(
         "grant-check", help="việc production có nằm trong Ủy quyền production của PLAN.md không (ADR-0022)"

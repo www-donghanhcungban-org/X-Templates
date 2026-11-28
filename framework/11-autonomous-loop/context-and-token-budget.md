@@ -3,7 +3,7 @@ title: Ngân sách context/token, compaction, bàn giao phiên
 kind: module
 prefix: LOOP-CTX
 applies_to: [all]
-updated: 2026-11-27
+updated: 2026-11-28
 ---
 
 # Ngân sách context/token, compaction, bàn giao phiên
@@ -45,6 +45,16 @@ cuối + exit code, file chưa commit, lỗi lặp vào `.autopilot/state.json`,
 bản tóm tắt nén; SessionStart(compact) in lại qua `loop status`) rồi chạy tiếp. Áp dụng khi `loop init --single-session` (trần vòng tự tính `max(40, 8 × task chưa làm)`).
 
 Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 90% là mốc cảnh báo nếu harness có đo chi phí thật.
+
+### Quan sát mốc merge
+
+Chạy `xt.py merge-watch --pr N --observe-context` để lưu thông tin về một PR đã merge. Sau khi nhận kết quả `MERGED`, lệnh
+đọc lại PR qua REST ở host, repo và số PR đã ghim. Tệp `.autopilot/merge-context-<hash>.json` chỉ chứa phiên bản schema,
+host, repo, số PR, SHA head, SHA commit merge và tên nhánh đích. Thư mục, tệp và khoá phải được Git bỏ qua.
+
+Khi chạy lại, lệnh đối chiếu mốc với bằng chứng REST mới. Hai tiến trình quan sát cùng mốc chỉ ghi một lần. Mốc hỏng, lệch
+hoặc quá 4 KiB được thay bằng bản đã đối chiếu khi REST và nơi lưu đều dùng được. Quan sát giữ nguyên kết quả và mã thoát
+của `merge-watch`. Chế độ nén của phiên do cấu hình riêng điều khiển.
 
 ### Cái gì vào context, cái gì ở ngoài
 
