@@ -611,6 +611,41 @@ test('measured cuts take precedence over earlier UNMEASURED results within the 2
   assert.match(diagnostics[0], /^✗ .*check=reflow element="#actual-cut" — chữ bị cắt/);
 });
 
+test('painted pseudo remains relevant with overridden visibility, ellipsis and an inset content-box clip', async (t) => {
+  const sample = await fixture(t, page({
+    css: '.clip { width: 100px; overflow: hidden; }' +
+      '.clip::before { content: ""; display: block; width: 160px; height: 16px; background: #143; }' +
+      '#visibility { visibility: hidden; } #visibility::before { visibility: visible; }' +
+      '#ellipsis { text-overflow: ellipsis; }' +
+      '#content-edge { overflow: clip; overflow-clip-margin: content-box; padding: 20px; }' +
+      '#content-edge::before { width: 110px; }',
+    markup: '<div class="clip" id="visibility"></div>' +
+      '<div class="clip" id="ellipsis"></div><div class="clip" id="content-edge"></div>',
+  }));
+  const advice = await sample.run(['--widths', '320']);
+  status(advice, 0);
+  for (const id of ['visibility', 'ellipsis', 'content-edge']) {
+    assert.match(advice.stdout, new RegExp(`^UNMEASURED .*check=reflow element="#${id}" — .*nội dung giả`, 'm'));
+  }
+  status(await sample.run(['--strict', '--widths', '320']), 1);
+});
+
+test('transparent gradients and empty image layers do not count as pseudo paint', async (t) => {
+  const sample = await fixture(t, page({
+    css: '.clip { width: 100px; overflow: hidden; }' +
+      '.clip::after { content: ""; display: block; width: 160px; height: 16px; }' +
+      '#clear-gradient::after { background-image: none, linear-gradient(45deg, transparent, color(display-p3 1 0 0 / 0)), radial-gradient(transparent, transparent); }' +
+      '#no-images::after { background-image: none, none; }' +
+      '#painted-gradient::after { background-image: none, linear-gradient(transparent, #143); }',
+    markup: '<div class="clip" id="clear-gradient"></div>' +
+      '<div class="clip" id="no-images"></div><div class="clip" id="painted-gradient"></div>',
+  }));
+  const advice = await sample.run(['--widths', '320']);
+  status(advice, 0);
+  assert.doesNotMatch(advice.stdout, /check=reflow element="#(?:clear-gradient|no-images)"/);
+  assert.match(advice.stdout, /^UNMEASURED .*check=reflow element="#painted-gradient" — .*nội dung giả/m);
+});
+
 const shadowPage = (mode, html, style = 'overflow:hidden;width:200px') => page({
   markup: `<div id="outer" tabindex="0" role="region" aria-label="shadow content" style="${style}"><x-wide id="host"></x-wide></div><script>
     const root = document.getElementById('host').attachShadow({ mode: '${mode}' });

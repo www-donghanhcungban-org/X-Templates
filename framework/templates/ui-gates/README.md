@@ -94,7 +94,9 @@ chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương ph
   chủ ý) báo `UNMEASURED` để người xem và khai ngoại lệ (`check: reflow`). Bỏ qua điều khiển form, chữ ẩn thị giác (`clip`,
   hộp ≤ 1 px) và phần chữ cắt có `text-overflow: ellipsis`. Vùng `overflow-x: auto|scroll` có nội dung cần cuộn ngang
   báo `UNMEASURED`, kể cả `body` khi tự cuộn độc lập. Tràn ngang của viewport được đo ở tài liệu gốc. Pseudo
-  `::before` hoặc `::after` có nội dung rỗng và nét vẽ trong vùng cắt đang tràn cũng báo `UNMEASURED` để xem thủ công.
+  `::before` hoặc `::after` có nội dung rỗng và nét vẽ trong vùng đang tràn hoặc có mép cắt nằm trong padding box
+  cũng báo `UNMEASURED` để xem thủ công. Cổng xét màu, viền, outline, bóng và ảnh nền theo CSS đã tính. Màu, bóng
+  và gradient hoàn toàn trong suốt được bỏ qua. Ảnh nền có điểm ảnh chưa đọc được vẫn cần kiểm thủ công.
   Trong tối đa 20 chẩn đoán vùng reflow mỗi viewport và theme, các vi phạm cắt chữ đã đo được xếp trước.
   Phép kiểm chỉ xét chiều ngang trong tài liệu chính. Cổng đi vào shadow root mở (báo `REFLOW … shadow_measured=N`); host có shadow
   `closed` không đo được nên báo `UNMEASURED … not_measured` (phần tử `shadow[closed]`, khai ngoại lệ được), không coi là

@@ -320,7 +320,7 @@ const settle = (el) => {
 // Cuộn lồng, nội dung giả có nét vẽ, chữ nằm ngoài hộp và media bị cắt cần kiểm thủ công.
 // Giới hạn 20 chẩn đoán ưu tiên các vi phạm đã đo, kể cả khi xuất hiện sau các vùng chưa đo được.
 // Duyệt cả shadow root MỞ (đệ quy); shadow `closed` không đọc được từ trang nên phía gọi đếm và báo not_measured.
-// Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và `text-overflow: ellipsis`.
+// Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và chữ dùng ellipsis.
 // Trả `{ found, shadowMeasured }`: số phần tử trong shadow root mở đã được xét.
 const findReflow = (path) => {
   const limit = 20;
@@ -329,8 +329,9 @@ const findReflow = (path) => {
   let shadowMeasured = 0;
   const MEDIA = ['img', 'video', 'canvas', 'svg'];
   const parentOf = (n) => n.parentElement ?? n.getRootNode().host ?? null;
-  const visible = (n) => getComputedStyle(n).display === 'contents' && parentOf(n) ? visible(parentOf(n))
-    : n.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+  const shown = (n, visibilityProperty) => getComputedStyle(n).display === 'contents' && parentOf(n)
+    ? shown(parentOf(n), visibilityProperty) : n.checkVisibility({ opacityProperty: true, visibilityProperty });
+  const visible = (n) => shown(n, true);
   const name = (el) => {
     const root = el.getRootNode();
     if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
@@ -350,15 +351,27 @@ const findReflow = (path) => {
   };
   // Chromium tuần tự hoá màu đã tính thành rgb(a) hoặc hàm màu CSS có alpha sau dấu slash.
   const paints = (color) => !/^(?:transparent|rgba\([^)]*,\s*0(?:\.0+)?\)|[\w-]+\([^)]*\/\s*0(?:\.0+)?%?\))$/.test(color);
+  const colorFunctions = /[\w-]+\([^()]*\)/g;
+  const backgroundImageMayPaint = (value) => {
+    // Bỏ các lớp none và gradient mà mọi điểm dừng đều có alpha bằng 0. Các ảnh khác cần người xem.
+    const layers = value.match(/(?:none|(?:repeating-)?(?:linear|radial|conic)-gradient\((?:[^()]|\([^()]*\))*\))(?=,|$)/g) ?? [];
+    if (layers.join(', ') !== value) return true;
+    return layers.some((layer) => {
+      if (layer === 'none') return false;
+      const colors = (layer.match(colorFunctions) ?? []).filter((token) => CSS.supports('color', token));
+      return colors.length === 0 || colors.some(paints);
+    });
+  };
   const stroke = (width, style, color) => parseFloat(width) > 0 && !['none', 'hidden'].includes(style) && paints(color);
   const hasPaintedPseudo = (el) => {
     for (const pseudo of ['::before', '::after']) {
       const style = getComputedStyle(el, pseudo);
       if (style.content !== '""' || ['none', 'contents'].includes(style.display) ||
           style.visibility !== 'visible' || Number(style.opacity) === 0) continue;
-      if (!visible(el)) return false;
-      const shadowColors = style.boxShadow.match(/[\w-]+\([^)]*\)/g) ?? [];
-      if (paints(style.backgroundColor) || style.backgroundImage !== 'none' || shadowColors.some(paints) ||
+      // Pseudo có thể đặt visibility:visible khi chủ của nó dùng visibility:hidden.
+      if (!shown(el, false)) return false;
+      const shadowColors = style.boxShadow.match(colorFunctions) ?? [];
+      if (paints(style.backgroundColor) || backgroundImageMayPaint(style.backgroundImage) || shadowColors.some(paints) ||
           stroke(style.outlineWidth, style.outlineStyle, style.outlineColor) ||
           ['Top', 'Right', 'Bottom', 'Left'].some((side) => stroke(
             style[`border${side}Width`], style[`border${side}Style`], style[`border${side}Color`],
@@ -383,19 +396,7 @@ const findReflow = (path) => {
       }
     }
   }
-  for (const el of elements(document, false)) {
-    const s = getComputedStyle(el);
-    const scrollable = ['auto', 'scroll'].includes(s.overflowX);
-    const clips = ['hidden', 'clip'].includes(s.overflowX) && s.textOverflow !== 'ellipsis';
-    if (!scrollable && !clips) continue;
-    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
-    const overflow = el.scrollWidth - el.clientWidth;
-    if (scrollable ? overflow <= 0 : overflow <= 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
-    if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
-    if (scrollable) {
-      if (!isViewportScroller(el, s)) addUnknown(el, 'scroll');
-      continue;
-    }
+  const clippingEdges = (el, s) => {
     const box = el.getBoundingClientRect();
     // clientLeft gồm viền trái và scrollbar bên trái (RTL); clientWidth là chiều rộng mép cắt.
     // Quy đổi về toạ độ viewport như Range, kể cả scale/zoom trên phần tử hoặc tổ tiên.
@@ -412,21 +413,19 @@ const findReflow = (path) => {
       const matrix = new DOMMatrixReadOnly(transform);
       axisAligned = matrix.is2D && matrix.a > 0 && matrix.d > 0 && matrix.b === 0 && matrix.c === 0;
     }
-    if (!axisAligned) {
-      addUnknown(el, 'hidden');
-      continue;
-    }
+    if (!axisAligned) return null;
     const scaleX = box.width / el.offsetWidth;
-    let left = box.left + el.clientLeft * scaleX;
-    let right = left + el.clientWidth * scaleX;
+    const clientLeft = box.left + el.clientLeft * scaleX;
+    const clientRight = clientLeft + el.clientWidth * scaleX;
+    let left = clientLeft;
+    let right = clientRight;
     if (s.overflowX === 'clip') {
       // Computed value là độ dài px, có thể kèm geometry-box; mặc định là padding-box.
       const parts = s.overflowClipMargin?.trim().split(/\s+/) ?? [];
       const lengths = parts.filter((part) => /^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(part));
       const boxes = parts.filter((part) => ['padding-box', 'border-box', 'content-box'].includes(part));
       if (lengths.length > 1 || boxes.length > 1 || lengths.length + boxes.length !== parts.length || (!lengths.length && !boxes.length)) {
-        addUnknown(el, 'hidden');
-        continue;
+        return null;
       }
       if (boxes[0] === 'border-box') {
         left = box.left;
@@ -434,10 +433,7 @@ const findReflow = (path) => {
       } else if (boxes[0] === 'content-box') {
         const paddingLeft = Number.parseFloat(s.paddingLeft);
         const paddingRight = Number.parseFloat(s.paddingRight);
-        if (!Number.isFinite(paddingLeft) || !Number.isFinite(paddingRight)) {
-          addUnknown(el, 'hidden');
-          continue;
-        }
+        if (!Number.isFinite(paddingLeft) || !Number.isFinite(paddingRight)) return null;
         left += paddingLeft * scaleX;
         right -= paddingRight * scaleX;
       }
@@ -445,13 +441,38 @@ const findReflow = (path) => {
       left -= margin;
       right += margin;
     }
-    let kind = overflow > 1 && hasPaintedPseudo(el) ? 'pseudo' : null;
+    return { left, right, clipsInsideClient: left > clientLeft + 1 || right < clientRight - 1 };
+  };
+  for (const el of elements(document, false)) {
+    const s = getComputedStyle(el);
+    const scrollable = ['auto', 'scroll'].includes(s.overflowX);
+    const clips = ['hidden', 'clip'].includes(s.overflowX);
+    if (!scrollable && !clips) continue;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
+    const overflow = el.scrollWidth - el.clientWidth;
+    const contentClip = s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box');
+    if (scrollable ? overflow <= 0 : overflow <= 1 && !contentClip) continue;
+    if (s.clip !== 'auto' || s.clipPath !== 'none' || !shown(el, false)) continue;
+    if (scrollable) {
+      if (visible(el) && !isViewportScroller(el, s)) addUnknown(el, 'scroll');
+      continue;
+    }
+    const readTextAndMedia = s.textOverflow !== 'ellipsis' && visible(el);
+    const edges = clippingEdges(el, s);
+    if (!edges && readTextAndMedia) {
+      addUnknown(el, 'hidden');
+      continue;
+    }
+    // Mép cắt content-box có thể nằm trong padding box mà scrollWidth đo.
+    const lookForPseudo = overflow > 1 || edges?.clipsInsideClient;
+    let kind = lookForPseudo && hasPaintedPseudo(el) ? 'pseudo' : null;
     let seen = 0;
     for (const node of contents(el)) {
-      if (kind === 'cut') break;
+      if (kind === 'cut' || (kind && !readTextAndMedia)) break;
       const isElement = node.nodeType === Node.ELEMENT_NODE;
+      if (isElement && !kind && lookForPseudo && hasPaintedPseudo(node)) kind = 'pseudo';
+      if (!readTextAndMedia) continue;
       const isMedia = isElement && MEDIA.includes(node.localName);
-      if (isElement && !kind && overflow > 1 && hasPaintedPseudo(node)) kind = 'pseudo';
       if (isElement && !isMedia) continue;
       if (!isMedia && !node.textContent.trim()) continue;
       if (++seen > 500) { // quét chưa hết: không im lặng cho qua
@@ -466,6 +487,7 @@ const findReflow = (path) => {
         range.selectNodeContents(node);
         rects.push(...range.getClientRects());
       }
+      const { left, right } = edges;
       for (const rect of rects) {
         // Cả mép phải lẫn mép trái (chữ RTL tràn sang trái): vắt qua mép là `cut`, nằm hẳn ngoài là `hidden`.
         if (rect.width <= 0 || (rect.right <= right + 1 && rect.left >= left - 1)) continue;
@@ -568,7 +590,7 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
       const { found, shadowMeasured } = await page.evaluate(`(${findReflow})(${elementPath})`);
       const details = {
         scroll: 'vùng cuộn ngang trong trang, cần người xem',
-        pseudo: 'nội dung giả rỗng có nét vẽ trong vùng tràn bị cắt, cần người xem',
+        pseudo: 'nội dung giả rỗng có nét vẽ trong vùng có thể bị cắt, cần người xem',
         hidden: 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem',
       };
       for (const { element, kind } of found) {
