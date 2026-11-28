@@ -242,9 +242,9 @@ class IcuTest(Base):
             with self.subTest(text=text):
                 self.assertIn(why, self.scan(text))
 
-    def test_names_are_top_level_only(self) -> None:
+    def test_names_include_arguments_inside_branches(self) -> None:
         names = kind_i18n.scan_icu("{n, plural, one {{x} a} other {b}} và { m } và {0}")[1]
-        self.assertEqual(names, frozenset({"n", "m", "0"}))
+        self.assertEqual(names, frozenset({"n", "x", "m", "0"}))
 
     def test_i18n003_reported_with_key(self) -> None:
         found = self.run_check({"a": "{n}", "b": "ok"}, {"a": "{n", "b": "ok"})
@@ -284,8 +284,21 @@ class ParamsTest(Base):
         found = kind_i18n.check([one, two], {"source": str(src)})
         self.assertEqual([f.code for f in found], ["LOC004", "LOC004"])
 
-    def test_nested_branch_params_are_ignored(self) -> None:
-        self.assertEqual(self.codes({"a": "{n, plural, one {{p} x} other {y}}"}, {"a": "{n, plural, other {z}}"}), [])
+    def test_missing_branch_argument(self) -> None:
+        self.assertEqual(
+            self.codes({"a": "{n, plural, one {{p} x} other {y}}"}, {"a": "{n, plural, other {z}}"}), ["LOC004"]
+        )
+
+    def test_nested_arguments_can_move_between_locale_selectors(self) -> None:
+        source = {"a": "{n, plural, one {{g, select, m {{p}} other {x}}} other {y}}"}
+        target = {"a": "{n, plural, =0 {z} few {{g, select, other {{p}}}} other {w}}"}
+        self.assertEqual(self.codes(source, target), [])
+
+    def test_dotted_key_collision_in_target_and_source(self) -> None:
+        collision = {"a.b": "x", "a": {"b": "y"}}
+        self.assertEqual(self.codes({"a.b": "x"}, collision), ["LOC000"])
+        with self.assertRaisesRegex(xt_checks.CheckError, "trùng"):
+            self.run_check(collision, {"a.b": "x"})
 
 
 class HtmlTest(Base):

@@ -25,7 +25,7 @@
 
 - [x] `T-5083` AUD-XFEAT-057: bot nâng cấp giữ lựa chọn ghim model Codex đã bật; bản cài kế thừa và tệp tự sửa giữ chính sách hiện hành (nguồn: audit:AUD-XFEAT-057) (files: scripts/install.py, scripts/xt_distribution.py, tests/test_codex_harness.py, tests/test_upgrade_bot.py, framework/templates/harness/README.md, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_codex_harness tests.test_upgrade_bot`
 - [x] `T-5084` AUD-CODE-068: hạn chờ khay CPU áp cả lúc chờ khoá và lúc cấp lease; hết hạn trả 2, lệnh con chưa chạy và mục chờ được dọn (nguồn: audit:AUD-CODE-068) (files: scripts/xt_cpu_share.py, tests/test_cpu_share.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review; exec: deep) — Gate: `python3 -m unittest tests.test_cpu_share`
-- [ ] `T-5085` AUD-XFEAT-058: kiểm cùng tập đối số ICU trong thân nhánh plural/select, phát hiện khoá phẳng/lồng trùng; giữ cú pháp và selector theo locale (nguồn: audit:AUD-XFEAT-058) (files: scripts/xt_checks/kind_i18n.py, tests/test_check_i18n.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_check_i18n`
+- [x] `T-5085` AUD-XFEAT-058: kiểm cùng tập đối số ICU trong thân nhánh plural/select, phát hiện khoá phẳng/lồng trùng; giữ cú pháp và selector theo locale (nguồn: audit:AUD-XFEAT-058) (files: scripts/xt_checks/kind_i18n.py, tests/test_check_i18n.py, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_check_i18n`
 
 ### Lát 2 — Cổng nghiệm thu và phát hành
 
