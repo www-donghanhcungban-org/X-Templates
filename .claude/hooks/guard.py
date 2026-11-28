@@ -9232,12 +9232,7 @@ VERDICT_RANK = {"deny": 2, "ask": 1}
 
 
 def _git_help(args: List[str], short_val: str, long_val: Tuple[str, ...]) -> bool:
-    """`-h`/`--help` là tuỳ chọn thật của lệnh git (parse-options đọc mọi vị trí trước `--`, cả trong cụm `-qh`): git in
-    usage rồi thoát 129 trước khi làm gì (AUD-HAR-353). Giá trị của tuỳ chọn ăn giá trị (`-o -h`, `--repo -h`, viết tắt
-    `--recu -h`) và token sau `--` không tính — đo trên git 2.43: `push -o -h` vẫn đẩy, `push main -h` thoát 129.
-    `--end-of-options` (git ≥ 2.24) kết thúc tuỳ chọn như `--` (`_parse_opts` đọc đúng: không tính khi nó là giá trị của
-    `-o`): `-h` sau nó là refspec, không phải trợ giúp (AUD-SEC-614, hồi quy #488). Token chưa giải (`--end-of-options$X`,
-    `$E`, glob) có thể thành `--`/`--end-of-options` lúc chạy nên không hưởng miễn trừ (review lượt 1)."""
+    """Miễn trừ khi parse-options đọc cờ trợ giúp thật (AUD-HAR-353, AUD-SEC-614) và mọi token có số từ cố định."""
     if any(REPLACE_SPLIT_RE.search(a) for a in args):
         return False
     return _has_opt(_parse_opts(args, short_val, long_val)[0], {"-h", "--help"})
@@ -9251,9 +9246,7 @@ def _push_refs(args: List[str]) -> List[str]:
 
 
 def _stricter(a: Tuple[str, str], b: Tuple[str, str]) -> Tuple[str, str]:
-    """Quyết định chặt hơn (deny > ask > cho qua; hoà → `a`). Dùng khi token không đọc được một nghĩa: shlex trả `>` cho
-    cả chuyển hướng lẫn `'>'` trong nháy (tên ref hợp lệ) — `git push origin 2>&1` phải xét như không có refspec,
-    `git push origin '>' main` phải xét `main` (AUD-SEC-102)."""
+    """Quyết định chặt hơn (deny > ask > cho qua), kể cả giữa hai cách đọc token chuyển hướng (AUD-SEC-102)."""
     return b if VERDICT_RANK.get(b[0], 0) > VERDICT_RANK.get(a[0], 0) else a
 
 
@@ -9734,10 +9727,16 @@ REPLACE_REF_PREFIX = "refs/replace/"  # `git replace` đổi nội dung mọi l�
 REPLACE_SPLIT_RE = re.compile(r"[$`*?\[{]")  # đối số shell có thể tách/mở rộng thành số từ khác
 
 
+def _ref_name_candidates(pos: List[str]) -> List[str]:
+    """Giữ mọi từ có thể rỗng và từ cố định đầu tiên sau chúng (AUD-HAR-579)."""
+    end = next((i + 1 for i, name in enumerate(pos) if not REPLACE_SPLIT_RE.search(name)), len(pos))
+    return pos[:end]
+
+
 def _update_ref_names(args: List[str], _cwd: Optional[str]) -> RefNames:
     """update-ref: ref là đối số vị trí đầu (cả `-d`); `--stdin` → None."""
     flags, pos, _ = _parse_opts(args, "m", ())
-    return None if _has_opt(flags, {"--stdin"}) else pos[:1]
+    return None if _has_opt(flags, {"--stdin"}) else _ref_name_candidates(pos)
 
 
 def _replace_names(args: List[str], _cwd: Optional[str]) -> RefNames:
@@ -9791,13 +9790,13 @@ def _replace_reading(args: List[str], ambiguous: int = 0) -> List[str]:
 def _symbolic_ref_names(args: List[str], _cwd: Optional[str]) -> RefNames:
     """symbolic-ref: ghi khi có `<tên> <ref>` hoặc xoá (`-d`); một đối số = đọc."""
     flags, pos, _ = _parse_opts(args, "m", ())
-    return pos[:1] if len(pos) > 1 or _has_opt(flags, {"-d", "--delete"}) else []
+    return _ref_name_candidates(pos) if len(pos) > 1 or _has_opt(flags, {"-d", "--delete"}) else []
 
 
 def _tag_names(args: List[str], _cwd: Optional[str]) -> RefNames:
     """tag: tên tag mới là đối số vị trí đầu, trừ chế độ liệt kê/xoá/kiểm (`-l`, `-d`, `-v`, `-n<số>`, `--contains`…)."""
     flags, pos, _ = _parse_opts(args, "mFu", TAG_VALUE_OPTS)
-    return [] if _has_opt(flags, TAG_NO_CREATE) else pos[:1]
+    return [] if _has_opt(flags, TAG_NO_CREATE) else _ref_name_candidates(pos)
 
 
 def _branch_names(args: List[str], _cwd: Optional[str]) -> RefNames:

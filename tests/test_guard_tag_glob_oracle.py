@@ -137,6 +137,18 @@ class TagGlobOracle(unittest.TestCase):
 
 
 class PositionalNameCandidatesTest(unittest.TestCase):
+    def test_glob_candidates_and_literal_boundary(self) -> None:
+        words = ["draft*", "topic", "$note"]
+        for parser in (guard._tag_names, guard._update_ref_names, guard._symbolic_ref_names):
+            with self.subTest(parser=parser.__name__):
+                self.assertEqual(parser(words, None), ["draft*", "topic"])
+                self.assertEqual(parser(["-m", "description", "--", *words], None), ["draft*", "topic"])
+
+    def test_preserves_read_and_stdin_modes(self) -> None:
+        self.assertEqual(guard._tag_names(["--list", "draft*", "topic"], None), [])
+        self.assertEqual(guard._symbolic_ref_names(["topic"], None), [])
+        self.assertIsNone(guard._update_ref_names(["--stdin"], None))
+
     def test_candidates_stop_after_first_literal(self) -> None:
         cases = (
             ([], []),
