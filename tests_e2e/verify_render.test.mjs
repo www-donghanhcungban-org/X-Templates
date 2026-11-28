@@ -403,16 +403,36 @@ test('overflow clip geometry boxes without an explicit length use zero margin', 
   assert.match(result.stdout, /check=reflow element="#edge" — chữ bị cắt/);
 });
 
-test('text cut mid-line by overflow:hidden at a narrow viewport fails reflow, scrollable and ellipsis ones pass', async (t) => {
+test('mid-line clipping fails reflow, horizontal scrolling needs review and ellipsis passes', async (t) => {
   const clipped = await fixture(t, page({ markup: wideBox('clip', 'overflow:hidden;width:200px') }));
   const result = await clipped.run(['--strict', '--widths', '320']);
   status(result, 1);
   assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#clip" — chữ bị cắt/m);
   assert.doesNotMatch(result.stdout, /^✗ .*viewport=1280x800 .*check=reflow/m);
   const scrollable = await fixture(t, page({ markup: wideBox('scroll', 'overflow:auto;width:200px') }));
-  status(await scrollable.run(['--widths', '320']), 0);
+  const scrollResult = await scrollable.run(['--widths', '320']);
+  status(scrollResult, 0);
+  assert.match(scrollResult.stdout, /^UNMEASURED .*viewport=320x800 .*check=reflow element="#scroll"/m);
+  status(await scrollable.run(['--strict', '--widths', '320']), 1);
+  const fits = await fixture(t, page({
+    markup: '<div id="vertical" role="region" aria-label="More details" tabindex="0" style="overflow:auto;width:200px;height:35px"><div style="height:90px">Fits</div></div>',
+  }));
+  const vertical = await fits.run(['--strict', '--widths', '320']);
+  status(vertical, 0);
+  assert.doesNotMatch(vertical.stdout, /check=reflow/);
   const ellipsis = await fixture(t, page({ markup: '<p id="e" style="overflow:hidden;width:200px;white-space:nowrap;text-overflow:ellipsis">a very long single line of text that will be cut with an ellipsis</p>' }));
   status(await ellipsis.run(['--widths', '320']), 0);
+});
+
+test('a painted empty pseudo extending outside horizontal clipping requires reflow review', async (t) => {
+  const sample = await fixture(t, page({
+    css: '#edge { position: relative; overflow: hidden; width: 100%; }' +
+      ' #paint::after { content: ""; position: absolute; left: 0; top: 0; width: 140%; height: 12px; background: #333; }',
+    markup: '<div id="edge"><span id="paint">Text fits</span></div>',
+  }));
+  const result = await sample.run(['--strict', '--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^UNMEASURED .*viewport=320x800 .*check=reflow element="#edge"/m);
 });
 
 test('visually hidden text, form fields and empty decorations are not reflow failures; a carousel is UNMEASURED', async (t) => {

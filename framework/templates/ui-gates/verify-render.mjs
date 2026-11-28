@@ -334,12 +334,25 @@ const findClipped = (path) => {
     if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
     return path(el) ?? el.localName;
   };
-  function* elements(root, inShadow) {
+  function* elements(root, inShadow, track = true) {
     for (const el of root.querySelectorAll('*')) {
-      if (inShadow) shadowMeasured++;
+      if (track && inShadow) shadowMeasured++;
       yield el;
-      if (el.shadowRoot) yield* elements(el.shadowRoot, true);
+      if (el.shadowRoot) yield* elements(el.shadowRoot, true, track);
     }
+  }
+  const paints = (color) => !color.startsWith('rgba(') || !/,\s*0\)$/.test(color);
+  const paintedEmptyPseudo = (node) => visible(node) && ['::before', '::after'].some((pseudo) => {
+    const style = getComputedStyle(node, pseudo);
+    if (!['""', "''"].includes(style.content) || style.display === 'none' || style.visibility !== 'visible' || style.opacity === '0') return false;
+    return style.backgroundImage !== 'none' || paints(style.backgroundColor) || style.boxShadow !== 'none' ||
+      ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+        Number.parseFloat(style[`border${side}Width`]) > 0 && paints(style[`border${side}Color`]));
+  });
+  function* pseudoOwners(el) {
+    yield el;
+    if (el.shadowRoot) yield* elements(el.shadowRoot, true, false);
+    yield* elements(el, false, false);
   }
   // Nút chữ và phần tử media dưới `node`, đi qua shadow root mở của từng host.
   function* leaves(node) {
@@ -353,10 +366,16 @@ const findClipped = (path) => {
   }
   for (const el of elements(document, false)) {
     const s = getComputedStyle(el);
-    if (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis') continue;
+    const scrollable = ['auto', 'scroll'].includes(s.overflowX) && el !== document.scrollingElement && el !== document.body;
+    if (!scrollable && (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis')) continue;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
     if (el.scrollWidth <= el.clientWidth + 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
     if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
+    if (scrollable) {
+      found.push({ element: name(el), kind: 'nested-scroll' });
+      if (found.length === 20) break;
+      continue;
+    }
     const box = el.getBoundingClientRect();
     // clientLeft gồm viền trái và scrollbar bên trái (RTL); clientWidth là chiều rộng mép cắt.
     // Quy đổi về toạ độ viewport như Range, kể cả scale/zoom trên phần tử hoặc tổ tiên.
@@ -432,6 +451,15 @@ const findClipped = (path) => {
         if (rect.width <= 0 || (rect.right <= right + 1 && rect.left >= left - 1)) continue;
         const straddles = rect.left < right - 1 && rect.right > left + 1;
         kind = straddles && !isMedia ? 'cut' : (kind ?? 'hidden');
+      }
+    }
+    if (!kind && el.scrollWidth > el.clientWidth + 1) {
+      let scanned = 0;
+      for (const node of pseudoOwners(el)) {
+        if (++scanned > 500 || paintedEmptyPseudo(node)) {
+          kind = 'pseudo';
+          break;
+        }
       }
     }
     if (kind) found.push({ element: name(el), kind });
@@ -529,6 +557,8 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
       for (const { element, kind } of found) {
         const clipped = { ...scope, state: 'default', check: 'reflow', element };
         if (kind === 'cut') recordViolation(results, clipped, 'chữ bị cắt ngang bởi overflow:hidden');
+        else if (kind === 'nested-scroll') recordUnknown(results, tally(), clipped, 'vùng cuộn ngang lồng cần đánh giá reflow thủ công');
+        else if (kind === 'pseudo') recordUnknown(results, tally(), clipped, 'chưa xác định mép cắt của nội dung giả trong vùng tràn ngang');
         else recordUnknown(results, tally(), clipped, 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem');
       }
       // Shadow root đóng không đo được: không coi là đạt (not_measured); người xem hoặc khai ngoại lệ `shadow[closed]`.
