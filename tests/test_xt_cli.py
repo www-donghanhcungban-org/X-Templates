@@ -354,6 +354,23 @@ class AuditStatusGroupsTest(TmpDirCase):
 
 
 class AuditRescanTest(TmpRepoCase):
+    def test_e2e_and_ui_assets_request_rescan(self):
+        self.init_repo()
+        cases = {
+            "tests_e2e/pack_ui.py": {4},
+            "web/flow.test.mjs": {4},
+            "src/notes-ui/app.js": {5, 6},
+            "src/notes-ui/contrast-pairs.txt": {5, 6},
+        }
+        status = self.tmp / "S.md"
+        base = self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        for offset, (path, expected) in enumerate(cases.items(), 1):
+            with self.subTest(path=path):
+                groups = {n: ("đã quét", base, "2026-10-14", "") for n in (4, 5, 6)}
+                status.write_text(audit_status_text(groups), encoding="utf-8")
+                base = self.commit_files({path: "change"}, 1_700_000_000 + offset)
+                self.assertEqual(set(xt.audit_rescan(self.repo, status)), expected)
+
     def test_up_to_date_group_and_empty_sha(self):
         self.init_repo()
         c1 = self.commit_files({"main.py": "1"}, 1_700_000_000)
