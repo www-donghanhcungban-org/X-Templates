@@ -193,6 +193,28 @@ class DefaultDenyTest(unittest.TestCase):
                 decision = decide(cleanup, root)
                 self.assertEqual((decision["decision"], decision["code"]), ("deny", guard.BUDGET))
 
+    def test_find_cache_options_and_explicit_startpoints(self):
+        frame, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        installed_cache = app / ".xtemplates/scripts/__pycache__"
+        installed_cache.mkdir()
+        (installed_cache / "sample.pyc").touch()
+        (app / "scripts/installed-cache").symlink_to(installed_cache, target_is_directory=True)
+        for option in ("-P", "-H", "-O2", "-D search", "-D search -O2 -P", "-L -P", "--"):
+            with self.subTest(option=option):
+                find = f"find {option} scripts -name '*.pyc'"
+                self.assertEqual(decide(f"{find} | xargs rm -f", app)["decision"], "")
+                self.assertEqual(decide(f"{find} | xargs rm -f", frame)["code"], guard.BUDGET)
+        for root, start in ((app, app / "scripts"), (app, installed_cache.parent), (frame, frame / "scripts")):
+            with self.subTest(start=start):
+                find = f"find -P {start} -path '{start}/*' -name '*.pyc'"
+                result = decide(f"{find} | xargs rm -f", root, root / "scripts")
+                self.assertEqual(result["decision"], "" if start == app / "scripts" else "deny", result)
+        for start in ("-L scripts", "-H scripts/installed-cache"):
+            with self.subTest(start=start):
+                find = f"find {start} -name '*.pyc'"
+                self.assertEqual(decide(f"{find} | xargs rm -f", app)["code"], guard.BUDGET)
+                self.assertEqual(decide(f"{find} -delete", app)["code"], "HOOK_BYPASS")
+
     def test_value_class_is_budget_with_rewrite_hint(self):
         for cmd in (*DENY["a-value"][:10], DENY["b-runner"][2], *DENY["c-xargs"][2:5]):
             with self.subTest(cmd=cmd):
