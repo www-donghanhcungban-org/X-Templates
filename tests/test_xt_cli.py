@@ -3555,6 +3555,63 @@ class CiTriageTest(TmpDirCase):
         self.assertEqual(a["signature"], b["signature"])
         self.assertNotEqual(a["signature"], c["signature"])
 
+    def test_ci_triage_caps_long_evidence_but_signs_full_log(self):
+        text = "".join(f"FAIL: test_{i} (t.T) {'đ' * 8192}ẩn{'é' * 8192} cuối\n" for i in range(10))
+        rc, first, err = self.triage("101", text)
+        self.assertEqual((rc, err, first["category"]), (0, "", "test"))
+        excerpts = first["evidence"]
+        self.assertEqual(len(excerpts), 10)
+        self.assertEqual(xt.read_state(self.tmp)["episode"]["runs"]["101"]["evidence"], excerpts)
+        for i, line in enumerate(excerpts):
+            self.assertEqual(len(line), 600)
+            self.assertTrue(line.startswith(f"FAIL: test_{i} (t.T) đ"))
+            self.assertTrue(line.endswith("é cuối"))
+            self.assertIn(" […] ", line)
+            self.assertNotIn("ẩn", line)
+
+        # Chỉ đổi giữa dòng: hai đoạn trích giống nhau, hai chữ ký khác nhau.
+        self.assertEqual((self.tmp / "ci.log").read_text(encoding="utf-8"), text)
+        rc, second, err = self.triage("102", text.replace("ẩn", "khác"))
+        self.assertEqual((rc, err, second["evidence"], second["episode"]["same_signature"]), (0, "", excerpts, 1))
+        self.assertNotEqual(first["signature"], second["signature"])
+        self.assertEqual(first["signature"], xt.ci_classify(text)["signature"])
+
+    def test_ci_triage_caps_and_rewrites_legacy_evidence_on_replay(self):
+        short = "FAIL: test_short (t.T)"
+        rc, first, err = self.triage("101", short + "\n", "--cost-usd", "0.25")
+        self.assertEqual((rc, err, first["evidence"]), (0, "", [short]))
+        state = xt.read_state(self.tmp)
+        past = state["episode"]["runs"]["101"]
+        long_line = short + " " + "đ" * 8192 + " cuối"
+        past["evidence"] = [long_line, short]
+        xt.write_state(state, self.tmp)
+        (self.tmp / "ci.log").unlink()
+
+        update_state = xt.update_state
+
+        def replay_after_other_writer(base, fn, retries=3):
+            # Trạng thái đổi sau lượt đọc đầu của replay và trước khi replay lấy khoá.
+            update_state(base, lambda cur: {**cur, "iterations": 7})
+            return update_state(base, fn, retries)
+
+        with unittest.mock.patch.object(xt, "update_state", replay_after_other_writer):
+            rc, out, err = run_main("loop", "ci-triage", "--run", "101", "--log", "ci.log")
+        self.assertEqual((rc, err), (0, ""))
+        state = xt.read_state(self.tmp)
+        self.assertEqual(state["iterations"], 7)
+        current = state["episode"]["runs"]["101"]
+        capped, kept = current["evidence"]
+        self.assertEqual((len(capped), kept), (600, short))
+        self.assertIn("  | " + capped + "\n", out)
+        self.assertIn("  | " + kept + "\n", out)
+        self.assertNotIn(long_line, out)
+
+        rc, out, err = run_main("loop", "ci-triage", "--run", "101", "--log", "ci.log", "--json")
+        replay = json.loads(out)
+        self.assertEqual((rc, err, replay["episode"]), (0, "", first["episode"]))
+        self.assertEqual((replay["evidence"], replay["signature"]), ([capped, kept], first["signature"]))
+        self.assertEqual(current, xt.read_state(self.tmp)["episode"]["runs"]["101"])
+
     def test_ci_triage_fix_episode_json_and_idempotent_rerun_of_command(self):
         xt.write_state({"active": True, "plan": "docs/autopilot/PLAN.md"}, self.tmp)
         rc, d, _ = self.triage("101", self.LOGS["test"], "--task", "T-001", "--cost-usd", "0.25")

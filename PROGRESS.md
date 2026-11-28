@@ -4,6 +4,8 @@
 
 ## Đang làm
 
+- D-645 · [Audit chi phí và số đo trước/sau](docs/ops/AUDIT-REPORT-2026-11-28-cost.md).
+
 - 2026-11-24 **3.36.0 đã phát hành** (tag `v3.36.0` ở `42f3c64b`, agent ký GO-NO-GO §5, ADR-0074; release nháp → công bố có archive + biên nhận, `release-verify` attestation hợp lệ). Gồm #746–#765: rà sớm lớp tác động tức thì (ADR-0095), dấu review v2, sổ lát, release bất biến, `release-check` ba trạng thái. Rà: 2 🔴 AUD-HAR-484/485 sửa; [audit delta](docs/ops/AUDIT-REPORT-2026-11-23-delta.md) 0 🔴; 🟠 chấp nhận hạn 2026-12-15 (AUD-HAR-488, AUD-DEP-038, AUD-CI-043) và 2027-01-21 (AUD-HAR-479/480/487, AUD-CI-041/044; D-551, D-554). 3.35.0: tag `v3.35.0` ở `7fc43e74`.
 - **Factory**: [MVP ghi chú](docs/ops/FACTORY-PILOT-1.md) có bốn ca xanh (#699); quyền triển khai, trần duyệt và G7 đã nối (#701); `feedback routine-check` (#700). Điều kiện vận hành và số đo còn thiếu ở [PLAN](docs/autopilot/PLAN-factory-e2e.md).
 - **Guard** (#704, D-530): chặn đường lách tag phiên bản (`--follow-tags`, `fetch` vào `refs/tags/`, cụm cờ `gh release`, glob) — AUD-SEC-996/997 (#704), 999 (#707) đã sửa. Nợ 🟢: AUD-HAR-449/450/451/455/456, AUD-SEC-998, AUD-TEST-133/135, AUD-XFEAT-050.
