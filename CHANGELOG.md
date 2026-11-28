@@ -7,6 +7,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 ## [Unreleased]
 
 - T-5067 (AUD-HAR-584): khi bộ luật phát sinh lỗi nội bộ, adapter guard `core` dùng quyết định dự phòng của chế độ đã chuẩn hoá, cùng chính sách với Bash.
+- Kiểm mẫu SRM giữ cùng quyết định khi nhân các trọng số tỷ lệ với cùng một hệ số hữu hạn (AUD-HAR-589).
 - `verify-render --strict` ghi nhận phần tương phản chưa đo khi vượt trần, đo văn bản gán trực tiếp qua slot và báo cấu hình axe không chọn quy tắc (AUD-A11Y-009 đến 011).
 
 - D-649 thêm `static-check eval-report`, `eval-evidence` và `design-outcome`. Khóa nghiệm thu mới ghim từng testcase JUnit. Khóa legacy cần `acceptance amend` trước khi cổng phát hành chấp nhận.

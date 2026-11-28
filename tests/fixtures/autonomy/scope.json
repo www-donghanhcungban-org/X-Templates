@@ -6,6 +6,10 @@
    "ids": ["AUD-HAR-584"]
   },
   {
+   "reason": "Kiểm tính bất biến theo thang đo của cùng một tỷ lệ SRM bằng bảng dữ liệu giả trong tests.test_check_srm.",
+   "ids": ["AUD-HAR-589"]
+  },
+  {
    "reason": "Kiểm cổng render qua các fixture tương phản, slot và axe bằng Chromium thật trong tests_e2e/verify_render.test.mjs.",
    "ids": ["AUD-A11Y-009","AUD-A11Y-010","AUD-A11Y-011"]
   },
