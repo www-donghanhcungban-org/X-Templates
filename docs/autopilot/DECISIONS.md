@@ -1330,3 +1330,10 @@
 - Chọn: Chấp thuận đúng hai gói MPL-2.0 4.13.0 cho CI và máy dev, lập bảng bốn gói ghim và kiểm bảng theo lockfile
 - Lý do (tiêu chí chất lượng cuối): Hai lượt đối chiếu registry và SHA-512 cho cùng metadata. Bốn gói nằm trong devDependencies của verify-render. Quyết định giới hạn phạm vi đó và đáp ứng BASE-DEP-005.
 - Đường lùi: Nếu thay phiên bản hoặc cách phân phối, rà lại metadata và ghi quyết định mới. Có thể gỡ gói và cập nhật Gate trước khi đổi phạm vi.
+
+### D-645 · 2026-11-28T14:45:13+00:00 · Sau audit chi phí ngày 28/11, sửa gì trước để giảm ngữ cảnh và thời gian mà vẫn phát hiện lỗi?
+
+- Phương án: (1) Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness. · (2) Giảm bộ kiểm hoặc rút PROGRESS và gộp hai lần quét phụ thuộc ngay.
+- Chọn: Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness.
+- Lý do (tiêu chí chất lượng cuối): Tái hiện mất nhóm và 26 lần gọi Git cho ba SHA. Mười dòng test dài trả hơn 164 KB ngữ cảnh. Cổng và thông tin chẩn đoán phải tiếp tục phân biệt được lỗi.
+- Đường lùi: Hoàn tác riêng từng lát, giữ báo cáo và các ca hồi quy để đối chiếu.
