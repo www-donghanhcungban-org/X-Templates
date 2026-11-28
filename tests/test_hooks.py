@@ -2665,6 +2665,10 @@ class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
                 self.assertIn(self.bash(self.target, command, "strict", cwd), (("", ""), ("ask", "OTHER_ASK")))
         self.assert_blocked(f"ls -d {cache} | xargs rm -f", ("HOOK_BYPASS", "BUDGET"), roots=(self.target,))
         self.assert_blocked(f"cd src && ls -d ../{cache} | xargs rm -f", ("BUDGET",), roots=(self.target,))
+        declared_cache = Path(self.target, cache.parent)
+        declared_cache.rmdir()
+        declared_cache.symlink_to(app_cache.parent, target_is_directory=True)
+        self.assert_blocked(f"grep -rl cache {cache.parent} | xargs rm -f", ("BUDGET",), roots=(self.target,))
 
     def test_find_keeps_uncertain_cache_listing_protected(self):
         cache = Path(self.frame, "scripts/__pycache__")
