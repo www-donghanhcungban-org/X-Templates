@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm tài sản release cần bước shell của workflow, Git và phản hồi release giả. Gate: `python3 -m unittest tests.test_ci tests.test_release_assets`.",
+   "ids": [
+    "AUD-CI-049"
+   ]
+  },
+  {
    "reason": "Audit delta cần lịch sử Git với từng thay đổi tệp và mốc quét của sổ. Gate: `python3 -m unittest tests.test_xt_cli.AuditRescanTest`.",
    "ids": [
     "AUD-HAR-582"
