@@ -4719,8 +4719,8 @@ def _path_groups(path: str) -> List[int]:
     # cùng regex với thẻ "phụ thuộc" của làn merge: manifest nào làm PR vào làn chuẩn cũng có nợ theo nhóm DEP (AUD-SEC-138)
     if name in MANIFESTS or name in LOCKFILES or DEP_PATH_RE.search(path):
         g += [7, 2]
-    if re.search(r"(^|/)(tests?|__tests__|spec)/", path) or re.search(
-        r"(_test\.go|\.(test|spec)\.[jt]sx?|test_[^/]+\.py)$", path
+    if re.search(r"(^|/)(tests?|__tests__|spec|e2e|tests_e2e)/", path) or re.search(
+        r"(_test\.go|\.(test|spec)\.(?:[jt]sx?|[cm]js)|test_[^/]+\.py)$", path
     ):
         g.append(4)
     if "/migrations/" in f"/{path}" or path.endswith((".sql", "schema.prisma")):
@@ -4730,7 +4730,7 @@ def _path_groups(path: str) -> List[int]:
         g.append(13)
     if name.startswith(".env") or name in ("Dockerfile", "compose.yaml", "docker-compose.yml"):
         g += [11, 8]
-    if path.endswith(UI_EXT):
+    if path.endswith(UI_EXT) or name == "contrast-pairs.txt" or (4 not in g and path.endswith((".js", ".mjs", ".cjs"))):
         g += [6, 5]
     if path.endswith(".md"):
         g.append(9)
