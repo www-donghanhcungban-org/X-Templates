@@ -115,6 +115,8 @@ class MergeContextTest(TmpRepoCase):
             (0, json.dumps({**rest, "state": "open"})),
             (0, json.dumps({**rest, "merge_commit_sha": None})),
             (0, json.dumps({**rest, "merge_commit_sha": "short"})),
+            (0, json.dumps({**rest, "merge_commit_sha": "b" * 40})),
+            (0, json.dumps({**rest, "base": {**rest["base"], "ref": "release/stable"}})),
             (0, json.dumps({**rest, "base": {**rest["base"], "ref": None}})),
             (0, json.dumps({**rest, "base": {**rest["base"], "ref": "x" * 256}})),
             (0, json.dumps({**rest, "base": {**rest["base"], "ref": "\n"}})),
@@ -122,6 +124,7 @@ class MergeContextTest(TmpRepoCase):
         ]
         for rc, body in responses:
             self.gh.calls.clear()
+            checkpoint.write_bytes(b"stale")
 
             def run(argv, **kwargs):
                 if route in argv and any(c[2] == route for c in self.gh.calls):
@@ -172,7 +175,7 @@ class MergeContextTest(TmpRepoCase):
         self.assertEqual(checkpoint.read_bytes(), b"tracked")
 
     def test_simultaneous_observers_commit_once(self):
-        _, decision, _ = xt._merge_check_json(pr_url())
+        _, decision, _ = xt._merge_check_json(pr_url(), observe_context=True)
         before_save = Barrier(2, timeout=cpu_budget.HANG_FLOOR)
         save = xt_merge_intent._save_context_checkpoint
 
@@ -196,4 +199,31 @@ class MergeContextTest(TmpRepoCase):
         with mock.patch.object(xt, "_merge_check_json", return_value=(1, decision, "")):
             self.assertEqual(self.watch("--observe-context")[0], 0)
         self.assertEqual(self.gh.calls, [])
+        self.assertEqual(self.checkpoints(), [])
+
+    def test_incomplete_first_merge_evidence_cannot_trigger_second_read(self):
+        for changes in ({"merge_commit_sha": None}, {"html_url": None}):
+            pull = {**self.gh.pull(HOST, SLUG), **changes}
+            with self.subTest(changes=changes), mock.patch.object(self.gh, "pull", return_value=pull):
+                self.gh.calls.clear()
+                rc, out, err = self.watch("--observe-context")
+                self.assertEqual(rc, 0, err)
+                self.assertIn("PR đã MERGED", out)
+                self.assertEqual(len([call for call in self.gh.calls if call[2].endswith(f"/pulls/{PR}")]), 1)
+        self.assertEqual(self.checkpoints(), [])
+
+    def test_consistently_invalid_git_branch_cannot_be_persisted(self):
+        pull = self.gh.pull(HOST, SLUG)
+        pull["base"]["ref"] = "main..next"
+        payload = self.gh.payload
+
+        def respond(host, repo, path, page):
+            if path == f"/pulls/{PR}":
+                return pull
+            return payload(host, repo, path.replace("main..next", "main"), page)
+
+        with mock.patch.object(self.gh, "payload", side_effect=respond):
+            rc, out, err = self.watch("--observe-context")
+        self.assertEqual(rc, 0, err)
+        self.assertIn("PR đã MERGED", out)
         self.assertEqual(self.checkpoints(), [])

@@ -242,6 +242,7 @@ def read_pr(
     details: PrDetails,
     error: type[Exception],
     on_selector: Callable[[str], None] | None = None,
+    on_merge_context: Callable[[tuple[str, str]], None] | None = None,
 ) -> dict[str, Any]:
     repo = target.path
     with at_host(setting, target.host):
@@ -254,6 +255,8 @@ def read_pr(
             raise error(f"không xác minh được phản hồi duy nhất cho PR #{number}")
         pull = values[0]
         intent = verified(pull, repo, number, target.host, error)
+        if on_merge_context is not None and intent and (metadata := _merge_context_metadata(pull)):
+            on_merge_context(metadata)
         result = details(repo, number, local_check, pull, intent._asdict() if intent else None)
         return {**result, "live_host": target.host, "live_selector": route}
 
@@ -391,13 +394,12 @@ def dispatch_ci(out: dict[str, Any], target: RepoTarget, base: str, run: WriteCo
 MAX_CHECKPOINT_BYTES = 4096
 
 
-def _confirmed_context_merge(
-    runtime: ModuleType, decision: dict[str, Any]
-) -> tuple[MergeIntent, dict[str, Any]] | None:
+def _confirmed_context_merge(runtime: ModuleType, decision: dict[str, Any]) -> tuple[MergeIntent, str, str] | None:
     # `live_selector` được đọc từ origin đã ghim. Không dựng endpoint từ dữ liệu lưu trên đĩa.
     raw_selector = decision.get("live_selector")
     selector = PR_URL.fullmatch(raw_selector) if isinstance(raw_selector, str) else None
-    if not selector:
+    first_metadata = decision.get("live_merge_context")
+    if not selector or not first_metadata:
         return None
     path = f"repos/{selector['repo']}/pulls/{selector['pr']}"
     values = runtime._gh_api(path, host=selector["host"])
@@ -412,18 +414,27 @@ def _confirmed_context_merge(
         decision.get("head"),
     ):
         return None
+    metadata = _merge_context_metadata(pull)
+    if metadata is None or metadata != first_metadata:
+        return None
+    return intent, *metadata
+
+
+def _merge_context_metadata(pull: dict[str, Any]) -> tuple[str, str] | None:
     if pull.get("merged") is not True or pull.get("state") != "closed":
         return None
-    return intent, pull
-
-
-def _context_checkpoint_text(runtime: ModuleType, base: Path, intent: MergeIntent, pull: dict[str, Any]) -> str:
     merge_sha = pull.get("merge_commit_sha")
     if not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha):
-        return ""
+        return None
     base_branch = pull["base"].get("ref")  # MergeIntent đã kiểm `base.repo`.
     if not isinstance(base_branch, str) or len(base_branch) > 255 or not base_branch.isprintable():
-        return ""
+        return None
+    return merge_sha, base_branch
+
+
+def _context_checkpoint_text(
+    runtime: ModuleType, base: Path, intent: MergeIntent, merge_sha: str, base_branch: str
+) -> str:
     if runtime._git(base, "check-ref-format", f"refs/heads/{base_branch}").returncode != 0:
         return ""
     return (
@@ -482,11 +493,24 @@ def observe_merge(runtime: ModuleType, decision: dict[str, Any]) -> None:
     try:
         confirmed = _confirmed_context_merge(runtime, decision)
         if confirmed:
-            intent, pull = confirmed
+            intent, merge_sha, base_branch = confirmed
             base = runtime.project_dir()
-            _save_context_checkpoint(runtime, base, _context_checkpoint_text(runtime, base, intent, pull), intent)
+            checkpoint = _context_checkpoint_text(runtime, base, intent, merge_sha, base_branch)
+            _save_context_checkpoint(runtime, base, checkpoint, intent)
     except (OSError, ValueError, RecursionError, runtime.PrInputError):
         return
+
+
+def finish_watch(runtime: ModuleType, decision: dict[str, Any], selector: str, observe_context: bool) -> int:
+    """In bước kế và trả exit khi verdict khác `wait`."""
+    if decision["next"]:
+        print(f"→ {decision['next']}", flush=True)
+    merged = decision["verdict"] == "closed" and "PR đã MERGED" in decision["reasons"][0]
+    if merged and observe_context:
+        observe_merge(runtime, decision)
+    if decision["verdict"] != "closed":
+        runtime._watch_pr_next(selector)
+    return 0 if merged or decision["verdict"] == "merge" else 1
 
 
 def dispatch_tag(

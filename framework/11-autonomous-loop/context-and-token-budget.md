@@ -49,7 +49,8 @@ Ngưỡng 80/100 tương ứng circuit breaker 80/90/100 của stored 21 §10; 9
 ### Quan sát mốc merge
 
 Chạy `xt.py merge-watch --pr N --observe-context` để lưu thông tin về một PR đã merge. Sau khi nhận kết quả `MERGED`, lệnh
-đọc lại PR qua REST ở host, repo và số PR đã ghim. Tệp `.autopilot/merge-context-<hash>.json` chỉ chứa phiên bản schema,
+đọc lại PR qua REST ở host, repo và số PR đã ghim. Hai lượt đọc phải khớp SHA head, SHA merge và nhánh đích. Tệp
+`.autopilot/merge-context-<hash>.json` chỉ chứa phiên bản schema,
 host, repo, số PR, SHA head, SHA commit merge và tên nhánh đích. Thư mục, tệp và khoá phải được Git bỏ qua.
 
 Khi chạy lại, lệnh đối chiếu mốc với bằng chứng REST mới. Hai tiến trình quan sát cùng mốc chỉ ghi một lần. Mốc hỏng, lệch
