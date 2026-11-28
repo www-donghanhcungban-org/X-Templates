@@ -26,7 +26,7 @@
    "ids": ["AUD-HAR-577"]
   },
   {
-   "reason": "Kiểm lỗi hết chỗ đĩa và lần chạy lại qua CLI cài đặt trong tests.test_install_atomic.InstallInterruptedWriteTest.",
+   "reason": "Kiểm lỗi hết chỗ đĩa khi chép mô-đun và gói qua tests.test_install_atomic.InstallInterruptedWriteTest và tests.test_install.InstallTest.",
    "ids": ["AUD-HAR-583"]
   },
   {
