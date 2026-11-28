@@ -310,6 +310,8 @@
  "tests.test_guard_go_no_go.GoNoGoXtSyncTest": 1.7,
  "tests.test_guard_har_class.HarClassTest": 1.6,
  "tests.test_guard_har_class.HarHelperTest": 0.8,
+ "tests.test_guard_ref_namespace.RefNamespaceTest": 0.8,
+ "tests.test_guard_release_oracle.NamespaceClassificationTest": 0.7,
  "tests.test_guard_release_oracle.ReleaseOracleTest": 48.0,
  "tests.test_guard_review186.CdGlobEnvDdExecTest": 0.4,
  "tests.test_guard_review186.CdUnresolvedTest": 0.5,
