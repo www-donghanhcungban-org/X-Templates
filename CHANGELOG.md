@@ -6,8 +6,6 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
-- T-5065 (AUD-HAR-567) bổ sung `UNMEASURED` cho vùng cuộn ngang lồng có nội dung tràn và phần vẽ của nội dung giả trong khung cắt tràn ngang.
-
 - `merge-watch --observe-context` đối chiếu PR đã merge qua REST ở đúng host và repo, rồi lưu mốc Git cục bộ trong `.autopilot/`. Lỗi đọc hoặc ghi mốc giữ nguyên kết quả `merge-watch`.
 
 - Mỗi job CI ghi một dòng `runner_cpu` gồm model CPU, số CPU logic và tải trung bình 1, 5, 15 phút khi chạy do `push` hoặc `workflow_dispatch` trên `main`.
