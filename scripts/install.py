@@ -1001,12 +1001,16 @@ def recover_settings_rules(target: Path) -> dict[str, list[str]]:
 
 def settings_change_provable(settings: Path, data: bytes) -> bool:
     """Chỉ lưu mốc mới nếu xác minh được việc công bố sẽ thay nội dung settings."""
-    if not settings.is_file():
-        return not settings.exists()
     try:
-        return settings.read_bytes() != data
+        mode = settings.lstat().st_mode
     except FileNotFoundError:
         return True
+    except OSError:
+        return False
+    if not stat.S_ISREG(mode):
+        return False
+    try:
+        return settings.read_bytes() != data
     except OSError:
         return False
 

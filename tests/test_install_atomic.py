@@ -273,7 +273,7 @@ class InstallInterruptedWriteTest(TestCase):
         with (
             mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
             mock.patch.object(install, "write_copy", side_effect=OSError(errno.ENOSPC, "simulated")),
-            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFREG)),
             mock.patch.object(Path, "read_bytes", return_value=b"{}"),
         ):
             with self.assertRaises(OSError):
@@ -286,7 +286,7 @@ class InstallInterruptedWriteTest(TestCase):
             mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
             mock.patch.object(install, "write_copy") as write,
             mock.patch.object(install, "stage_settings_rules") as stage,
-            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFREG)),
             mock.patch.object(Path, "read_bytes", side_effect=PermissionError(errno.EACCES, "simulated")),
         ):
             self.assertEqual(install.install_settings(self.target, True, install.Counter(), prior), install.our_rules())
@@ -299,12 +299,18 @@ class InstallInterruptedWriteTest(TestCase):
         install.stage_settings_rules(self.target, b"{}", prior, prior)
         with (
             mock.patch.object(Path, "is_file", return_value=False),
-            mock.patch.object(Path, "exists", return_value=True),
+            mock.patch.object(Path, "lstat", return_value=mock.Mock(st_mode=stat.S_IFIFO)),
             mock.patch.object(Path, "read_bytes") as read,
         ):
             self.assertFalse(install.settings_change_provable(settings, b"{}"))
             self.assertEqual(install.recover_settings_rules(self.target), prior)
             read.assert_not_called()
+
+    def test_unavailable_settings_metadata_is_not_proof_of_absence(self) -> None:
+        settings = mock.Mock(spec=Path)
+        settings.lstat.side_effect = PermissionError(errno.EACCES, "simulated")
+        self.assertFalse(install.settings_change_provable(settings, b"{}"))
+        settings.read_bytes.assert_not_called()
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
