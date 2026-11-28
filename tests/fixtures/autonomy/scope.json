@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Diễn tập rollout cần receipt dev, loopback và fixture trạng thái nhánh bảo vệ, ngoài adapter corpus. Gate: `python3 -m unittest tests.test_factory_operations`.",
+   "ids": [
+    "AUD-XFEAT-059"
+   ]
+  },
+  {
    "reason": "Phạm vi quét lockfile cần kiểm job bắt buộc, thư mục Dependabot và npm audit, ngoài adapter quyết định của corpus. Gate: `python3 -m unittest tests.test_ci.SupplyChainArtifactsTest`.",
    "ids": [
     "AUD-DEP-040"

@@ -17,6 +17,7 @@ class GithubFixture:
         self.git("remote", "add", "origin", "git@github.com:factory/example.git")
         cfg = (
             "deploy_envs: dev prod\n"
+            "deploy_env_pass:\n"
             + "".join(f"{key}_prod: ./adapter {key}\n" for key in ("deploy", "smoke", "digest", "rollback"))
             + "worker_budget_usd: 5\nworker_max_turns: 10\ndeploy_secrets: XT_PRODUCT\n"
         )
