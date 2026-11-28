@@ -4488,10 +4488,10 @@ def _grep_paths(words: List[str]) -> List[str]:
 def _grep_source_safe(words: List[str], root: str, here: str) -> bool:
     paths = _grep_paths(words)
     for p in paths:
-        full = os.path.realpath(os.path.join(here, os.path.expanduser(p)))
-        rel = os.path.relpath(full, os.path.realpath(root))
+        target = os.path.join(here, os.path.expanduser(p))
+        rel = os.path.relpath(os.path.realpath(target), os.path.realpath(root))
         bad = re.search(r"[$`~]", p) or _xargs_fence_word(p, root) or rel == "." or rel.split("/", 1)[0] == ".."
-        if bad or _cli_cache_fence(full, rel, root, parents=True) or os.path.lexists(os.path.join(full, ".git")):
+        if bad or _cli_cache_fence(target, rel, root, parents=True) or os.path.lexists(os.path.join(target, ".git")):
             return False
     return bool(paths)
 
