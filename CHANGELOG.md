@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Hook Python dùng `-S` khi khởi động các bộ nạp chỉ cần thư viện chuẩn, gồm tiến trình con dùng chung bộ nạp của guard (AUD-HAR-572).
+
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.
 - T-5073 giữ đường bằng chứng thiết kế theo lần trình đầu, đối chiếu lại HEAD sau khi tính hash và giữ cả các task phụ thuộc trong lúc chờ duyệt thiết kế.
 - T-5102 (AUD-HAR-583): bộ cài chuẩn bị các mô-đun CLI trước khi thay `xt.py` để lỗi chép mô-đun không làm gián đoạn CLI đã cài.

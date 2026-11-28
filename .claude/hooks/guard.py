@@ -10521,7 +10521,7 @@ GH_API_VALUE_FLAGS: Tuple[str, ...] = (
 GH_API_BOOL_SHORT = "i"
 
 
-# Bộ nạp của `py_run` (_lib.sh — giữ GIỐNG HỆT, test so): chạy `main()` của file .py như module, `-I -B` (AUD-SEC-065),
+# Bộ nạp của `py_run` (_lib.sh — giữ GIỐNG HỆT, test so): chạy `main()` với `-I -S -B` (AUD-SEC-065, AUD-HAR-572),
 # biên dịch từ nguồn mỗi lần — pyc giả khớp header vẫn chạy thay guard (AUD-SEC-074, #182).
 PY_LOADER = """import sys
 p = sys.argv[1]
@@ -10540,7 +10540,7 @@ sys.exit(m.main())
 def isolated_python() -> List[str]:
     """Đầu lệnh python chạy `main()` của một file cho tiến trình con của guard — như `py_run` của _lib.sh: cách ly,
     biên dịch từ nguồn (không cache bytecode)."""
-    return [sys.executable, "-I", "-B", "-c", PY_LOADER]
+    return [sys.executable, "-I", "-S", "-B", "-c", PY_LOADER]
 
 
 def merge_check(selector: List[str], root: str) -> Dict[str, object]:
