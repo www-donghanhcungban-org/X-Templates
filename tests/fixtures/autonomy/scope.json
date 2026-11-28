@@ -2,6 +2,14 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Thời hạn lease liên quan khoá hệ điều hành và đồng hồ đơn điệu. Gate: `python3 -m unittest tests.test_cpu_share`.",
+   "ids": ["AUD-CODE-068"]
+  },
+  {
+   "reason": "Kiểm catalog JSON và cú pháp ICU nằm ngoài adapter quyết định của corpus. Gate: `python3 -m unittest tests.test_check_i18n`.",
+   "ids": ["AUD-XFEAT-058"]
+  },
+  {
    "reason": "Kiểm hai lệnh CLI từ chối chi phí rỗng trước khi có tác dụng phụ nằm ngoài adapter quyết định của corpus. Gate: `python3 -m unittest tests.test_cost_flag`.",
    "ids": [
     "AUD-CODE-069"
