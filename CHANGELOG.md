@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5088 (AUD-CI-049): khi tag đã có, workflow kiểm `VERSION` tại commit của tag và chỉ báo đã phát hành nếu release công bố đủ hai tệp có tên chính xác `<repo>-vX.Y.Z.tar.gz` và `<repo>-vX.Y.Z.promotion.json`.
+
 - T-5086 (AUD-HAR-582): audit delta yêu cầu quét lại TEST khi đổi E2E, và PERF/A11Y khi đổi JavaScript ứng dụng hoặc danh sách cặp tương phản.
 
 - T-5085 (AUD-XFEAT-058): kiểm i18n đối chiếu cả đối số trong nhánh ICU và báo lỗi khi khoá JSON phẳng trùng khoá lồng.

@@ -4,13 +4,17 @@ công bố; không ghi đè, không xoá; tag đã có thì chỉ báo trạng t
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from textwrap import dedent
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_ci import ci_jobs, job_key
+from test_ci import ci_jobs, install_release_view_stub, job_key, release_view_cases
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github" / "workflows" / "release-tag.yml"
@@ -128,7 +132,63 @@ class ReleaseAssetsTest(unittest.TestCase):
         self.assertEqual(block.count("exit 1"), 1)
         self.assertIn(".promotion.json", block)
 
-    def test_approve_checks_tag_sha_kind_and_release_before_early_exit(self):
+    def test_publish_race_checks_release_asset_names(self):
+        block = self.blocks[find(self.blocks, "gh release view")]
+        script = dedent(block.split("        run: |\n", 1)[1])
+        bindir = Path(self.enterContext(tempfile.TemporaryDirectory())) / "bin"
+        install_release_view_stub(bindir)
+        env = dict(os.environ, PATH=f"{bindir}:{os.environ['PATH']}", GITHUB_REPOSITORY="org/Sample.Repo", V="1.2.3")
+        for case, state, payload in release_view_cases():
+            with self.subTest(case=case):
+                r = subprocess.run(
+                    ["bash", "-c", script], env=dict(env, FAKE_JSON=payload), capture_output=True, text=True, timeout=30
+                )
+                self.assertEqual(r.returncode, 0 if state == "released" else 1, r.stdout)
+                message = "::notice::" if state == "released" else f"'{state}'"
+                self.assertIn(message, r.stdout)
+
+    def test_publish_race_checks_existing_tag_before_reporting_release(self):
+        block = self.blocks[find(self.blocks, 'test "$(git cat-file -t "refs/tags/v$V")" = tag')]
+        script = dedent(block.split("        run: |\n", 1)[1])
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+
+        def git(*args: str) -> str:
+            return subprocess.run(
+                ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=30,
+            ).stdout.strip()
+
+        def run(target: str) -> subprocess.CompletedProcess:
+            env = dict(os.environ, TARGET=target, V="1.2.3", RUNNER_TEMP=str(tmp))
+            return subprocess.run(["bash", "-c", script], cwd=tmp, env=env, capture_output=True, text=True, timeout=30)
+
+        git("init", "-qb", "main")
+        git("commit", "--allow-empty", "-qm", "no version")
+        missing = git("rev-parse", "HEAD")
+        for version in ("1.2.2", "1.2.3"):
+            (tmp / "VERSION").write_text(f"{version}\n", encoding="utf-8")
+            git("add", "VERSION")
+            git("commit", "-qm", version)
+        wrong = git("rev-parse", "HEAD^")
+        correct = git("rev-parse", "HEAD")
+
+        git("tag", "v1.2.3", correct)
+        self.assertEqual(run(correct).returncode, 1)  # tag nhẹ
+        git("tag", "-fa", "v1.2.3", "-m", "v1.2.3", correct)
+        self.assertEqual(run(wrong).returncode, 1)  # SHA khác
+        self.assertEqual(run(correct).returncode, 0)
+        for target in (missing, wrong):
+            with self.subTest(target=target):
+                git("tag", "-fa", "v1.2.3", "-m", "v1.2.3", target)
+                r = run(target)
+                self.assertEqual(r.returncode, 1, r.stdout)
+                self.assertIn("VERSION ở tag v1.2.3", r.stdout)
+
+    def test_approve_checks_tag_sha_kind_version_and_release_before_early_exit(self):
         approve = self.text.split("\n  tag:\n", 1)[0]
         branch = approve.split('if git show-ref --verify --quiet "refs/tags/v$v"; then', 1)[1].split(
             "\n          fi\n", 1
@@ -137,6 +197,7 @@ class ReleaseAssetsTest(unittest.TestCase):
         for needle in (
             'git merge-base --is-ancestor "$tag_commit" "$target"',
             'git cat-file -t "refs/tags/v$v"',
+            'git show "$tag_commit:VERSION"',
             "gh release view",
         ):
             self.assertLess(branch.index(needle), exit0, needle)
