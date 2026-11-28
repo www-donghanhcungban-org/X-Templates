@@ -122,6 +122,19 @@
 | typing-extensions | 4.16.0 | PSF-2.0 | như trên (bắc cầu của pyee) |
 | axe-core (vendored, `tests_e2e/vendor/axe/`) | 4.14.0 | MPL-2.0 (chấp nhận — xem trên) | chỉ test E2E, không phân phối kèm |
 
+## npm verify-render
+
+Job `verify-render` của `pack-web-api.yml` cài bộ test từ [package-lock.json](../../tests_e2e/verify-render-deps/package-lock.json).
+Các gói này chạy khi kiểm giao diện và không được phân phối trong bản phát hành khung. Ngày 2026-11-28, metadata phiên bản,
+license và `dist.integrity` SHA-512 ở bốn nguồn dưới đây khớp lockfile.
+
+| Gói | Bản | License | Quan hệ | Nguồn registry |
+|---|---|---|---|---|
+| `@axe-core/playwright` | 4.14.0 | MPL-2.0 | Trực tiếp | <https://registry.npmjs.org/@axe-core%2fplaywright/4.14.0> |
+| `axe-core` | 4.14.1 | MPL-2.0 | Bắc cầu qua `@axe-core/playwright` | <https://registry.npmjs.org/axe-core/4.14.1> |
+| `playwright` | 1.65.1 | Apache-2.0 | Trực tiếp | <https://registry.npmjs.org/playwright/1.65.1> |
+| `playwright-core` | 1.65.1 | Apache-2.0 | Ghim trực tiếp, cũng do `playwright` yêu cầu | <https://registry.npmjs.org/playwright-core/1.65.1> |
+
 ## Binary CI: bun (test plugin OpenCode), Gitleaks CLI (quét bí mật)
 
 | Gói | Bản | License | Nguồn và hash | Dùng ở |

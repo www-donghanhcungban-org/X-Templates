@@ -441,6 +441,19 @@ class GateFanOutTest(unittest.TestCase):
 class SupplyChainArtifactsTest(unittest.TestCase):
     """AUD-DEP-010 (T-3654): SBOM CycloneDX ở dep-audit; provenance của nguồn phát hành ký TRƯỚC khi đẩy tag."""
 
+    def test_verify_render_inventory_matches_lock(self):
+        lockfile = ROOT / "tests_e2e/verify-render-deps/package-lock.json"
+        packages = json.loads(lockfile.read_text(encoding="utf-8"))["packages"]
+        inventory = (ROOT / "docs/ops/DEPENDENCIES.md").read_text(encoding="utf-8")
+        table = inventory.partition("## npm verify-render\n")[2].partition("\n## ")[0]
+        documented = re.findall(r"(?m)^\| `([^`]+)` \| ([^| ]+) \| ([^| ]+) \|", table)
+        expected = [
+            (path.removeprefix("node_modules/"), fields["version"], fields["license"])
+            for path, fields in packages.items()
+            if path
+        ]
+        self.assertCountEqual(documented, expected)
+
     def test_dep_audit_uploads_cyclonedx_sbom_after_scan(self):
         body = (WORKFLOWS / "dep-audit.yml").read_text(encoding="utf-8")
         scan, sbom = body.index("Quét lỗ hổng"), body.index("-f cyclonedx-json -o sbom.cdx.json")

@@ -22,6 +22,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - T-5085 (AUD-XFEAT-058): kiểm i18n đối chiếu cả đối số trong nhánh ICU và báo lỗi khi khoá JSON phẳng trùng khoá lồng.
 
+- T-5095 (AUD-DEP-041): ghi hồ sơ license cho bốn gói npm dùng trong verify-render và kiểm phiên bản, license khớp lockfile.
+
 - T-5093 (AUD-XFEAT-061): API thống kê PR đọc cùng host và repo đã xác minh với API danh sách PR.
 
 - T-5090 (AUD-XFEAT-059): admin-plan và rollout-drill kiểm `deploy_env_pass` như preflight. Rollout-drill đối chiếu danh sách của ứng viên với nhánh được bảo vệ.
