@@ -35,7 +35,8 @@ class PreCompactOutputTest(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         (tmp / "scripts").mkdir()
-        shutil.copy(ROOT / "scripts" / "xt.py", tmp / "scripts" / "xt.py")
+        for module in ("xt.py", "xt_merge_queue.py", "xt_merge_intent.py"):
+            shutil.copy(ROOT / "scripts" / module, tmp / "scripts" / module)
         (tmp / "docs" / "autopilot").mkdir(parents=True)
         (tmp / "docs" / "autopilot" / "PLAN.md").write_text("- [ ] `T-001` việc — Gate: `true`\n", encoding="utf-8")
         if decisions is not None:

@@ -5050,6 +5050,7 @@ class StewardDispatchCiTest(unittest.TestCase):
                 with (
                     unittest.mock.patch.object(xt, "_steward_stale", return_value=""),
                     unittest.mock.patch.object(xt, "_steward_run", return_value=""),
+                    unittest.mock.patch("xt_merge_queue.before_action", return_value=""),
                 ):
                     xt._steward_apply(out, {}, TEST_TARGET, [["gh", "x"]], "main")
                 m.assert_not_called()
