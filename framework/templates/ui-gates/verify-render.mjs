@@ -328,7 +328,7 @@ const findReflow = (path) => {
   const unknown = [];
   let shadowMeasured = 0;
   const MEDIA = ['img', 'video', 'canvas', 'svg'];
-  const parentOf = (n) => n.parentElement ?? n.getRootNode().host ?? null;
+  const parentOf = (n) => n.assignedSlot ?? n.parentElement ?? n.getRootNode().host ?? null;
   const shown = (n, visibilityProperty) => getComputedStyle(n).display === 'contents' && parentOf(n)
     ? shown(parentOf(n), visibilityProperty) : n.checkVisibility({ opacityProperty: true, visibilityProperty });
   const visible = (n) => shown(n, true);
@@ -388,7 +388,9 @@ const findReflow = (path) => {
   }
   // Duyệt nút chữ, media và phần tử có thể sinh pseudo qua shadow root mở của từng host.
   function* contents(node) {
-    for (const child of [...(node.shadowRoot?.childNodes ?? []), ...node.childNodes]) {
+    const assigned = node instanceof HTMLSlotElement ? node.assignedNodes() : [];
+    const children = assigned.length ? assigned : (node.shadowRoot ?? node).childNodes;
+    for (const child of children) {
       if (child.nodeType === Node.TEXT_NODE) yield child;
       else if (child.nodeType === Node.ELEMENT_NODE) {
         yield child;

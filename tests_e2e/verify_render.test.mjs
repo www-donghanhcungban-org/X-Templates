@@ -671,6 +671,29 @@ test('reflow descends into open shadow roots: cut text and a clipper inside the 
   assert.match(fitsResult.stdout, /^REFLOW .*viewport=320x800 .*shadow_measured=[1-9]\d* shadow_closed_not_measured=0$/m);
 });
 
+test('reflow checks assigned slot content inside an open shadow clipper', async (t) => {
+  const clip = (label) => page({
+    markup: `<sample-box id="host"><span>${label}</span></sample-box>
+      <script>
+        customElements.define("sample-box", class extends HTMLElement {
+          connectedCallback() {
+            this.attachShadow({ mode: "open" }).innerHTML =
+              '<div id="clip" style="overflow:hidden;width:100px;white-space:nowrap;font:20px monospace">' +
+              '<slot><span>12345678901234567890</span></slot></div>';
+          }
+        });
+      </script>`,
+  });
+  const overflow = await fixture(t, clip('12345678901234567890'));
+  const clipped = await overflow.run(['--strict', '--widths', '320']);
+  status(clipped, 1);
+  assert.match(clipped.stdout, /^✗ .*check=reflow element="#host >>> div#clip"/m);
+  const fits = await fixture(t, clip('Fits'));
+  const safe = await fits.run(['--strict', '--widths', '320']);
+  status(safe, 0);
+  assert.doesNotMatch(safe.stdout, /check=reflow/);
+});
+
 test('an image sticking out of an overflow:hidden box is UNMEASURED, also inside an open shadow root', async (t) => {
   const img = `<img alt="" src="${SAMPLE_IMAGE}" width="900" height="20">`;
   const light = await fixture(t, page({ markup: `<div id="pic" tabindex="0" role="region" aria-label="picture" style="overflow:hidden;width:200px">${img}</div>` }));
