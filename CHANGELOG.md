@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5069 (ADR-0111): tách bộ đọc trọng số và chia shard thành `xt_shard.py`, giữ nguyên giao diện CLI và cách chia.
+
 - T-5088 (AUD-CI-049): khi tag đã có, workflow kiểm `VERSION` tại commit của tag và chỉ báo đã phát hành nếu release công bố đủ hai tệp có tên chính xác `<repo>-vX.Y.Z.tar.gz` và `<repo>-vX.Y.Z.promotion.json`.
 
 - T-5089 (AUD-DEP-040): check bắt buộc `dep-audit` quét lockfile npm của verify-render với ngưỡng moderate. Dependabot theo dõi cùng thư mục và gom các cập nhật hằng tuần.

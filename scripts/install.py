@@ -923,6 +923,7 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         "xt_design.py",
         "xt_toolcfg.py",
         "xt_cpu_share.py",
+        "xt_shard.py",
     )
     for f in ("xt.py", "dev-task.sh", "check-links.py", *optional_scripts):
         drop_symlink(xt_dir / "scripts" / f)
