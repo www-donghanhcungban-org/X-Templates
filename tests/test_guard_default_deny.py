@@ -13,6 +13,7 @@ import tempfile
 import unittest
 import unittest.mock as mock
 from pathlib import Path
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
@@ -33,6 +34,33 @@ def decide(cmd: str, root: Path = ROOT, cwd: Path | None = None) -> dict:
         mock.patch.object(guard, "_current_branch", return_value="feat"),
     ):
         return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(root), str(cwd) if cwd else None))
+
+
+def cache_cleanup_projects(top: Path) -> tuple[Path, Path]:
+    frame, app = top / "frame", top / "app"
+    for root, rel in (
+        (frame, "framework/00-method/README.md"),
+        (frame, "scripts/xt.py"),
+        (frame, "scripts/__pycache__/sample.pyc"),
+        (app, ".xtemplates/scripts/xt.py"),
+        (app, "scripts/__pycache__/sample.pyc"),
+    ):
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    return frame, app
+
+
+def assert_cache_cleanup_layouts(
+    test: unittest.TestCase, classify: Callable[[str, Path], dict], commands: tuple[str, ...]
+) -> None:
+    """Giữ ca dọn cache trên app có CLI cài riêng và đối chứng với cache do khung sở hữu."""
+    frame, app = cache_cleanup_projects(Path(test.enterContext(tempfile.TemporaryDirectory())))
+    for command in commands:
+        with test.subTest(command=command):
+            allowed, denied = classify(command, app), classify(command, frame)
+            test.assertEqual(allowed["decision"], "", allowed)
+            test.assertEqual((denied["decision"], denied["code"]), ("deny", guard.BUDGET), denied)
 
 
 DENY = {
@@ -151,20 +179,12 @@ class DefaultDenyTest(unittest.TestCase):
 
     def test_find_xargs_respects_cache_ownership(self):
         top = Path(self.enterContext(tempfile.TemporaryDirectory()))
-        frame, app = top / "frame", top / "app"
-        for root, rel in (
-            (frame, "framework/00-method/README.md"),
-            (frame, "scripts/xt.py"),
-            (frame, "scripts/__pycache__/sample.pyc"),
-            (app, ".xtemplates/scripts/xt.py"),
-            (app, ".xtemplates/scripts/__pycache__/sample.pyc"),
-            (app, "scripts/__pycache__/sample.pyc"),
-        ):
-            path = root / rel
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.touch()
+        frame, app = cache_cleanup_projects(top)
+        installed_cache = app / ".xtemplates/scripts/__pycache__"
+        installed_cache.mkdir()
+        (installed_cache / "sample.pyc").touch()
         cleanup = "find . -name '*.pyc' | xargs rm -f"
-        (app / "scripts/installed-cache").symlink_to(app / ".xtemplates/scripts/__pycache__", target_is_directory=True)
+        (app / "scripts/installed-cache").symlink_to(installed_cache, target_is_directory=True)
         self.assertEqual(decide(cleanup, app, app / "scripts")["decision"], "")
         follows_links = cleanup.replace("find .", "find -L .", 1)
         self.assertEqual(decide(follows_links, app, app / "scripts")["code"], guard.BUDGET)

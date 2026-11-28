@@ -16,7 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("XT_GUARD_PHASE", "harden")
 sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
+sys.path.insert(0, str(ROOT / "tests"))
 import guard
+from test_guard_default_deny import assert_cache_cleanup_layouts
 
 H = chr(126)  # `~` dựng bằng chr: chữ xoá home không nằm nguyên văn trong tệp test
 CL = "." + "claude"  # thư mục hàng rào
@@ -156,7 +158,6 @@ ALLOW = (
     'npx --no-install prettier --write "$FILE"',
     'pnpm dlx --silent prettier --write "$FILE"',
     # đối chứng của fuzz
-    "find . -name '*.pyc' | xargs rm -f",
     "ls *.md | xargs -I{} cp {} /tmp/",
     "find docs -name '*.md' | xargs sed -i s/a/b/",
     "echo docs/a.md | xargs -I{} cp {} /tmp/",
@@ -190,6 +191,9 @@ class SignOff5AllowTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 d = decide(cmd)
                 self.assertEqual(d["decision"], "", d.get("reason"))
+
+    def test_cache_cleanup(self):
+        assert_cache_cleanup_layouts(self, decide, ("find . -name '*.pyc' | xargs rm -f",))
 
     def test_cd_home_inside_project(self):
         """4b: `cd "$HOME/<dự án>"` (HOME không gán lại) — bộ theo dõi thư mục giải được, không dời mờ."""

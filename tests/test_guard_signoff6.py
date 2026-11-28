@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
 sys.path.insert(0, str(ROOT / "tests"))
 import cpu_budget
 import guard
+from test_guard_default_deny import assert_cache_cleanup_layouts
 
 H = chr(126)  # `~` dựng bằng chr: chữ xoá home không nằm nguyên văn trong tệp test
 CL = "." + "claude"  # thư mục hàng rào
@@ -168,14 +169,10 @@ ALLOW = (
     'for f in *.md docs/*.md; do cp "$f" "${f%.md}.bak"; done',
     'for f in a b; do for g in *.x; do rm -rf "${f%x}${g%x}"; done; done',
     # F2
-    "cd @R && find . -name '*.pyc' | xargs rm -f",
     "cd @R && ls *.txt | xargs -I{} mv {} archive/",
-    "pushd scripts && find . -name '*.pyc' | xargs rm -f; popd",
-    "find . -name '*.pyc' -not -path './.venv/*' | xargs rm -f",
     "find . -name '.DS_Store' | xargs rm -f",
     "find .github -name '*.yml' | xargs sed -i 's/a/b/'",
     "find . -name '*.bak' | xargs -I{} cp {} {}.orig",
-    "find . -name '*.pyc' -print0 | xargs -0 rm -f",
     "find src \\( -name '*.py' \\) | xargs sed -i s/a/b/",
     "find . -name '*.orig' -print | xargs rm -f",
     "find docs -name '*.md' -o -name '*.yaml' | xargs sed -i s/a/b/",
@@ -219,6 +216,18 @@ class SignOff6AllowTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 d = decide(cmd)
                 self.assertEqual(d["decision"], "", d.get("reason"))
+
+    def test_cache_cleanup(self):
+        assert_cache_cleanup_layouts(
+            self,
+            decide,
+            (
+                "cd @R && find . -name '*.pyc' | xargs rm -f",
+                "pushd scripts && find . -name '*.pyc' | xargs rm -f; popd",
+                "find . -name '*.pyc' -not -path './.venv/*' | xargs rm -f",
+                "find . -name '*.pyc' -print0 | xargs -0 rm -f",
+            ),
+        )
 
 
 class SignOff6PerfTest(unittest.TestCase):
