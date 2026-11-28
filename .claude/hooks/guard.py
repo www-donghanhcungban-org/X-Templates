@@ -9075,8 +9075,7 @@ def _git_remote(args: List[str]) -> Tuple[str, str]:
     return "", ""
 
 
-# F-144 (SPEC-factory-scale §2.5, S-517, D-424): tag phiên bản `vX.Y.Z`, cả hậu tố SemVer (`v4.0.0-rc.1`, `v1.2.3+b`)
-# — ruleset `tags.json` phủ `refs/tags/v*`. `v1`/`v1.2` (tag major di động) chưa phủ: tên thường dùng cho release thử.
+# F-144 (D-424): tag `vX.Y.Z` kể cả hậu tố SemVer. `v1`/`v1.2` dùng cho release thử.
 RELEASE_VERSION_TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.+-]*)?\Z")
 RELEASE_TAG_WHY = "tag phiên bản chỉ do workflow phát hành tạo sau khi duyệt promotion"
 GLOB_UNIT_RE = re.compile(r"\[[!^]?\]?(?:\[:[a-z]+:\]|[^\]])*\]|[*?\[]")  # lớp: `[]0]`, `[!x]`, `[[:digit:]]`
@@ -9085,8 +9084,7 @@ GLOB_OLD_RE = re.compile(r"\[[^\]]*\]|[*?\[]")  # cách đọc của luật cũ:
 
 
 def _glob_sub(repl: str, text: str, count: int = 0, unit: "re.Pattern[str]" = GLOB_UNIT_RE) -> str:
-    """Thay đơn vị glob như bash: `[` trong lớp là chữ thường (`[a0[]`). Chỉ phần tới `]` cuối đọc lớp (mỗi `[` ở đó
-    có `]` phía sau nên tuyến tính); đuôi không còn `]` thì `[` là đơn vị riêng (AUD-HAR-543). `count` 0 = thay hết."""
+    """Thay đơn vị glob như bash. Chỉ đọc lớp tới `]` cuối để giữ tuyến tính (AUD-HAR-543). `count` 0 = thay hết."""
     cut = text.rfind("]") + 1
     head, hits = unit.subn(repl, text[:cut], count)
     return head + (
@@ -9099,23 +9097,18 @@ GLOB_SEG_RE = re.compile(rf"(?:{GLOB_UNIT_RE.pattern}|[^/:])+")
 
 
 def _glob_segs(word: str) -> List[str]:
-    """Đoạn của từ: tách `/`, `:` như luật cũ ∪ tách không cắt trong lớp ký tự (`[[:digit:]]`, `[!:]`, `[:rc:]` chứa `:`).
-    Lớp chỉ đọc tới `]` cuối (tuyến tính, như `_glob_sub`)."""
+    """Tách `/`, `:` theo hai cách: luật cũ và giữ lớp ký tự nguyên vẹn. Chỉ đọc lớp tới `]` cuối."""
     cut = word.rfind("]") + 1
     head, tail = GLOB_SEG_RE.findall(word[:cut]), re.split("[/:]", word[cut:])
     aware = [*head[:-1], head[-1] + tail[0], *tail[1:]] if head else tail
     return [*dict.fromkeys([*re.split("[/:]", word), *aware])]
 
 
-def _tag_glob(word: str) -> bool:
-    """Đọc từ theo cả hai cách hiểu lớp ký tự (bash và luật cũ): guard mới là tập cha của luật cũ theo cấu trúc."""
+def _tag_glob(word: str) -> bool:  # Giữ cả cách hiểu lớp ký tự của bash và của luật cũ.
     return any(_tag_glob_by(word, unit) for unit in (GLOB_UNIT_RE, GLOB_OLD_RE))
 
 
-def _tag_glob_by(word: str, unit: "re.Pattern[str]") -> bool:
-    """AUD-SEC-996b: glob bash bung theo tệp (`touch v1.2.3`) có thể ra tag phiên bản — đoạn (tách `/`, `:`) có glob mà
-    chữ còn lại dạng tag (`v1.2.?`, `v*`, `[v]1.2.3`) hay đoạn khác là tag (`HEAD?refs/tags/v1.2.3`); `?d`, `x?a=1`: luật cũ.
-    AUD-HAR-541: đoạn chỉ gồm glob (`??.?.?`, `[v][0-9].[0-9].[0-9]`) — thay đơn vị glob bằng chữ số (đơn vị đầu: `v`)."""
+def _tag_glob_by(word: str, unit: "re.Pattern[str]") -> bool:  # AUD-SEC-996b, AUD-HAR-541
     segs = _glob_segs(word) if GLOB_LOOSE_RE.search(word) else []
     globs = [s for s in segs if GLOB_LOOSE_RE.search(s)]
     lits = [_glob_sub("", s, unit=unit).lower() for s in globs]  # `nocaseglob`: `V1.2.?` khớp `v1.2.0`
@@ -9136,21 +9129,34 @@ def _tag_glob_by(word: str, unit: "re.Pattern[str]") -> bool:
     return tagged or any(only) or any(map(RELEASE_VERSION_TAG.fullmatch, [*segs, *probes]))
 
 
+def _could_be_tag_namespace(namespace: str) -> bool:
+    """Chỉ loại đích tag khi chứng minh được thành phần namespace là tên Git chữ rõ."""
+    return namespace == "tags" or not re.fullmatch(r"(?!\.)(?!.*(?:\.\.|\.lock$))[\w%+,.=@-]+", namespace)
+
+
+def _could_be_tag_ref(ref: str) -> bool:
+    match = re.match(r"refs/([^/]*)/", ref)
+    return not match or _could_be_tag_namespace(match[1])
+
+
+def _ref_tag_expansion(ref: str) -> bool:
+    return ref.startswith(("refs/", "tags/")) and bool(REPLACE_SPLIT_RE.search(ref))
+
+
 def _release_tag_unsafe(name: str) -> bool:
-    """Tên tag (`v1.2.3`, `tags/…`, `refs/tags/…`) là tag phiên bản ở gốc hay đoạn cuối, hoặc guard không đọc chắc
-    (`$`, backtick, `@tệp`, placeholder `{…}`/`:branch`, `_tag_glob` — "không đọc được thì coi là tag phiên bản", F-144)."""
+    """Tag phiên bản ở gốc hay đoạn cuối, hoặc tên tag không đọc chắc (F-144)."""
     tag = name.strip().removeprefix("refs/").removeprefix("tags/")
     exact = RELEASE_VERSION_TAG.fullmatch(tag) or RELEASE_VERSION_TAG.fullmatch(tag.rsplit("/", 1)[-1])
     return bool(exact) or "`" in name or _gh_branch_vague(name) or _tag_glob(name)
 
 
 def _push_ref_rule(ref: str, deleting: bool, cwd: Optional[str] = None) -> Tuple[str, str]:
-    """Một refspec của push: đích là nhánh chính → deny nếu xoá, ask nếu đẩy thẳng. Đích `HEAD`/`@` = nhánh hiện tại.
-    Tag phiên bản, `_tag_glob` → deny (F-144)."""
+    """Chặn tag phát hành (F-144) và xoá nhánh chính. Đẩy thẳng nhánh chính → hỏi."""
     dst = ref.split(":", 1)[1] if ":" in ref else ref
-    tag = RELEASE_VERSION_TAG.fullmatch(dst.removeprefix("refs/tags/").removeprefix("tags/"))
-    if not deleting and not ref.startswith(":") and (tag or _tag_glob(ref)):
-        return "deny", RELEASE_TAG_WHY
+    if not deleting and not ref.startswith(":") and _could_be_tag_ref(dst):
+        tag = RELEASE_VERSION_TAG.fullmatch(dst.removeprefix("refs/tags/").removeprefix("tags/"))
+        if tag or _ref_tag_expansion(dst) or _tag_glob(ref):
+            return "deny", RELEASE_TAG_WHY
     dst = dst.removeprefix("refs/").removeprefix("heads/")  # git phân giải `heads/main` thành refs/heads/main
     if dst in ("HEAD", "@"):
         dst = _current_branch(cwd)
@@ -9161,11 +9167,8 @@ def _push_ref_rule(ref: str, deleting: bool, cwd: Optional[str] = None) -> Tuple
     return "ask", "push thẳng nhánh chính — khung yêu cầu đi qua PR"
 
 
-# AUD-SEC-551 (D-407): xoá nhánh/tag remote KHÁC nhánh hiện tại của phiên (`push --delete|-d`, refspec `:<ref>`,
-# `push --prune`, `gh api -X DELETE …/git/refs/…`, graphql `deleteRef`) và viết lại mọi ref (`filter-branch --all`/nhiều
-# ref, `filter-repo`) là hành động khó đảo ngược (nhóm máy chặn, ADR-0018): xoá nhánh của người khác, và xoá được lời từ
-# chối NO-GO chỉ nằm trên nhánh chưa có PR khỏi neo `release-sign` (D-406). Nhánh hiện tại = `_current_branch` ở thư
-# mục của lệnh (như PUSH_MAIN); không biết (không phải repo, detached) → mọi đích là không phải của phiên.
+# AUD-SEC-551 (D-407, ADR-0018): xoá ref remote khác nhánh hiện tại và viết lại nhiều ref đều có thể xoá lời từ chối
+# NO-GO khỏi neo `release-sign` (D-406). Nhánh hiện tại lấy theo thư mục lệnh; không biết → đích là của người khác.
 REF_DESTROY_MARK = "xoá/viết lại ref không phải của phiên"  # dấu của mã REMOTE_DELETE (REASON_CODES)
 REMOTE_DELETE_WHY = (
     REF_DESTROY_MARK + ": xoá `{}` trên remote (nhánh hiện tại: `{}`) — nhánh/tag của người khác, xoá được lời từ chối"
@@ -9845,8 +9848,7 @@ def _canonical_fetch(repo: str, spec: str, remotes: FrozenSet[str]) -> bool:
 
 
 def _fetch_names(args: List[str], cwd: Optional[str]) -> RefNames:
-    """fetch/pull: đích của refspec tường minh (kể cả `--refmap`), trừ dạng cấu hình của remote đã cấu hình; `--stdin`
-    → None. `fetch origin main` (không `:`) không có đích tường minh."""
+    """Đích refspec tường minh (kể cả `--refmap`), trừ dạng chuẩn của remote đã cấu hình. `--stdin` → None."""
     read = _fetch_refspecs(args)
     if read is None:
         return None
@@ -9856,35 +9858,32 @@ def _fetch_names(args: List[str], cwd: Optional[str]) -> RefNames:
     return [s.split(":", 1)[1] for s in specs if not _canonical_fetch(repo, s, remotes)]
 
 
-def _fetch_refspecs(args: List[str]) -> Optional[Tuple[str, List[str]]]:
-    """(remote, mọi refspec kể cả `--refmap`); `--stdin` → None."""
+def _fetch_refspecs(args: List[str]) -> Optional[Tuple[str, List[str]]]:  # (remote, refspec) hoặc None khi đọc stdin
     flags, pos, vals = _parse_opts(args, "joXs", FETCH_VALUE_OPTS)
     if _has_opt(flags, {"--stdin"}):
         return None
     return (pos[0] if pos else ""), pos[1:] + [v for k, v in vals if _long_match(k, ("--refmap",))]
 
 
-def _fetch_tag_write(sub: str, args: List[str]) -> bool:
-    """F-144 (AUD-SEC-996): fetch/pull (hai cách đọc như `_pull_names`) ghi tag phiên bản/không đọc chắc."""
+def _fetch_tag_write(sub: str, args: List[str]) -> bool:  # F-144 (AUD-SEC-996), hai cách đọc như _pull_names
     if sub not in ("fetch", "pull"):
         return False
     readings = [args, [a for a in args if a not in OPTS_END]] if sub == "pull" else [args]
     return any(_fetch_spec_tag(s) for r in readings for s in (_fetch_refspecs(r) or ("", []))[1])
 
 
-def _fetch_spec_tag(spec: str) -> bool:
-    """Đích `[refs/]tags/` là tag phiên bản; có `*` mà không phải `tags/*:tags/*` (git thay phần khớp mẫu nguồn vào
-    đích: `x*`→`*` biến `xv1.2.3` thành `v1.2.3`); hay `_tag_glob`. Đích trần là `refs/heads/…`."""
+def _fetch_spec_tag(spec: str) -> bool:  # Đích trần là nhánh.
     src, _, dst = spec.lstrip("+").partition(":")
     short = dst.removeprefix("refs/")
     tag = short[5:] if short.startswith("tags/") else ""
     copy = tag == "*" and src.removeprefix("refs/") == "tags/*"
-    return bool(RELEASE_VERSION_TAG.fullmatch(tag) or "*" in tag and not copy) or _tag_glob(spec)
+    return _could_be_tag_ref(dst) and bool(
+        RELEASE_VERSION_TAG.fullmatch(tag) or not copy and _ref_tag_expansion(dst) or _tag_glob(spec)
+    )
 
 
 def _pull_names(args: List[str], cwd: Optional[str]) -> RefNames:
-    """pull chuyển đối số vị trí cho `git fetch` KHÔNG kèm `--`: token sau dấu hết tuỳ chọn của pull lại là tuỳ chọn của
-    fetch (`pull --end-of-options . --stdin`, `pull -- --refmap=… . main`; đo git 2.43) — xét cả hai cách đọc."""
+    """Pull chuyển đối số cho fetch thiếu dấu `--`. Xét cả hai cách đọc (đo git 2.43)."""
     first = _fetch_names(args, cwd)
     second = _fetch_names([a for a in args if a not in OPTS_END], cwd)
     return None if first is None or second is None else first + second
@@ -9944,8 +9943,7 @@ GIT_DIR_SUBS = {"commit", "config", *REMOTE_REF_NAMES}
 
 
 def _remote_ref_rule(sub: str, args: List[str], cwd: Optional[str]) -> Tuple[str, str]:
-    """AUD-SEC-119: deny khi lệnh git ghi ref theo dõi remote hoặc tạo ref trùng tên remote; ref từ stdin hay là file mà
-    `find -exec … {}` tìm thấy (`find refs/remotes -exec git update-ref {} HEAD`) → hỏi (unsure)."""
+    """AUD-SEC-119: chặn ghi ref theo dõi hoặc trùng tên remote. Nguồn stdin và `find -exec … {}` → hỏi."""
     names = REMOTE_REF_NAMES[sub](args, cwd)
     if names is None:
         return "ask", UNRESOLVED_ARGS_WHY.format(sub, "--stdin")
@@ -9958,9 +9956,11 @@ def _remote_ref_rule(sub: str, args: List[str], cwd: Optional[str]) -> Tuple[str
 
 
 def _release_ref_write(sub: str, name: str) -> bool:  # D-612: tag phiên bản hay glob bung ra được nó
+    if sub != "tag" and (sub not in ("update-ref", "symbolic-ref") or not _could_be_tag_ref(name)):
+        return False
     base = name.removeprefix("refs/tags/")
     may = _tag_glob(name) or GLOB_LOOSE_RE.search(base) and base[:1] in "vV*?[$" and ("*" in base or len(base) > 5)
-    return sub in ("tag", "update-ref", "symbolic-ref") and bool(RELEASE_VERSION_TAG.fullmatch(base) or may)
+    return bool(RELEASE_VERSION_TAG.fullmatch(base) or may or sub != "tag" and _ref_tag_expansion(name))
 
 
 def _fetch_hint(sub: str, hit: str) -> str:
