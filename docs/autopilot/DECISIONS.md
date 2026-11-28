@@ -1344,3 +1344,10 @@
 - Chọn: Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness.
 - Lý do (tiêu chí chất lượng cuối): Tái hiện mất nhóm và 26 lần gọi Git cho ba SHA. Mười dòng test dài trả hơn 164 KB ngữ cảnh. Cổng và thông tin chẩn đoán phải tiếp tục phân biệt được lỗi.
 - Đường lùi: Hoàn tác riêng từng lát, giữ báo cáo và các ca hồi quy để đối chiếu.
+
+### D-646 · 2026-11-28T14:55:37+00:00 · Làm thế nào giảm thời gian toàn lệnh audit plan sau khi đã bỏ các git diff trùng?
+
+- Phương án: (1) Mỗi lượt audit chỉ dò một lần cho mỗi tên công cụ, dùng cùng kết quả cho mọi nhóm và đo lại toàn lệnh. · (2) Chỉ tối ưu Git hoặc lưu cache công cụ qua nhiều lượt.
+- Chọn: Mỗi lượt audit chỉ dò một lần cho mỗi tên công cụ, dùng cùng kết quả cho mọi nhóm và đo lại toàn lệnh.
+- Lý do (tiêu chí chất lượng cuối): Đo xen kẽ trên cùng checkout, toàn lệnh khoảng 7 giây. Profile mới ghi 5,8 giây ở 68 lần dò công cụ. Cache trong lượt giữ phân loại nhất quán và vẫn phát hiện công cụ vừa cài ở lượt kế.
+- Đường lùi: Hoàn tác riêng thay đổi audit_tools và giữ kết quả đo cùng test danh sách công cụ.

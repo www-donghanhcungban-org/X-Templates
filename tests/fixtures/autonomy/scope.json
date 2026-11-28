@@ -63,7 +63,9 @@
   {
    "reason": "Audit delta cần lịch sử Git với từng thay đổi tệp và mốc quét của sổ. Gate: `python3 -m unittest tests.test_xt_cli.AuditRescanTest`.",
    "ids": [
-    "AUD-HAR-582"
+    "AUD-HAR-582",
+    "AUD-HAR-585",
+    "AUD-HAR-586"
    ]
   },
   {
