@@ -19,3 +19,14 @@ Mốc kiểm là `main` ở `719eb8b0`. Ba lỗi tái hiện được ảnh hư�
 ## Hai cơ hội ưu tiên thấp
 
 `xt.py checks` dựng parser sáu lần để chạy năm kiểm. cProfile ghi 0,157 giây cộng dồn trong parser. Chưa đo thời gian sau tối ưu. Workflow dependency audit gọi pip-audit hai lần để xuất bảng và SBOM. Trên 12 run xanh, mỗi bước có trung vị một giây. Bảng chẩn đoán hiện có thông tin giúp sửa CVE. Hai cơ hội được ghi để đối chiếu khi có profile mới.
+
+## Kết quả sửa ci-triage
+
+| Cùng fixture, cùng ID | Trước | Sau |
+|---|---:|---:|
+| JSON gửi agent | 164.905 B | 6.595 B |
+| Văn bản khi gọi lại | 164.593 B | 6.283 B |
+| State sau một run | 165.083 B | 6.773 B |
+| State sau hai run | 329.893 B | 13.283 B |
+
+Mỗi dòng dài giữ đầu, cuối và dấu cắt trong 600 ký tự. Hai chữ ký của biến thể alpha và beta vẫn khớp kết quả gốc. Log coverage thật vẫn trả nguyên dòng 57 ký tự. Hai ca hồi quy đỏ trước sửa. Sau sửa, 50 test triage CI/cục bộ, ghi state và trần kích thước đạt, exit 0. Lợi ích đo được là giảm 96,0% byte JSON ở fixture dòng dài.

@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- `loop ci-triage` giữ tối đa 600 ký tự mỗi dòng bằng chứng đã che dữ liệu. Dòng dài giữ đầu và cuối. Mở lại một run cũ cũng rút gọn bản ghi, giữ nguyên chữ ký tính trên dòng đầy đủ và bộ đếm.
+
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.
 
 - Kiểm reflow theo nội dung thực sự được gán vào slot của shadow root mở, gồm chữ bị cắt và ca nội dung dự phòng ẩn.

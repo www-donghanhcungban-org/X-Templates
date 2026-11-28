@@ -72,34 +72,21 @@ Lệnh:
   audit plan [--blueprint F] [--status F] [--json]
                                 Dò stack → nhóm audit áp dụng/rút gọn/N/A, công cụ có/thiếu, bằng chứng blueprint cũ, nhóm cần quét lại.
   audit check STATUS [--strict] Kiểm sổ docs/ops/AUDIT-STATUS.md; --strict = Definition of Complete (0 🔴/🟠 mở, mọi nhóm đã quét).
-  feedback add --kind K --id ID --symptom S --fix F [--repro R] [--suggest X]
-                                Dự án đích ghi lỗi do khung + cách khắc phục → docs/xtemplates-feedback/FB-NNN.md.
-  feedback collect [--blueprint F]
-                                Tự gom MUST bị miễn và lý do autopilot bị chặn thành FB-NNN (không trùng).
+  feedback add --kind K --id ID --symptom S --fix F [--repro R] [--suggest X]  Ghi lỗi và cách sửa vào FB-NNN.md.
+  feedback collect [--blueprint F]  Gom MUST bị miễn và lý do autopilot bị chặn thành FB-NNN (không trùng).
   feedback list [DIR] [--json]  Liệt kê phản hồi.
-  feedback aggregate --from DỰ_ÁN=GỐC_REPO|THƯ_MỤC ... [--json]
-                                Repo khung: gộp phản hồi nhiều dự án theo (loại, ID), đánh dấu đủ ngưỡng sửa.
-  registry [--file F] [--json] [--today D] [--strict]
-                                Registry sản phẩm đích (docs/ops/registry.json): lệch core/gói so với VERSION khung,
-                                ngoại lệ hết hạn; schema sai → exit 2; --strict: còn lệch/hết hạn → exit 1.
-  release-sign --note TEXT [--file F]
-                                Agent ký §5 GO-NO-GO khi xt.yaml (cây và nhánh chính) khai `release_signoff: agent`,
-                                release-check không FAIL và chỉ còn chữ ký (ADR-0074); ô tên ghi `agent`.
-  deploy status [--env E] [--json]
-                                Đọc sổ triển khai (ADR-0077).
+  feedback aggregate --from DỰ_ÁN=GỐC_REPO|THƯ_MỤC ... [--json]  Gộp phản hồi theo (loại, ID), đánh dấu đủ ngưỡng sửa.
+  registry [--file F] [--json] [--today D] [--strict]  Kiểm phiên bản và hạn ngoại lệ ở docs/ops/registry.json.
+  release-sign --note TEXT [--file F]  Agent ký §5 GO-NO-GO khi được cấu hình và đã qua cổng (ADR-0074).
+  deploy status [--env E] [--json]  Đọc sổ triển khai (ADR-0077).
   merge-check [--pr PR] [--pr-json F] [--json]
                                 Máy quyết khi nào merge PR: merge · review · wait · update · fix · human · closed (exit 0 = merge).
   grant-check GROUP [KHOÁ=GIÁ_TRỊ ...] [--plan F] [--json]
                                 Việc production có nằm trong mục Ủy quyền production của PLAN.md không (exit 0 =
                                 trong ủy quyền; 1 = ngoài → loop defer; thiếu mục = ngoài).
-  merge-watch [--pr PR] [--interval 30] [--max-minutes 240] [--observe-context]
-                                Gọi merge-check mỗi `interval` giây tới khi verdict ≠ wait (exit 0 = đã merge/merge,
-                                1 = cần hành động, 2 = lỗi đọc PR 3 lần liền, 3 = hết giờ); chạy nền, không tốn token.
-  doctor [--fix] [--json]       Audit khung đã cài trước /autopilot (Python/git, hook + file hook, skill, AGENTS/CLAUDE,
-                                xt.yaml, .gitignore, state, khung hợp lệ); --fix sửa phần an toàn, exit 1 khi còn lỗi.
-  doctor --drift [--latest TAG] [--json]
-                                So `.xtemplates/manifest.json` với bản cài (file/quyền/tài liệu) và tag mới nhất
-                                (--latest hoặc gh api); exit 1 khi có lệch; mẫu Routine tuần: stop-points-and-escalation.md.
+  merge-watch [--pr PR] [--interval 30] [--max-minutes 240] [--observe-context]  Theo dõi đến khi PR có bước tiếp theo.
+  doctor [--fix] [--json]       Kiểm bản cài trước /autopilot. Tuỳ chọn sửa lỗi đảo ngược được.
+  doctor --drift [--latest TAG] [--json]  So manifest với bản cài và tag mới nhất.
   stats                         Thống kê số module/mục.
 
 Thoát: 0 = ổn, 1 = vi phạm/chưa đạt, 2 = lỗi dùng lệnh.
@@ -10007,6 +9994,7 @@ CI_LOG_PREFIX_RE = re.compile(r"^(?:[^\t\n]*\t){0,2}\d{4}-\d\d-\d\dT[\d:.]+Z ?")
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 CI_RUN_ID_RE = re.compile(r"[0-9]{1,20}")
 CI_TRIAGE_EVIDENCE = 10
+CI_TRIAGE_LINE_CHARS = 600
 CI_SAME_SIGNATURE_MAX = 3  # cùng chữ ký lần 3 → dừng episode (defer), như `max_same_failure` của loop record
 CI_EPISODE_KEYS = ("task", "started", "rerun_used", "fix_attempts", "cost_usd", "signature", "same_signature")
 
@@ -10159,6 +10147,15 @@ def _ci_triage_print(out: Dict[str, Any]) -> None:
     print(f"  episode {ep['task'] or '—'}: re-run {ep['rerun_used']}/1 · sửa {ep['fix_attempts']} · chi phí {cost}")
 
 
+def _ci_evidence_excerpt(line: str) -> str:
+    if len(line) <= CI_TRIAGE_LINE_CHARS:
+        return line
+    marker = " […] "
+    remaining = CI_TRIAGE_LINE_CHARS - len(marker)
+    head = remaining // 2
+    return line[:head] + marker + line[-(remaining - head) :]
+
+
 def _ci_triage_state(
     cur: Dict[str, Any], run: str, task: Optional[str], text: Optional[str], cost: Optional[float], got: Dict[str, Any]
 ) -> Dict[str, Any]:
@@ -10174,6 +10171,7 @@ def _ci_triage_state(
                 f"state.json đổi trong lúc triage (run {run} không còn trong episode) — chạy lại lệnh"
             )
         rec = _ci_triage_new(ep, run, text, cost)
+    rec["evidence"] = [_ci_evidence_excerpt(line) for line in rec["evidence"]]  # cả bản ghi cũ, sau khi tính chữ ký
     st["episode"] = ep
     _ci_apply(st, run, rec, task)
     got.update(rec=rec, ep=ep)
