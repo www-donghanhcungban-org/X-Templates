@@ -226,6 +226,7 @@ def copy_files_replace(src: Path, rels: list[Path], dst: Path) -> None:
 
 MANIFEST = ".xtemplates/harness.sha256.json"
 MANIFEST_V2 = ".xtemplates/manifest.json"  # REC-09: hash file + rule do khung đặt + chính sách
+PENDING_SETTINGS = "pending_settings"
 
 
 def write_atomic(path: Path, text: str, keep_mode: bool = False) -> None:
@@ -690,6 +691,8 @@ def merge_hooks(
     prov: dict[str, list[str]] | None = None,
     report: dict[str, Any] | None = None,
     own: bool = False,
+    *,
+    before_write: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> str:
     """settings.json của dự án đã có: thêm khoá `hooks` của khung còn thiếu (giữ hook riêng) và gộp quyền theo
     ADR-0018 (`merge_permissions`; quyền riêng của dự án giữ nguyên). `prov` = rule khung đã đặt (manifest.json);
@@ -707,7 +710,10 @@ def merge_hooks(
     if not rep["changes"]:
         return "kept"
     # bytes: giữ CRLF (AUD-HAR-311); keep_mode: tệp tạm của mkstemp là 0600, không để settings.json 0644 của dự án đổi quyền
-    write_atomic(dst, settings_text(dst.read_bytes().decode("utf-8"), theirs), keep_mode=True)
+    rendered = settings_text(dst.read_bytes().decode("utf-8"), theirs)
+    if before_write is not None:
+        before_write(rendered, rep)
+    write_atomic(dst, rendered, keep_mode=True)
     return "merged-hooks"
 
 
@@ -967,16 +973,49 @@ def update_provenance(prov: dict[str, list[str]], report: dict[str, Any]) -> dic
     return out
 
 
+def stage_settings_rules(target: Path, data: bytes, rules: dict[str, list[str]]) -> None:
+    """Ghi nguồn gốc dự kiến trước khi công bố settings. Chỉ khôi phục khi khớp đúng byte đã công bố."""
+    update_manifest_doc(target, **{PENDING_SETTINGS: {"settings_hash": hash_label(sha256(data)), "rules": rules}})
+
+
+def recover_settings_rules(target: Path) -> dict[str, list[str]]:
+    previous = load_rules(target)
+    pending = load_manifest_doc(target).get(PENDING_SETTINGS)
+    settings = target / ".claude" / "settings.json"
+    if not isinstance(pending, dict) or settings.is_symlink() or parent_symlink(settings):
+        return previous
+    try:
+        digest = hash_label(sha256(settings.read_bytes()))
+    except FileNotFoundError:
+        return previous
+    rules = pending.get("rules")
+    if digest != pending.get("settings_hash") or not isinstance(rules, dict):
+        return previous
+    if any(not isinstance(rules.get(key), list) for key in RULE_KEYS):
+        return previous
+    return {key: [rule for rule in rules[key] if isinstance(rule, str)] for key in RULE_KEYS}
+
+
 def install_settings(
     target: Path, force_harness: bool, stats: Counter[str], prov: dict[str, list[str]]
 ) -> dict[str, list[str]]:
     """settings.json của harness: dự án đã có (không --force-harness) thì gộp khoá hooks, chưa có thì copy.
     Trả rule do khung đặt (ghi vào manifest.json)."""
     settings = target / ".claude" / "settings.json"
+    src = SRC / ".claude" / "settings.json"
+    own = own_permissions(target)
     if settings.exists() and not force_harness:
         report: dict[str, Any] = {}
-        own = own_permissions(target)
-        r = merge_hooks(SRC / ".claude" / "settings.json", settings, prov, report, own)
+        r = merge_hooks(
+            src,
+            settings,
+            prov,
+            report,
+            own,
+            before_write=lambda rendered, rep: stage_settings_rules(
+                target, rendered.encode("utf-8"), update_provenance(prov, rep)
+            ),
+        )
         stats[r] += 1
         if r == "merged-hooks" and own:
             log(
@@ -991,12 +1030,16 @@ def install_settings(
         if unproven:
             log(f"  ⚠ giữ `ask` trùng chuỗi rule cũ của khung nhưng manifest không chứng minh khung đặt: {unproven}")
         return update_provenance(prov, report)
-    own = own_permissions(target)
-    r = copy_if_absent(SRC / ".claude" / "settings.json", settings, force_harness, settings_transform(own))
+    if not parent_symlink(settings):
+        settings.parent.mkdir(parents=True, exist_ok=True)
+    r, data = classify_copy(src, settings, force_harness, settings_transform(own))
+    rules = prov
+    if r == "copied":
+        rules = dict.fromkeys(RULE_KEYS, []) if own else our_rules()
+        stage_settings_rules(target, data, rules)
+    write_copy(src, settings, r, data)
     stats[r] += 1
-    if r != "copied":
-        return prov
-    return dict.fromkeys(RULE_KEYS, []) if own else our_rules()
+    return rules
 
 
 # Khoá cấp cao của settings khung chưa mang sang đích: D-613/LOOP-CTX-016 đòi đo `preTokens` và tỉ lệ Gate xanh lần đầu
@@ -1081,14 +1124,20 @@ def copy_harness_files(
 
 
 def write_manifests(
-    target: Path, files: dict[str, str], rules: dict[str, list[str]], preset: str | None = None
+    target: Path,
+    files: dict[str, str],
+    rules: dict[str, list[str]],
+    preset: str | None = None,
+    *,
+    settings_complete: bool = False,
 ) -> None:
     """Ghi `harness.sha256.json` (hash file) và `manifest.json` (hash file + rule khung đặt + chính sách, REC-09); mọi
     hash ghi dạng `sha256:<hex>` (`hash_label`), kể cả hash hex trần giữ lại từ manifest cũ."""
     labelled = {rel: hash_label(digest) for rel, digest in files.items()}
     write_atomic(target / MANIFEST, json.dumps(labelled, indent=2, sort_keys=True) + "\n")
     doc = {"schema": 1, "files": labelled, "rules": rules, "policy": manifest_policy(target, preset)}
-    doc.update({k: v for k, v in load_manifest_doc(target).items() if k in MANIFEST_PATH_LISTS})
+    preserve = MANIFEST_PATH_LISTS if settings_complete else (*MANIFEST_PATH_LISTS, PENDING_SETTINGS)
+    doc.update({k: v for k, v in load_manifest_doc(target).items() if k in preserve})
     write_atomic(target / MANIFEST_V2, json.dumps(doc, indent=2, sort_keys=True) + "\n")
 
 
@@ -1128,14 +1177,14 @@ def install_harness(target: Path, force_harness: bool) -> None:
     """Bước 2: harness .claude/ — copy-if-absent, ghi manifest hash (+ manifest.json có rule khung), báo thống kê."""
     stats: Counter[str] = Counter()
     manifest = load_manifest(target)
-    rules = install_settings(target, force_harness, stats, load_rules(target))
+    rules = install_settings(target, force_harness, stats, recover_settings_rules(target))
     new_manifest = copy_harness_files(target, force_harness, manifest, stats)
     # Hash file `.github/` (--with-github) và file gốc (bước sau ghi lại) giữ qua bước này: lần sau file chưa sửa vẫn
     # được cập nhật tại chỗ.
     # File managed của gói (`--pack`) cũng vậy.
     packed = pack_managed_paths(target)
     new_manifest.update({k: v for k, v in manifest.items() if k in GITHUB_FILES or k in ROOT_TEMPLATES or k in packed})
-    write_manifests(target, new_manifest, rules)
+    write_manifests(target, new_manifest, rules, settings_complete=True)
     log("✓ .claude/: " + " · ".join(f"{k} {v}" for k, v in sorted(stats.items())))
     shadowed = shadowed_skills(target)
     if shadowed:

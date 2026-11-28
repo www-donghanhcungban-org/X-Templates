@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import errno
 import io
+import json
 import os
 import resource
 import signal
@@ -204,6 +205,53 @@ class InstallInterruptedWriteTest(TestCase):
         self.target = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         subprocess.run(["git", "init", "-q", str(self.target)], check=True)
         self.hooks = self.target / ".git" / "hooks"
+
+    def test_retry_after_settings_publish_keeps_rule_provenance(self) -> None:
+        for mode in ("fresh", "merge", "own"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as scratch:
+                root = Path(scratch)
+                clean = root / "clean"
+                retry = root / "retry"
+                for target in (clean, retry):
+                    (target / ".xtemplates").mkdir(parents=True)
+                    if mode != "fresh":
+                        settings = target / ".claude" / "settings.json"
+                        settings.parent.mkdir()
+                        settings.write_text(json.dumps({"permissions": {"allow": ["Read(README.md)"]}}))
+                    if mode == "own":
+                        (target / "xt.yaml").write_text("harness_permissions: own\n")
+
+                install.install_harness(clean, False)
+                with mock.patch.object(install, "write_manifests", side_effect=OSError(errno.ENOSPC, "simulated")):
+                    with self.assertRaises(OSError):
+                        install.install_harness(retry, False)
+                install.install_harness(retry, False)
+                self.assertEqual(install.load_rules(retry), install.load_rules(clean))
+                self.assertNotIn("Read(README.md)", install.load_rules(retry)["allow"])
+                self.assertEqual(install.load_manifest_doc(retry), install.load_manifest_doc(clean))
+                install.install_harness(retry, False)
+                self.assertEqual(install.load_rules(retry), install.load_rules(clean))
+
+    def test_settings_transition_uses_only_the_published_snapshot(self) -> None:
+        settings = self.target / ".claude" / "settings.json"
+        settings.parent.mkdir()
+        expected = b'{"permissions":{"allow":["Read(README.md)"]}}'
+        prior = {key: [] for key in install.RULE_KEYS}
+        rules = {**prior, "allow": ["Read(README.md)"]}
+        install.stage_settings_rules(self.target, expected, rules)
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        settings.write_bytes(b"{}")
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        settings.write_bytes(expected)
+        install.write_manifests(self.target, {}, prior)
+        self.assertEqual(install.recover_settings_rules(self.target), rules)
+        install.update_manifest_doc(
+            self.target,
+            **{install.PENDING_SETTINGS: {"settings_hash": install.hash_label(install.sha256(expected)), "rules": []}},
+        )
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
+        install.stage_settings_rules(self.target, expected, {"allow": rules["allow"]})
+        self.assertEqual(install.recover_settings_rules(self.target), prior)
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
