@@ -4,6 +4,7 @@ vẫn bị chặn (ADR-0058 giữ cho mọi trường hợp còn lại)."""
 
 import json
 import os
+import re
 import subprocess
 import sys
 import unittest
@@ -521,6 +522,42 @@ class XtInProcessGuardTest(unittest.TestCase):
         ):
             with self.subTest(cmd=cmd):
                 self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
+
+    def test_named_loaders_consider_the_module_portion(self):
+        # Chỉ phân tích AST. Tạm coi json và xml.etree là tên cần khớp.
+        stand_in = re.compile(r"json|xml\.etree")
+        cases = (
+            ("import pkgutil", "pkgutil.resolve_name", "json:loads"),
+            ("import pkgutil", "pkgutil.resolve_name", "json:"),
+            ("import pkgutil", "pkgutil.resolve_name", "json.loads"),
+            ("from pkgutil import resolve_name", "resolve_name", "xml.etree:ElementTree.Element"),
+            ("from pkgutil import resolve_name", "resolve_name", "xml.etree.ElementTree.Element"),
+            ("import pydoc as docs", "docs.locate", "json.loads"),
+            ("import pydoc", "pydoc.locate", "xml.etree.ElementTree.Element"),
+            ("import pydoc", "pydoc.locate", ".json..loads"),
+        )
+        for imports, loader, target in cases:
+            with self.subTest(loader=loader, target=target):
+                script = f"{imports}; {loader}({target!r})"
+                self.assertFalse(guard._xt_inproc_python(script, 0))
+                with unittest.mock.patch.object(guard, "XT_INPROC_NAME_RE", stand_in):
+                    self.assertTrue(guard._xt_inproc_python(script, 0))
+        with unittest.mock.patch.object(guard, "XT_INPROC_NAME_RE", stand_in):
+            self.assertFalse(guard._xt_inproc_python("import pkgutil; pkgutil.resolve_name('xml:json')", 0))
+            self.assertFalse(guard._xt_inproc_python("import pydoc; pydoc.locate('other.etree.ElementTree')", 0))
+
+    def test_resolve_name_preserves_legacy_literal_matching(self):
+        stand_in = re.compile(r"(?:.*\.)?json")
+        with unittest.mock.patch.object(guard, "XT_INPROC_NAME_RE", stand_in):
+            self.assertTrue(guard._xt_inproc_python("import pkgutil; pkgutil.resolve_name('xml:etree.json')", 0))
+
+    def test_importfile_considers_the_whole_path(self):
+        script = "import pydoc; pydoc.importfile('tests_e2e/__init__.py')"
+        path = re.compile(r"tests_e2e/__init__\.py")
+        with unittest.mock.patch.object(guard, "XT_INPROC_NAME_RE", path):
+            self.assertTrue(guard._xt_inproc_python(script, 0))
+        with unittest.mock.patch.object(guard, "XT_INPROC_NAME_RE", re.compile(r"tests_e2e/__init__")):
+            self.assertFalse(guard._xt_inproc_python(script, 0))
 
     def test_python_scan_helpers(self):
         self.assertFalse(guard._xt_inproc_python("x = (", 0))  # không phải Python: luật chữ, không nạp xt
