@@ -1337,3 +1337,10 @@
 - Chọn: Mở PLAN kế riêng cho nợ audit còn mở và cổng ký
 - Lý do (tiêu chí chất lượng cuối): Giữ nguyên bằng chứng đợt D-638, giữ ID đã có, nghiệm thu từng lát và chỉ ký sau audit strict cùng review delta
 - Đường lùi: Bỏ PLAN kế và quay lại PLAN D-638 nếu phạm vi audit đổi trước khi mở PR
+
+### D-645 · 2026-11-28T14:45:13+00:00 · Sau audit chi phí ngày 28/11, sửa gì trước để giảm ngữ cảnh và thời gian mà vẫn phát hiện lỗi?
+
+- Phương án: (1) Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness. · (2) Giảm bộ kiểm hoặc rút PROGRESS và gộp hai lần quét phụ thuộc ngay.
+- Chọn: Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness.
+- Lý do (tiêu chí chất lượng cuối): Tái hiện mất nhóm và 26 lần gọi Git cho ba SHA. Mười dòng test dài trả hơn 164 KB ngữ cảnh. Cổng và thông tin chẩn đoán phải tiếp tục phân biệt được lỗi.
+- Đường lùi: Hoàn tác riêng từng lát, giữ báo cáo và các ca hồi quy để đối chiếu.
