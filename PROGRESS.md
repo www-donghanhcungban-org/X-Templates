@@ -1,6 +1,6 @@
 # PROGRESS.md — Khung X-Templates
 
-> Giai đoạn hiện tại: G8 Vận hành & tiến hoá (khung 3.36.0, pha `harden` — D-136) · Cập nhật: 2026-11-27
+> Giai đoạn hiện tại: G8 Vận hành & tiến hoá (khung 3.36.0, pha `harden` — D-136) · Cập nhật: 2026-11-28
 
 ## Đang làm
 
@@ -14,12 +14,13 @@
 
 ## Tiếp theo
 1. **Tối ưu khung** ([PLAN](docs/autopilot/PLAN-optimize-2026-11-26.md), D-608/D-609/D-610; [nghiên cứu](research/2026-11-26-framework-optimization.md) 10 hướng, 31 lát): đợt 1 `T-5032`…`T-5037` không chạm tệp nóng; còn lại ở "Đợt sau". Dự án đích hoãn nâng (D-610).
-2. **Kế hoạch cải tiến** ([PLAN](docs/autopilot/PLAN-improve-2026-11-23.md), D-544): đợt 1–2 xong, phát hành 3.36.0. Còn: T-4007 (workflow #868 đã merge; cấu hình App/ruleset tag live cần admin); T-4010 xong (#823); T-3555 xong (#854); `test_field_trigger` đỏ ~12 phút đầu mỗi ngày UTC đã sửa ở #764 (AUD-TEST-152); tách sâu `guard.py` ([PLAN](docs/autopilot/PLAN-guard-split-2026-11-22.md), D-542) về đợt 4. Phiên `stored` merge tài liệu `framework/` vào `main` làm lệch vân tay GO-NO-GO — dừng chúng khi đang cắt bản. Ngoài PLAN: stored XT-H-117…139; `pre-push.sh`; AUD-HAR-436; AUD-TEST-126.
+2. **Kế hoạch cải tiến** ([PLAN](docs/autopilot/PLAN-improve-2026-11-23.md), D-544): đợt 1–2 xong, phát hành 3.36.0. Còn: T-4007 (workflow #868 đã merge; cấu hình App/ruleset tag live cần admin); tách sâu `guard.py` ([PLAN](docs/autopilot/PLAN-guard-split-2026-11-22.md), D-542) về đợt 4. Phiên `stored` merge tài liệu `framework/` vào `main` làm lệch vân tay GO-NO-GO — dừng chúng khi đang cắt bản. Ngoài PLAN: stored XT-H-117…139; `pre-push.sh`; AUD-HAR-436; AUD-TEST-126.
 3. Hạn: 2026-12-31 rà stored; **2027-01-21** xét lại hàng rào guard + đánh giá sandbox Bash opt-in (D-331/D-332, ADR-0072) và các chấp nhận AUD-SEC-406/931/943/955/965.
 4. Ruleset `main` đủ 5 check (2026-11-20); ruleset tag live chưa có. Việc của người: T-4007; xoá stash `d497-dup`, `d498-dup-x9`; `XT_STEWARD_TOKEN`, Dependabot security updates (RUNBOOK-PR-STEWARD §1).
 5. Còn: máy hoá `LOOP-HARNESS-031`, `LOOP-STOP-030`; task `[perf]` trong `loop` (D-041); URL phiên do máy chủ MCP gắn vào thân PR; ép báo "đã đo/chưa đo" cho UI (`LOOP-DESIGN-021`); tách khung khỏi đích bằng `.pyz` ([PLAN](docs/autopilot/PLAN-tool-independence-2026-11-24.md), ADR-0097: P0–P1 xong).
-6. [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md): T-5001–5008, T-5014–5016 đã merge (#797–#799). Chromium CI đã chạy (#856); còn AUD-HAR-567 phần pseudo/cuộn lồng. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký còn NO-GO.
+6. [PLAN-harden](docs/autopilot/PLAN-harden-2026-11-24.md): T-5001–5008, T-5014–5016 đã merge (#797–#799). Còn AUD-HAR-567 phần pseudo/cuộn lồng. T-5020/5017/5018 chờ admin, người thử hoặc môi trường thật; cổng ký còn NO-GO.
 7. Giữ cổng: C901 ≤ 10, `mypy --strict`, coverage dòng + nhánh 100 %, `changelog-check`, trần byte (`tests/test_docs_budget.py`, ADR-0043), không ngưỡng thời gian/CPU cứng (BASE-GATE-005), quy ước tên định danh ở `scripts/AGENTS.md` — không `noqa`/pragma; nới trần chỉ bằng ADR (ADR-0092).
+8. **Dễ tiếp cận, đa host** ([PLAN](docs/autopilot/PLAN-approach-2026-11-28.md), D-650…D-652; [đối chiếu](research/2026-11-28-external-roadmap-assessment.md)): `T-5115` xong; 9 task mở.
 
 ## Quyết định
 > Chi tiết ở `docs/adr/` và `docs/autopilot/DECISIONS.md` (D-NNN); ở đây chỉ giữ điều chưa có nhà khác.
