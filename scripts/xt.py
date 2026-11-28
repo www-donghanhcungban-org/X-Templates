@@ -4556,16 +4556,16 @@ def _tool_present(root: Path, name: str) -> bool:
 
 def audit_tools(root: Path, sig: Dict[str, Any], appl: Dict[int, Tuple[str, str]]) -> Dict[int, Dict[str, List[str]]]:
     stacks = set(sig["langs"]) | ({"ui"} if sig["ui"] or sig["mobile"] else set())
+    is_present = functools.cache(functools.partial(_tool_present, root))
     out: Dict[int, Dict[str, List[str]]] = {}
     for no, tools in AUDIT_TOOLS.items():
         if appl[no][0] == "N/A":
             continue
         rel = [t for t, st in tools if st is None or st in stacks]
         if rel:
-            out[no] = {
-                "có": [t for t in rel if _tool_present(root, t)],
-                "thiếu": [t for t in rel if not _tool_present(root, t)],
-            }
+            present = [t for t in rel if is_present(t)]
+            missing = [t for t in rel if not is_present(t)]
+            out[no] = {"có": present, "thiếu": missing}
     return out
 
 

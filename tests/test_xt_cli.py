@@ -259,6 +259,32 @@ class AuditToolsTest(TmpDirCase):
         self.assertIn("jscpd", tools[3]["có"] + tools[3]["thiếu"])
         self.assertNotIn(6, tools)  # N/A (không UI) bị bỏ qua
 
+    def test_each_applicable_tool_is_probed_once_per_call(self):
+        sig = xt.audit_signals(self.tmp, ["lib.rs", "AGENTS.md"])
+        appl = xt.audit_applicability(sig)
+        with (
+            unittest.mock.patch.object(
+                xt.shutil, "which", side_effect=lambda name: "/usr/bin/semgrep" if name == "semgrep" else None
+            ),
+            unittest.mock.patch.object(xt, "_tool_present", wraps=xt._tool_present) as probes,
+        ):
+            first = xt.audit_tools(self.tmp, sig, appl)
+            names = [c.args[1] for c in probes.call_args_list]
+            self.assertEqual(len(names), len(set(names)), names)
+            self.assertNotIn("playwright", names)  # nhóm N/A
+            self.assertNotIn("bandit", names)  # stack không áp dụng
+            self.assertEqual(first[2], {"có": ["semgrep"], "thiếu": ["gitleaks", "osv-scanner"]})
+            self.assertEqual(first[11], {"có": [], "thiếu": ["gitleaks"]})
+
+            installed = self.tmp / "node_modules" / ".bin" / "gitleaks"
+            installed.parent.mkdir(parents=True)
+            installed.touch()
+            probes.reset_mock()
+            second = xt.audit_tools(self.tmp, sig, appl)
+            self.assertEqual([c.args[1] for c in probes.call_args_list], names)
+            self.assertEqual(second[2], {"có": ["gitleaks", "semgrep"], "thiếu": ["osv-scanner"]})
+            self.assertEqual(second[11], {"có": ["gitleaks"], "thiếu": []})
+
 
 class ToolPresentTest(TmpDirCase):
     """Tất định, không phụ thuộc PATH của máy chạy test."""
