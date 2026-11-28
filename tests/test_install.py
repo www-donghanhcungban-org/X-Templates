@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import io
 import json
 import os
@@ -65,6 +66,70 @@ class InstallTest(unittest.TestCase):
                 install.install_framework(root, "minimal")
         self.assertFalse(any((root / "scripts" / name).exists() for name in helpers))
         self.assertEqual(project_file.read_text(), "product = True\n")
+
+    def test_cli_version_survives_a_failed_package_copy(self):
+        root = self.target / ".xtemplates"
+        scripts = root / "scripts"
+        package = scripts / "xt_checks"
+        package.mkdir(parents=True)
+        previous = {
+            root / "VERSION": b"3.36.0\n",
+            scripts / "xt.py": b"# old CLI\n",
+            scripts / "xt_flow.py": b"# old helper\n",
+            package / "__init__.py": b"# old checks\n",
+        }
+        for path, data in previous.items():
+            path.write_bytes(data)
+
+        copytree = shutil.copytree
+
+        def copy_with_full_disk(src, dst, *args, **kwargs):
+            if src == ROOT / "scripts" / "xt_checks":
+                raise OSError(errno.ENOSPC, "disk full")
+            return copytree(src, dst, *args, **kwargs)
+
+        with (
+            mock.patch.object(shutil, "copytree", side_effect=copy_with_full_disk),
+            self.assertRaises(OSError) as caught,
+        ):
+            install.install_framework(root, "3.37.0")
+        self.assertEqual(caught.exception.errno, errno.ENOSPC)
+        for path, data in previous.items():
+            self.assertTrue(path.read_bytes() == data, str(path.relative_to(root)))
+
+    def test_cli_package_survives_a_failed_rename(self):
+        rename = Path.rename
+        for failure in ("backup", "publish", "rollback"):
+            with self.subTest(failure=failure):
+                root = self.target / failure / ".xtemplates"
+                scripts = root / "scripts"
+                package = scripts / "xt_checks"
+                package.mkdir(parents=True)
+                (package / "__init__.py").write_text("# old checks\n", encoding="utf-8")
+
+                def fail_rename(path, target):
+                    publishing = path.name == target.name == "xt_checks"
+                    backup = path == package and target.name == "prior"
+                    restoring = path.name == "prior" and target == package
+                    if (
+                        (backup and failure == "backup")
+                        or (publishing and failure != "backup")
+                        or (restoring and failure == "rollback")
+                    ):
+                        raise PermissionError(errno.EACCES, "permission denied")
+                    return rename(path, target)
+
+                with mock.patch.object(Path, "rename", fail_rename), self.assertRaises(PermissionError) as caught:
+                    install.install_framework(root, "3.37.0")
+                self.assertEqual(caught.exception.errno, errno.EACCES)
+                backups = list(scripts.glob(".xt_checks-previous-*/prior"))
+                if failure == "rollback":
+                    self.assertEqual(len(backups), 1)
+                    self.assertFalse(package.exists())
+                else:
+                    self.assertEqual(backups, [])
+                old = backups[0] if backups else package
+                self.assertEqual((old / "__init__.py").read_text(encoding="utf-8"), "# old checks\n")
 
     def test_xtemplates_readme_is_the_single_adopted_note(self):
         """WF-DOC-021: `.xtemplates/README.md` = tiêu đề + ghi chú nguồn (phiên bản từ nhãn, repo từ `source.repo`) + một
