@@ -18,6 +18,7 @@ import unicodedata
 import unittest
 import warnings
 import unittest.mock
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import chdir, redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -354,6 +355,117 @@ class AuditStatusGroupsTest(TmpDirCase):
 
 
 class AuditRescanTest(TmpRepoCase):
+    def test_codex_harness_files_request_rescan(self):
+        self.init_repo()
+        cases = {
+            ".codex/hooks.json": {13},
+            ".codex/agents/executor.toml": {13},
+            ".agents/skills/audit/SKILL.md": {9, 13},
+            ".claude/hooks/example.sh": {13},
+            ".codex/agents/examples/nested.toml": set(),
+        }
+        status = self.tmp / "S.md"
+        base = self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        with unittest.mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(self.repo)}):
+            for offset, (path, expected) in enumerate(cases.items(), 1):
+                with self.subTest(path=path):
+                    groups = {n: ("đã quét", base, "2026-10-14", "") for n in (9, 13)}
+                    status.write_text(audit_status_text(groups), encoding="utf-8")
+                    base = self.commit_files({path: "change"}, 1_700_000_000 + offset)
+                    rc, out, err = run_main("audit", "plan", "--status", status, "--json")
+                    self.assertEqual((rc, err), (0, ""))
+                    self.assertEqual(set(json.loads(out)["rescan"]), {str(n) for n in expected})
+
+    def test_diff_error_requests_rescan_for_all_groups_at_that_commit(self):
+        self.init_repo()
+        first = self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        head = self.commit_files({"app.py": "changed"}, 1_700_000_001)
+        status = self.tmp / "S.md"
+        groups = {
+            1: ("đã quét", first, "2026-10-14", ""),
+            9: ("rút gọn", first, "2026-10-14", ""),
+            12: ("đã quét", head, "2026-10-14", ""),
+            13: ("chưa quét", "", "", ""),
+        }
+        status.write_text(audit_status_text(groups), encoding="utf-8")
+        git = xt._git
+        for code, partial in [(128, "app.py\0"), (124, "")]:
+            with self.subTest(code=code):
+
+                def failed_diff(root, *args):
+                    if args[0] == "diff" and args[-1] == f"{first}..HEAD":
+                        return subprocess.CompletedProcess(args, code, partial, "diff error")
+                    return git(root, *args)
+
+                with (
+                    unittest.mock.patch.object(xt, "_git", side_effect=failed_diff) as run_git,
+                    unittest.mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(self.repo)}),
+                ):
+                    rc, out, err = run_main("audit", "plan", "--status", status, "--json")
+                self.assertEqual((rc, err), (0, ""))
+                rescan = json.loads(out)["rescan"]
+                self.assertEqual(set(rescan), {"1", "9", "13"})
+                self.assertEqual(rescan["13"], "chưa quét")
+                self.assertEqual(rescan["1"], rescan["9"])
+                self.assertIn(f"git diff từ `{first[:7]}` (exit {code})", rescan["1"])
+                self.assertEqual(sum(c.args[-1] == f"{first}..HEAD" for c in run_git.call_args_list), 1)
+
+    def test_reads_each_scan_commit_once_and_preserves_example_order(self):
+        self.init_repo()
+        first = self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        second = self.commit_files({"a.py": "one", "b.py": "two"}, 1_700_000_001)
+        self.commit_files({"z.py": "three", "é.py": "four"}, 1_700_000_002)
+        status = self.tmp / "S.md"
+        groups = {n: ("đã quét", sha, "2026-10-14", "") for n, sha in [(1, first), (3, second), (12, first)]}
+        status.write_text(audit_status_text(groups), encoding="utf-8")
+        with (
+            unittest.mock.patch.object(xt, "_git", wraps=xt._git) as run_git,
+            unittest.mock.patch.object(xt, "_path_groups", wraps=xt._path_groups) as classify_path,
+            unittest.mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(self.repo)}),
+        ):
+            rc, out, err = run_main("audit", "plan", "--status", status, "--json")
+        self.assertEqual((rc, err), (0, ""))
+        rescan = json.loads(out)["rescan"]
+        self.assertEqual(list(rescan), ["1", "3", "12"])
+        self.assertEqual(rescan["1"], f"4 file đổi từ `{first[:7]}` (vd a.py, b.py, z.py)")
+        self.assertEqual(rescan["3"], f"2 file đổi từ `{second[:7]}` (vd z.py, é.py)")
+        self.assertEqual(rescan["1"], rescan["12"])
+        self.assertEqual([c.args[-2] for c in run_git.call_args_list if c.args[1] == "merge-base"], [first, second])
+        self.assertEqual(
+            [c.args[-1] for c in run_git.call_args_list if c.args[1] == "diff"], [f"{first}..HEAD", f"{second}..HEAD"]
+        )
+        self.assertEqual(
+            [c.args[0] for c in classify_path.call_args_list], ["a.py", "b.py", "z.py", "é.py", "z.py", "é.py"]
+        )
+
+    def test_codex_harness_activates_previously_inapplicable_group(self):
+        self.init_repo()
+        status = self.tmp / "S.md"
+        status.write_text(audit_status_text({13: ("N/A", "", "", "chưa có harness")}), encoding="utf-8")
+        self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        self.assertNotIn(13, xt.audit_rescan(self.repo, status))
+        self.commit_files({".agents/skills/audit/SKILL.md": "skill"}, 1_700_000_001)
+        rescan = xt.audit_rescan(self.repo, status)
+        self.assertIn(13, rescan)
+        self.assertIn("N/A→áp dụng", rescan[13])
+
+    def test_concurrent_scans_with_shared_sha_use_each_repos_changes(self):
+        original = self.init_repo()
+        base = self.commit_files({"README.md": "baseline"}, 1_700_000_000)
+        other = self.tmp / "other"
+        shutil.copytree(original, other)
+        self.commit_files({"app.py": "app"}, 1_700_000_001)
+        self.repo = other
+        self.commit_files({"guide.md": "guide"}, 1_700_000_002)
+        status = self.tmp / "S.md"
+        groups = {n: ("đã quét", base, "2026-10-14", "") for n in (1, 9)}
+        status.write_text(audit_status_text(groups), encoding="utf-8")
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            original_scan = pool.submit(xt.audit_rescan, original, status)
+            other_scan = pool.submit(xt.audit_rescan, other, status)
+            self.assertEqual(set(original_scan.result()), {1})
+            self.assertEqual(set(other_scan.result()), {9})
+
     def test_e2e_and_ui_assets_request_rescan(self):
         self.init_repo()
         cases = {

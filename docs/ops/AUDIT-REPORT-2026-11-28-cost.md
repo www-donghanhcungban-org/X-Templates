@@ -16,6 +16,12 @@ Mốc kiểm là `main` ở `719eb8b0`. Ba lỗi tái hiện được ảnh hư�
 - Với log coverage thật của PR #904, công cụ chọn một dòng dài 57 ký tự trên log 94.688 byte. Lợi ích về ngữ cảnh tập trung ở ca dòng dài. [Job đã đo](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46154912933/job/141011847296).
 - `audit check` exit 0 trên mốc gốc. `audit check --strict` exit 1 với sáu mục 🟠 đang mở trước đợt này. Sổ hiện hành nêu chủ và phạm vi của từng khoản.
 
+## Kết quả sửa audit delta
+
+Đo hàm `audit_rescan` trên cùng checkout sạch `719eb8b0` và cùng sổ. Sau một lượt làm nóng, lấy trung vị bảy lượt cho mỗi bản. Thời gian giảm từ 158,03 ms xuống 43,50 ms. Số tiến trình Git giảm từ 26 xuống 6 (mỗi SHA một lần kiểm tổ tiên và một diff). Cả hai bản đều trả cùng 11 nhóm trên sổ khung.
+
+Trong fixture, Git trả 128 hoặc 124 làm mọi nhóm sử dụng SHA đó được báo cần quét lại. CLI giữ thứ tự nhóm và ba tên tệp minh họa khi Git thành công. Ba commit chỉ đổi harness Codex nay đều đánh dấu nhóm 13. Thêm skill vào repo từng ghi HAR là N/A cũng kích hoạt rà lại. Bộ test audit, đường dẫn và trần dòng đạt sau sửa.
+
 ## Hai cơ hội ưu tiên thấp
 
 `xt.py checks` dựng parser sáu lần để chạy năm kiểm. cProfile ghi 0,157 giây cộng dồn trong parser. Chưa đo thời gian sau tối ưu. Workflow dependency audit gọi pip-audit hai lần để xuất bảng và SBOM. Trên 12 run xanh, mỗi bước có trung vị một giây. Bảng chẩn đoán hiện có thông tin giúp sửa CVE. Hai cơ hội được ghi để đối chiếu khi có profile mới.
