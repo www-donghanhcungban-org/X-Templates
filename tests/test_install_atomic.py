@@ -85,6 +85,15 @@ class WriteBytesAtomicTest(TestCase):
         install.migrate_legacy(self.tmp)
         self.assertTrue(manifest.is_dir())
 
+    def test_load_incomplete_manifest_without_changing_it(self) -> None:
+        manifest = self.tmp / install.MANIFEST
+        manifest.parent.mkdir()
+        for raw in (b'{"sample.txt":', b'"\xff"'):
+            with self.subTest(raw=raw):
+                manifest.write_bytes(raw)
+                self.assertEqual(install.load_manifest(self.tmp), {})
+                self.assertEqual(manifest.read_bytes(), raw)
+
     def test_legacy_manifest_survives_partial_write_and_retry(self) -> None:
         legacy = self.tmp / install.LEGACY_DIR
         legacy.mkdir()
