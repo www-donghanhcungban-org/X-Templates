@@ -424,6 +424,26 @@ class PrsTest(unittest.TestCase):
 
 
 class PrStatsTest(unittest.TestCase):
+    def test_mismatched_checkout_overrides_stop_both_reads(self) -> None:
+        for override in ({"GH_REPO": "another/repo"}, {"GH_HOST": "github.example"}):
+            with self.subTest(override=override), mock.patch.dict(os.environ, override):
+                spy = GhSpy()
+                with Sandbox(gh=spy) as sb:
+                    for route in ("/api/prs", "/api/pr-stats"):
+                        code, body = sb.call(route)
+                        self.assertEqual((code, body["available"]), (200, False))
+                self.assertEqual(spy.calls, [])
+
+    def test_stats_requests_use_checkout_host_and_repo(self) -> None:
+        proc = ProcSpy()
+        with Sandbox(proc=proc) as sb:
+            self.assertIs(sb.call("/api/pr-stats")[1]["available"], True)
+        reads = [cmd for cmd in proc.cmds if cmd[:2] == ["gh", "api"]]
+        self.assertTrue(any("/actions/workflows/" in cmd[-1] for cmd in reads))
+        for cmd in reads:
+            self.assertEqual(cmd[2:4], ["--hostname", "github.com"])
+            self.assertTrue(cmd[-1].startswith("repos/o/r/"))
+
     def test_default_days_matches_pr_stats(self) -> None:
         with Sandbox(gh=GhSpy()) as sb:
             code, body = sb.call("/api/pr-stats")

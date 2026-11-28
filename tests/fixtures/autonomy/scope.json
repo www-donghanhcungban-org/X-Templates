@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Đối chiếu repo của hai route HTTP bằng REST GET giả trong `tests.test_app_pr.PrsTest` và `tests.test_app_pr.PrStatsTest`.",
+   "ids": [
+    "AUD-XFEAT-061"
+   ]
+  },
+  {
    "reason": "Diễn tập rollout cần receipt dev, loopback và fixture trạng thái nhánh bảo vệ, ngoài adapter corpus. Gate: `python3 -m unittest tests.test_factory_operations`.",
    "ids": [
     "AUD-XFEAT-059"
