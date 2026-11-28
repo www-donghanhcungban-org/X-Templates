@@ -946,13 +946,23 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         "xt_shard.py",
         "xt_merge_queue.py",
     )
-    for f in ("xt.py", "dev-task.sh", "check-links.py", *optional_scripts):
-        drop_symlink(xt_dir / "scripts" / f)
-        if f in optional_scripts and not (SRC / "scripts" / f).is_file():  # khung tối giản/bản cũ
-            (xt_dir / "scripts" / f).unlink(missing_ok=True)
-            continue
-        shutil.copy2(SRC / "scripts" / f, xt_dir / "scripts" / f)
-    (xt_dir / "scripts" / "dev-task.sh").chmod(0o755)
+    scripts = xt_dir / "scripts"
+    # Chuẩn bị đủ các mô-đun trước khi công bố CLI mới. Công bố bằng rename cùng hệ tệp.
+    with tempfile.TemporaryDirectory(dir=scripts) as staging:
+        staged, absent = [], []
+        for name in ("dev-task.sh", "check-links.py", *optional_scripts, "xt.py"):
+            source = SRC / "scripts" / name
+            if name in optional_scripts and not source.is_file():  # khung tối giản/bản cũ
+                absent.append(name)
+                continue
+            path = Path(staging) / name
+            shutil.copy2(source, path)
+            staged.append(path)
+        (Path(staging) / "dev-task.sh").chmod(0o755)
+        for path in staged:
+            path.replace(scripts / path.name)
+        for name in absent:
+            (scripts / name).unlink(missing_ok=True)
     # App cục bộ `xt.py app` (ADR-0038): gói máy chủ + giao diện tĩnh cạnh xt.py, luôn thay như xt.py.
     for d in ("xt_app", "app", "xt_checks"):  # xt_checks: bộ kiểm tĩnh `xt.py static-check` (ADR-0099)
         if (SRC / "scripts" / d).is_dir():  # khung tối giản (test, bản cũ) không có app: bỏ qua, `doctor` báo ⚠

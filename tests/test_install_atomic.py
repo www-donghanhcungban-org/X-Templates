@@ -263,6 +263,46 @@ class InstallInterruptedWriteTest(TestCase):
         subprocess.run(["git", "init", "-q", str(self.target)], check=True)
         self.hooks = self.target / ".git" / "hooks"
 
+    def test_upgrade_keeps_existing_cli_when_new_module_copy_fails(self) -> None:
+        scripts = self.target / ".xtemplates" / "scripts"
+        scripts.mkdir(parents=True)
+        cli = scripts / "xt.py"
+        cli.write_text("print('sample.One')\n", encoding="utf-8")
+        version = scripts.parent / "VERSION"
+        version.write_text("v3.36.0\n", encoding="utf-8")
+
+        def plan_shard() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [sys.executable, str(cli), "test-shard-plan", "1", "2", "--weights", str(self.target / "absent.json")],
+                input="sample.One\nsample.Two\n",
+                capture_output=True,
+                text=True,
+            )
+
+        copy_file = install.shutil.copy2
+
+        def copy_with_disk_failure(src: Path, dst: Path) -> Path:
+            if Path(src).name == "xt_shard.py":
+                raise OSError(errno.ENOSPC, "simulated disk exhaustion", str(dst))
+            return copy_file(src, dst)
+
+        original = plan_shard()
+        self.assertEqual((original.returncode, original.stdout), (0, "sample.One\n"))
+        with mock.patch.object(install.shutil, "copy2", side_effect=copy_with_disk_failure):
+            code, error = self.run_install("--no-harness", "--no-git-hooks")
+        self.assertEqual(code, 1, error)
+        self.assertIn("xt_shard.py", error)
+        self.assertEqual(version.read_text(encoding="utf-8"), "v3.36.0\n")
+        interrupted = plan_shard()
+        self.assertEqual((interrupted.returncode, interrupted.stdout), (0, original.stdout), interrupted.stderr)
+
+        code, error = self.run_install("--no-harness", "--no-git-hooks")
+        self.assertEqual(code, 0, error)
+        self.assertTrue((scripts / "xt_shard.py").is_file())
+        self.assertEqual(version.read_text(encoding="utf-8"), "t\n")
+        retried = plan_shard()
+        self.assertEqual((retried.returncode, retried.stdout), (0, original.stdout), retried.stderr)
+
     def test_retry_after_settings_publish_keeps_rule_provenance(self) -> None:
         for mode in ("fresh", "merge", "own"):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as scratch:
