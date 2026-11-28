@@ -136,5 +136,20 @@ class TagGlobOracle(unittest.TestCase):
                 self.assertTrue(blocked(cmd))
 
 
+class PositionalNameCandidatesTest(unittest.TestCase):
+    def test_candidates_stop_after_first_literal(self) -> None:
+        cases = (
+            ([], []),
+            (["topic", "note"], ["topic"]),
+            (["$sample", "topic", "note"], ["$sample", "topic"]),
+            (["$sample", "$other", "topic", "note"], ["$sample", "$other", "topic"]),
+            (["$sample", "$other"], ["$sample", "$other"]),
+        )
+        for parser in (guard._tag_names, guard._update_ref_names):
+            for words, expected in cases:
+                with self.subTest(parser=parser.__name__, words=words):
+                    self.assertEqual(parser(words, None), expected)
+
+
 if __name__ == "__main__":
     unittest.main()
