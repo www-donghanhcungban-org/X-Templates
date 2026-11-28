@@ -5,47 +5,30 @@ Lệnh:
   validate                      Kiểm quy ước toàn khung (frontmatter, ID, liên kết, hồ sơ/gói ngành).
   list [profiles|industries|modules]
   compose --profile P [--industry I ...] [--scale S|M|L] [--include-may] [--add MODULE ...] [--out FILE] [--full]
-                                Ghép baseline + hồ sơ + gói ngành thành BLUEPRINT.md (MUST theo quy mô) + <tên>-BACKLOG.md
-                                (SHOULD/MAY) cho dự án; --full: một file như trước ADR-0012.
+                                Ghép blueprint theo quy mô và tạo backlog riêng, hoặc dùng --full để ghép chung.
   blueprint-status FILE [--strict] [--run] [--json]
-                                Đếm mục đạt/chưa/miễn; --run: chạy lại lệnh ghi chú `— Kiểm:` của mục [x] trong thư mục
-                                chứa FILE; --strict: còn MUST chưa đạt hoặc lệnh kiểm đỏ -> exit 1.
+                                Đếm mục đạt, mở và miễn. --run kiểm lại mục đạt. --strict kiểm MUST và Gate.
   loop init --plan FILE [--blueprint FILE] [--max-iterations N] [--hours H] [--single-session] [--max-task-runs N]
   loop status [--json]          Verdict máy tính từ PLAN + bằng chứng (không do model tự khai).
-  loop next-step [--prs FILE] [--status F] [--json]
-                                Bước kế của mục tiêu build-until-clean (task/verify/pr/audit/replan/ready-for-complete…).
-  loop record --task T-001 -- <lệnh...>
-                                Chạy lệnh kiểm của task, ghi bằng chứng (exit code, thời gian, đuôi output).
-  loop block --reason TEXT      Đánh dấu BLOCKED (điểm dừng an toàn — cần người, mọi việc còn lại phụ thuộc nó).
-  loop defer --task ID --reason TEXT
-                                Việc cần người: bỏ qua, làm việc khác; hết việc → verdict done-pending-human.
-  loop checkpoint               Dùng cho PreCompact hook: ghi vị trí làm việc vào state trước khi nén (luôn exit 0).
-  loop decide --question Q --option A --option B --choice N --why W --revert R [--prod TEXT] [--log FILE]
-                                Phiên chính tự duyệt điểm quyết định, ghi D-NNN vào docs/autopilot/DECISIONS.md.
+  loop next-step                Bước kế của mục tiêu build-until-clean.
+  loop record                   Chạy Gate và ghi exit code, thời gian, đuôi output.
+  loop block                    Dừng khi mọi việc còn lại đều chờ người.
+  loop defer                    Ghi việc chờ người và tiếp tục các việc khác.
+  loop checkpoint               Ghi vị trí trước khi nén cho hook PreCompact, luôn exit 0.
+  loop decide                   Ghi D-NNN vào docs/autopilot/DECISIONS.md.
   loop attach                   Gắn phiên hiện tại vào vòng đang chạy (sau /clear); giữ việc chờ, đếm lỗi, BLOCKED.
   loop resolve --task ID --reason TEXT
                                 Người đã xử lý một việc chờ: gỡ khỏi deferred, ghi resolved[].
   loop unblock --reason TEXT    Người xem rồi: mở BLOCKED/đã dừng, đặt lại đếm lỗi; giữ việc chờ, số vòng/bằng chứng.
-  loop resume [--reason TEXT]   Lệnh cũ (làm cả bốn việc trên, in cảnh báo) — dùng attach/resolve/unblock.
+  loop resume                   Lệnh cũ, dùng attach/resolve/unblock.
   loop stop [--reason TEXT]     Tắt vòng lặp.
-  loop stats [--json] [--all]   Số đo vòng từ .autopilot/runs.jsonl: lần chạy/task, xanh lần đầu, task cần ≥ 3 lần,
-                                thời gian tới xanh (giờ, trung vị/P95 — ADR-0061).
-  pr next [--pr N] [--json]     Merge theo làn: MỘT bước kế cho PR đã mở (tắt auto-merge người bật, rà, merge ghim head…).
-  pr stats [--days 30] [--repo R] [--json]
-                                Số đo PR đã merge trong N ngày (REST): lead time trung vị/P95, run CI `pull_request` mỗi PR,
-                                tỉ lệ run failure/cancelled, PR làn chuẩn, PR revert — bảng Markdown cho /handover.
-  pr reviewed --pr N --head SHA (--clean|--blocking) --reviewer-model M --author-model M
-              [--reviewer-effort E --author-effort E]
-                                Ghi kết quả review ở commit đã rà vào .autopilot/reviews.json (ADR-0025).
-  pr debt [--pr N] [--findings AUD-…[,AUD-…]] [--fixed AUD-…]
-                                Sau một review đã kết luận (`pr next` = debt — review 1 lần, ADR-0062): 🟠/🟢 ghi `mở` +
-                                `nợ-review: #N` ở sổ (--findings); 🔴 sửa trong một commit kèm test, ghi `đã sửa` (--fixed);
-                                → review `debt` ở head, đăng dấu; nợ làm `audit check --strict` đỏ tới khi trả cuối pha.
-  pr rethink [--pr N] --decision D-NNN
-                                `pr next` = rethink (PR cắt bản, `review_identity`, review cuối chưa kết luận sau lượt đã kết
-                                luận): mở thêm một lần sửa theo D-NNN mới, câu hỏi nhắc #N, ghi sau
-                                review chưa sạch cuối (ADR-0053/0059, D-210); tối đa `max_rethink` lần/PR (mức chặt hơn
-                                giữa cây và nhánh đích; PR cắt bản miễn) — hết trần `pr next` trả split-or-close (ADR-0061).
+  loop stats                    Tổng hợp số lượt kiểm và thời gian tới xanh từ .autopilot/runs.jsonl.
+  pr next                       Một bước kế cho PR đã mở.
+  pr stats                      Thời gian tới merge, số lượt CI và tỉ lệ lỗi, huỷ hoặc hoàn tác.
+  pr reviewed                   Ghi kết quả review ở commit đã rà.
+  pr debt                       Ghi kết quả khắc phục và khoản nợ sau review.
+  pr rethink                    Mở thêm một lượt sửa theo quyết định D-NNN.
+  Tùy chọn đầy đủ có ở `xt.py <lệnh> --help` và mục Công cụ của README.md.
   loop hook-stop                Dùng cho Stop hook của Claude Code: đọc JSON stdin, quyết định cho dừng hay chạy tiếp.
   loop triage-local             Dùng cho hook PostToolUseFailure: lệnh Bash cổng/Gate đỏ → ≤ 20 dòng lỗi đã che bí mật
                                 (bộ phân loại của ci-triage) làm additionalContext; không khớp/lỗi → im lặng, exit 0.
@@ -4462,6 +4445,9 @@ def _repo_files(root: Path) -> List[str]:
     return files
 
 
+CODEX_HARNESS_RE = re.compile(r"\.codex/(?:hooks\.json|agents/[^/]+\.toml)|\.agents/skills/[^/]+/SKILL\.md")
+
+
 def audit_signals(root: Path, files: Optional[List[str]] = None) -> Dict[str, Any]:
     files = _repo_files(root) if files is None else files
     names = [posixpath.basename(f) for f in files]
@@ -4498,7 +4484,8 @@ def audit_signals(root: Path, files: Optional[List[str]] = None) -> Dict[str, An
         "iac": sum(1 for f in files if f.endswith(".tf")),
         "docs": sum(1 for f in files if f.endswith(".md")),
         "harness": sorted(n for n in ("AGENTS.md", "xt.yaml", "PROGRESS.md", "BLUEPRINT.md") if n in files)
-        + ([".claude/"] if any(f.startswith(".claude/") for f in files) else []),
+        + ([".claude/"] if any(f.startswith(".claude/") for f in files) else [])
+        + sorted({f.split("/", 1)[0] + "/" for f in files if CODEX_HARNESS_RE.fullmatch(f)}),
         "framework_repo": "framework/00-method/conventions.md" in files and "scripts/xt.py" in files,
     }
     return sig
@@ -4553,7 +4540,7 @@ def audit_applicability(sig: Dict[str, Any]) -> Dict[int, Tuple[str, str]]:
     if sig["harness"]:
         a[13] = ("áp dụng", ", ".join(sig["harness"]) + (" · repo khung" if sig["framework_repo"] else ""))
     else:
-        a[13] = ("N/A", "chưa cài harness khung (không AGENTS.md/xt.yaml/.claude/)")
+        a[13] = ("N/A", "không thấy hồ sơ dự án hay tệp harness Claude/Codex")
     return a
 
 
@@ -4569,16 +4556,16 @@ def _tool_present(root: Path, name: str) -> bool:
 
 def audit_tools(root: Path, sig: Dict[str, Any], appl: Dict[int, Tuple[str, str]]) -> Dict[int, Dict[str, List[str]]]:
     stacks = set(sig["langs"]) | ({"ui"} if sig["ui"] or sig["mobile"] else set())
+    is_present = functools.cache(functools.partial(_tool_present, root))
     out: Dict[int, Dict[str, List[str]]] = {}
     for no, tools in AUDIT_TOOLS.items():
         if appl[no][0] == "N/A":
             continue
         rel = [t for t, st in tools if st is None or st in stacks]
         if rel:
-            out[no] = {
-                "có": [t for t in rel if _tool_present(root, t)],
-                "thiếu": [t for t in rel if not _tool_present(root, t)],
-            }
+            present = [t for t in rel if is_present(t)]
+            missing = [t for t in rel if not is_present(t)]
+            out[no] = {"có": present, "thiếu": missing}
     return out
 
 
@@ -4671,7 +4658,7 @@ def _path_groups(path: str) -> List[int]:
     if "/migrations/" in f"/{path}" or path.endswith((".sql", "schema.prisma")):
         g.append(10)
     harness = name in ("xt.yaml", "PROGRESS.md", "BLUEPRINT.md") or path.startswith(".claude/")
-    if harness or _gate_path(path, AGENT_RULE_GLOBS):
+    if harness or CODEX_HARNESS_RE.fullmatch(path) or _gate_path(path, AGENT_RULE_GLOBS):
         g.append(13)
     if name.startswith(".env") or name in ("Dockerfile", "compose.yaml", "docker-compose.yml"):
         g += [11, 8]
@@ -4737,11 +4724,26 @@ def audit_na_drift(root: Path, groups: Dict[int, Dict[str, str]]) -> Dict[int, s
     return {no: f"N/A→{appl[no][0]}: {appl[no][1]}" for no in na if appl[no][0] != "N/A"}
 
 
+def _audit_changes(root: Path, sha: str) -> Dict[int, str] | str:
+    """Thông báo cần quét lại cho từng nhóm, hoặc một lý do chung khi thiếu dữ liệu Git."""
+    if not sha or _git(root, "merge-base", "--is-ancestor", sha, "HEAD").returncode != 0:
+        return f"SHA `{sha or '—'}` không còn là tổ tiên HEAD — quét lại từ đầu"
+    diff = _git(root, "diff", "-z", "--no-renames", "--name-only", f"{sha}..HEAD")
+    if diff.returncode != 0:
+        return f"không đọc được git diff từ `{sha[:7]}` (exit {diff.returncode}) — quét lại từ đầu"
+    by_group: Dict[int, List[str]] = {}
+    for path in filter(None, diff.stdout.split("\0")):
+        for no in _path_groups(path):
+            by_group.setdefault(no, []).append(path)
+    return {no: f"{len(paths)} file đổi từ `{sha[:7]}` (vd {', '.join(paths[:3])})" for no, paths in by_group.items()}
+
+
 def audit_rescan(root: Path, status: Path) -> Dict[int, str]:
     """Nhóm cần quét lại: chưa quét · SHA không còn trong lịch sử · có file đổi kể từ SHA quét · N/A nay áp dụng."""
     groups = audit_status_groups(status)
     drift = audit_na_drift(root, groups)
     out: Dict[int, str] = {}
+    by_sha: Dict[str, Dict[int, str] | str] = {}
     for no, _, _ in AUDIT_GROUPS:
         r = groups.get(no)
         if r is None or r.get("Trạng thái") == "chưa quét":
@@ -4752,15 +4754,13 @@ def audit_rescan(root: Path, status: Path) -> Dict[int, str]:
                 out[no] = drift[no]
             continue
         sha = r.get("SHA", "").strip("` ")
-        if not sha or _git(root, "merge-base", "--is-ancestor", sha, "HEAD").returncode != 0:
-            out[no] = f"SHA `{sha or '—'}` không còn là tổ tiên HEAD — quét lại từ đầu"
-            continue
-        names = _git(root, "diff", "-z", "--no-renames", "--name-only", f"{sha}..HEAD").stdout.split(
-            "\0"
-        )  # -z: tên lạ không bị trích dẫn
-        changed = [f for f in names if f and no in _path_groups(f)]
-        if changed:
-            out[no] = f"{len(changed)} file đổi từ `{sha[:7]}` (vd {', '.join(changed[:3])})"
+        if sha not in by_sha:
+            by_sha[sha] = _audit_changes(root, sha)
+        changes = by_sha[sha]
+        if isinstance(changes, str):
+            out[no] = changes
+        elif no in changes:
+            out[no] = changes[no]
     return out
 
 
