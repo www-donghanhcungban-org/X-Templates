@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm cổng render qua các fixture tương phản, slot và axe bằng Chromium thật trong tests_e2e/verify_render.test.mjs.",
+   "ids": ["AUD-A11Y-009","AUD-A11Y-010","AUD-A11Y-011"]
+  },
+  {
    "reason": "Kiểm quyết định của guard qua mô hình repo khung, bản cài cạnh scripts của ứng dụng, liên kết tượng trưng và thao tác đồng thời. Gate: `python3 -m unittest tests.test_hooks.CliCacheFenceTest`.",
    "ids": ["AUD-HAR-573"]
   },

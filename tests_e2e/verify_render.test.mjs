@@ -83,6 +83,49 @@ async function serve(t, routes) {
 }
 
 const status = ({ code, stdout, stderr }, expected) => assert.equal(code, expected, stdout + stderr);
+
+test('strict reports an axe tag selection with no rules', async (t) => {
+  const sample = await fixture(t, page({ markup: `<img src="${SAMPLE_IMAGE}">` }));
+  const result = await sample.run(['--strict', '--widths', '320', '--tags', 'wcag2aaaa']);
+  status(result, 1);
+  assert.match(result.stdout, /^UNMEASURED .*check=axe /m);
+});
+
+test('strict reports contrast that exceeds the control content measurement budget', async (t) => {
+  for (const [count, reason] of [
+    [47, null],
+    [48, 'còn phần tử chưa xét nội dung giả'],
+    [198, 'còn phần tử con ngoài giới hạn đo tương phản'],
+  ]) {
+    const filler = '<span></span>'.repeat(count);
+    const sample = await fixture(t, page({
+      css: '#complex:hover { background: #fff; color: #111; } #complex:hover .measured { color: #eee; }'
+        + ' .detail::after { content: "Book a room"; }',
+      markup: `<button id="complex" aria-label="Book a room"><span class="measured">Book a room</span>${filler}<span class="detail"></span></button>`,
+    }));
+    const result = await sample.run(['--strict', '--widths', '320']);
+    status(result, 1);
+    assert.match(result.stdout, /^✗ .*state=hover check=contrast element="#complex"/m);
+    const unknown = result.stdout.split('\n').find((line) => line.startsWith('UNMEASURED ') && line.includes('check=contrast element="#complex"'));
+    assert.equal(unknown?.split(' — ')[1] ?? null, reason, `${count} fillers: ${result.stdout}`);
+  }
+});
+
+test('contrast sees text assigned directly to an open shadow slot', async (t) => {
+  for (const [color, code] of [['#eee', 1], ['#111', 0]]) {
+    const sample = await fixture(t, page({
+      css: '#chip:hover { background: #fff; color: #111; }',
+      markup: `<button id="chip"><label-chip>Book a room</label-chip></button><script>
+        const shadow = document.querySelector('label-chip').attachShadow({ mode: 'open' });
+        shadow.innerHTML = '<style>:host-context(button:hover) slot { color: ${color}; }</style><slot><span>Fallback</span></slot>';
+      </script>`,
+    }));
+    const result = await sample.run(['--strict', '--widths', '320']);
+    status(result, code);
+    if (code) assert.match(result.stdout, /^✗ .*state=hover check=contrast element="#chip"/m);
+  }
+});
+
 const scoped = (width, theme, state) => `viewport=${width}x800 theme=${theme} state=${state}`;
 const count = (stdout, label, width, theme, state, expected) => {
   const line = stdout.split('\n').find((row) => row.startsWith(label + ' ') && row.includes(scoped(width, theme, state)));
