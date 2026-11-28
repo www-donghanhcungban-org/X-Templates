@@ -9,7 +9,7 @@ set -uo pipefail
 
 payload="$(cat)"
 command -v python3 >/dev/null 2>&1 || exit 0
-printf '%s' "$payload" | python3 -I -B -c '
+printf '%s' "$payload" | python3 -I -S -B -c '
 import json, re, sys
 
 EXIT_RE = re.compile(r"\b(?:exit(?:[ _-]?(?:code|status))?|rc|mã thoát)\b\W{0,3}-?\d+", re.IGNORECASE)
