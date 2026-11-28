@@ -171,10 +171,30 @@ def copy_tree_replace(src: Path, dst: Path, ignore: Callable[[str, list[str]], s
     drop_symlink(tmp)
     shutil.rmtree(tmp, ignore_errors=True)
     shutil.copytree(src, tmp, ignore=ignore)
+    publish_tree(tmp, dst)
+
+
+def publish_tree(staged: Path, dst: Path) -> None:
     drop_symlink(dst)
-    if dst.exists():
-        shutil.rmtree(dst)
-    tmp.rename(dst)
+    if not dst.exists():
+        staged.rename(dst)
+        return
+    backup = Path(tempfile.mkdtemp(prefix=f".{dst.name}-previous-", dir=dst.parent))
+    previous = backup / "prior"
+    try:
+        dst.rename(previous)
+        try:
+            staged.rename(dst)
+        except OSError:
+            previous.rename(dst)
+            raise
+    except OSError:
+        if previous.exists():
+            log(f"  ⚠ Chưa khôi phục được {dst}; bản trước còn ở {previous}")
+        else:
+            backup.rmdir()
+        raise
+    shutil.rmtree(backup)
 
 
 # Đích liên kết như `LINK_RE` của check-links: `<…>` (cho phép khoảng trắng) hoặc không khoảng trắng (AUD-CODE-044).
@@ -947,7 +967,7 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
         "xt_merge_queue.py",
     )
     scripts = xt_dir / "scripts"
-    # Chuẩn bị đủ các mô-đun trước khi công bố CLI mới. Công bố bằng rename cùng hệ tệp.
+    # Chuẩn bị cả các gói CLI trước khi thay tệp của bản đang cài.
     with tempfile.TemporaryDirectory(dir=scripts) as staging:
         staged, absent = [], []
         for name in ("dev-task.sh", "check-links.py", *optional_scripts, "xt.py"):
@@ -959,14 +979,20 @@ def install_framework(xt_dir: Path, label: str | None, repo: object = None) -> s
             shutil.copy2(source, path)
             staged.append(path)
         (Path(staging) / "dev-task.sh").chmod(0o755)
+        packages = []
+        # Bản cũ hoặc tối giản có thể thiếu gói. Doctor báo khi thiếu phần ứng dụng cục bộ.
+        for name in ("xt_app", "app", "xt_checks"):
+            source = SRC / "scripts" / name
+            if source.is_dir():
+                path = Path(staging) / name
+                shutil.copytree(source, path, ignore=BYTECODE)
+                packages.append(path)
+        for path in packages:
+            publish_tree(path, scripts / path.name)
         for path in staged:
             path.replace(scripts / path.name)
         for name in absent:
             (scripts / name).unlink(missing_ok=True)
-    # App cục bộ `xt.py app` (ADR-0038): gói máy chủ + giao diện tĩnh cạnh xt.py, luôn thay như xt.py.
-    for d in ("xt_app", "app", "xt_checks"):  # xt_checks: bộ kiểm tĩnh `xt.py static-check` (ADR-0099)
-        if (SRC / "scripts" / d).is_dir():  # khung tối giản (test, bản cũ) không có app: bỏ qua, `doctor` báo ⚠
-            copy_tree_replace(SRC / "scripts" / d, xt_dir / "scripts" / d)
     version = framework_label(label)
     for f in ("VERSION", "README.md"):
         drop_symlink(xt_dir / f)

@@ -6,6 +6,10 @@
    "ids": ["AUD-HAR-584"]
   },
   {
+   "reason": "Kiểm cổng render qua các fixture tương phản, slot và axe bằng Chromium thật trong tests_e2e/verify_render.test.mjs.",
+   "ids": ["AUD-A11Y-009","AUD-A11Y-010","AUD-A11Y-011"]
+  },
+  {
    "reason": "Kiểm quyết định của guard qua mô hình repo khung, bản cài cạnh scripts của ứng dụng, liên kết tượng trưng và thao tác đồng thời. Gate: `python3 -m unittest tests.test_hooks.CliCacheFenceTest`.",
    "ids": ["AUD-HAR-573"]
   },
@@ -26,7 +30,7 @@
    "ids": ["AUD-HAR-577"]
   },
   {
-   "reason": "Kiểm lỗi hết chỗ đĩa và lần chạy lại qua CLI cài đặt trong tests.test_install_atomic.InstallInterruptedWriteTest.",
+   "reason": "Kiểm lỗi hết chỗ đĩa khi chép mô-đun và gói qua tests.test_install_atomic.InstallInterruptedWriteTest và tests.test_install.InstallTest.",
    "ids": ["AUD-HAR-583"]
   },
   {
