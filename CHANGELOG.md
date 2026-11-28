@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Khi chuyển manifest hash của bản cài cũ, installer ghi đích bằng thay tệp nguyên tử. Nếu lỗi ghi, lần chạy lại vẫn còn bản nguồn đầy đủ.
+
 - Installer giữ nguồn gốc rule của harness khi chạy lại sau gián đoạn giữa lúc ghi settings và hoàn tất manifest. Dữ liệu đang chờ chỉ được dùng khi khớp đúng snapshot settings đã ghi.
 
 - T-5065 (AUD-HAR-567) mở rộng kiểm reflow của `verify-render`: vùng cuộn ngang lồng và pseudo rỗng có nét vẽ trong vùng cắt báo `UNMEASURED`. Trong giới hạn 20 chẩn đoán, các vi phạm cắt chữ đã đo được xếp trước.

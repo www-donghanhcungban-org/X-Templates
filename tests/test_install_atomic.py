@@ -56,6 +56,25 @@ class WriteBytesAtomicTest(TestCase):
         self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         self.path = self.tmp / "hook.sh"
 
+    def test_legacy_manifest_survives_partial_write_and_retry(self) -> None:
+        legacy = self.tmp / install.LEGACY_DIR
+        legacy.mkdir()
+        old = legacy / "harness.sha256.json"
+        destination = self.tmp / install.MANIFEST
+        destination.parent.mkdir()
+        data = b'{"sample.txt":"' + b"a" * 4096 + b'"}'
+        old.write_bytes(data)
+        old.chmod(0o640)
+        with file_size_limit(128), self.assertRaises(OSError):
+            install.migrate_legacy(self.tmp)
+        self.assertEqual(old.read_bytes(), data)
+        self.assertFalse(destination.exists())
+        self.assertEqual(tmp_leftovers(self.tmp), [])
+        install.migrate_legacy(self.tmp)
+        self.assertEqual(destination.read_bytes(), data)
+        self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o640)
+        self.assertFalse(legacy.exists())
+
     def test_new_file_gets_open_default_mode_plus_extra_bits(self) -> None:
         install.write_bytes_atomic(self.path, b"#!/bin/sh\n", add_mode=stat.S_IXUSR)
         self.assertEqual(self.path.read_bytes(), b"#!/bin/sh\n")

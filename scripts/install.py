@@ -2512,8 +2512,8 @@ def migrate_legacy(target: Path) -> None:
         manifest = target / MANIFEST
         if manifest.is_symlink() and not manifest.exists():
             drop_symlink(manifest)  # liên kết treo qua được `exists()` rồi copy2 ghi xuyên nó (AUD-SEC-616)
-        if old_manifest.is_file() and not (target / MANIFEST).exists():
-            shutil.copy2(old_manifest, target / MANIFEST)
+        if old_manifest.is_file() and not manifest.exists():
+            write_bytes_atomic(manifest, old_manifest.read_bytes(), mode=stat.S_IMODE(old_manifest.stat().st_mode))
         shutil.rmtree(legacy)
         log(f"  {LEGACY_DIR}/ → .xtemplates/ (đã xoá bản sao cũ, giữ manifest hash)")
     old_yaml, new_yaml = target / LEGACY_YAML, target / "xt.yaml"
