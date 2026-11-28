@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -547,6 +548,50 @@ class SupplyChainArtifactsTest(unittest.TestCase):
                 r, out = run(exact_release)
                 self.assertEqual((r.returncode, out), (1, ""))
                 self.assertIn("VERSION ở tag v1.2.3", r.stdout)
+
+
+class CodeQLTriggerTest(unittest.TestCase):
+    def setUp(self):
+        workflow = (WORKFLOWS / "codeql.yml").read_text(encoding="utf-8")
+        self.events = workflow.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+
+    def test_pull_request_paths(self):
+        pull_request = self.events.split("  pull_request:\n", 1)[1].split("\n  schedule:", 1)[0]
+        declaration = [line for line in map(strip_comment, pull_request.splitlines()) if line.strip()]
+        self.assertEqual(declaration[:2], ["    branches: [main]", "    paths:"])
+        # fnmatchcase có cùng ngữ nghĩa dấu ** của GitHub cho các mẫu này, kể cả dấu /.
+        self.assertCountEqual(
+            declaration[2:],
+            [
+                '      - "**.py"',
+                '      - "**.pyi"',
+                "      - .github/codeql/**",
+                "      - .github/workflows/codeql.yml",
+            ],
+        )
+        patterns = [line.removeprefix("      - ").strip('"') for line in declaration[2:]]
+        cases = (
+            (("tool.py",), True),
+            (("scripts/tools/tool.py",), True),
+            (("scripts/tools/tool.pyi",), True),
+            ((".claude/hooks/kiểm.py",), True),
+            ((".github/codeql/codeql-config.yml",), True),
+            ((".github/codeql/queries/python.qls",), True),
+            ((".github/workflows/codeql.yml",), True),
+            (("README.md", "scripts/dev-task.sh", "docs/tool.py.md"), False),
+            ((".github/workflows/ci.yml", "frontend/index.ts", ".github/codeql-notes.md"), False),
+            (("README.md", "tests/test_ci.py"), True),
+            ((), False),
+        )
+        for paths, expected in cases:
+            with self.subTest(paths=paths):
+                self.assertEqual(any(fnmatchcase(path, pattern) for path in paths for pattern in patterns), expected)
+
+    def test_push_and_schedule_keep_full_scans(self):
+        push = self.events.split("  push:\n", 1)[1].split("\n  pull_request:", 1)[0]
+        schedule = self.events.split("  schedule:\n", 1)[1]
+        self.assertEqual(push.strip(), "branches: [main]")
+        self.assertEqual(schedule.strip(), '- cron: "23 3 * * 1"')
 
 
 class MergeGateStubTest(unittest.TestCase):
