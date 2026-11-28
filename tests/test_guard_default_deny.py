@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 import unittest.mock as mock
 from pathlib import Path
@@ -26,12 +27,12 @@ ATTR = "Claude-Session: x"  # dòng ghi công AI (`AI_ATTRIBUTION_RE`)
 ATTR_GLUED = "Claude-\"'Session: x'"  # bash ghép "Claude-" và "Session: x" qua hai kiểu nháy
 
 
-def decide(cmd: str) -> dict:
+def decide(cmd: str, root: Path = ROOT, cwd: Path | None = None) -> dict:
     with (
-        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(ROOT), "XT_GUARD_POLICY": ""}),
+        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "XT_GUARD_POLICY": ""}),
         mock.patch.object(guard, "_current_branch", return_value="feat"),
     ):
-        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(ROOT)))
+        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(root), str(cwd) if cwd else None))
 
 
 DENY = {
@@ -118,7 +119,6 @@ ALLOW = (
     "gh pr create --title 'fix: x' --body \"$(cat <<'EOF'\nbody\nEOF\n)\"",
     'gh pr view "$(git branch --show-current)"',
     "ls | xargs -I{} echo {}",
-    "find . -name '*.pyc' | xargs rm -f",
     "git ls-files | xargs git add",
     'tmp=$(mktemp); echo x > "$tmp"',
     'git push -u origin "$(git branch --show-current)"',
@@ -148,6 +148,29 @@ class DefaultDenyTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 d = decide(cmd)
                 self.assertEqual(d["decision"], "", d.get("reason"))
+
+    def test_find_xargs_respects_cache_ownership(self):
+        top = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        frame, app = top / "frame", top / "app"
+        for root, rel in (
+            (frame, "framework/00-method/README.md"),
+            (frame, "scripts/xt.py"),
+            (frame, "scripts/__pycache__/sample.pyc"),
+            (app, ".xtemplates/scripts/xt.py"),
+            (app, ".xtemplates/scripts/__pycache__/sample.pyc"),
+            (app, "scripts/__pycache__/sample.pyc"),
+        ):
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        cleanup = "find . -name '*.pyc' | xargs rm -f"
+        self.assertEqual(decide(cleanup, app, app / "scripts")["decision"], "")
+        follows_links = cleanup.replace("find .", "find -L .", 1)
+        self.assertEqual(decide(follows_links, app, app / "scripts")["code"], guard.BUDGET)
+        for root in (frame, app):
+            with self.subTest(root=root):
+                decision = decide(cleanup, root)
+                self.assertEqual((decision["decision"], decision["code"]), ("deny", guard.BUDGET))
 
     def test_value_class_is_budget_with_rewrite_hint(self):
         for cmd in (*DENY["a-value"][:10], DENY["b-runner"][2], *DENY["c-xargs"][2:5]):
