@@ -60,7 +60,8 @@ python3 .xtemplates/scripts/xt.py blueprint-status BLUEPRINT.md --strict --run
 6. **Hai file** (ADR-0012 của repo khung): `--out BLUEPRINT.md` ghi `BLUEPRINT.md` chỉ chứa MUST ở quy mô đã chọn và
    `BLUEPRINT-BACKLOG.md` chứa SHOULD/MAY. Agent đọc file chính mỗi vòng; backlog không chặn "xong", làm khi còn ngân
    sách. `blueprint-status` đọc cả hai (frontmatter `backlog:`); đổi quy mô thì ghép lại, mục chuyển file theo ID và giữ
-   trạng thái. Cần một file như trước: `--full`.
+   trạng thái. Cần một file như trước: `--full`. Khi ghép lại, chỉ mang trạng thái từ backlog theo tên quy ước còn được
+   khai ở frontmatter. Sau `--full`, trạng thái nằm ở file chính và backlog cũ có thể được giữ trên đĩa.
 
 ## Chọn quy mô
 

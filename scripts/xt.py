@@ -8185,7 +8185,7 @@ def compose_write(
     quiet: bool = False,
 ) -> Dict[str, Any]:
     """Đường ghi của `compose --out` (CLI và `POST /api/blueprint` dùng chung): ghép, giữ tick/miễn trừ theo ID từ
-    `out_path` + `<tên>-BACKLOG.md` cũ, ghi nguyên tử. Lỗi như `compose`/`compose_split` (SystemExit). Trả
+    `out_path` + `<tên>-BACKLOG.md` cũ nếu còn khai ở frontmatter; ghi nguyên tử từng tệp. Lỗi như `compose` (SystemExit). Trả
     `{"written": [Path], "kept", "dropped", "stale" (int), "promoted": [id]}`: `kept` = số mục mang được trạng thái/ghi
     chú từ bản cũ trừ mục đổi chữ (số của dòng `↺ Giữ trạng thái`), `dropped` = số mục `[x]`/`[~]` đổi chữ mà không mang
     được ghi chú, `stale` = số mục đổi chữ yêu cầu bị đặt lại `[ ]`; không có bản cũ → 0. `quiet`: không in stderr."""
@@ -8202,7 +8202,7 @@ def compose_write(
     if not quiet:
         _report_essential(norm_features(feats), scale, promoted)
         _warn_dropped_features(src, extra, out_path, norm_features(feats), promoted)
-    olds = [p for p in (out_path, bl_path) if p.exists()]
+    olds = [p for p in blueprint_files(out_path) if p in (out_path, bl_path) and p.exists()]
     info: Dict[str, Any] = {"kept": 0, "stale": [], "dropped": []}
     if olds:
         main, backlog, info = _carry_merge(framework, olds, main, backlog)

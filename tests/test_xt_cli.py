@@ -842,6 +842,30 @@ class FrameworkCommandsTest(TmpDirCase):
         self.assertNotIn("PRF-WEB-001", out)
         self.assertIn("2 mục SHOULD/MAY không in", err)
 
+    def test_recompose_ignores_backlog_after_switch_to_full(self):
+        target, backlog = self.tmp / "BP.md", self.tmp / "BP-BACKLOG.md"
+        cmd = ("--framework", self.fw, "compose", "--profile", "web-app", "--out", target)
+        self.assertEqual(run_main(*cmd, "--scale", "S")[0], 0)
+        item = "`BE-API-001`"
+        old = backlog.read_text(encoding="utf-8")
+        line = next(line for line in old.splitlines() if item in line)
+        checked = line.replace("[ ]", "[x]", 1) + " — Bằng chứng: bản cũ"
+        backlog.write_text(old.replace(line, checked), encoding="utf-8")
+
+        self.assertEqual(run_main(*cmd, "--scale", "S", "--full")[0], 0)
+        full = target.read_text(encoding="utf-8")
+        self.assertIn(checked, full)
+        self.assertIn(checked, backlog.read_text(encoding="utf-8"))
+        target.write_text(full.replace(checked, line + " — Thiếu: kiểm lại"), encoding="utf-8")
+
+        self.assertEqual(run_main(*cmd, "--scale", "M")[0], 0)
+        current = next(line for line in target.read_text(encoding="utf-8").splitlines() if item in line)
+        self.assertTrue(current.startswith(f"- [ ] {item} **MUST**"), current)
+        self.assertTrue(current.endswith(" — Thiếu: kiểm lại"), current)
+        status = xt.blueprint_status(target)
+        self.assertIn("BE-API-001", status["open_must"])
+        self.assertNotIn("BE-API-001", xt.blueprint_checks(target)["unchecked_must"])
+
     def test_stats(self):
         rc, out, _ = run_main("--framework", self.fw, "stats")
         self.assertEqual(rc, 0)
