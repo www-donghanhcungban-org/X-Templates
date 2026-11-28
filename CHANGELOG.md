@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5098 (AUD-HAR-573): guard bảo vệ cache bytecode của CLI và các gói đi kèm trong repo khung lẫn bản cài. `scripts/` của ứng dụng vẫn dùng được cache riêng khi CLI đã cài tại `.xtemplates/`.
+
 - `loop ci-triage` giữ tối đa 600 ký tự mỗi dòng bằng chứng đã che dữ liệu. Dòng dài giữ đầu và cuối. Mở lại một run cũ cũng rút gọn bản ghi, giữ nguyên chữ ký tính trên dòng đầy đủ và bộ đếm.
 
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.

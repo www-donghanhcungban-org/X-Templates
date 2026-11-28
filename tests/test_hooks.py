@@ -2580,6 +2580,76 @@ class _FenceRootsMixin:
                 self.assertEqual(self.bash(root, cmd, policy)[0], "")
 
 
+class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        installed = Path(self.target, ".xtemplates/scripts/xt.py")
+        installed.parent.mkdir()
+        installed.touch()
+        for root in self.roots:
+            for scripts in ("scripts", ".xtemplates/scripts"):
+                for package in ("", "xt_app", "xt_checks"):
+                    Path(root, scripts, package, "__pycache__").mkdir(parents=True, exist_ok=True)
+
+    def test_cache_writes_follow_cli_layout(self):
+        for root, scripts in ((self.frame, "scripts"), (self.target, ".xtemplates/scripts")):
+            for package in ("", "xt_app", "xt_checks"):
+                cache = Path(scripts, package, "__pycache__")
+                member = cache / "sample.pyc"
+                self.assert_blocked(f"touch {member}", roots=(root,))
+                self.assert_blocked(f"chmod 700 {cache}", roots=(root,))
+                self.assert_allowed(f"stat {cache}", roots=(root,))
+                for policy in self.POLICIES:
+                    with self.subTest(root=root, member=member, policy=policy):
+                        self.assertEqual(self.edit(root, str(member), policy=policy), ("deny", "HOOK_BYPASS"))
+
+    def test_application_and_uncertain_ownership(self):
+        for root, scripts in ((self.frame, "src"), (self.target, "scripts")):
+            path = scripts + "/__pycache__/sample.pyc"
+            self.assert_allowed(f"touch {path}", roots=(root,))
+            for policy in self.POLICIES:
+                with self.subTest(root=root, path=path, policy=policy):
+                    self.assertEqual(self.edit(root, path, policy=policy)[0], "")
+        self.assert_blocked("touch scripts/__pycache__/sample.pyc", roots=(self.bare,))
+        self.assert_blocked("touch .xtemplates/scripts/__pycache__/sample.pyc", roots=(self.bare,))
+
+    def test_cache_path_resolution_and_traversal(self):
+        for root, scripts in ((self.frame, "scripts"), (self.target, ".xtemplates/scripts")):
+            cache = Path(root, scripts, "__pycache__")
+            Path(root, "cache-alias").symlink_to(cache, target_is_directory=True)
+            for command in (
+                "touch cache-alias/sample.pyc",
+                f"cd {scripts} && touch __pycache__/sample.pyc",
+                'cd "$dir" && touch sample.pyc',
+                f"touch {scripts}/__pycache_?/sample.pyc",
+                f"mv {scripts} archived",
+                f"find {scripts} -name '__pycache__' -delete",
+                f"find ./{scripts} -path './{scripts}/__pycache__' -delete",
+                f"find {scripts} -name '__pycache__' -print0 | xargs -0 rm -r",
+                f"git restore --source=HEAD~ -- {scripts}",
+                f"tar -xf fixtures.tar {scripts}/__pycache__",
+            ):
+                self.assert_blocked(command, ("HOOK_BYPASS", "BUDGET"), roots=(root,))
+            self.assertEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "default")[0], "")
+            self.assertNotEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "strict")[1], "HOOK_BYPASS")
+        self.assert_allowed("find scripts -name '__pycache__' -delete", roots=(self.target,))
+
+    def test_symlinked_install_keeps_cache_fenced(self):
+        installed = Path(self.target, ".xtemplates/scripts/xt.py")
+        installed.unlink()
+        app_cli = Path(self.target, "scripts/xt.py")
+        app_cli.touch()
+        installed.symlink_to(app_cli)
+        self.assert_blocked("touch scripts/__pycache__/sample.pyc", roots=(self.target,))
+
+    def test_concurrent_edits_keep_project_ownership_separate(self):
+        path = "scripts/__pycache__/sample.pyc"
+        roots = (self.frame, self.target) * 12
+        with concurrent.futures.ThreadPoolExecutor(4) as pool:
+            actions = list(pool.map(lambda root: self.g.edit_decision(path, root)[0], roots))
+        self.assertEqual(actions, ["deny", ""] * 12)
+
+
 class FenceRestoreFromRevTest(_FenceRootsMixin, unittest.TestCase):
     """AUD-SEC-988 (T-3968): git đưa nội dung từ commit/nhánh/tag/stash KHÁC chỉ mục/HEAD vào cây làm việc hay chỉ mục ở
     đường phủ tệp hàng rào (tệp, thư mục cha, `.`, `:/`, glob pathspec) = thay hàng rào bằng bản cũ (`git checkout HEAD~3
