@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 import cpu_budget
 import xt
+import xt_shard
 from test_ci import CI, ci_jobs, matrix_shards
 
 WEIGHTS = ROOT / "tests" / "shard-weights.json"
@@ -45,7 +46,7 @@ class ShardPlanTest(unittest.TestCase):
         ids = [f"t{k:02d}" for k in range(11)]
         for n in range(1, 6):
             with self.subTest(n=n):
-                self.assertEqual(xt.shard_plan(ids, {}, n), [ids[i::n] for i in range(n)])
+                self.assertEqual(xt_shard.shard_plan(ids, {}, n), [ids[i::n] for i in range(n)])
 
     def test_partition_with_present_missing_and_stale_weights(self):
         ids = ["a", "b", "c", "d", "e", "f"]
@@ -58,16 +59,18 @@ class ShardPlanTest(unittest.TestCase):
         for name, w in cases.items():
             for n in (1, 2, 3, 4, 6, 8):
                 with self.subTest(case=name, n=n):
-                    shards = xt.shard_plan(ids + ["a"], w, n)  # id trùng ở đầu vào bỏ đi
+                    shards = xt_shard.shard_plan(ids + ["a"], w, n)  # id trùng ở đầu vào bỏ đi
                     self.assertEqual(len(shards), n)
                     self.assert_partition(ids, shards)
 
     def test_unknown_id_takes_median_and_order_is_deterministic(self):
         w = {"x": 10.0, "y": 1.0, "z": 3.0, "old": 2.0}  # trung vị = 2.5
-        self.assertEqual(xt.shard_plan(["x", "y", "z", "new"], w, 2), [["x"], ["z", "new", "y"]])
-        self.assertEqual(xt.shard_plan(["new", "z", "y", "x"], w, 2), xt.shard_plan(["x", "y", "z", "new"], w, 2))
+        self.assertEqual(xt_shard.shard_plan(["x", "y", "z", "new"], w, 2), [["x"], ["z", "new", "y"]])
+        self.assertEqual(
+            xt_shard.shard_plan(["new", "z", "y", "x"], w, 2), xt_shard.shard_plan(["x", "y", "z", "new"], w, 2)
+        )
         # hoà trọng số → theo id; hoà tổng → shard chỉ số nhỏ nhất
-        self.assertEqual(xt.shard_plan(["b", "a"], {"a": 1.0, "b": 1.0}, 2), [["a"], ["b"]])
+        self.assertEqual(xt_shard.shard_plan(["b", "a"], {"a": 1.0, "b": 1.0}, 2), [["a"], ["b"]])
 
     def test_balance_within_heaviest_weight(self):
         rng = random.Random(95)
@@ -75,30 +78,30 @@ class ShardPlanTest(unittest.TestCase):
             ids = [f"t{k}" for k in range(rng.randint(1, 60))]
             w = {t: round(rng.expovariate(0.2), 1) for t in ids if rng.random() < 0.9}
             n = rng.randint(1, 6)
-            shards = xt.shard_plan(ids, w, n)
+            shards = xt_shard.shard_plan(ids, w, n)
             self.assert_partition(ids, shards)
-            default = xt.statistics.median(w.values()) if w else xt.SHARD_DEFAULT_WEIGHT
+            default = xt.statistics.median(w.values()) if w else xt_shard.SHARD_DEFAULT_WEIGHT
             heaviest = max(w.get(t, default) for t in ids)
             self.assertLessEqual(spread(shards, w, default), heaviest + 1e-9)
 
     def test_committed_weights_cover_every_class(self):
         """Lớp mới chưa đo rơi về trung vị → shard lệch dần (D-102): cho thiếu/thừa tới 15 % số lớp để PR thêm test không
         phải đo lại (~7 phút); quá ngưỡng thì chạy lại `dev-task.sh test-weights`."""
-        w = xt.load_shard_weights(WEIGHTS)
+        w = xt_shard.load_shard_weights(WEIGHTS)
         ids = set(xt.unittest_class_ids(ROOT, "tests", None))
         cap = len(ids) * 15 // 100
         self.assertLessEqual(len(ids - w.keys()), cap, f"lớp thiếu trọng số: {sorted(ids - w.keys())}")
         self.assertLessEqual(len(w.keys() - ids), cap, f"trọng số của lớp không còn: {sorted(w.keys() - ids)}")
 
     def test_committed_weights_balance_real_suite(self):
-        w = xt.load_shard_weights(WEIGHTS)
+        w = xt_shard.load_shard_weights(WEIGHTS)
         self.assertTrue(w)
         self.assertEqual(WEIGHTS.read_text(encoding="utf-8"), json.dumps(w, indent=1, sort_keys=True) + "\n")
         ids = xt.unittest_class_ids(ROOT, "tests", None)
         default = xt.statistics.median(w.values())
         for n in (3, 4):
             with self.subTest(n=n):
-                shards = xt.shard_plan(ids, w, n)
+                shards = xt_shard.shard_plan(ids, w, n)
                 self.assert_partition(ids, shards)
                 self.assertLessEqual(spread(shards, w, default), max(w.get(t, default) for t in ids))
                 mod_n = [ids[i::n] for i in range(n)]
@@ -112,11 +115,11 @@ class LoadWeightsTest(unittest.TestCase):
         self.f = self.tmp / "w.json"
 
     def test_missing_file_is_empty(self):
-        self.assertEqual(xt.load_shard_weights(self.f), {})
+        self.assertEqual(xt_shard.load_shard_weights(self.f), {})
 
     def test_valid(self):
         self.f.write_text('{"a": 1, "b": 2.5, "c": 0}', encoding="utf-8")
-        self.assertEqual(xt.load_shard_weights(self.f), {"a": 1.0, "b": 2.5, "c": 0.0})
+        self.assertEqual(xt_shard.load_shard_weights(self.f), {"a": 1.0, "b": 2.5, "c": 0.0})
 
     def test_bad_files_raise(self):
         for raw, msg in (
@@ -132,12 +135,12 @@ class LoadWeightsTest(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.f.write_text(raw, encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, msg):
-                    xt.load_shard_weights(self.f)
+                    xt_shard.load_shard_weights(self.f)
 
     def test_unreadable_raises(self):
         self.f.mkdir()  # thư mục: IsADirectoryError (OSError khác FileNotFoundError)
         with self.assertRaisesRegex(ValueError, "không đọc được"):
-            xt.load_shard_weights(self.f)
+            xt_shard.load_shard_weights(self.f)
 
 
 class ShardCliTest(unittest.TestCase):
@@ -297,7 +300,7 @@ class DevTaskProject(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, True)
         (self.tmp / "scripts").mkdir()
-        for name in ("dev-task.sh", "xt.py"):
+        for name in ("dev-task.sh", "xt.py", "xt_shard.py"):
             shutil.copy(ROOT / "scripts" / name, self.tmp / "scripts" / name)
         self.out = self.tmp / "out"
         self.out.mkdir()

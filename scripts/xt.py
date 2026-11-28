@@ -2908,51 +2908,6 @@ def cmd_test_select(args: argparse.Namespace) -> int:
     return 0
 
 
-# --- Chia shard test theo trọng số (D-095): `dev-task.sh test-shard` khi `xt.yaml` khai `test_weights` --------------
-SHARD_DEFAULT_WEIGHT = 1.0  # file vắng/rỗng: mọi id cùng trọng số → phân hoạch trùng hệt chỉ số k mod N
-
-
-def load_shard_weights(path: Path) -> Dict[str, float]:
-    """`{"tests.test_x.Lop": giây}` từ `path`; file vắng → {} (mọi id lấy mặc định). JSON hỏng, không phải object,
-    khoá không phải chuỗi hoặc giá trị không phải số hữu hạn ≥ 0 → ValueError (fail-closed: shard đỏ rõ)."""
-    try:
-        raw = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return {}
-    except OSError as e:
-        raise ValueError(f"không đọc được {path}: {e}") from e
-    try:
-        data = json.loads(raw)
-    except ValueError as e:
-        raise ValueError(f"{path} không phải JSON hợp lệ: {e}") from e
-    if not isinstance(data, dict):
-        raise ValueError(f'{path} phải là object {{"id": giây}}')
-    out: Dict[str, float] = {}
-    for key, val in data.items():
-        ok = isinstance(val, (int, float)) and not isinstance(val, bool) and math.isfinite(val) and val >= 0
-        if not ok:
-            raise ValueError(f"{path}: trọng số của {key!r} phải là số giây hữu hạn ≥ 0 (nhận {val!r})")
-        out[key] = float(val)
-    return out
-
-
-def shard_plan(ids: Iterable[str], weights: Dict[str, float], n: int) -> List[List[str]]:
-    """Phân hoạch xác định `ids` thành `n` shard bằng tham lam LPT: sắp giảm dần theo trọng số (hoà → theo id), mỗi id
-    vào shard có tổng nhẹ nhất (hoà → chỉ số nhỏ nhất). Id không có trong `weights` lấy trung vị của file (file rỗng →
-    `SHARD_DEFAULT_WEIGHT`). Mọi shard tính cùng phân hoạch từ cùng đầu vào; chênh lệch tổng giữa hai shard bất kỳ
-    ≤ trọng số lớn nhất (tính chất của lập lịch tham lam)."""
-    default = statistics.median(weights.values()) if weights else SHARD_DEFAULT_WEIGHT
-    order = sorted(set(ids), key=lambda t: (-weights.get(t, default), t))
-    loads = [0.0] * n
-    shards: List[List[str]] = [[] for _ in range(n)]
-    for t in order:
-        k = min(range(n), key=lambda j: (loads[j], j))
-        loads[k] += weights.get(t, default)
-        shards[k].append(t)
-    # Giữ thứ tự LPT trong từng shard để xargs -P khởi chạy lớp lâu nhất trước.
-    return shards
-
-
 def _stdin_ids() -> List[str]:
     return sorted({ln.strip() for ln in sys.stdin.read().splitlines() if ln.strip()})
 
@@ -2960,6 +2915,9 @@ def _stdin_ids() -> List[str]:
 def cmd_test_shard_plan(args: argparse.Namespace) -> int:
     """`xt.py test-shard-plan I N --weights FILE`: đọc id test từ stdin (mỗi dòng một id), in id của shard I/N theo
     `shard_plan`. I/N sai hoặc file trọng số hỏng → exit 2 (không đoán)."""
+    _sibling_imports()
+    from xt_shard import SHARD_DEFAULT_WEIGHT, load_shard_weights, shard_plan
+
     if not 1 <= args.index <= args.count:
         print(f"✗ test-shard-plan: cần 1 ≤ I ≤ N (nhận I={args.index} N={args.count})", file=sys.stderr)
         return 2
@@ -5874,6 +5832,14 @@ def _doctor_progress(base: Path) -> List[Finding]:
 def _doctor_merge(base: Path) -> List[Finding]:
     """merge_autonomy ≥ L2 mà settings còn luật ask cho `gh pr merge`: luật ask luôn hỏi (kể cả hook allow, chế độ
     auto/bypass) nên không bao giờ tự merge. Bản cài cũ giữ permissions khi `install.py` gộp lại (ADR-0013)."""
+    _sibling_imports()
+    from xt_merge_queue import stall_minutes
+
+    keys = _xt_keys(base)
+    if keys.get("merge_queue", "fifo") not in ("fifo", "off"):
+        return [Finding("merge", "error", "merge_queue phải là fifo hoặc off (ADR-0105)")]
+    if stall_minutes(keys.get("merge_queue_stall_minutes", "120")) is None:
+        return [Finding("merge", "error", "merge_queue_stall_minutes phải là số nguyên không âm (ADR-0105)")]
     if merge_config(base)[0] < 2:
         return []
     perms = (_read_json_obj(base / ".claude" / "settings.json") or {}).get("permissions")
@@ -13103,34 +13069,6 @@ def optional_review_decision(
     return decision
 
 
-def _check_live_base(pr: Dict[str, Any], d: Dict[str, Any]) -> Dict[str, Any]:
-    """`base.sha` và `mergeable_state` có thể cùng cũ. Chỉ hỏi nhánh đích của PR đã qua các cổng khác."""
-    repo = pr.get("strictBaseRepo")
-    if d["verdict"] != "merge" or not repo:
-        return d
-    base = str(pr.get("baseRefName") or "")
-    from xt_merge_intent import at_host
-
-    with at_host(PR_READ_HOST, str(pr.get("live_host") or "")):
-        behind = _live_base_distance(repo, base, str(d["head"]))
-    if behind == 0:
-        return d
-    verdict, reason, cmd = (
-        ("wait", "chưa xác minh được head chứa nhánh đích hiện tại theo ruleset — đợi rồi kiểm lại", MERGE_WAIT_NEXT)
-        if behind is None
-        else ("update", PR_BEHIND_REASON, _pr_update_next(d["pr"], d["head"], base))
-    )
-    result = {
-        **d,
-        "verdict": verdict,
-        "reasons": [reason, *_waived_notes(d["hard_waived"])],
-        "next": cmd,
-        "eligible": False,
-    }
-    result.pop("next_rest", None)
-    return result
-
-
 def _eval_pr_next(
     pr: Dict[str, Any], d: Dict[str, Any], rec: Dict[str, Any], base: Path, check_base: bool = True
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -13138,8 +13076,9 @@ def _eval_pr_next(
     auto_merge, cap = bool(pr.get("autoMergeRequest")), pr_rethink_cap(base, pr)
     out = pr_next(d, auto_merge, rec, cap)
     from xt_merge_intent import live_action
+    from xt_merge_queue import gate
 
-    if check_base and out["action"] == "merge" and (observed := _check_live_base(pr, d)) is not d:
+    if check_base and (observed := gate(sys.modules[__name__], pr, d, out["action"])) is not d:
         return observed, live_action(pr, pr_next(observed, auto_merge, rec, cap))
     return d, live_action(pr, out)
 
@@ -13225,8 +13164,9 @@ def cmd_merge_check(args: argparse.Namespace) -> int:
     d, notes = _merge_eval(pr, local=True)
     _sibling_imports()
     from xt_merge_intent import merge_check_result as render_merge_check
+    from xt_merge_queue import gate
 
-    d = render_merge_check(pr, derived_steward_only(_check_live_base(pr, d)))
+    d = render_merge_check(pr, derived_steward_only(gate(sys.modules[__name__], pr, d, "")))
     if args.json:
         print(json.dumps({**d, "notes": notes}, ensure_ascii=False))
     else:
@@ -18633,6 +18573,8 @@ def _steward_one(pr_arg: str, target: RepoTarget, base: Path, apply: bool) -> Di
         for path in _risky_paths(pr)
     )
     tag = branch == "main" and (is_release_pr(pr) or signoff) and (base / RELEASE_WORKFLOW_FILE).is_file()
+    out["_queue_branch"] = branch
+    out["_queue_checks_absent"] = not (pr.get("rulesUnknown") or pr.get("requiredChecks"))
     return _steward_apply(out, d, target, cmds if apply else [], branch, tag)
 
 
@@ -18676,6 +18618,10 @@ def _steward_apply(
             return {**out, "error": f"không đọc lại được PR trước khi làm: {exc}"}
         if stale:
             return _add_note(out, f"bỏ qua {out['key']} — {stale}")
+        from xt_merge_queue import before_action, followup_update
+
+        if out["action"] in ("merge", "update") and (why := before_action(sys.modules[__name__], out, target, base)):
+            return _add_note(out, f"bỏ qua {out['key']} — {why}")
         err = _steward_run(cmds)
         out.update(applied=not err, **({"error": err} if err else {}))
         if not err and out["action"] == "merge" and not can_update:
@@ -18684,10 +18630,7 @@ def _steward_apply(
                 _steward_dispatch_tag(out, target, base)
         # Tụt sau nhánh đích mà auto-merge đang bật: vừa tắt xong thì cập nhật nhánh luôn trong lượt này.
         if not err and out["action"] == "disable-auto-merge" and d.get("verdict") == "update" and can_update:
-            up_err = _steward_run([_update_branch_cmd(target, str(d["pr"]), str(out["head"]))])
-            out["then"] = "update" + (f" ✗ {up_err}" if up_err else " ✓")
-            if up_err:
-                out["error"] = up_err
+            return followup_update(sys.modules[__name__], out, target, base)
     return out
 
 
@@ -18743,11 +18686,10 @@ def _steward_targets(args: argparse.Namespace, target: RepoTarget) -> Tuple[List
         heads = steward_event_prs(event) if isinstance(event, dict) else {}
     optional = _committed_xt_keys(project_dir(), "HEAD").get("merge_review", "optional") == "optional"
     if heads and not optional:
-        return list(heads), heads
+        return sorted(heads, key=int), heads
     pulls = _pr_open(target)
-    if optional:
-        pulls.sort(key=lambda p: int(p.get("number") or 0))
-    return [str(p.get("number")) for p in pulls], heads
+    pulls.sort(key=lambda p: int(p.get("number") or 0))
+    return [str(p.get("number")) for p in pulls if not p.get("draft") or p.get("auto_merge")], heads
 
 
 def _event_note(out: Dict[str, Any], event_head: str) -> Dict[str, Any]:
@@ -18774,7 +18716,16 @@ def cmd_pr_steward(args: argparse.Namespace) -> int:
         print(f"✗ {exc}", file=sys.stderr)
         return 2
     base = project_dir()
-    results = [_event_note(_steward_one(n, target, base, args.apply), heads.get(n, "")) for n in nums]
+    from xt_merge_queue import event_successors, queue_scope, queue_summary
+
+    with queue_scope():
+        results = []
+        for n in nums:
+            result = _event_note(_steward_one(n, target, base, args.apply), heads.get(n, ""))
+            results.append(result)
+            if args.event and not args.pr and result["action"] == "merge" and result.get("applied"):
+                nums.extend(p for p in event_successors(sys.modules[__name__], result, target) if p not in nums)
+    queue_lines = queue_summary(results)
     lines = [
         f"#{r['pr']} {r['action']}{' ✓' if r.get('applied') else ''}{' → ' + r['then'] if r.get('then') else ''}"
         f"{' ✗ ' + r['error'] if r.get('error') and not r.get('then') else ''}"
@@ -18788,7 +18739,7 @@ def cmd_pr_steward(args: argparse.Namespace) -> int:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
-            fh.write("## pr-steward\n\n" + "".join(f"- {ln}\n" for ln in lines or ["không có PR mở"]))
+            fh.write("## pr-steward\n\n" + "".join(f"- {ln}\n" for ln in (queue_lines + lines or ["không có PR mở"])))
     return 1 if any(r.get("error") or r.get("warn") or r["action"] == "error" for r in results) else 0
 
 

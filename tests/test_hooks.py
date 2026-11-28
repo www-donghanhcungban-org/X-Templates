@@ -3362,7 +3362,8 @@ class StopAndSessionTest(unittest.TestCase):
     def test_stop_guard_blocks_when_loop_active(self):
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (tmp / "scripts").mkdir()
-        shutil.copy(ROOT / "scripts" / "xt.py", tmp / "scripts" / "xt.py")
+        for module in ("xt.py", "xt_merge_queue.py", "xt_merge_intent.py"):
+            shutil.copy(ROOT / "scripts" / module, tmp / "scripts" / module)
         (tmp / "docs" / "autopilot").mkdir(parents=True)
         (tmp / "docs" / "autopilot" / "PLAN.md").write_text("- [ ] `T-001` việc — Gate: `true`\n", encoding="utf-8")
         env = dict(os.environ, CLAUDE_PROJECT_DIR=str(tmp))
@@ -3441,7 +3442,8 @@ class StopAndSessionTest(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         (tmp / "scripts").mkdir()
-        shutil.copy(ROOT / "scripts" / "xt.py", tmp / "scripts" / "xt.py")
+        for module in ("xt.py", "xt_merge_queue.py", "xt_merge_intent.py"):
+            shutil.copy(ROOT / "scripts" / module, tmp / "scripts" / module)
         (tmp / "docs" / "autopilot").mkdir(parents=True)
         (tmp / "docs" / "autopilot" / "PLAN.md").write_text("- [ ] `T-001` việc — Gate: `true`\n", encoding="utf-8")
         if xt_yaml:
@@ -4227,7 +4229,7 @@ class MergeGuardBase(unittest.TestCase):
                     "mergeable": pr["mergeable"] == "MERGEABLE",
                     "mergeable_state": pr["mergeStateStatus"].lower(),
                     "head": {"sha": sha},
-                    "base": {"repo": {"full_name": "o/r"}},
+                    "base": {"ref": "main", "repo": {"full_name": "o/r"}},
                     "labels": pr["labels"],
                 },
                 f"{repo}/pulls/{n}/files?per_page=100": [
@@ -4241,6 +4243,7 @@ class MergeGuardBase(unittest.TestCase):
                 ],
                 f"{repo}/pulls/{n}/reviews?per_page=100": [],
                 f"{repo}/rules/branches/main": [],
+                f"{repo}/pulls?state=open&per_page=100": [],
                 f"{repo}/issues/{n}/comments?per_page=100": (
                     [
                         {

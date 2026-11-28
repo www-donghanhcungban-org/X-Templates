@@ -311,7 +311,9 @@ class MergeTargetBindingTest(TmpRepoCase):
         self.assertIn("WAIT · PR #7", out)
         self.assertIn(f"--hostname {HOST} repos/{SLUG}/pulls/7/merge", out)
         paths = [path for _, _, path, _ in self.gh.calls if path.rsplit("/", 1)[-1] in {"pulls", "7", "8"}]
-        self.assertEqual(paths, [f"repos/{SLUG}/pulls", *([f"repos/{SLUG}/pulls/7"] * 4)])
+        listing = f"repos/{SLUG}/pulls"
+        pinned = f"{listing}/7"
+        self.assertEqual(paths, [listing, pinned, pinned, pinned, listing, pinned, listing])
         self.assert_target_routes()
 
     def test_pr_read_rejects_partial_conflicting_identity_before_details(self):
