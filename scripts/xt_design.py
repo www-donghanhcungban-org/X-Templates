@@ -45,7 +45,7 @@ HUMAN = "không"
 DEFER = " · việc khác trong lúc chờ: `xt.py loop defer --task <ID> --reason …` rồi làm tiếp"
 INIT = " · chưa có vòng để hoãn task: `xt.py loop init --plan <PLAN>` trước, rồi làm việc khác trong lúc chờ"
 # Thẻ `ui:` trong nhóm ngoặc của dòng task: mọi giá trị khác `no` (kể cả rỗng, `true`, `có`) là giao diện (chặt hơn)
-UI_TAG_RE = re.compile(r"\bui\s*:(?!\s*no\b)", re.I)
+UI_TAG_RE = re.compile(r"\bui\s*:([^,;]*)", re.I)
 HASH_RE = re.compile(r"[0-9a-f]{64}")  # `evidence_sha256`: sha256 nội dung tệp bằng chứng lúc trình (ADR-0107)
 CLIENT = "khách"
 HUMAN_ONLY = "chỉ người — chủ dự án chạy ở terminal riêng, ngoài phiên agent; agent không tự duyệt thiết kế (ADR-0106)"
@@ -166,6 +166,9 @@ def submit(core: ModuleType, led: Doc, sha: str, evidence: str, digest: str) -> 
     if led["status"] == "awaiting_approval":
         pending = led["submitted"]["sha"][:12]
         raise DesignError(f"đã trình bản {pending}, đang chờ người duyệt — sửa: `stage design-reopen --reason …` trước")
+    first = next((event["evidence"] for event in led["history"] if event["event"] == "submit"), evidence)
+    if evidence != first:
+        raise DesignError(f"bản trình phải dùng cùng đường bằng chứng đã đăng ký: {first}")
     sub = {"sha": sha, "evidence": evidence, "evidence_sha256": digest}
     led.update(status="awaiting_approval", submitted=sub)
     _event(core, led, "submit", **sub)
@@ -292,9 +295,14 @@ def declared(core: ModuleType, base: Path) -> tuple[bool, str]:
     """(dự án khai khách duyệt thiết kế, ghi chú). Sổ `DESIGN.json` đã có (kể cả hỏng, rỗng, symlink gãy) → khách bất
     kể `PROJECT.md`: dự án từng trình thì không rút khai báo được (ADR-0108). Chưa có sổ → theo dòng khai."""
     client, note = _declared_line(base)
-    ledger = base / LEDGER
-    if client or not (ledger.exists() or ledger.is_symlink()):
+    if client:
         return client, note
+    try:
+        (base / LEDGER).lstat()
+    except FileNotFoundError:
+        return client, note
+    except OSError as exc:
+        return True, f"không đọc được {LEDGER} ({exc}) — coi như đã đăng ký duyệt thiết kế"
     return True, STICKY
 
 
@@ -304,8 +312,12 @@ def _declared_line(base: Path) -> tuple[bool, str]:
     code fence → kèm ghi chú), không đọc được hay khai mâu thuẫn → khách (chặt hơn). Dòng trong comment HTML đọc như
     dòng thường."""
     p = base / PROJECT_FILE
-    if not p.exists():
+    try:
+        p.lstat()
+    except FileNotFoundError:
         return False, ""
+    except OSError as exc:
+        return True, f"không đọc được {PROJECT_FILE} ({exc}) — coi như khai `Duyệt thiết kế: {CLIENT}`"
     try:
         text = p.read_text(encoding="utf-8-sig")  # BOM đầu tệp không phải nội dung (rào ngay sau BOM vẫn là rào)
     except (OSError, UnicodeDecodeError) as exc:
@@ -377,7 +389,7 @@ def is_ui(core: ModuleType, task: Doc) -> bool:
     gate = core.GATE_RE.search(rest)
     head = core.PLAN_CODE_SPAN_RE.sub(" ", rest[: gate.start()] if gate else rest)
     groups, unclosed = core._paren_groups(head)
-    return any(UI_TAG_RE.search(g) for g in [*groups, unclosed or ""])
+    return any(m[1].strip().casefold() != "no" for g in [*groups, unclosed or ""] for m in UI_TAG_RE.finditer(g))
 
 
 def hold(core: ModuleType, base: Path, ready: list[Doc]) -> tuple[list[Doc], dict[str, str]]:
@@ -403,11 +415,22 @@ def defer_held(core: ModuleType, base: Path, st: Doc) -> Doc:
     """Bản sao `st` cho verdict (không ghi đĩa): task giao diện mở đang bị giữ tính như `loop defer` — verdict không dẫn
     agent vào task khoá rồi `loop record` exit 2; chỉ còn chúng → `done-pending-human` kèm lý do khoá."""
     deferred = core._deferred(st)
-    tasks = [t for t in core._plan_tasks(base, st) if t["state"] == " " and t["id"] not in deferred]
-    held = hold(core, base, tasks)[1]
+    tasks = [t for t in core._plan_tasks(base, st) if t["state"] == " "]
+    held = hold(core, base, [t for t in tasks if t["id"] not in deferred])[1]
     if not held:
         return st
-    return {**st, "deferred": {**deferred, **{k: {"reason": why, "at": core.now_iso()} for k, why in held.items()}}}
+    waiting: dict[str, list[str]] = {}
+    for task in tasks:
+        for dependency in task["after"]:
+            waiting.setdefault(dependency, []).append(task["id"])
+    pending = list(held)
+    while pending:
+        dependency = pending.pop()
+        for task_id in waiting.get(dependency, []):
+            if task_id not in held:
+                held[task_id] = f"chờ {dependency} được mở khoá thiết kế"
+                pending.append(task_id)
+    return {**st, "deferred": {**{k: {"reason": why, "at": core.now_iso()} for k, why in held.items()}, **deferred}}
 
 
 def record_problem(core: ModuleType, base: Path, st: Doc, task: str) -> str:
@@ -449,6 +472,8 @@ def _transition(core: ModuleType, args: argparse.Namespace, base: Path) -> Calla
         sha = str(core._stage_clean_head(base))
         rel = evidence_path(core, base, args.evidence)
         digest = file_sha256(base, rel)  # cây sạch: = nội dung ở HEAD; '' (không đọc được) → sổ mới sai, không ghi
+        if core._stage_clean_head(base) != sha:
+            raise DesignError("HEAD đổi trong lúc đọc bằng chứng; kiểm tra cây rồi trình lại")
         return lambda led: submit(core, led, sha, rel, digest)
     if args.stage_cmd == "design-reopen":
         return lambda led: reopen(core, led, args.reason)
