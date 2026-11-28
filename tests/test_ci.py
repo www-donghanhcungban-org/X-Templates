@@ -88,6 +88,39 @@ def gate_tasks() -> List[str]:
     return [t for t in gate_loop() if not t.startswith("$")]
 
 
+def install_release_view_stub(bindir: Path) -> None:
+    bindir.mkdir()
+    fake = bindir / "gh"
+    fake.write_text(
+        '#!/bin/sh\n[ "$*" = "release view v1.2.3 --json isDraft,assets" ] || exit 2\n'
+        '[ -n "$FAKE_JSON" ] || exit 1\n'
+        "printf '%s' \"$FAKE_JSON\"\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+
+
+def release_view_cases() -> list[tuple[str, str, str]]:
+    """Phản hồi GitHub giả, giữ jq và shell thật khi kiểm trạng thái release."""
+    archive = "Sample.Repo-v1.2.3.tar.gz"
+    receipt = "Sample.Repo-v1.2.3.promotion.json"
+    cases = (
+        ("exact", "released", False, [archive, receipt]),
+        ("extra", "released", False, [archive, receipt, "other.tar.gz", "other.promotion.json"]),
+        ("draft", "draft", True, [archive, receipt]),
+        ("no assets", "incomplete", False, []),
+        ("wrong archive", "incomplete", False, ["other.tar.gz", receipt]),
+        ("wrong receipt", "incomplete", False, [archive, "other.promotion.json"]),
+        ("wrong pair", "incomplete", False, ["other.tar.gz", "other.promotion.json"]),
+        ("wrong version", "incomplete", False, [archive.replace("1.2.3", "1.2.4"), receipt.replace("1.2.3", "1.2.4")]),
+        ("wrong case", "incomplete", False, [archive.lower(), receipt]),
+    )
+    return [
+        (case, state, json.dumps({"isDraft": draft, "assets": [{"name": name} for name in names]}))
+        for case, state, draft, names in cases
+    ] + [("missing", "missing", "")]
+
+
 class QualityAggregateTest(unittest.TestCase):
     def setUp(self):
         self.jobs = ci_jobs(CI.read_text(encoding="utf-8"))
@@ -425,21 +458,13 @@ class SupplyChainArtifactsTest(unittest.TestCase):
         self.assertIn("state=candidate\n", out)
 
     def test_release_tag_existing_tag_is_checked_before_any_early_exit(self):
-        """AUD-CI-042: tag đã có thì đối chiếu SHA, kiểu tag và trạng thái release trước khi thoát; không thoát 0 với đầu ra rỗng."""
+        """Tag đã có thì đối chiếu SHA, kiểu tag, VERSION và trạng thái release trước khi thoát (AUD-CI-042, AUD-CI-049)."""
         script = step_run(ci_jobs((WORKFLOWS / "release-tag.yml").read_text(encoding="utf-8"))["approve"], "candidate")
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         repo = tmp / "repo"
         repo.mkdir()
         bindir = tmp / "bin"
-        bindir.mkdir()
-        fake = bindir / "gh"
-        # gh giả: chạy biểu thức `--jq` thật (jq) trên JSON trong FAKE_JSON; rỗng = release chưa có hoặc gh lỗi.
-        fake.write_text(
-            '#!/bin/sh\nwhile [ $# -gt 0 ]; do if [ "$1" = --jq ]; then expr=$2; fi; shift; done\n'
-            '[ -n "$FAKE_JSON" ] || exit 1\nprintf \'%s\' "$FAKE_JSON" | jq -r "$expr"\n',
-            encoding="utf-8",
-        )
-        fake.chmod(0o755)
+        install_release_view_stub(bindir)
 
         def git(*args: str) -> str:
             return subprocess.run(
@@ -451,8 +476,15 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             ).stdout.strip()
 
         git("init", "-qb", "main")
-        (repo / "VERSION").write_text("1.2.3\n", encoding="utf-8")
         (repo / "CHANGELOG.md").write_text("## [1.2.3] - 2026-11-21\n", encoding="utf-8")
+        git("add", ".")
+        git("commit", "-qm", "no version")
+        missing_version = git("rev-parse", "HEAD")
+        (repo / "VERSION").write_text("1.2.2\n", encoding="utf-8")
+        git("add", "VERSION")
+        git("commit", "-qm", "old version")
+        wrong_version = git("rev-parse", "HEAD")
+        (repo / "VERSION").write_text("1.2.3\n", encoding="utf-8")
         git("add", ".")
         git("commit", "-qm", "c")
         first = git("rev-parse", "HEAD")
@@ -461,44 +493,44 @@ class SupplyChainArtifactsTest(unittest.TestCase):
         git("commit", "-qm", "d")
         head = git("rev-parse", "HEAD")
 
-        assets = [{"name": "r-v1.2.3.tar.gz"}, {"name": "r-v1.2.3.promotion.json"}]
-        releases = {
-            "released": json.dumps({"isDraft": False, "assets": assets}),
-            "draft": json.dumps({"isDraft": True, "assets": assets}),
-            "incomplete": json.dumps({"isDraft": False, "assets": assets[:1]}),
-            "missing": "",
-        }
-
-        def run(release: str, input_sha: str = first, sha: str = head) -> tuple[subprocess.CompletedProcess, str]:
+        def run(payload: str, input_sha: str = first) -> tuple[subprocess.CompletedProcess, str]:
             out = tmp / "output"
             out.write_text("", encoding="utf-8")
-            env = dict(os.environ, GITHUB_SHA=sha, INPUT_SHA=input_sha, GITHUB_OUTPUT=str(out), RUNNER_TEMP=str(tmp))
-            env.update(PATH=f"{bindir}:{os.environ['PATH']}", FAKE_JSON=releases[release])
+            env = dict(os.environ, GITHUB_SHA=head, INPUT_SHA=input_sha, GITHUB_OUTPUT=str(out), RUNNER_TEMP=str(tmp))
+            env.update(PATH=f"{bindir}:{os.environ['PATH']}", FAKE_JSON=payload, GITHUB_REPOSITORY="org/Sample.Repo")
             r = subprocess.run(["bash", "-c", script], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
             return r, out.read_text(encoding="utf-8")
 
         git("tag", "-a", "v1.2.3", "-m", "v1.2.3", first)
-        r, out = run("released")
-        self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stderr)
-        self.assertIn("đã phát hành", r.stdout)
-        # main đi tiếp sau khi phát hành: không có inputs.sha, ứng viên là commit mới, tag ở tổ tiên
-        r, out = run("released", input_sha="")
-        self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stdout)
-        for state in ("draft", "incomplete", "missing"):
+        cases = release_view_cases()
+        exact_release = cases[0][2]
+        for case, state, payload in cases:
+            # Khi main đã đi tiếp, ứng viên mặc định là HEAD và tag nằm ở tổ tiên.
             for input_sha in (first, ""):
-                r, out = run(state, input_sha=input_sha)
-                self.assertEqual((r.returncode, out), (1, ""), (state, r.stdout))
-                self.assertIn(f"'{state}'", r.stdout)
+                with self.subTest(case=case, input_sha=input_sha):
+                    r, out = run(payload, input_sha=input_sha)
+                    if state == "released":
+                        self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stderr)
+                        self.assertIn("đã phát hành", r.stdout)
+                    else:
+                        self.assertEqual((r.returncode, out), (1, ""), r.stdout)
+                        self.assertIn(f"'{state}'", r.stdout)
         git("tag", "-d", "v1.2.3")
         git("tag", "-a", "v1.2.3", "-m", "v1.2.3", head)  # tag ở commit con của ứng viên: không phải tổ tiên
-        r, out = run("released")
+        r, out = run(exact_release)
         self.assertEqual((r.returncode, out), (1, ""))
         self.assertIn("không phải tổ tiên", r.stdout)
         git("tag", "-d", "v1.2.3")
         git("tag", "v1.2.3", first)  # tag nhẹ, không phải annotated
-        r, out = run("released")
+        r, out = run(exact_release)
         self.assertEqual((r.returncode, out), (1, ""))
         self.assertIn("annotated", r.stdout)
+        for tag_commit in (missing_version, wrong_version):
+            with self.subTest(tag_commit=tag_commit):
+                git("tag", "-fa", "v1.2.3", "-m", "v1.2.3", tag_commit)
+                r, out = run(exact_release)
+                self.assertEqual((r.returncode, out), (1, ""))
+                self.assertIn("VERSION ở tag v1.2.3", r.stdout)
 
 
 class MergeGateStubTest(unittest.TestCase):

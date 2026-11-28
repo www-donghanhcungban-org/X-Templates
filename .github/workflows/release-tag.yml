@@ -61,9 +61,8 @@ jobs:
           git show "$target:CHANGELOG.md" > "$RUNNER_TEMP/CHANGELOG.md"
           awk -v header="## [$v]" '$0 == header || index($0, header " ") == 1 {found=1} END {exit !found}' "$RUNNER_TEMP/CHANGELOG.md"
           if git show-ref --verify --quiet "refs/tags/v$v"; then
-            # Tag đã có (chạy lại sau lượt dở, hoặc đã phát hành): đối chiếu SHA, kiểu tag, rồi trạng thái release TRƯỚC khi thoát.
-            # Tag ở commit phát hành, main đã đi tiếp: bình thường. Chỉ đỏ khi commit của tag không phải tổ tiên của ứng viên
-            # (checkout fetch-depth 0 có đủ lịch sử).
+            # Tag đã có (chạy lại sau lượt dở, hoặc đã phát hành): đối chiếu SHA, kiểu tag, VERSION và release trước khi thoát.
+            # Main có thể đi tiếp sau khi phát hành. Checkout fetch-depth 0 có đủ lịch sử để kiểm quan hệ tổ tiên.
             tag_commit=$(git rev-parse "refs/tags/v$v^{commit}")
             if ! git merge-base --is-ancestor "$tag_commit" "$target"; then
               echo "::error::Tag v$v trỏ $tag_commit, không phải tổ tiên của ứng viên $target. Không đẩy lại; cắt bản mới (tăng VERSION)."
@@ -73,9 +72,18 @@ jobs:
               echo "::error::Tag v$v không phải annotated tag. Không đẩy lại; cắt bản mới (tăng VERSION)."
               exit 1
             fi
-            state=$(gh release view "v$v" --json isDraft,assets --jq 'if .isDraft then "draft" elif ([.assets[].name | select(endswith(".tar.gz"))] | length) >= 1 and ([.assets[].name | select(endswith(".promotion.json"))] | length) >= 1 then "released" else "incomplete" end' 2>/dev/null || echo missing)
+            if ! tag_version=$(git show "$tag_commit:VERSION" 2>/dev/null) || test "$tag_version" != "$v"; then
+              echo "::error::VERSION ở tag v$v thiếu hoặc không khớp tên tag. Cắt bản mới (tăng VERSION)."
+              exit 1
+            fi
+            name="${GITHUB_REPOSITORY#*/}-v$v"
+            state=$(gh release view "v$v" --json isDraft,assets 2>/dev/null | jq -er --arg name "$name" '
+              if .isDraft then "draft"
+              elif any(.assets[]; .name == ($name + ".tar.gz")) and any(.assets[]; .name == ($name + ".promotion.json"))
+              then "released" else "incomplete" end
+            ') || state=missing
             if test "$state" != released; then
-              echo "::error::v$v có tag (ở $tag_commit) nhưng release ở trạng thái '$state' (draft = nháp; incomplete = thiếu archive hay biên nhận; missing = chưa có hoặc token contents: read không thấy bản nháp). Không dựng lại archive vì digest sẽ khác bản đã attest: chủ repo kiểm release rồi công bố, hoặc cắt bản mới (tăng VERSION)."
+              echo "::error::v$v có tag (ở $tag_commit) nhưng release ở trạng thái '$state' (draft = nháp; incomplete = thiếu $name.tar.gz hoặc $name.promotion.json; missing = chưa có hoặc token contents: read không thấy bản nháp). Không dựng lại archive vì digest sẽ khác bản đã attest: chủ repo kiểm release rồi công bố, hoặc cắt bản mới (tăng VERSION)."
               exit 1
             fi
             echo "::notice::v$v đã phát hành: tag ở tổ tiên của ứng viên, release công bố đủ archive và biên nhận. Giữ nguyên tag."
@@ -153,7 +161,11 @@ jobs:
           if git show-ref --verify --quiet "refs/tags/v$V"; then
             test "$(git rev-parse "refs/tags/v$V^{commit}")" = "$TARGET"
             test "$(git cat-file -t "refs/tags/v$V")" = tag
-            echo "::notice::v$V đã được phát hành ở đúng SHA."
+            if ! tag_version=$(git show "$TARGET:VERSION" 2>/dev/null) || test "$tag_version" != "$V"; then
+              echo "::error::VERSION ở tag v$V thiếu hoặc không khớp tên tag. Cắt bản mới (tăng VERSION)."
+              exit 1
+            fi
+            echo "::notice::Tag v$V đã có ở đúng SHA."
             exit 0
           fi
           # Kiểm lại chữ ký và cấu hình nếu main tiến trong lúc chờ. Các thay đổi độc lập vẫn có thể merge.
@@ -245,11 +257,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ needs.approve.outputs.version }}
         run: |
+          set -euo pipefail
           # Hai run cùng duyệt: run sau thấy tag của run trước. Chỉ xanh khi release đã công bố đủ archive và biên nhận; nháp, thiếu
           # tệp hay chưa có release đều đỏ (job xanh sẽ che việc nơi dùng chưa có bản công bố). Hướng xử lý: kiểm rồi công bố, hoặc cắt bản mới.
-          state=$(gh release view "v$V" --json isDraft,assets --jq 'if .isDraft then "draft" elif ([.assets[].name | select(endswith(".tar.gz"))] | length) >= 1 and ([.assets[].name | select(endswith(".promotion.json"))] | length) >= 1 then "released" else "incomplete" end' 2>/dev/null || echo missing)
+          name="${GITHUB_REPOSITORY#*/}-v$V"
+          state=$(gh release view "v$V" --json isDraft,assets 2>/dev/null | jq -er --arg name "$name" '
+            if .isDraft then "draft"
+            elif any(.assets[]; .name == ($name + ".tar.gz")) and any(.assets[]; .name == ($name + ".promotion.json"))
+            then "released" else "incomplete" end
+          ') || state=missing
           if test "$state" != released; then
-            echo "::error::v$V có tag nhưng release ở trạng thái '$state' (nháp, thiếu tệp hay chưa có). Kiểm hai tệp đã tải lên rồi công bố, hoặc cắt bản mới (tăng VERSION)."
+            echo "::error::v$V có tag nhưng release ở trạng thái '$state' (nháp, thiếu $name.tar.gz hoặc $name.promotion.json, hay chưa có release). Kiểm hai tệp đã tải lên rồi công bố, hoặc cắt bản mới (tăng VERSION)."
             exit 1
           fi
           echo "::notice::v$V đã có release công bố đủ tệp."
