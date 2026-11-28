@@ -507,17 +507,17 @@ class XtInProcessGuardTest(unittest.TestCase):
             ("pydoc", "importfile", "tests_e2e/__init__.py"),
         ):
             with self.subTest(loader=function, target="literal"):
-                cmd = f'python3 -c "import {module}; {module}.{function}(\'{target}\')"'
+                cmd = f"python3 -c \"import {module}; {module}.{function}('{target}')\""
                 self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
             with self.subTest(loader=function, target="variable"):
-                cmd = f'python3 -c "import {module}; name=\'{target}\'; {module}.{function}(name)"'
+                cmd = f"python3 -c \"import {module}; name='{target}'; {module}.{function}(name)\""
                 out = self.decide(cmd)
                 self.assertEqual((out.get("decision"), out.get("code")), ("deny", "STAGE_APPROVE"))
 
     def test_local_locate_and_ordinary_python_remain_allowed(self):
         for cmd in (
-            'python3 -c "def locate(name): return name\nprint(locate(\'json\'))"',
-            'python3 -c "import json; name=\'json\'; print(json.dumps(name))"',
+            "python3 -c \"def locate(name): return name\nprint(locate('json'))\"",
+            "python3 -c \"import json; name='json'; print(json.dumps(name))\"",
         ):
             with self.subTest(cmd=cmd):
                 self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
