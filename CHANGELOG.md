@@ -10,6 +10,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.
 - T-5073 giữ đường bằng chứng thiết kế theo lần trình đầu, đối chiếu lại HEAD sau khi tính hash và giữ cả các task phụ thuộc trong lúc chờ duyệt thiết kế.
+- T-5102 (AUD-HAR-583): bộ cài chuẩn bị các mô-đun CLI trước khi thay `xt.py` để lỗi chép mô-đun không làm gián đoạn CLI đã cài.
 
 - Kiểm reflow theo nội dung thực sự được gán vào slot của shadow root mở, gồm chữ bị cắt và ca nội dung dự phòng ẩn.
 - Ngoại lệ reflow dùng đường dẫn riêng cho mỗi vùng trong shadow root. Strict tính cả các vùng vượt giới hạn hiển thị chẩn đoán.
