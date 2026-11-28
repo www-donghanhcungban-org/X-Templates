@@ -250,6 +250,7 @@ jobs:
           gh release edit "$tag" --draft=false
       - &release-status
         name: Báo trạng thái release của tag đã phát hành trước đó
+        id: existing-release
         if: steps.tag.outputs.archive == ''
         env:
           GH_TOKEN: ${{ github.token }}

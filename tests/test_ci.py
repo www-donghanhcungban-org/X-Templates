@@ -426,7 +426,10 @@ class SupplyChainArtifactsTest(unittest.TestCase):
 
     def test_release_tag_existing_tag_is_checked_before_any_early_exit(self):
         """AUD-CI-042: tag đã có thì đối chiếu SHA, kiểu tag và trạng thái release trước khi thoát; không thoát 0 với đầu ra rỗng."""
-        script = step_run(ci_jobs((WORKFLOWS / "release-tag.yml").read_text(encoding="utf-8"))["approve"], "candidate")
+        jobs = ci_jobs((WORKFLOWS / "release-tag.yml").read_text(encoding="utf-8"))
+        script = step_run(jobs["approve"], "candidate")
+        existing = step_run(jobs["tag"], "existing-release")
+        self.assertTrue(existing)
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
         repo = tmp / "repo"
         repo.mkdir()
@@ -477,23 +480,27 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             "missing": "",
         }
 
-        def run(release: str, input_sha: str = first, sha: str = head) -> tuple[subprocess.CompletedProcess, str]:
+        def run(
+            release: str, input_sha: str = first, sha: str = head, command: str = script
+        ) -> tuple[subprocess.CompletedProcess, str]:
             out = tmp / "output"
             out.write_text("", encoding="utf-8")
             env = dict(os.environ, GITHUB_SHA=sha, INPUT_SHA=input_sha, GITHUB_OUTPUT=str(out), RUNNER_TEMP=str(tmp))
             env.update(PATH=f"{bindir}:{os.environ['PATH']}", FAKE_JSON=releases[release])
-            env["GITHUB_REPOSITORY"] = "o/r"
-            r = subprocess.run(["bash", "-c", script], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
+            env.update(GITHUB_REPOSITORY="o/r", V="1.2.3")
+            r = subprocess.run(["bash", "-c", command], cwd=repo, env=env, capture_output=True, text=True, timeout=30)
             return r, out.read_text(encoding="utf-8")
 
         git("tag", "-a", "v1.2.3", "-m", "v1.2.3", first)
         r, out = run("released")
         self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stderr)
         self.assertIn("đã phát hành", r.stdout)
+        self.assertEqual(run("released", command=existing)[0].returncode, 0)
         # main đi tiếp sau khi phát hành: không có inputs.sha, ứng viên là commit mới, tag ở tổ tiên
         r, out = run("released", input_sha="")
         self.assertEqual((r.returncode, out), (0, "state=released\nversion=1.2.3\n"), r.stdout)
         for state in ("draft", "incomplete", "missing", "unrelated"):
+            self.assertEqual(run(state, command=existing)[0].returncode, 1, state)
             for input_sha in (first, ""):
                 r, out = run(state, input_sha=input_sha)
                 self.assertEqual((r.returncode, out), (1, ""), (state, r.stdout))
