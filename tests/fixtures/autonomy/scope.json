@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Corpus kiểm quyết định của guard. Ca này kiểm cờ khởi động của tiến trình qua hook PreCompact và việc nạp thư viện trong tiến trình con merge-check qua tests.test_hook_precompact_output.PreCompactOutputTest.test_checkpoint_and_renderer_start_without_site và tests.test_guard_audit1019.StdlibGuardChildTest.",
+   "ids": ["AUD-HAR-572"]
+  },
+  {
    "reason": "Ca này đo số ký tự đầu ra và bằng chứng khi phát lại state cũ. Bộ ci_log của corpus chỉ kiểm phân loại và hành động. Gate: `python3 -m unittest tests.test_xt_cli.CiTriageTest`.",
    "ids": ["AUD-CI-050"]
   },
