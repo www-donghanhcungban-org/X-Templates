@@ -323,7 +323,8 @@ const settle = (el) => {
 // Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và `text-overflow: ellipsis`.
 // Trả `{ found, shadowMeasured }`: số phần tử trong shadow root mở đã được xét.
 const findClipped = (path) => {
-  const found = [];
+  const cuts = [];
+  const unknowns = [];
   let shadowMeasured = 0;
   const MEDIA = ['img', 'video', 'canvas', 'svg'];
   const parentOf = (n) => n.parentElement ?? n.getRootNode().host ?? null;
@@ -334,6 +335,10 @@ const findClipped = (path) => {
     if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
     return path(el) ?? el.localName;
   };
+  const record = (el, kind) => {
+    const entries = kind === 'cut' ? cuts : unknowns;
+    if (entries.length < 20) entries.push({ element: name(el), kind });
+  };
   function* elements(root, inShadow, track = true) {
     for (const el of root.querySelectorAll('*')) {
       if (track && inShadow) shadowMeasured++;
@@ -341,12 +346,20 @@ const findClipped = (path) => {
       if (el.shadowRoot) yield* elements(el.shadowRoot, true, track);
     }
   }
-  const paints = (color) => !color.startsWith('rgba(') || !/,\s*0\)$/.test(color);
+  const paints = (color) => color !== 'transparent' && !/\/\s*0(?:%|\.0+)?\s*\)$/.test(color) &&
+    !/^rgba\(.*?,\s*0(?:\.0+)?\s*\)$/.test(color);
+  const paintedShadow = (shadow) => {
+    if (shadow === 'none') return false;
+    const colors = shadow.match(/[\w-]+\([^)]*\)/g);
+    return !colors || colors.some(paints);
+  };
   const paintedEmptyPseudo = (node) => visible(node) && ['::before', '::after'].some((pseudo) => {
     const style = getComputedStyle(node, pseudo);
     if (!['""', "''"].includes(style.content) || style.display === 'none' || style.visibility !== 'visible' || style.opacity === '0') return false;
-    return style.backgroundImage !== 'none' || paints(style.backgroundColor) || style.boxShadow !== 'none' ||
+    return style.backgroundImage !== 'none' || paints(style.backgroundColor) || paintedShadow(style.boxShadow) ||
+      (!['none', 'hidden'].includes(style.outlineStyle) && Number.parseFloat(style.outlineWidth) > 0 && paints(style.outlineColor)) ||
       ['Top', 'Right', 'Bottom', 'Left'].some((side) =>
+        !['none', 'hidden'].includes(style[`border${side}Style`]) &&
         Number.parseFloat(style[`border${side}Width`]) > 0 && paints(style[`border${side}Color`]));
   });
   function* pseudoOwners(el) {
@@ -366,14 +379,15 @@ const findClipped = (path) => {
   }
   for (const el of elements(document, false)) {
     const s = getComputedStyle(el);
-    const scrollable = ['auto', 'scroll'].includes(s.overflowX) && el !== document.scrollingElement && el !== document.body;
+    const isViewport = el === document.scrollingElement ||
+      (el === document.body && getComputedStyle(document.documentElement).overflowX === 'visible');
+    const scrollable = ['auto', 'scroll'].includes(s.overflowX) && !isViewport;
     if (!scrollable && (!['hidden', 'clip'].includes(s.overflowX) || s.textOverflow === 'ellipsis')) continue;
     if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) || el.clientWidth <= 1) continue;
     if (el.scrollWidth <= el.clientWidth + 1 && !(s.overflowX === 'clip' && s.overflowClipMargin?.includes('content-box'))) continue;
     if (s.clip !== 'auto' || s.clipPath !== 'none' || !visible(el)) continue;
     if (scrollable) {
-      found.push({ element: name(el), kind: 'nested-scroll' });
-      if (found.length === 20) break;
+      record(el, 'nested-scroll');
       continue;
     }
     const box = el.getBoundingClientRect();
@@ -393,8 +407,7 @@ const findClipped = (path) => {
       axisAligned = matrix.is2D && matrix.a > 0 && matrix.d > 0 && matrix.b === 0 && matrix.c === 0;
     }
     if (!axisAligned) {
-      found.push({ element: name(el), kind: 'hidden' });
-      if (found.length === 20) break;
+      record(el, 'hidden');
       continue;
     }
     const scaleX = box.width / el.offsetWidth;
@@ -406,8 +419,7 @@ const findClipped = (path) => {
       const lengths = parts.filter((part) => /^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(part));
       const boxes = parts.filter((part) => ['padding-box', 'border-box', 'content-box'].includes(part));
       if (lengths.length > 1 || boxes.length > 1 || lengths.length + boxes.length !== parts.length || (!lengths.length && !boxes.length)) {
-        found.push({ element: name(el), kind: 'hidden' });
-        if (found.length === 20) break;
+        record(el, 'hidden');
         continue;
       }
       if (boxes[0] === 'border-box') {
@@ -417,8 +429,7 @@ const findClipped = (path) => {
         const paddingLeft = Number.parseFloat(s.paddingLeft);
         const paddingRight = Number.parseFloat(s.paddingRight);
         if (!Number.isFinite(paddingLeft) || !Number.isFinite(paddingRight)) {
-          found.push({ element: name(el), kind: 'hidden' });
-          if (found.length === 20) break;
+          record(el, 'hidden');
           continue;
         }
         left += paddingLeft * scaleX;
@@ -462,10 +473,10 @@ const findClipped = (path) => {
         }
       }
     }
-    if (kind) found.push({ element: name(el), kind });
-    if (found.length === 20) break;
+    if (kind) record(el, kind);
+    if (cuts.length === 20) break;
   }
-  return { found, shadowMeasured };
+  return { found: [...cuts, ...unknowns].slice(0, 20), shadowMeasured };
 };
 
 // Đếm host có shadow root `closed` (trang không đọc được; CDP thấy). Trả null nếu CDP không dùng được.

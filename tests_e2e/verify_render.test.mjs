@@ -433,11 +433,38 @@ test('a painted empty pseudo extending outside horizontal clipping requires refl
   const result = await sample.run(['--strict', '--widths', '320']);
   status(result, 1);
   assert.match(result.stdout, /^UNMEASURED .*viewport=320x800 .*check=reflow element="#edge"/m);
+  const outline = await fixture(t, page({
+    css: '#frame { position: relative; overflow: hidden; }' +
+      ' #frame::after { content: ""; position: absolute; left: 0; top: 0; width: 140%; height: 12px; outline: 2px solid #333; }',
+    markup: '<div id="frame">Outline</div>',
+  }));
+  assert.match((await outline.run(['--widths', '320'])).stdout,
+    /^UNMEASURED .*viewport=320x800 .*check=reflow element="#frame"/m);
+});
+
+test('nested scroll warnings cannot mask a measured reflow violation after the report limit', async (t) => {
+  const scrolls = Array.from({ length: 20 }, (_, index) =>
+    `<div role="region" aria-label="Panel ${index}" tabindex="0" style="overflow:auto;width:200px"><div style="width:300px">Fit</div></div>`);
+  const sample = await fixture(t, page({
+    markup: scrolls.join('') + wideBox('cut-after-scrolls', 'overflow:hidden;width:135px'),
+  }));
+  const result = await sample.run(['--widths', '320']);
+  status(result, 1);
+  assert.match(result.stdout, /^✗ .*viewport=320x800 .*check=reflow element="#cut-after-scrolls"/m);
+});
+
+test('a body scroll container is reported when its overflow is independent of the viewport', async (t) => {
+  const sample = await fixture(t, page({
+    css: 'html { overflow: hidden; } body { width: 200px; height: 160px; overflow: auto; margin: 0; }',
+    markup: '<p style="width: 250px">Summary</p>',
+  }));
+  const result = await sample.run(['--widths', '320']);
+  assert.match(result.stdout, /^UNMEASURED .*viewport=320x800 .*check=reflow element="html:nth-of-type\(1\) > body:nth-of-type\(1\)"/m);
 });
 
 test('visually hidden text, form fields and empty decorations are not reflow failures; a carousel is UNMEASURED', async (t) => {
   const css = '.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }' +
-    ' #rip { position: relative; overflow: hidden; } #rip::after { content: ""; position: absolute; top: 0; left: -50%; width: 200%; height: 100%; }';
+    ' #rip { position: relative; overflow: hidden; } #rip::after { content: ""; position: absolute; top: 0; left: -50%; width: 200%; height: 100%; background: oklch(60% 0.3 30 / 0); box-shadow: 0 0 1px rgba(1, 2, 3, 0); }';
   const benign = await fixture(t, page({
     css,
     markup: '<p>Cart <span class="sr-only">(3 items, total 42 EUR)</span></p>' +
