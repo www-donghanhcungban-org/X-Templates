@@ -1690,6 +1690,28 @@ class DoctorHookSiblingTest(unittest.TestCase):
                 with self.subTest(name=name, deep=deep):
                     self.assert_error(self.run_doctor({**self.SIBLINGS, name: ""}, deep=deep), name, "file rỗng")
 
+    def test_shorter_hook_prefix_reports_the_proposed_template(self):
+        for deep in (False, True):
+            with self.subTest(deep=deep):
+                found = self.run_doctor(
+                    {
+                        **self.SIBLINGS,
+                        "guard.py": "# fixture\n",
+                        "guard.py.xtemplates-new": "# fixture\n" + self.PRINT,
+                    },
+                    deep=deep,
+                )
+                self.assertEqual([(item.code, item.level) for item in found], [("hooks", "warn")])
+                self.assertIn("guard.py.xtemplates-new", found[0].msg)
+        kept = self.run_doctor(
+            {
+                **self.SIBLINGS,
+                "guard.py": "# own\n",
+                "guard.py.xtemplates-new": "# fixture\n" + self.PRINT,
+            }
+        )
+        self.assertEqual(kept, [])
+
     def test_hidden_and_path_siblings(self):
         cases = [
             (".guard.py", ".guard.py"),

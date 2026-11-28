@@ -1140,7 +1140,9 @@ def copy_harness_files(
         if r == "kept-own" and rel.startswith(".claude/hooks/"):
             current, template = dst.read_bytes(), src.read_bytes()
             if len(current) < len(template) and template.startswith(current):
-                log(f"  ⚠ {rel} có thể bị ghi cụt: chỉ còn phần đầu mẫu. Đã giữ file để đối chiếu và khôi phục.")
+                r = "updated-new"
+                write_copy(src, dst, r, template)
+                log(f"  ⚠ {rel} có thể bị ghi cụt: đã để mẫu đầy đủ ở {rel}.xtemplates-new để đối chiếu.")
         stats[r] += 1
         if r in HASHED:
             new_manifest[rel] = sha256(src.read_bytes())

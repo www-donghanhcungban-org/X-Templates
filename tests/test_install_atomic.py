@@ -367,6 +367,12 @@ class InstallInterruptedWriteTest(TestCase):
                     self.assertEqual(result, {rel: expected})
                     self.assertEqual(installed.read_bytes(), data)
                     self.assertEqual("có thể bị ghi cụt" in log.getvalue(), should_warn)
+                    proposal = installed.with_name(installed.name + ".xtemplates-new")
+                    if should_warn:
+                        self.assertEqual(proposal.read_bytes(), complete)
+                        proposal.unlink()
+                    else:
+                        self.assertFalse(proposal.exists())
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()

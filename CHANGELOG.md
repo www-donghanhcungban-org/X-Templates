@@ -8,7 +8,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - Khi chuyển manifest hash của bản cài cũ, installer ghi đích bằng thay tệp nguyên tử. Nếu lỗi ghi, lần chạy lại vẫn còn bản nguồn đầy đủ.
 - `doctor` báo lỗi khi hook được cấu hình hoặc tệp mà hook cần có kích thước 0 byte.
-- Installer cảnh báo khi hook cũ chỉ còn phần đầu của mẫu hiện hành, đồng thời giữ nguyên tệp cho bước đối chiếu.
+- Installer cảnh báo khi hook cũ chỉ còn phần đầu của mẫu hiện hành và ghi bản mẫu đầy đủ vào tệp `.xtemplates-new`. `doctor` đối chiếu tệp đề xuất để báo hook có thể bị ghi cụt.
 
 - Installer giữ nguồn gốc rule của harness khi chạy lại sau gián đoạn giữa lúc ghi settings và hoàn tất manifest. Dữ liệu đang chờ chỉ được dùng khi khớp đúng snapshot settings đã ghi.
 

@@ -5295,6 +5295,12 @@ def _doctor_hook_files(base: Path, hooks: Dict[str, Any], deep: bool) -> List[Fi
     out = []
     for n, p in paths:
         problem = "file không có" if not os.path.isfile(p) else "file rỗng" if os.path.getsize(p) == 0 else ""
+        proposal = Path(p + ".xtemplates-new")
+        if not problem and not proposal.is_symlink() and proposal.is_file() and not Path(p).is_symlink():
+            with contextlib.suppress(OSError):
+                active, offered = Path(p).read_bytes(), proposal.read_bytes()
+                if len(active) < len(offered) and offered.startswith(active):
+                    out.append(Finding("hooks", "warn", f".claude/hooks/{n} có thể bị ghi cụt; so với {proposal.name}"))
         if problem:
             out.append(Finding("hooks", "error", f"hook cần .claude/hooks/{n} nhưng {problem}; {INSTALL_HINT}"))
         elif deep and (err := _syntax_error(Path(p))):
