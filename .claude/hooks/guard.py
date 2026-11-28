@@ -4631,7 +4631,7 @@ def _xargs_find_safe(
     if {"(", ")"} & set(expr) and {"-o", "-or", "!", "-not"} & set(expr):
         return False  # ngoặc chỉ bỏ được khi biểu thức thuần AND (`find src \( -name '*.py' \)`)
     expr = [w for w in expr if w not in ("(", ")")]
-    if "," in expr or XARGS_FIND_ACTIONS & set(expr) or fence and _find_traversal_uncertain(words[:k], expr):
+    if "," in expr or XARGS_FIND_ACTIONS & set(expr):
         return False
     branches: List[List[Tuple[str, str]]] = [[]]
     for i, w in enumerate(expr):
@@ -4643,8 +4643,14 @@ def _xargs_find_safe(
             branches[-1].append((w, expr[i + 1]))
     here = os.path.realpath(here) if here else ""
     for start in starts:
-        s = os.path.relpath(os.path.realpath(posixpath.join(here, start)), here) if here else posixpath.normpath(start)
-        if ".git" in s.split("/") or UNRESOLVED_TARGET_CHARS.intersection(start) or start.startswith("~"):
+        target = posixpath.join(here, start) if here else ""
+        s = os.path.relpath(os.path.realpath(target), here) if here else posixpath.normpath(start)
+        if (
+            ".git" in s.split("/")
+            or UNRESOLVED_TARGET_CHARS.intersection(start)
+            or start.startswith("~")
+            or (fence and _find_traversal_uncertain(words[:k], expr, target))
+        ):
             return False
         reach = [p for p in fence if p == s or p.startswith(s + "/") or s == "." and p.split("/", 1)[0] != ".."]
         reach += [posixpath.join(s, n) for n in extra_names]
@@ -10806,8 +10812,7 @@ UNRESOLVED_TARGET_CHARS = set("$`*?[{}")
 
 
 def _local(target: Optional[str], root: str, cwd: Optional[str], typed: bool = True) -> bool:
-    """Đích chắc chắn nằm trong dự án hoặc thư mục tạm (không phải chính gốc thư mục tạm — `chmod -R 777 /tmp` chạm file
-    người khác): thư mục đang đứng biết, không biến/backtick/glob/`{}`, không `~-`."""
+    """Đích xác định trong dự án hoặc dưới thư mục tạm, trừ chính gốc thư mục tạm."""
     if cwd is None or not target or (typed and UNRESOLVED_TARGET_CHARS & set(target)) or OLDPWD_REF_RE.match(target):
         return False
     if FIND_FOUND in target:  # `find /etc -exec chmod 777 {} +`: file tìm thấy dưới gốc của find, không phải trong cwd
@@ -10858,8 +10863,7 @@ FIND_EXEC_END = (";", "+")  # so bằng `str(t)`: `\;`/`';'` là `LitWord` (ch�
 
 
 def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str]:
-    """`find <gốc…> -delete` / `-exec rm … {}`: xoá các file khớp dưới gốc — gốc là `/`, `~` → deny; gốc ngoài dự án
-    → ask. Lệnh trong `-exec … ;|+` còn được quét như lệnh thường (`{}` = một file tìm thấy)."""
+    """Xét gốc của find xoá và quét lệnh trong `-exec` với `{}` là tệp tìm thấy."""
     roots, i = _find_parts(args)
     deleting = "-delete" in args[i:]
     for k, a in enumerate(args):
@@ -10869,7 +10873,6 @@ def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str
             FIND_FOUND if t == "{}" else t
             for t in itertools.takewhile(lambda t: str(t) not in FIND_EXEC_END, args[k + 1 :])
         ]
-        # lệnh của -exec bắt đầu ở độ sâu 2: còn hai lớp shell lồng (`bash -c '… sh -c "…"'`, review #159)
         verdict = bash_decision(_join_tokens(sub), root, cwd, MAX_NEST - 2)  # dấu trần giữ là toán tử như trước
         if verdict["decision"] in ("deny", "ask"):
             return str(verdict["decision"]), f"find {a}: {verdict['reason']}"
@@ -10890,14 +10893,12 @@ def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str
     return ("ask", f"find xoá file ngoài thư mục dự án ({outside[0]})") if outside else ("", "")
 
 
-# D-153: `find` có `-delete`/`-exec…` trong CHUỖI GỐC (không qua token — shlex bỏ dấu thoát nên `\(`, `\;` cắt argv).
 FIND_WORD_RE = re.compile(r"(?<![\w.-])find(?![\w.-])")
 FIND_ACT_RE = re.compile(r"(?<![\w-])-(?:delete|exec|execdir|ok|okdir)(?![\w-])")
 FIND_WRITE_RE = re.compile(r"(?<![\w-])-(?:delete|fprint0?|fprintf|fls)(?![\w-])")
 FIND_EXEC_CMD_RE = re.compile(r"(?<![\w-])-(?:exec|execdir|ok|okdir)(?![\w-])(?:[ \t]+(\S+))?")
 FIND_OUT_RE = re.compile(r"(?<![\w-])-(?:fprint0?|fprintf|fls)[ \t]+(\S+)")
 CD_WORD_RE = re.compile(r"(?<![\w.-])(?:cd|pushd|popd)(?![\w.-])")
-# D-154: -exec từ gốc được miễn khi chỉ chạy các lệnh đọc này (danh sách đóng — không shell/trình thông dịch/xargs/env)
 FIND_ROOT_RO_EXEC = frozenset(
     # không `rg` (`--pre <lệnh>` chạy lệnh tuỳ ý), không `file` (`file -C` ghi magic.mgc)
     "cat grep egrep fgrep ls head tail wc stat du sha256sum sha1sum md5sum basename dirname realpath echo "
@@ -10910,8 +10911,7 @@ FIND_ROOT_WHY = (
 
 
 def _find_starts(rest: str) -> List[str]:
-    """Điểm bắt đầu sau một từ `find` trong chuỗi gốc: bỏ `-H/-L/-P/-O<n>/-D <x>/--`, dừng ở từ bắt đầu bằng `-`, `(`,
-    `\\(`, `!` hay toán tử shell; nháy và `\\` bị bỏ."""
+    """Điểm bắt đầu của find trong chuỗi gốc, trước biểu thức hoặc toán tử shell."""
     out: List[str] = []
     words = iter(rest.split("\n", 1)[0].split())
     for w in words:
@@ -10930,8 +10930,7 @@ def _find_starts(rest: str) -> List[str]:
 
 
 def _find_exec_readonly(rest: str) -> bool:
-    """D-154: không `-delete`/`-fprint*`/`-fls` và MỌI `-exec`/`-execdir`/`-ok`/`-okdir` chạy lệnh TÊN TRẦN (không `/`
-    — `./cat` không phải cat) trong `FIND_ROOT_RO_EXEC`; lệnh là `{}`, biến hay thiếu → không miễn."""
+    """D-154 miễn find chỉ đọc khi mọi lệnh con dùng tên trần trong danh sách cho phép."""
     if FIND_WRITE_RE.search(rest):
         return False
     return all(c.strip("'\"") in FIND_ROOT_RO_EXEC for c in FIND_EXEC_CMD_RE.findall(rest))
@@ -10944,10 +10943,7 @@ def _find_bad_start(s: str, root: str, cwd: Optional[str], moved: bool) -> bool:
 
 
 def find_root_scan(cmd: str, root: str, cwd: Optional[str]) -> str:
-    """D-153: lý do chặn khi một `find` có hành động xoá/`-exec` bắt đầu từ gốc dự án, tổ tiên hay `gốc/.git`, không có
-    điểm bắt đầu khi đang đứng ở đó, hoặc điểm bắt đầu không xác định (`$`, backtick, glob, `{}`, tương đối sau `cd`);
-    hoặc `-fprint*`/`-fls` ghi vào `gốc/.git`. Quét bản bỏ `"`/`'`/`\\` (`fi""nd`, `f\\ind` vẫn là find). Chữ `find`
-    trong đối số có nháy cũng tính (AUD-SEC-410 mở, D-329): nhiều lệnh chạy chữ đó (`git rebase --exec`, `make --eval`)."""
+    """D-153: quét chuỗi gốc để chặn find thay đổi gốc dự án, `.git` hoặc đích không xác định."""
     norm = re.sub(r"[\"'\\]", "", join_continuations(_data_heredoc_head(cmd)))
     for m in FIND_WORD_RE.finditer(norm):
         rest = norm[m.end() :]
@@ -10993,9 +10989,31 @@ def _find_parts(args: List[str]) -> Tuple[List[str], int]:
     return args[i:j] or ["."], j
 
 
-def _find_traversal_uncertain(prefix: List[str], expr: List[str]) -> bool:
+def _find_traversal_uncertain(prefix: List[str], expr: List[str], target: str) -> bool:
     links = next((arg for arg in reversed(prefix) if arg in ("-L", "-P", "-H")), "")
-    return links == "-L" or "-follow" in expr or "-files0-from" in expr
+    follows = links == "-L" or "-follow" in expr
+    return "-files0-from" in expr or follows and not _find_tree_without_links(target, expr)
+
+
+def _find_tree_without_links(target: str, expr: List[str]) -> bool:
+    """Chứng minh cây find trong giới hạn: không theo symlink và dừng khi không đọc đủ."""
+    depths = [value for flag, value in zip(expr, expr[1:]) if flag == "-maxdepth"]
+    limit = int(depths[0]) if len(depths) == 1 and re.fullmatch(r"[0-9]{1,3}", depths[0]) else OUTSIDE_SCAN_MAX
+    pending, count = [(target, 0)], 1
+    while pending:
+        path, depth = pending.pop()
+        try:
+            mode = os.lstat(path).st_mode
+        except OSError:
+            return False
+        if stat.S_ISLNK(mode):
+            return False
+        names = _outside_names(path) if depth < limit and stat.S_ISDIR(mode) else []
+        if names is None or count + len(names) > OUTSIDE_SCAN_MAX:
+            return False
+        count += len(names)
+        pending.extend((os.path.join(path, name), depth + 1) for name in names)
+    return True
 
 
 def _find_delete_roots(args: List[str]) -> List[str]:
@@ -11006,26 +11024,10 @@ def _find_delete_roots(args: List[str]) -> List[str]:
     return roots if deleting else []
 
 
-FIND_READONLY_EXEC = {
-    *(
-        "cat",
-        "grep",
-        "egrep",
-        "fgrep",
-        "head",
-        "tail",
-        "ls",
-        "wc",
-        "stat",
-        "file",
-        "jq",
-        "diff",
-        "cmp",
-        "echo",
-        "printf",
-    ),
-    *("sha256sum", "sha1sum", "md5sum", "basename", "dirname", "readlink", "realpath", "du", "test", "["),
-}
+FIND_READONLY_EXEC = set(
+    "cat grep egrep fgrep head tail ls wc stat file jq diff cmp echo printf "
+    "sha256sum sha1sum md5sum basename dirname readlink realpath du test [".split()
+)
 FIND_FILE_OUT = {"-fprint", "-fprint0", "-fprintf", "-fls"}  # ghi kết quả vào file (đối số kế tiếp)
 FIND_NAME_TESTS = {"-path", "-ipath", "-wholename", "-iwholename", "-regex", "-iregex", "-name", "-iname", "-lname"}
 EVIDENCE_NAMES = {"verified.json", "runs.jsonl", "reviews.json"}  # tên đặc thù của file trong `.autopilot/`
@@ -16593,10 +16595,10 @@ def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional
         single_exec = len(execs) == 1 and action + len(execs[0]) + 2 == len(expr) and str(expr[-1]) in FIND_EXEC_END
         filters = [*expr[:action], "-print0"] if expr[action:] == ["-delete"] or single_exec else None
         paths, uncertain = _cli_cache_candidates(root)
-        if paths and _find_traversal_uncertain(n[1 : i + 1], expr):
-            return [CLI_CACHE_WHY.format(roots[0])]
         for start in roots:
             for x in _where(start, root, cwd):
+                if paths and _find_traversal_uncertain(n[1 : i + 1], expr, os.path.join(root, x)):
+                    return [CLI_CACHE_WHY.format(start)]
                 rel = _rel_dir(x, root)
                 reach = {
                     p: posixpath.normpath(posixpath.join(start, posixpath.relpath(p, rel)))
@@ -17103,14 +17105,12 @@ def _target_kind(target: str, root: str) -> str:
     return path_kind(rel, root) or ("gate" if _dir_holds_gate(rel, root) else "")
 
 
-# Thư mục NGOÀI dự án (`mv x /tmp`) đọc tối đa chừng này mục (D-097): /tmp ≈ 20k mục làm mỗi lệnh chậm ~2,5 s; thư mục
-# nhỏ hơn thì xét đủ như trong dự án, kể cả mẫu wildcard (`tsconfig*.json`) — strict vẫn hỏi `cp x OUT/ts/`.
+# D-097: giữ trần lượt đọc thư mục (`/tmp` có thể chứa hàng chục nghìn mục).
 OUTSIDE_SCAN_MAX = 256
 
 
 def _outside_names(d: str) -> Optional[List[str]]:
-    """Tên mục của thư mục ngoài dự án `d`; None khi quá OUTSIDE_SCAN_MAX mục hoặc không đọc được (chỉ kiểm tên đích
-    danh); không phải thư mục → rỗng."""
+    """Tên mục của d. None khi quá trần hoặc lỗi đọc. Đường ngoài thư mục cho danh sách rỗng."""
     if not os.path.isdir(d) or os.path.islink(d):
         return []
     names: List[str] = []
