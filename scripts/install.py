@@ -311,8 +311,15 @@ def load_manifest(target: Path) -> dict[str, str]:
     """Đường dẫn → hash hex theo `harness.sha256.json`: `sha256:<hex>` hay hex trần đều về hex (`manifest_hash`); giá
     trị không phải chuỗi bỏ qua như chưa biết hash; file thiếu/hỏng/không phải object → rỗng."""
     try:
-        data = json.loads((target / MANIFEST).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        return parse_manifest((target / MANIFEST).read_bytes())
+    except OSError:
+        return {}
+
+
+def parse_manifest(raw: bytes) -> dict[str, str]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except ValueError:
         return {}
     if not isinstance(data, dict):
         return {}
@@ -423,7 +430,14 @@ def classify_copy(
     mẫu trước khi thay SHA HEAD); cả hai nhận `sha256:<hex>` lẫn hex trần (`manifest_hash`). Dùng chung cho
     `copy_if_absent` và `--plan` để kế hoạch không lệch hành vi thật."""
     data = source_bytes(src, transform)
-    return classify_bytes(data, dst, force, installed_hash, template_hash, preserve_yaml_policy), data
+    action = classify_bytes(data, dst, force, installed_hash, template_hash, preserve_yaml_policy)
+    if action == "kept-own" and SRC / ".claude" / "hooks" in src.parents:
+        proposal = dst.with_name(dst.name + ".xtemplates-new")
+        if not proposal.exists():
+            current = dst.read_bytes()
+            if len(current) < len(data) and data.startswith(current):
+                action = "updated-new"
+    return action, data
 
 
 def classify_bytes(
@@ -2503,17 +2517,54 @@ def ensure_gitignore(target: Path) -> None:
         log("  .gitignore: tạo mới")
 
 
+def legacy_manifest_complete(data: bytes) -> bool:
+    """Manifest hash đầy đủ có gốc JSON là object."""
+    try:
+        return isinstance(json.loads(data), dict)
+    except ValueError:
+        return False
+
+
+def partial_legacy_manifest(source: Path, manifest: Path) -> bytes | None:
+    current = manifest.read_bytes()
+    if legacy_manifest_complete(current):
+        return None
+    full = source.read_bytes()
+    if len(current) < len(full) and full.startswith(current) and legacy_manifest_complete(full):
+        return full
+    return None
+
+
+def legacy_manifest_replacement(target: Path) -> tuple[bytes, int | None] | None:
+    """Chọn nội dung và mode migration dự kiến để --plan và lần cài dùng cùng hash."""
+    legacy = target / LEGACY_DIR
+    if not legacy.is_dir() or legacy.is_symlink():
+        return None
+    source = legacy / "harness.sha256.json"
+    if not source.is_file():
+        return None
+    manifest = target / MANIFEST
+    if not manifest.exists():
+        return source.read_bytes(), stat.S_IMODE(source.stat().st_mode)
+    if not manifest.is_symlink() and manifest.is_file():
+        recovered = partial_legacy_manifest(source, manifest)
+        if recovered is not None:
+            return recovered, None
+    return None
+
+
 def migrate_legacy(target: Path) -> None:
     """Bước 0 (bản ≤ 2.x): giữ manifest hash để hook chưa sửa vẫn cập nhật tại chỗ, xoá bản sao chỉ đọc `.xstored/`
     (cài lại được), đổi `xs.yaml` → `xt.yaml` — dev-task.sh chỉ đọc tên mới, để nguyên thì cổng thành no-op."""
     legacy = target / LEGACY_DIR
     if legacy.is_dir() and not legacy.is_symlink():
-        old_manifest = legacy / "harness.sha256.json"
         manifest = target / MANIFEST
         if manifest.is_symlink() and not manifest.exists():
             drop_symlink(manifest)  # liên kết treo qua được `exists()` rồi copy2 ghi xuyên nó (AUD-SEC-616)
-        if old_manifest.is_file() and not (target / MANIFEST).exists():
-            shutil.copy2(old_manifest, target / MANIFEST)
+        replacement = legacy_manifest_replacement(target)
+        if replacement is not None:
+            data, mode = replacement
+            write_bytes_atomic(manifest, data, mode=mode)
         shutil.rmtree(legacy)
         log(f"  {LEGACY_DIR}/ → .xtemplates/ (đã xoá bản sao cũ, giữ manifest hash)")
     old_yaml, new_yaml = target / LEGACY_YAML, target / "xt.yaml"
@@ -2779,7 +2830,9 @@ def plan_files(
 ) -> list[dict[str, Any]]:
     """Hành động dự kiến cho từng file harness/gốc/GitHub: copied | kept | updated | kept-own | updated-new |
     skipped-symlink. Cùng hash như cài thật: manifest, file gốc chưa có hash thì suy từ mẫu cũ (`infer_root_hashes`)."""
-    hashes = {**infer_root_hashes(target), **load_manifest(target)}  # manifest thắng hash suy
+    replacement = legacy_manifest_replacement(target)
+    installed = load_manifest(target) if replacement is None else parse_manifest(replacement[0])
+    hashes = {**infer_root_hashes(target), **installed}  # manifest thắng hash suy
     jobs: list[PlanJob] = []
     if not no_harness:
         jobs += [(src, src.relative_to(SRC).as_posix(), force_harness, None, None) for src in harness_sources(target)]

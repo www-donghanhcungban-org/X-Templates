@@ -5292,16 +5292,18 @@ def _doctor_hook_files(base: Path, hooks: Dict[str, Any], deep: bool) -> List[Fi
     names = sorted(direct | siblings)
     # Ghép chuỗi, không qua Path: Path bỏ `/` cuối (`guard.py/` thành file có thật) và `/guard.py` thành đường tuyệt đối.
     paths = [(n, f"{hook_dir}/{n}") for n in names]
-    out = [
-        Finding(
-            "hooks", "error", f"hook cần .claude/hooks/{n} nhưng file không có — hook lặng lẽ cho qua; {INSTALL_HINT}"
-        )
-        for n, p in paths
-        if not os.path.isfile(p)
-    ]
-    for n, p in paths if deep else []:
-        err = _syntax_error(Path(p)) if os.path.isfile(p) else None
-        if err:
+    out = []
+    for n, p in paths:
+        problem = "file không có" if not os.path.isfile(p) else "file rỗng" if os.path.getsize(p) == 0 else ""
+        proposal = Path(p + ".xtemplates-new")
+        if not problem and not proposal.is_symlink() and proposal.is_file() and not Path(p).is_symlink():
+            with contextlib.suppress(OSError):
+                active, offered = Path(p).read_bytes(), proposal.read_bytes()
+                if len(active) < len(offered) and offered.startswith(active):
+                    out.append(Finding("hooks", "warn", f".claude/hooks/{n} có thể bị ghi cụt; so với {proposal.name}"))
+        if problem:
+            out.append(Finding("hooks", "error", f"hook cần .claude/hooks/{n} nhưng {problem}; {INSTALL_HINT}"))
+        elif deep and (err := _syntax_error(Path(p))):
             out.append(Finding("hooks", "error", f".claude/hooks/{n} lỗi cú pháp: {_one_line(err)[:200]}"))
     return out
 

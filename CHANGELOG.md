@@ -9,6 +9,10 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 - Kiểm reflow theo nội dung thực sự được gán vào slot của shadow root mở, gồm chữ bị cắt và ca nội dung dự phòng ẩn.
 - Ngoại lệ reflow dùng đường dẫn riêng cho mỗi vùng trong shadow root. Strict tính cả các vùng vượt giới hạn hiển thị chẩn đoán.
 
+- Khi chuyển manifest hash của bản cài cũ, installer ghi đích bằng thay tệp nguyên tử. Lần chạy lại cũng khôi phục bản đích ghi dở nếu nó là tiền tố của manifest JSON nguồn còn nguyên.
+- `doctor` báo lỗi khi hook được cấu hình hoặc tệp mà hook cần có kích thước 0 byte.
+- Installer đề xuất mẫu đầy đủ khi hook cũ chỉ còn phần đầu của mẫu hiện hành. `--plan` báo cùng thao tác và lần cài lại giữ bản đề xuất đã có. `doctor` đối chiếu mẫu để báo hook có thể bị ghi cụt.
+
 - Installer giữ nguồn gốc rule của harness khi chạy lại sau gián đoạn giữa lúc ghi settings và hoàn tất manifest. Dữ liệu đang chờ chỉ được dùng khi khớp đúng snapshot settings đã ghi.
 
 - T-5065 (AUD-HAR-567) mở rộng kiểm reflow của `verify-render`: vùng cuộn ngang lồng và pseudo rỗng có nét vẽ trong vùng cắt báo `UNMEASURED`. Trong giới hạn 20 chẩn đoán, các vi phạm cắt chữ đã đo được xếp trước.

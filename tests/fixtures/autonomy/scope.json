@@ -10,6 +10,13 @@
    ]
   },
   {
+   "reason": "Mô phỏng gián đoạn installer, khôi phục nguồn gốc rule và kiểm chẩn đoán hook bằng fixture cục bộ: `python3 -m unittest tests.test_install_atomic tests.test_doctor.DoctorHookSiblingTest`.",
+   "ids": [
+    "AUD-HAR-574",
+    "AUD-HAR-578"
+   ]
+  },
+  {
    "reason": "Kiểm reflow bằng fixture HTML và Chromium: `node --test tests_e2e/verify_render.test.mjs`.",
    "ids": [
     "AUD-HAR-567"

@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -55,6 +56,62 @@ class WriteBytesAtomicTest(TestCase):
     def setUp(self) -> None:
         self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         self.path = self.tmp / "hook.sh"
+
+    def test_migration_replaces_incomplete_prefix_and_retains_unrelated_manifest(self) -> None:
+        source = b'{"sample.txt":"example"}\n'
+        manifest = self.tmp / install.MANIFEST
+        manifest.parent.mkdir()
+        legacy = self.tmp / install.LEGACY_DIR
+        for current, expected in (
+            (source[:8], source),
+            (source[:-1], source[:-1]),
+            (b'{"own.txt":"keep"}', b'{"own.txt":"keep"}'),
+            (b"other bytes", b"other bytes"),
+        ):
+            with self.subTest(current=current):
+                legacy.mkdir()
+                (legacy / "harness.sha256.json").write_bytes(source)
+                manifest.write_bytes(current)
+                manifest.chmod(0o600)
+                install.migrate_legacy(self.tmp)
+                self.assertEqual(manifest.read_bytes(), expected)
+                self.assertEqual(stat.S_IMODE(manifest.stat().st_mode), 0o600)
+        self.assertFalse(install.legacy_manifest_complete(b'{"not-complete"'))
+        self.assertFalse(install.legacy_manifest_complete(b"[1]"))
+        manifest.unlink()
+        manifest.mkdir()
+        legacy.mkdir()
+        (legacy / "harness.sha256.json").write_bytes(source)
+        install.migrate_legacy(self.tmp)
+        self.assertTrue(manifest.is_dir())
+
+    def test_load_incomplete_manifest_without_changing_it(self) -> None:
+        manifest = self.tmp / install.MANIFEST
+        manifest.parent.mkdir()
+        for raw in (b'{"sample.txt":', b'"\xff"'):
+            with self.subTest(raw=raw):
+                manifest.write_bytes(raw)
+                self.assertEqual(install.load_manifest(self.tmp), {})
+                self.assertEqual(manifest.read_bytes(), raw)
+
+    def test_legacy_manifest_survives_partial_write_and_retry(self) -> None:
+        legacy = self.tmp / install.LEGACY_DIR
+        legacy.mkdir()
+        old = legacy / "harness.sha256.json"
+        destination = self.tmp / install.MANIFEST
+        destination.parent.mkdir()
+        data = b'{"sample.txt":"' + b"a" * 4096 + b'"}'
+        old.write_bytes(data)
+        old.chmod(0o640)
+        with file_size_limit(128), self.assertRaises(OSError):
+            install.migrate_legacy(self.tmp)
+        self.assertEqual(old.read_bytes(), data)
+        self.assertFalse(destination.exists())
+        self.assertEqual(tmp_leftovers(self.tmp), [])
+        install.migrate_legacy(self.tmp)
+        self.assertEqual(destination.read_bytes(), data)
+        self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o640)
+        self.assertFalse(legacy.exists())
 
     def test_new_file_gets_open_default_mode_plus_extra_bits(self) -> None:
         install.write_bytes_atomic(self.path, b"#!/bin/sh\n", add_mode=stat.S_IXUSR)
@@ -322,6 +379,76 @@ class InstallInterruptedWriteTest(TestCase):
         ):
             self.assertEqual(install.recover_settings_rules(self.target), previous)
             read.assert_called_once()
+
+    def test_installer_reports_partial_legacy_hook_and_preserves_project_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            rel = ".claude/hooks/sample.sh"
+            source, installed = root / rel, self.target / rel
+            source.parent.mkdir(parents=True)
+            installed.parent.mkdir(parents=True)
+            complete = b"#!/bin/sh\n# demo fixture\nprintf sample\n"
+            source.write_bytes(complete)
+            expected = install.sha256(complete)
+            for data, should_warn in ((complete[:25], True), (b"#!/bin/sh\nprintf custom\n", False)):
+                with self.subTest(should_warn=should_warn):
+                    installed.write_bytes(data)
+                    proposal = installed.with_name(installed.name + ".xtemplates-new")
+                    with (
+                        mock.patch.object(install, "SRC", root),
+                        mock.patch.object(install, "harness_sources", return_value=[source]),
+                    ):
+                        job = (source, rel, False, None, None)
+                        action = "updated-new" if should_warn else "kept-own"
+                        self.assertEqual(install.plan_entry(self.target, job, expected)["action"], action)
+                        stats = Counter()
+                        result = install.copy_harness_files(self.target, False, {rel: expected}, stats)
+                        self.assertEqual(stats, Counter({action: 1}))
+                        self.assertEqual(result, {rel: expected})
+                        self.assertEqual(installed.read_bytes(), data)
+                        if should_warn:
+                            self.assertEqual(proposal.read_bytes(), complete)
+                            proposal.write_bytes(b"# reviewed proposal\n")
+                            self.assertEqual(install.plan_entry(self.target, job, expected)["action"], "kept-own")
+                            install.copy_harness_files(self.target, False, {rel: expected}, Counter())
+                            self.assertEqual(proposal.read_bytes(), b"# reviewed proposal\n")
+                            proposal.unlink()
+                        else:
+                            self.assertFalse(proposal.exists())
+
+    def test_plan_previews_update_using_recoverable_legacy_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            rel = ".claude/hooks/sample.sh"
+            source, installed = root / rel, self.target / rel
+            source.parent.mkdir(parents=True)
+            installed.parent.mkdir(parents=True)
+            previous, current = b"#!/bin/sh\n# previous sample\n", b"#!/bin/sh\n# current sample\n"
+            source.write_bytes(current)
+            installed.write_bytes(previous)
+            manifest = self.target / install.MANIFEST
+            manifest.parent.mkdir()
+            legacy = self.target / install.LEGACY_DIR
+            legacy.mkdir()
+            full = json.dumps({rel: install.sha256(previous)}).encode()
+            (legacy / "harness.sha256.json").write_bytes(full)
+            manifest.write_bytes(full[:12])
+            with (
+                mock.patch.object(install, "SRC", root),
+                mock.patch.object(install, "harness_sources", return_value=[source]),
+                mock.patch.object(install, "root_template_jobs", return_value=[]),
+            ):
+                self.assertEqual(
+                    install.plan_files(self.target, False, False, False), [{"path": rel, "action": "updated"}]
+                )
+                self.assertEqual(manifest.read_bytes(), full[:12])
+                self.assertEqual(installed.read_bytes(), previous)
+                self.assertTrue(legacy.is_dir())
+                install.migrate_legacy(self.target)
+                stats = Counter()
+                install.copy_harness_files(self.target, False, install.load_manifest(self.target), stats)
+                self.assertEqual(stats, Counter(updated=1))
+                self.assertEqual(installed.read_bytes(), current)
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
