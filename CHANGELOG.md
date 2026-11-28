@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5096 (AUD-HAR-541): đích ref hoặc refspec có namespace chữ rõ như `refs/notes/` và `refs/heads/` đi qua luật Git chung. Đích tag và namespace chưa xác định tiếp tục được kiểm theo luật tag phát hành.
+
 - `loop ci-triage` giữ tối đa 600 ký tự mỗi dòng bằng chứng đã che dữ liệu. Dòng dài giữ đầu và cuối. Mở lại một run cũ cũng rút gọn bản ghi, giữ nguyên chữ ký tính trên dòng đầy đủ và bộ đếm.
 
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.
