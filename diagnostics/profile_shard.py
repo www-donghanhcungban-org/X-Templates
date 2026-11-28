@@ -49,6 +49,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--prioritize", action="store_true")
     args = parser.parse_args()
     root, output = args.source.resolve(), args.output.resolve()
     assert command(["git", "rev-parse", "HEAD"], cwd=root) == HEAD
@@ -62,11 +63,16 @@ def main():
         input=ids + "\n",
     ).splitlines()
     assert len(tests) == len(set(tests)) == 116
+    if args.prioritize:
+        target = "tests.test_guard_d155.GlobCommandNameTest"
+        tests.remove(target)
+        tests.insert(0, target)
     output.mkdir(exist_ok=True, parents=True)
     logs = output / "logs"
     logs.mkdir()
     count = int(command(["nproc"]))
     metadata = {
+        "order": "prioritize" if args.prioritize else "baseline",
         "head": HEAD,
         "python": platform.python_version(),
         "platform": platform.platform(),

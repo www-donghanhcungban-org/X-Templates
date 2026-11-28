@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sample: [1, 2, 3]
+        sample: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -37,11 +37,19 @@ jobs:
       - name: Profile fixed test shard
         env:
           XT_MIN_TESTS: '100'
-        run: python instrumentation/diagnostics/profile_shard.py source result
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.sample }}" == "1" ]]; then
+            python instrumentation/diagnostics/profile_shard.py source result/baseline
+            python instrumentation/diagnostics/profile_shard.py source result/prioritize --prioritize
+          else
+            python instrumentation/diagnostics/profile_shard.py source result/prioritize --prioritize
+            python instrumentation/diagnostics/profile_shard.py source result/baseline
+          fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ !cancelled() }}
         with:
           name: py313-profile-${{ matrix.sample }}
-          path: result/profile.json
+          path: result/*/profile.json
           if-no-files-found: error
           retention-days: 7
