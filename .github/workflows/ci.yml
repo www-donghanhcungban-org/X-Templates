@@ -40,6 +40,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - &runner-cpu-snapshot
+        name: Ghi thông tin CPU và tải của runner
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        shell: bash
+        run: |
+          # Biểu thức GitHub Actions so chuỗi không phân biệt hoa thường.
+          [ "${GITHUB_REF:-}" = refs/heads/main ] || exit 0
+          cpu_model=$(awk '/^model name[ \t]*:/ { sub(/^[^:]*:[ \t]*/, ""); print; exit }' /proc/cpuinfo 2>/dev/null) || cpu_model=
+          logical_cpus=$(nproc --all 2>/dev/null) || logical_cpus=
+          read -r load_1m load_5m load_15m _ 2>/dev/null < /proc/loadavg || :
+          printf 'runner_cpu logical_cpus=%s load_1m=%s load_5m=%s load_15m=%s cpu_model=%s\n' \
+            "${logical_cpus:-unknown}" "${load_1m:-unknown}" "${load_5m:-unknown}" "${load_15m:-unknown}" "${cpu_model:-unknown}"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -59,6 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -78,6 +91,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -104,6 +118,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -151,6 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -181,9 +197,10 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
+      - *runner-cpu-snapshot
       # Thoát sớm ở CẤP BƯỚC (không `if:` cấp job: `quality` đòi mọi job con `success`, job bị skip thì không đạt). Trên
       # push/dispatch vào `main`, job `test` đã checkout đúng nhánh `main` → test-main lặp nguyên cây (T-5047). Chỉ PR
-      # (checkout HEAD tách rời) mới cần kiểm nhánh tên `main`; mọi bước dưới đây mang cùng điều kiện.
+      # (checkout HEAD tách rời) mới cần kiểm nhánh tên `main`; các bước kiểm thử dưới đây chỉ chạy trên PR.
       - if: github.event_name == 'pull_request'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -222,6 +239,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -244,6 +262,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `xt.py progress-check` cần lịch sử để kiểm SHA bàn giao là tổ tiên HEAD
@@ -311,6 +330,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # AUD-CI-028
@@ -340,6 +360,7 @@ jobs:
     env:
       RESULTS: ${{ toJSON(needs) }}
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.15.2"
@@ -364,6 +385,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - *runner-cpu-snapshot
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # AUD-CI-028 — bước API dùng GH_TOKEN qua env

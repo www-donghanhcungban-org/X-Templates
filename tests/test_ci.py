@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from fnmatch import fnmatchcase
 from pathlib import Path
@@ -26,6 +27,8 @@ STUB = WORKFLOWS / "merge-gate.yml"
 RULESET = ROOT / ".github" / "rulesets" / "main.json"
 AGGREGATE = "quality"
 OUTSIDE_QUALITY = {"protection-guard"}  # required check riêng, không phải cổng chất lượng
+CPU_SNAPSHOT_ANCHOR = "&runner-cpu-snapshot"
+CPU_SNAPSHOT_ALIAS = "*runner-cpu-snapshot"
 # T-5064: không workflow nào còn `pull_request_target` — GitHub chặn mặc định ở repo public từ 2026-12-02.
 PR_TARGET_ALLOWED: set[str] = set()
 PR_TARGET_RE = re.compile(r"(?<![\w-])pull_request_target(?![\w-])")
@@ -42,6 +45,11 @@ def job_key(body: str, key: str) -> str:
     """Giá trị một dòng của khoá cấp job (thụt 4) — rỗng nếu không có."""
     m = re.search(rf"^    {re.escape(key)}:[ \t]*(.*)$", body, re.M)
     return m.group(1).strip() if m else ""
+
+
+def ci_steps(body: str) -> list[str]:
+    """Các bước cấp job, giữ nguyên thân bước và alias YAML."""
+    return re.split(r"^      - ", body.split("\n    steps:\n", 1)[1], flags=re.M)[1:]
 
 
 def flow_list(value: str) -> List[str]:
@@ -251,11 +259,54 @@ class GateFanOutTest(unittest.TestCase):
         self.assertLess(body.index("git checkout -q -B main"), body.index("scripts/dev-task.sh test-shard"))
         self.assertNotIn("XT_PY", body)
 
+    def test_every_ci_job_starts_with_main_runner_cpu_snapshot(self):
+        for job, body in self.jobs.items():
+            with self.subTest(job=job):
+                step_headers = [step.splitlines()[0] for step in ci_steps(body)]
+                marker = CPU_SNAPSHOT_ANCHOR if job == "build" else CPU_SNAPSHOT_ALIAS
+                self.assertEqual(step_headers[0], marker)
+                self.assertEqual(
+                    [header for header in step_headers if header in (CPU_SNAPSHOT_ANCHOR, CPU_SNAPSHOT_ALIAS)], [marker]
+                )
+        self.assertIn(
+            "        if: github.ref == 'refs/heads/main' && "
+            "(github.event_name == 'push' || github.event_name == 'workflow_dispatch')",
+            ci_steps(self.jobs["build"])[0].splitlines(),
+        )
+
+    def test_runner_cpu_snapshot_log(self):
+        step = ci_steps(self.jobs["build"])[0]
+        self.assertEqual(step.splitlines()[0], CPU_SNAPSHOT_ANCHOR)
+        script = textwrap.dedent(step.split("\n        run: |\n", 1)[1])
+        for ref, stubs, expected in (
+            (
+                "refs/heads/main",
+                "",
+                r"runner_cpu logical_cpus=[1-9]\d* load_1m=\d+\.\d+ load_5m=\d+\.\d+ load_15m=\d+\.\d+ cpu_model=.+\n",
+            ),
+            (
+                "refs/heads/main",
+                "awk() { return 1; }; nproc() { return 1; }; read() { return 1; }\n",
+                r"runner_cpu logical_cpus=unknown load_1m=unknown load_5m=unknown load_15m=unknown cpu_model=unknown\n",
+            ),
+            ("refs/heads/Main", "", ""),
+        ):
+            with self.subTest(ref=ref, probes_available=not stubs):
+                result = subprocess.run(
+                    ["bash", "-eo", "pipefail", "-c", stubs + script],
+                    env={**os.environ, "GITHUB_REF": ref},
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                self.assertEqual(result.stderr, "")
+                self.assertRegex(result.stdout, rf"\A{expected}\Z")
+
     def test_test_main_exits_early_per_step_when_not_pr(self):
         # T-5047: trên push/dispatch `main`, `test` đã chạy trên nhánh `main` → test-main bỏ qua ở CẤP BƯỚC.
         body = self.jobs["test-main"]
         self.assertEqual(job_key(body, "if"), "")  # không `if:` cấp job: skipped ≠ success cho `quality`
-        steps = re.split(r"^      - ", body.split("\n    steps:\n", 1)[1], flags=re.M)[1:]
+        steps = [step for step in ci_steps(body) if step.splitlines()[0] != CPU_SNAPSHOT_ALIAS]
         self.assertGreaterEqual(len(steps), 4)
         cond = "if: github.event_name == 'pull_request'"
         for step in steps:

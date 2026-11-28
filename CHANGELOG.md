@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- Mỗi job CI ghi một dòng `runner_cpu` gồm model CPU, số CPU logic và tải trung bình 1, 5, 15 phút khi chạy do `push` hoặc `workflow_dispatch` trên `main`.
+
 - `test-shard` nhận `XT_SHARD_FIRST` để đưa một ID khớp nguyên dòng lên đầu shard đã chọn. Chỉ bước kiểm thử CPython 3.13 đặt biến này. Shard 6 giảm 5,38 và 5,53 giây trong hai cặp đo A/B đảo thứ tự trên cùng runner (lượt CI 46122099374). Giữ nguyên 8 shard, tập lớp kiểm thử, coverage và các phụ thuộc của `quality`.
 
 - T-5075 (ADR-0105, LOOP-STOP-031): CLI và steward áp thứ tự PR theo nhánh đích và đọc lại trạng thái trước khi cập nhật nhánh hoặc merge. Dự án đích: FIFO bật mặc định; khoá `merge_queue: off` ở nhánh đích khôi phục cách xử lý trước đây.
