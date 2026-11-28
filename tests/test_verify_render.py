@@ -33,14 +33,14 @@ def _glob_re(pattern: str) -> "re.Pattern[str]":
     return re.compile(out)
 
 
-def _paths(event: str) -> List[str]:
+def _paths(event: str, workflow: Path = WORKFLOW) -> List[str]:
     """Các mục `paths:` của sự kiện `event` (pull_request/push) đọc thẳng từ văn bản workflow."""
-    text = WORKFLOW.read_text(encoding="utf-8")
+    text = workflow.read_text(encoding="utf-8")
     block = re.search(rf"^  {event}:\n(.*?)(?=^  \w|^\w)", text, re.S | re.M)
     assert block, event
     listed = re.search(r"^    paths:\n((?:      - .*\n)+)", block[1], re.M)
     assert listed, event
-    return [ln.strip()[2:].strip() for ln in listed[1].splitlines()]
+    return [ln.strip()[2:].strip().strip("'\"") for ln in listed[1].splitlines()]
 
 
 def gate_flags() -> List[str]:
@@ -51,6 +51,36 @@ def gate_flags() -> List[str]:
 
 
 class VerifyRenderWorkflowTest(unittest.TestCase):
+    def test_optional_workflows_match_only_relevant_pr_paths(self):
+        codeql = WORKFLOW.with_name("codeql.yml")
+        for workflow, included, excluded in (
+            (
+                codeql,
+                (
+                    "helper.py",
+                    "scripts/xt_checks/example.py",
+                    "scripts/types.pyi",
+                    ".github/codeql/config.yml",
+                    ".github/workflows/codeql.yml",
+                ),
+                ("README.md", "tests_e2e/verify-render-deps/package-lock.json"),
+            ),
+            (
+                WORKFLOW,
+                (GATE, E2E, "scripts/install.py", "tests_e2e/verify-render-deps/package-lock.json"),
+                ("README.md", ".github/workflows/codeql.yml"),
+            ),
+        ):
+            paths = [_glob_re(pattern) for pattern in _paths("pull_request", workflow)]
+            for filename in included + excluded:
+                with self.subTest(workflow=workflow.name, filename=filename):
+                    self.assertEqual(any(pattern.fullmatch(filename) for pattern in paths), filename in included)
+
+    def test_codeql_keeps_unfiltered_main_and_periodic_scan(self):
+        text = WORKFLOW.with_name("codeql.yml").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^  push:\n    branches: \[main\]\n  pull_request:")
+        self.assertRegex(text, r'(?m)^  schedule:\n    - cron: "[^"]+"$')
+
     def test_paths_cover_gate_and_e2e_in_both_events(self):
         for event in ("pull_request", "push"):
             paths = _paths(event)
