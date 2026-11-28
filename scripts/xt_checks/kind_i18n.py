@@ -23,6 +23,7 @@ ELLIPSIS = chr(0x2026)
 
 Flat = dict[str, object]
 NAME_RE = re.compile(r"[^,{}]*+")
+BRANCH_RE = re.compile(r",\s*+(?:plural|selectordinal|select)\s*+,")
 RISKY_RE = re.compile(
     r"(?P<script><script)|(?P<handler>(?<![\w-])on[a-z]{2,30}\s{0,5}=)|(?P<jsuri>javascript:)",
     re.IGNORECASE,
@@ -56,6 +57,8 @@ def _flatten(root: dict[str, object]) -> Flat | None:
             if isinstance(value, dict):
                 stack.append((path, value))
             else:
+                if path in out:
+                    raise ValueError(f"khoá làm phẳng bị trùng: {_show(path)!r}")
                 out[path] = value
     return out
 
@@ -73,7 +76,10 @@ def _load(path: Path) -> tuple[Flat | None, str]:
         return None, "không phải JSON hợp lệ"
     if not isinstance(data, dict):
         return None, "gốc JSON không phải object"
-    flat = _flatten(data)
+    try:
+        flat = _flatten(data)
+    except ValueError as error:
+        return None, str(error)
     if flat is None:
         return None, "khoá lồng quá dài hoặc quá rộng (tổng độ dài đường dẫn vượt trần)"
     return flat, ""
@@ -98,10 +104,23 @@ def _skip_quote(text: str, pos: int) -> int:
     return pos + 1
 
 
+def _opening(text: str, pos: int, parent: str, names: set[str]) -> str:
+    if parent == "selectors":
+        return "message"
+    if parent == "message":
+        match = next(NAME_RE.finditer(text, pos + 1))
+        name = match.group().strip()
+        if not name:
+            return ""
+        names.add(name)
+        if BRANCH_RE.match(text, match.end()):
+            return "selectors"
+    return "opaque"
+
+
 def scan_icu(text: str) -> tuple[str, frozenset[str]]:
-    """Quét ICU một lượt bằng đếm độ sâu: (lỗi hoặc "", tên tham số cấp cao nhất). `'{`/`'}` mở đoạn trích tới `'` kế,
-    `''` là dấu nháy thường, `'` đứng trước ký tự khác là chữ thường."""
-    depth = 0
+    """Quét ICU một lượt, lấy tên đối số trong thông điệp chính và thân các nhánh."""
+    frames = ["message"]
     names: set[str] = set()
     pos = 0
     size = len(text)
@@ -113,19 +132,17 @@ def scan_icu(text: str) -> tuple[str, frozenset[str]]:
                 return "dấu ' chưa đóng", frozenset(names)
             continue
         if char == "{":
-            if depth == 0:
-                name = next(NAME_RE.finditer(text, pos + 1)).group().strip()
-                if not name:
-                    return "tham số rỗng", frozenset(names)
-                names.add(name)
-            depth += 1
+            frame = _opening(text, pos, frames[-1], names)
+            if not frame:
+                return "tham số rỗng", frozenset(names)
+            frames.append(frame)
         elif char == "}":
-            depth -= 1
-            if depth < 0:
+            if len(frames) == 1:
                 return "dấu } thừa", frozenset(names)
+            frames.pop()
         pos += 1
-    if depth > 0:
-        return f"thiếu {depth} dấu }}", frozenset(names)
+    if len(frames) > 1:
+        return f"thiếu {len(frames) - 1} dấu }}", frozenset(names)
     return "", frozenset(names)
 
 
