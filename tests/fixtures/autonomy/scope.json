@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm tính bất biến theo thang đo của cùng một tỷ lệ SRM bằng bảng dữ liệu giả trong tests.test_check_srm.",
+   "ids": ["AUD-HAR-589"]
+  },
+  {
    "reason": "Kiểm quyết định của guard qua mô hình repo khung, bản cài cạnh scripts của ứng dụng, liên kết tượng trưng và thao tác đồng thời. Gate: `python3 -m unittest tests.test_hooks.CliCacheFenceTest`.",
    "ids": ["AUD-HAR-573"]
   },
