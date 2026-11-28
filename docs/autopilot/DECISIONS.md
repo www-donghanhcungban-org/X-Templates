@@ -1358,3 +1358,10 @@
 - Chọn: Giao triển khai độc lập từ đặc tả trên main sạch theo tuyến D-625, kiểm toàn bộ cây cuối và giữ lịch sử PR nối tiếp
 - Lý do (tiêu chí chất lượng cuối): Chủ dự án giao tự xử lý và merge tuần tự. PR #891 đã dùng commit hoàn tác khôi phục nguyên cây base rồi tích hợp bản độc lập. So cây Git, Gate và review độc lập ở đúng head cho phép kiểm cả hành vi lẫn tác giả. Các lát sau dùng cùng tuyến và đối chứng nghiệp vụ.
 - Đường lùi: Trước merge giữ nhánh và commit cũ để đối chiếu. Khi bản mới chưa đạt thì giữ PR nháp và sửa theo kết quả review và CI.
+
+### D-648 · 2026-11-28T17:09:28+00:00 · Phân loại phần mô-đun của tên đối tượng trong ba API stdlib như thế nào?
+
+- Phương án: (1) Thay toàn bộ quy tắc cũ bằng bộ phân loại tên đối tượng mới. · (2) Giữ quy tắc toàn chuỗi hiện có, thêm nhận diện tiền tố mô-đun đúng cú pháp từng loader.
+- Chọn: Giữ quy tắc toàn chuỗi hiện có, thêm nhận diện tiền tố mô-đun đúng cú pháp từng loader.
+- Lý do (tiêu chí chất lượng cuối): Review T-5068 xác nhận trên stdlib rằng tên có dấu hai chấm hoặc thành phần thuộc tính vẫn tải mô-đun. Giữ quyết định phòng vệ hiện có và xét phần tên mô-đun một cách bảo thủ khi không thể biết ranh giới mà không import.
+- Đường lùi: Hoàn tác riêng phần nhận diện bổ sung và mở lại AUD-HAR-576 nếu hợp đồng API hoặc bộ đối chứng thay đổi.
