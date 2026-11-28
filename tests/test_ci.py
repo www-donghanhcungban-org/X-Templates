@@ -225,6 +225,19 @@ class GateFanOutTest(unittest.TestCase):
         self.assertIn("actions/upload-artifact@", self.jobs["test"])
         self.assertIn("include-hidden-files: true", self.jobs["test"])  # `.coverage.*` là file ẩn
 
+    def test_shard_first_is_set_only_in_compat_test_step(self):
+        self.assert_sharded("compat-py313", cov=False)
+        env_line = r"(?m)^ +XT_SHARD_FIRST:"
+        self.assertEqual(len(re.findall(env_line, CI.read_text(encoding="utf-8"))), 1)
+        self.assertIn(
+            "      - name: Test shard trên CPython 3.13\n"
+            "        env:\n"
+            "          SHARD: ${{ matrix.shard }}\n"
+            "          XT_SHARD_FIRST: tests.test_guard_d155.GlobCommandNameTest\n"
+            '        run: scripts/dev-task.sh test-shard "$SHARD" 8\n',
+            self.jobs["compat-py313"],
+        )
+
     def test_coverage_job_combines_all_shards(self):
         cov = self.jobs["coverage"]
         self.assertEqual(flow_list(job_key(cov, "needs")), ["test"])
@@ -831,7 +844,8 @@ class TestShardTest(unittest.TestCase):
         (self.tmp / "xt.yaml").write_text("".join(f"{k}: {v}\n" for k, v in keys.items()), encoding="utf-8")
 
     def run_dt(self, *args: str, **env: str) -> subprocess.CompletedProcess:
-        base = {k: v for k, v in os.environ.items() if k not in ("XT_MIN_TESTS", "XT_COV_DIR", "XT_PY")}
+        isolated = ("XT_MIN_TESTS", "XT_COV_DIR", "XT_PY", "XT_SHARD_FIRST")
+        base = {k: v for k, v in os.environ.items() if k not in isolated}
         full = dict(base, CLAUDE_PROJECT_DIR=str(self.tmp), OUT=str(self.out), **env)
         return subprocess.run(
             ["bash", str(self.tmp / "scripts" / "dev-task.sh"), *args],
@@ -866,6 +880,32 @@ class TestShardTest(unittest.TestCase):
                 self.assertEqual(sorted(got), ids[i - 1 :: n])  # chỉ số k (sắp xếp, bỏ trùng) → shard k mod N + 1
                 seen += got
             self.assertEqual(sorted(seen), ids, n)  # không sót, không trùng
+
+    def test_shard_first_reorders_only_a_literal_match_in_the_selected_shard(self):
+        ids = [f"tests.example.{name}" for name in ("Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot")]
+        first, other_shard, middle, _, last, _ = ids
+        self.yaml(test_list=self.ids("\n".join(ids) + "\n"), test_unit='[ -n "$1" ] && printf "%s\\n" "$1"')
+        original = [first, middle, last]
+        cases = (
+            ({}, original),
+            ({"XT_SHARD_FIRST": ""}, original),
+            ({"XT_SHARD_FIRST": other_shard}, original),
+            ({"XT_SHARD_FIRST": "Echo"}, original),
+            ({"XT_SHARD_FIRST": "tests.example.*"}, original),
+            ({"XT_SHARD_FIRST": f"{first}\n{middle}"}, original),
+            ({"XT_SHARD_FIRST": last}, [last, first, middle]),
+        )
+        for env, expected in cases:
+            with self.subTest(env=env):
+                r = self.run_dt("test-shard", "1", "2", XT_CPU_SHARE_ID="fixture", XT_JOBS="1", **env)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                self.assertEqual(r.stdout.splitlines(), expected)
+
+    def test_shard_first_keeps_all_selected_ids_with_parallel_workers(self):
+        self.yaml(test_list=self.ids("a\nb\nc\nd\ne\nf\n"), test_unit=self.RECORD)
+        r = self.run_dt("test-shard", "1", "2", XT_CPU_SHARE_ID="fixture", XT_JOBS="2", XT_SHARD_FIRST="e")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(sorted(self.ran()), ["a", "c", "e"])
 
     def test_real_suite_partition_equals_discover(self):
         """Tập lớp của mọi shard (lệnh `test_list` THẬT của xt.yaml) hợp lại == tập lớp của unittest discover."""

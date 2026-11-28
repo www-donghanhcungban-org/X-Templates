@@ -236,6 +236,7 @@ jobs:
       - name: Test shard trên CPython 3.13
         env:
           SHARD: ${{ matrix.shard }}
+          XT_SHARD_FIRST: tests.test_guard_d155.GlobCommandNameTest
         run: scripts/dev-task.sh test-shard "$SHARD" 8
 
   checks:
