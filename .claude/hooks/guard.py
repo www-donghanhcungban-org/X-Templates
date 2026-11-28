@@ -4615,7 +4615,7 @@ def _xargs_source_safe(src: str, words: List[str], root: str, here: str) -> bool
     rel = [posixpath.relpath(p, base) for p in [*_xargs_fence_paths(root), *caches]]
     unknown = {posixpath.relpath(p, base) for p in uncertain}
     if src == "find":
-        return _xargs_find_safe(words, rel, uncertain=unknown)
+        return _xargs_find_safe(words, rel, uncertain=unknown, here=here)
     return _xargs_lsfiles_safe(words, rel, unknown)
 
 
@@ -4624,13 +4624,14 @@ def _xargs_find_safe(
     fence: List[str],
     extra_names: Tuple[str, ...] = XARGS_SECRET_NAMES,
     uncertain: Iterable[str] = (),
+    here: str = "",
 ) -> bool:
-    k = next((i for i, w in enumerate(words) if w[:1] in "-!(" or w == ","), len(words))
-    starts, expr = words[:k] or ["."], words[k:]
+    starts, k = _find_parts(words)
+    expr = words[k:]
     if {"(", ")"} & set(expr) and {"-o", "-or", "!", "-not"} & set(expr):
         return False  # ngoặc chỉ bỏ được khi biểu thức thuần AND (`find src \( -name '*.py' \)`)
     expr = [w for w in expr if w not in ("(", ")")]
-    if "," in expr or XARGS_FIND_ACTIONS & set(expr):
+    if "," in expr or XARGS_FIND_ACTIONS & set(expr) or fence and _find_traversal_uncertain(words[:k], expr):
         return False
     branches: List[List[Tuple[str, str]]] = [[]]
     for i, w in enumerate(expr):
@@ -4640,15 +4641,14 @@ def _xargs_find_safe(
             branches.append([])
         elif w in XARGS_FIND_FILTERS and i + 1 < len(expr) and not (i and expr[i - 1] in ("!", "-not")):
             branches[-1].append((w, expr[i + 1]))
+    here = os.path.realpath(here) if here else ""
     for start in starts:
-        s = posixpath.normpath(start)
-        if ".git" in s.split("/"):  # T-3945 (R3): gốc tìm trong `.git` — mọi tệp ở đó là hàng rào
+        s = os.path.relpath(os.path.realpath(posixpath.join(here, start)), here) if here else posixpath.normpath(start)
+        if ".git" in s.split("/") or UNRESOLVED_TARGET_CHARS.intersection(start) or start.startswith("~"):
             return False
-        dot = s == "."
-        follow = "-L" in words or "-follow" in expr
-        reach = [p for p in fence if p == s or p.startswith(s + "/") or dot and (follow or p.split("/", 1)[0] != "..")]
+        reach = [p for p in fence if p == s or p.startswith(s + "/") or s == "." and p.split("/", 1)[0] != ".."]
         reach += [posixpath.join(s, n) for n in extra_names]
-        found = ["./" + p if start.startswith("./") or start == "." else p for p in reach]
+        found = [start if p == s else posixpath.join(start, posixpath.relpath(p, s)) for p in reach]
         if set(reach).intersection(uncertain) or any(
             all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found
         ):
@@ -10982,21 +10982,22 @@ def _data_heredoc_head(cmd: str) -> str:
 
 
 def _find_parts(args: List[str]) -> Tuple[List[str], int]:
-    """(gốc, vị trí bắt đầu biểu thức) của `find`: bỏ tuỳ chọn toàn cục đứng trước gốc (`-H`/`-L`/`-P`, `-D <opt>`,
-    `-O<n>`) — `find -L .autopilot -delete` từng bị đọc thành gốc `.` (reviewer #132)."""
+    """Điểm bắt đầu và chỉ số biểu thức sau các tuỳ chọn toàn cục của find."""
     i = 0
-    while i < len(args) and (args[i] in ("-H", "-L", "-P") or re.fullmatch(r"-O\d", args[i])):
-        i += 1
-    if args[i : i + 1] == ["-D"]:
-        i += 2
+    while i < len(args) and (args[i] in ("-H", "-L", "-P", "-D", "--") or re.fullmatch(r"-O\d", args[i])):
+        i += 2 if args[i] == "-D" else 1
     j = i
-    while j < len(args) and not args[j].startswith(("-", "(", "!")):
+    while j < len(args) and args[j] != "," and not args[j].startswith(("-", "(", "!")):
         j += 1
     return args[i:j] or ["."], j
 
 
+def _find_traversal_uncertain(prefix: List[str], expr: List[str]) -> bool:
+    links = next((arg for arg in reversed(prefix) if arg in ("-L", "-P", "-H")), "")
+    return links == "-L" or "-follow" in expr or "-files0-from" in expr
+
+
 def _find_delete_roots(args: List[str]) -> List[str]:
-    """Gốc của `find … -delete` / `-exec rm|shred|unlink …`: lệnh xoá file dưới các gốc này (reviewer #132)."""
     roots, i = _find_parts(args)
     deleting = "-delete" in args[i:] or any(
         sub and posixpath.basename(sub[0]) in ("rm", "shred", "unlink") for sub in _find_exec_argvs(["find", *args[i:]])
@@ -11004,7 +11005,6 @@ def _find_delete_roots(args: List[str]) -> List[str]:
     return roots if deleting else []
 
 
-# `find … -exec <lệnh>` chỉ ĐỌC file thì không đụng bằng chứng; lệnh khác (mv, sed -i, sh -c, tee…) coi là có thể ghi.
 FIND_READONLY_EXEC = {
     *(
         "cat",
@@ -11031,8 +11031,7 @@ EVIDENCE_NAMES = {"verified.json", "runs.jsonl", "reviews.json"}  # tên đặc 
 
 
 def _find_name_hints(expr: List[str]) -> List[str]:
-    """`-path './.autopilot/*'`, `-name verified.json`: gốc `.` nhưng bộ lọc chỉ trúng bằng chứng — trả đường dẫn giả
-    `.autopilot/<tên>` để xét như đích ghi."""
+    """Trả ứng viên `.autopilot/<tên>` theo bộ lọc của find."""
     out: List[str] = []
     for k, a in enumerate(expr[:-1]):
         val = expr[k + 1]
@@ -11043,8 +11042,7 @@ def _find_name_hints(expr: List[str]) -> List[str]:
 
 
 def _find_evidence_targets(args: List[str]) -> List[str]:
-    """Đích mà `find` có thể ghi/sửa ngoài việc xoá: `-exec` chạy lệnh không chỉ-đọc dưới các gốc (kể cả bộ lọc trúng
-    bằng chứng), `-fprint FILE`. Chỉ dùng để xét `.autopilot/` (ADR-0026) — gốc `.` thường không phải cổng."""
+    """Đích bằng chứng của find, gồm lệnh ghi trong `-exec` và tệp `-fprint`."""
     roots, i = _find_parts(args)
     expr = args[i:]
     out = [expr[k + 1] for k, a in enumerate(expr[:-1]) if a in FIND_FILE_OUT]
@@ -16594,6 +16592,8 @@ def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional
         single_exec = len(execs) == 1 and action + len(execs[0]) + 2 == len(expr) and str(expr[-1]) in FIND_EXEC_END
         filters = [*expr[:action], "-print0"] if expr[action:] == ["-delete"] or single_exec else None
         paths, uncertain = _cli_cache_candidates(root)
+        if paths and _find_traversal_uncertain(n[1 : i + 1], expr):
+            return [CLI_CACHE_WHY.format(roots[0])]
         for start in roots:
             for x in _where(start, root, cwd):
                 rel = _rel_dir(x, root)
