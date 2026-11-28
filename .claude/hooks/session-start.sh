@@ -16,7 +16,7 @@ PROGRESS_LIMIT=8192  # khớp PROGRESS_MAX_BYTES của `xt.py progress-check` (t
 progress_block() {
   [ -f "$XT_ROOT/PROGRESS.md" ] || return 0
   local prog
-  prog="$(python3 -I -c 'import sys, unicodedata; sys.stdout.write(unicodedata.normalize("NFC", sys.stdin.read()))' \
+  prog="$(python3 -I -S -c 'import sys, unicodedata; sys.stdout.write(unicodedata.normalize("NFC", sys.stdin.read()))' \
     < "$XT_ROOT/PROGRESS.md" 2>/dev/null | awk '
     /^## /{keep = ($0 ~ /Đang làm|Tiếp theo|Quyết định|Bàn giao/)}
     NR==1 || keep {print}
@@ -31,7 +31,7 @@ if [ -n "${XT:-}" ] && [ -f "$XT_ROOT/.autopilot/state.json" ]; then
   status="$(py_run "$XT" loop status 2>/dev/null)" || status='không đọc được trạng thái'
   # Quá 2 400 ký tự: giữ dòng verdict đầu (chặn ở 1 200 ký tự kèm "…"), bỏ các dòng giữa, giữ nguyên các dòng cuối còn
   # vừa (dòng checkpoint); dòng cuối dài hơn phần còn lại thì giữ phần đầu của nó kèm "…"; chỉ một dòng thì cắt cụt kèm "…".
-  status="$(printf '%s' "$status" | python3 -I -c '
+  status="$(printf '%s' "$status" | python3 -I -S -c '
 import sys
 t = sys.stdin.buffer.read().decode("utf-8", "replace")
 n = int(sys.argv[1])
@@ -99,7 +99,7 @@ prog="$(progress_block)"
 if [ -n "$prog" ]; then
   # Ngân sách PROGRESS = 9 800 trừ phần còn lại, đo bằng ký tự trong Python (đọc UTF-8 tường minh, không phụ thuộc
   # LANG: `${#rest}` đếm byte khi locale trống). Cắt thì nối dấu để phiên sau biết còn phần chưa đọc.
-  ctx="$(python3 -I -c '
+  ctx="$(python3 -I -S -c '
 import sys
 prog, rest, limit = sys.argv[1], sys.argv[2], int(sys.argv[3])
 head = "===== PROGRESS.md (trạng thái phiên trước) =====\n"

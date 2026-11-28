@@ -20,7 +20,7 @@ xt_py() {
 # (AUD-PERF-031). Bộ nạp giống hệt
 # `PY_LOADER` của guard.py (test so).
 py_run() { # $1=đường dẫn .py (có main()) $2…=đối số
-  python3 -I -B -c 'import sys
+  python3 -I -S -B -c 'import sys
 p = sys.argv[1]
 d, _, f = p.rpartition("/")
 sys.path.insert(0, d or ".")
@@ -55,7 +55,7 @@ guard_fields() { # $1=bash|edit|mcp
 
 # Đọc một trường trong payload JSON (stdin của hook) bằng python3; rỗng nếu thiếu.
 json_field() { # $1=payload $2=đường dẫn dạng a.b.c
-  printf '%s' "$1" | python3 -I -c '
+  printf '%s' "$1" | python3 -I -S -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
@@ -71,7 +71,7 @@ sys.stdout.write(d if isinstance(d, str) else json.dumps(d, ensure_ascii=False))
 
 # In JSON quyết định PreToolUse (deny|ask|allow) kèm lý do, rồi exit 0.
 pretool_decision() { # $1=deny|ask $2=lý do
-  python3 -I -c '
+  python3 -I -S -c '
 import json, sys
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
       "permissionDecision": sys.argv[1], "permissionDecisionReason": sys.argv[2]}}, ensure_ascii=False))
@@ -93,12 +93,12 @@ fence_closed() { # $1=lý do
 
 # Cắt stdin tối đa $1 byte KHÔNG cắt giữa ký tự UTF-8 (head -c từng làm hỏng tiếng Việt — AUD-HAR-011).
 utf8_head() {
-  python3 -I -c 'import sys; sys.stdout.write(sys.stdin.buffer.read()[: int(sys.argv[1])].decode("utf-8", "ignore"))' "$1" 2>/dev/null
+  python3 -I -S -c 'import sys; sys.stdout.write(sys.stdin.buffer.read()[: int(sys.argv[1])].decode("utf-8", "ignore"))' "$1" 2>/dev/null
 }
 
 # In JSON additionalContext cho SessionStart/UserPromptSubmit.
 context_output() { # $1=hookEventName $2=nội dung
-  python3 -I -c '
+  python3 -I -S -c '
 import json, sys
 print(json.dumps({"hookSpecificOutput": {"hookEventName": sys.argv[1],
       "additionalContext": sys.argv[2]}}, ensure_ascii=False))

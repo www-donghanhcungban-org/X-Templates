@@ -23,8 +23,10 @@ HOOK = ROOT / ".claude" / "hooks" / "pre-compact.sh"
 PAYLOAD = json.dumps({"hook_event_name": "PreCompact", "trigger": "auto", "custom_instructions": None})
 
 
-def run_pre_compact(project: Path, payload: str = PAYLOAD) -> tuple[int, str, str]:
-    env = dict(os.environ, CLAUDE_PROJECT_DIR=str(project))
+def run_pre_compact(
+    project: Path, payload: str = PAYLOAD, extra_env: dict[str, str] | None = None
+) -> tuple[int, str, str]:
+    env = {**os.environ, "CLAUDE_PROJECT_DIR": str(project), **(extra_env or {})}
     r = subprocess.run(["bash", str(HOOK)], input=payload, capture_output=True, text=True, env=env, timeout=120)
     return r.returncode, r.stdout, r.stderr
 
@@ -83,6 +85,37 @@ class PreCompactOutputTest(unittest.TestCase):
         self.assertIn("Gate cuối: chưa có bằng chứng.", out)
         self.assertIn("Tệp chưa commit: không.", out)
         self.assertIn("mới nhất trong sổ: —.", out)
+
+    def test_checkpoint_and_renderer_start_without_site(self):
+        tmp = self.project()
+        python = tmp / "python3"
+        python.write_text(
+            "#!/bin/sh\n"
+            "for arg; do\n"
+            '  [ "$arg" = -c ] && break\n'
+            '  printf "%s " "$arg"\n'
+            'done >> "$PYTHON_TRACE"\n'
+            'printf "\\n" >> "$PYTHON_TRACE"\n'
+            'exec "$TEST_PYTHON" "$@"\n',
+            encoding="utf-8",
+        )
+        python.chmod(0o755)
+        trace = tmp / "python.log"
+        code, out, err = run_pre_compact(
+            tmp,
+            extra_env={
+                "PATH": str(tmp) + os.pathsep + os.environ["PATH"],
+                "PYTHON_TRACE": str(trace),
+                "TEST_PYTHON": sys.executable,
+            },
+        )
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("Chỉ dẫn tóm tắt", out)
+        starts = [line.split() for line in trace.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(starts), 2, starts)
+        for flags in starts:
+            self.assertIn("-I", flags)
+            self.assertIn("-S", flags)
 
     def test_evidence_without_exit_code_and_long_command_capped(self):
         tmp = self.project()
