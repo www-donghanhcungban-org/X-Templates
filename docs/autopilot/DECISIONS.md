@@ -1365,3 +1365,10 @@
 - Chọn: Giữ quy tắc toàn chuỗi hiện có, thêm nhận diện tiền tố mô-đun đúng cú pháp từng loader.
 - Lý do (tiêu chí chất lượng cuối): Review T-5068 xác nhận trên stdlib rằng tên có dấu hai chấm hoặc thành phần thuộc tính vẫn tải mô-đun. Giữ quyết định phòng vệ hiện có và xét phần tên mô-đun một cách bảo thủ khi không thể biết ranh giới mà không import.
 - Đường lùi: Hoàn tác riêng phần nhận diện bổ sung và mở lại AUD-HAR-576 nếu hợp đồng API hoặc bộ đối chứng thay đổi.
+
+### D-649 · 2026-11-28T18:00:55+00:00 · Tích hợp và đo hiệu quả eval từ tài liệu đính kèm thế nào?
+
+- Phương án: (1) Dùng số đo và SHA của candidate trong hồ sơ để xác nhận phát hành. · (2) Áp hợp đồng P0 trên main, chạy test thật và giữ tách kết quả cục bộ, CI, môi trường đích.
+- Chọn: Áp hợp đồng P0 trên main, chạy test thật và giữ tách kết quả cục bộ, CI, môi trường đích.
+- Lý do (tiêu chí chất lượng cuối): Candidate đính kèm không truy cập được theo SHA và quyết định D-647/D-648 trên main thuộc việc khác. Đối chứng tập danh tính và policy độc lập tránh xanh giả. Bộ đo cục bộ dùng stdlib, giới hạn đầu vào và đối chiếu tập hợp.
+- Đường lùi: Hoàn tác từng lát checker; giữ khóa nghiệm thu cũ có lịch sử, dùng quy trình amend khi nâng phiên bản thay vì sửa sổ tay.

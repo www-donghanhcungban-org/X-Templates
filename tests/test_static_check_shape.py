@@ -84,7 +84,18 @@ class ShapeTest(unittest.TestCase):
                         self.assertIn(code, codes)
 
     def test_registry(self):
-        structured = {"sbom", "vex", "trace", "srm", "i18n", "dedup-leak", "design-evidence"}
+        structured = {
+            "sbom",
+            "vex",
+            "trace",
+            "srm",
+            "i18n",
+            "dedup-leak",
+            "design-evidence",
+            "design-outcome",
+            "eval-report",
+            "eval-evidence",
+        }
         self.assertEqual(set(xt_checks.KINDS), TEXT.keys() | structured)
         for kind in structured:
             self.assertTrue(hasattr(self, "test_" + kind.replace("-", "_")))
@@ -168,6 +179,25 @@ class ShapeTest(unittest.TestCase):
         self.matrix("design-evidence", UNTESTED, "DES000")
         for path in (("options",), ("trial", "participants")):
             self.assertIn("DES000", self.codes("design-evidence", replace(DESIGN, path, [])))
+
+    def test_design_outcome(self):
+        options = {"policy": self.put("policy.json", "{}"), "revision": "a" * 40, "at": "2026-11-29T00:00:00Z"}
+        for item in SAMPLES:
+            self.assertIn("DSO000", self.codes("design-outcome", item, options))
+
+    def test_eval_report(self):
+        good = json.loads((HERE / "fixtures/evaluation/report.json").read_text(encoding="utf-8"))
+        self.matrix("eval-report", good, "EVR000")
+
+    def test_eval_evidence(self):
+        options = {
+            "policy": self.put("policy.json", "{}"),
+            "revision": "a" * 40,
+            "at": "2026-11-29T00:00:00Z",
+            "artifacts": str(self.base),
+        }
+        for item in SAMPLES:
+            self.assertIn("EVR000", self.codes("eval-evidence", item, options))
 
     def test_dedup_leak(self):
         opts = {"train": "train", "eval": "eval"}

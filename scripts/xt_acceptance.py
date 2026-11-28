@@ -3,6 +3,7 @@
 import argparse
 from collections import Counter
 import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
@@ -12,7 +13,7 @@ import subprocess
 import sys
 import uuid
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 import xml.etree.ElementTree as ET
 
 
@@ -186,12 +187,31 @@ def _ledger(base: Path, core: ModuleType) -> dict[str, Any]:
     return doc
 
 
+def _validate_manifest(row: dict[str, Any]) -> None:
+    if "testcases" not in row:
+        return
+    manifest = row["testcases"]
+    if not isinstance(manifest, dict) or set(manifest) != set(row["files"]):
+        raise ValueError(f"Sổ {LEDGER} có manifest sai")
+    for name, cases in manifest.items():
+        if (
+            not isinstance(cases, list)
+            or len(cases) != row["counts"][name]
+            or any(
+                not isinstance(c, list) or len(c) != 2 or not all(isinstance(x, str) for x in c) or not c[1].strip()
+                for c in cases
+            )
+            or len({tuple(c) for c in cases}) != len(cases)
+        ):
+            raise ValueError(f"Sổ {LEDGER} có danh tính testcase sai")
+
+
 def _validate_records(doc: dict[str, Any], core: ModuleType) -> None:
     ids: set[str] = set()
     specs: set[str] = set()
     owned: set[str] = set()
     for row in doc["locks"]:
-        if not isinstance(row, dict) or set(row) != {
+        if not isinstance(row, dict) or set(row) - {"testcases"} != {
             "id",
             "spec",
             "scenarios",
@@ -237,6 +257,7 @@ def _validate_records(doc: dict[str, Any], core: ModuleType) -> None:
             and isinstance(row["head"], str)
         ):
             raise ValueError(f"Sổ {LEDGER} có dữ liệu khoá không hợp lệ")
+        _validate_manifest(row)
         if row["id"] in ids or row["spec"] in specs or owned.intersection(row["files"]):
             raise ValueError(f"Sổ {LEDGER} trùng khoá, SPEC hoặc quyền sở hữu file")
         ids.add(row["id"])
@@ -302,6 +323,10 @@ def _verify_row(
     out["locks"].append(rid)
     out["authors"][rid] = {"author": row["author"], "session": row["session"]}
     out["expected_cases"].update(row["counts"])
+    if "testcases" not in row:
+        out["legacy_locks"].append(rid)
+    else:
+        out["identity_binding"].update(row["testcases"])
     if core.cmd_sha256(cmd) != row["cmd_sha256"]:
         problems.append(f"{rid}: lệnh acceptance khác lúc khoá")
     for name, digest in row["files"].items():
@@ -321,6 +346,8 @@ def verify(core: ModuleType, base: Path) -> dict[str, Any]:
         "locks": [],
         "authors": {},
         "expected_cases": {},
+        "legacy_locks": [],
+        "identity_binding": {},
         "amendments": 0,
     }
     try:
@@ -346,34 +373,149 @@ def verify(core: ModuleType, base: Path) -> dict[str, Any]:
     return out
 
 
-def report_counts(raw: bytes, files: set[str]) -> tuple[Counter[str], set[str]]:
-    root = ET.fromstring(raw)
+def _case_outcome(case: ET.Element) -> str:
+    outcomes = [child.tag for child in case if child.tag in ("failure", "error", "skipped")]
+    if (
+        any(
+            child.tag not in ("failure", "error", "skipped", "system-out", "system-err") or len(child) for child in case
+        )
+        or len(outcomes) > 1
+    ):
+        raise ValueError("JUnit testcase có kết quả hoặc cấu trúc mâu thuẫn")
+    outcome = outcomes[0] if outcomes else "passed"
+    aliases = {
+        "passed": "passed",
+        "pass": "passed",
+        "failure": "failure",
+        "failed": "failure",
+        "error": "error",
+        "skipped": "skipped",
+    }
+    for attr in ("status", "result"):
+        value = case.get(attr)
+        if value is not None and aliases.get(value.lower()) != outcome:
+            raise ValueError("JUnit status/result không khớp kết quả")
+    return outcome
+
+
+class JUnitReader:
+    def __init__(self, files: set[str]) -> None:
+        self.files = files
+        self.identities: dict[str, set[tuple[str, str]]] = {f: set() for f in files}
+        self.failed: set[str] = set()
+        self.skipped = False
+        self.modules: dict[str, set[str]] = {}
+        for name in files:
+            mod = str(Path(name).with_suffix("")).replace("/", ".")
+            self.modules.setdefault(mod, set()).add(name)
+        self.module_max = max(map(len, self.modules), default=0)
+
+    def file_for(self, case: ET.Element) -> str:
+        name = case.get("file")
+        classname = case.get("classname", "")
+        if name is not None:
+            candidate = Path(name).as_posix()
+            matches = {candidate} & self.files
+        else:
+            matches = set()
+            prefix = classname[: self.module_max + 1]
+            for boundary in re.finditer(r"\.|\Z", prefix):
+                matches.update(self.modules.get(prefix[: boundary.start()], ()))
+        if len(matches) != 1:
+            raise ValueError(f"JUnit không quy được testcase về đúng một file đã khoá: {name or classname}")
+        return matches.pop()
+
+    def case_result(self, case: ET.Element) -> Counter[str]:
+        outcome = _case_outcome(case)
+        classname, name = case.get("classname", ""), case.get("name", "")
+        if not name.strip():
+            raise ValueError("JUnit testcase thiếu tên")
+        matched = self.file_for(case)
+        identity = (classname, name)
+        if identity in self.identities[matched]:
+            raise ValueError("JUnit trùng danh tính testcase")
+        self.identities[matched].add(identity)
+        if outcome != "passed":
+            self.failed.add(matched)
+        self.skipped |= outcome == "skipped"
+        total: Counter[str] = Counter(tests=1)
+        if outcome != "passed":
+            total[{"failure": "failures", "error": "errors", "skipped": "skipped"}[outcome]] += 1
+        return total
+
+    def visit(self, node: ET.Element, depth: int = 0) -> Counter[str]:
+        if node.tag == "testcase":
+            return self.case_result(node)
+        depth += int(node.tag == "testsuite")
+        if depth > 100:
+            raise ValueError("JUnit lồng quá sâu")
+        allowed = {"testsuite", "properties", "system-out", "system-err"}
+        if node.tag == "testsuite":
+            allowed.add("testcase")
+        total: Counter[str] = Counter()
+        for child in node:
+            if child.tag not in allowed:
+                raise ValueError(f"JUnit có phần tử sai vị trí: {child.tag}")
+            if child.tag in ("testsuite", "testcase"):
+                total.update(self.visit(child, depth))
+            else:
+                _metadata(child)
+        _counters(node, total)
+        return total
+
+
+def _metadata(node: ET.Element) -> None:
+    if node.tag == "properties":
+        if any(p.tag != "property" or len(p) for p in node):
+            raise ValueError("JUnit properties không hợp lệ")
+    elif len(node):
+        raise ValueError("JUnit metadata không hợp lệ")
+
+
+def _counters(node: ET.Element, total: Counter[str]) -> None:
+    for key in ("tests", "failures", "errors", "skipped"):
+        value = node.get(key)
+        if value is not None and (not re.fullmatch(r"[0-9]+", value) or int(value) != total[key]):
+            raise ValueError(f"JUnit counter {key} không khớp")
+
+
+def _read_report(raw: bytes, files: set[str]) -> JUnitReader:
+    if len(raw) > MAX_BYTES:
+        raise ValueError("JUnit vượt 5 MiB")
+    root = None
+    for event, node in ET.iterparse(BytesIO(raw), events=("start-ns", "start")):
+        if event == "start-ns":
+            raise ValueError("JUnit không hỗ trợ namespace")
+        if root is None:
+            root = node
+    root = cast(ET.Element, root)
     if root.tag not in ("testsuite", "testsuites"):
         raise ValueError("acceptance_report phải là JUnit XML")
-    counts: Counter[str] = Counter()
-    failed = set()
-    for case in root.iter("testcase"):
-        bad = case.find("error") is not None or case.find("failure") is not None
-        if not bad and case.find("skipped") is not None:
-            continue
-        name = case.get("file")
-        if name is not None:
-            matches = {f for f in files if f == Path(name).as_posix()}
-        else:
-            classname = case.get("classname", "")
-            matches = {
-                f
-                for f in files
-                if classname == (mod := str(Path(f).with_suffix("")).replace("/", "."))
-                or classname.startswith(mod + ".")
-            }
-        if len(matches) != 1:
-            raise ValueError(f"JUnit không quy được testcase về đúng một file đã khoá: {name or case.get('classname')}")
-        matched = matches.pop()
-        counts[matched] += 1
-        if bad:
-            failed.add(matched)
-    return counts, failed
+    reader = JUnitReader(files)
+    reader.visit(root)
+    return reader
+
+
+def report_identities(raw: bytes, files: set[str]) -> tuple[dict[str, set[tuple[str, str]]], set[str]]:
+    reader = _read_report(raw, files)
+    return reader.identities, reader.failed
+
+
+def report_counts(raw: bytes, files: set[str]) -> tuple[Counter[str], set[str]]:
+    identities, failed = report_identities(raw, files)
+    return Counter({f: len(cases) for f, cases in identities.items()}), failed
+
+
+def read_report_bytes(path: Path) -> bytes:
+    with path.open("rb") as stream:
+        raw = stream.read(MAX_BYTES + 1)
+    if len(raw) > MAX_BYTES:
+        raise ValueError("JUnit vượt 5 MiB")
+    return raw
+
+
+def report_sha256(path: Path) -> str:
+    return hashlib.sha256(read_report_bytes(path)).hexdigest()
 
 
 def release_rows(
@@ -383,22 +525,28 @@ def release_rows(
     if not out["enabled"]:
         return []
     problems = out["problems"]
+    if out["legacy_locks"]:
+        problems.append(
+            "Khoá cũ thiếu danh tính: " + ", ".join(out["legacy_locks"]) + "; cần amend với quyết định và reviewer"
+        )
     row, report = run
     if row["result"] != "PASS" or not report or report["status"] != "PASS":
         problems.append("hàng acceptance và report JUnit phải PASS")
     elif not problems:
         try:
-            raw = project_file(base, report["path"]).read_bytes()
+            raw = read_report_bytes(project_file(base, report["path"]))
             if hashlib.sha256(raw).hexdigest() != report["sha256"]:
                 raise ValueError("report đã thay đổi sau khi chạy")
             floors = out["expected_cases"]
-            counts, failed = report_counts(raw, set(floors))
+            identities, failed = report_identities(raw, set(floors))
             for f, n in floors.items():
-                if counts[f] < n or f in failed:
-                    problems.append(f"{f}: đã chạy {counts[f]}/{n} ca, cần mọi ca xanh")
+                if identities[f] != {tuple(c) for c in out["identity_binding"][f]} or f in failed:
+                    problems.append(f"{f}: đã chạy {len(identities[f])}/{n} ca, cần đúng danh tính và mọi ca xanh")
         except (OSError, ValueError, ET.ParseError) as exc:
             problems.append(str(exc))
-    evidence = "; ".join(problems) if problems else f"{', '.join(out['locks'])}: đủ số ca đã khoá trên từng file"
+    evidence = (
+        "; ".join(problems) if problems else f"{', '.join(out['locks'])}: khớp danh tính ca đã khoá trên từng file"
+    )
     return [core._release_row("acceptance_lock", "FAIL" if problems else "PASS", evidence)]
 
 
@@ -440,7 +588,7 @@ class GuardDenied(ValueError):
 
 def _baseline(
     core: ModuleType, base: Path, cmd: str, report: str, available: set[str], selected: set[str], red: bool
-) -> dict[str, int]:
+) -> dict[str, list[list[str]]]:
     if core.gate_noop(cmd) or not report:
         raise ValueError("Cần khai acceptance và acceptance_report trong xt.yaml")
     path = project_file(base, report)
@@ -452,16 +600,19 @@ def _baseline(
         before and before.st_mtime_ns == path.stat().st_mtime_ns and before.st_ino == path.stat().st_ino
     ):
         raise ValueError("Thiếu report JUnit mới do lần chạy này sinh")
-    counts, failed = report_counts(path.read_bytes(), available)
-    if any(not counts[f] for f in selected):
+    reader = _read_report(read_report_bytes(path), available)
+    identities, failed = reader.identities, reader.failed
+    if reader.skipped:
+        raise ValueError("Không thể khoá testcase bị skip")
+    if any(not identities[f] for f in selected):
         raise ValueError(
-            "Thiếu ca đã chạy cho file nghiệm thu: " + ", ".join(sorted(f for f in selected if not counts[f]))
+            "Thiếu ca đã chạy cho file nghiệm thu: " + ", ".join(sorted(f for f in selected if not identities[f]))
         )
     if red and (not code or not failed.intersection(selected)):
         raise ValueError("Bộ nghiệm thu phải đỏ trên ca của SPEC trước khi viết mã")
     if not red and (bool(code) != bool(failed)):
         raise ValueError("Exit của lệnh nghiệm thu không khớp các ca lỗi trong JUnit")
-    return {f: counts[f] for f in sorted(selected)}
+    return {f: [list(c) for c in sorted(identities[f])] for f in sorted(selected)}
 
 
 def _actor(
@@ -525,13 +676,15 @@ def update(core: ModuleType, base: Path, args: argparse.Namespace) -> str:
         raise ValueError("Thiếu nghiệm thu cho " + ", ".join(sorted(missing)) + " (mỗi file chỉ thuộc một khoá)")
     if previous and not amend:
         if (
-            previous["files"] == files
+            "testcases" in previous
+            and previous["files"] == files
             and previous["cmd_sha256"] == core.cmd_sha256(cmd)
             and previous["scenarios"] == sorted(scenarios)
         ):
             return str(previous["id"])
         raise ValueError(f"{previous['id']} đã có, dùng amend")
-    counts = _baseline(core, base, cmd, report, set(actual) | owners, set(files), not amend and not decision)
+    manifest = _baseline(core, base, cmd, report, set(actual) | owners, set(files), not amend and not decision)
+    counts = {f: len(cases) for f, cases in manifest.items()}
     if (
         snapshot(base, paths) != actual
         or _scenarios(core, base, spec) != scenarios
@@ -552,6 +705,7 @@ def update(core: ModuleType, base: Path, args: argparse.Namespace) -> str:
         "cmd_sha256": core.cmd_sha256(cmd),
         "cases": sum(counts.values()),
         "counts": counts,
+        "testcases": manifest,
         "author": previous["author"] if previous else actor,
         "session": core.session_id() or os.environ.get("CODEX_THREAD_ID") or f"cli-{uuid.uuid4()}",
         "locked_at": now,
@@ -594,7 +748,10 @@ def command(core: ModuleType, args: argparse.Namespace) -> int:
             out["author_executor_overlap"] = [
                 rid for rid, info in out["authors"].items() if info["author"] in executors
             ]
-        print(json.dumps(out, ensure_ascii=False) if args.json else ("\n".join(out["problems"]) or "Nghiệm thu khớp"))
+        messages = list(out["problems"])
+        if out["legacy_locks"]:
+            messages.append("Khóa thiếu danh tính: " + ", ".join(out["legacy_locks"]) + " — cần acceptance amend")
+        print(json.dumps(out, ensure_ascii=False) if args.json else ("\n".join(messages) or "Nghiệm thu khớp"))
         return int(not out["ok"])
     try:
         print(update(core, base, args))

@@ -42,7 +42,7 @@ Lệnh:
                                 License gói đã cài của file requirements ghim (mặc định requirements-dev.txt) đối chiếu
                                 allowlist license-allow.json; vi phạm/ngoại lệ quá hạn → exit 1 (BASE-DEP-005).
   static-check KIND [PATH…] [--opt K=V]… [--json]
-                                Kiểm tĩnh theo loại (gói xt_checks, ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt design-evidence; 0 sạch,
+                                Kiểm tĩnh theo loại (gói xt_checks, ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt design-evidence design-outcome eval-report eval-evidence; 0 sạch,
                                 1 có phát hiện, 2 dùng sai.
   progress-check [FILE]         PROGRESS.md: ≤ 8 KB, đúng 4 mục, SHA ở Bàn giao phiên là tổ tiên HEAD và có trên nhánh chính.
   prompt-assets-scan [PATH…] [--exempt F] [--patterns F] [--json]
@@ -14806,14 +14806,14 @@ def _json_report(raw: bytes) -> Dict[str, Any]:
     return _unknown("không nhận dạng được report (JUnit XML, SARIF, pip-audit JSON)")
 
 
-def report_result(path: Path) -> Dict[str, Any]:
+def report_result(path: Path, read: Callable[[Path], bytes] = Path.read_bytes) -> Dict[str, Any]:
     """Kết quả có kiểu của một report (`kind`, `status` PASS|FAIL|PENDING|INCONCLUSIVE, `total`, `failed`, `detail`).
     XML đọc bằng `xml.etree` của stdlib (expat có chặn bom thực thể từ 2.4.1); dạng lạ/hỏng/không đọc được → INCONCLUSIVE."""
     import xml.etree.ElementTree as ET  # chỉ khi có report: không tăng thời gian nạp CLI
 
     try:
-        raw = path.read_bytes()
-    except OSError as exc:
+        raw = read(path)
+    except (OSError, ValueError) as exc:
         return _unknown(f"không đọc được report: {exc}")
     if raw.removeprefix(b"\xef\xbb\xbf").lstrip().startswith(b"<"):
         try:
@@ -14849,15 +14849,17 @@ def _release_report(base: Path, key: str, rel: str, start: float, ev: str) -> Tu
     if not p.is_file():
         res["detail"] = "thiếu"
         return _release_row(key, "FAIL", f"{ev} nhưng report `{rel}` thiếu — lệnh phải sinh report"), res
+    acceptance = acceptance_module() if key == "acceptance" else None
+    digest_file = acceptance.report_sha256 if acceptance else _stream_sha256
     try:
-        res["sha256"], mtime = _stream_sha256(p), p.stat().st_mtime
-    except OSError as exc:
+        res["sha256"], mtime = digest_file(p), p.stat().st_mtime
+    except (OSError, ValueError) as exc:
         res["detail"] = "không đọc được"
         return _release_row(key, "FAIL", f"{ev} nhưng không đọc được report `{rel}`: {exc}"), res
     if mtime + REPORT_CLOCK_SLACK < start:
         res.update(status="STALE", detail="cũ hơn lần chạy")
         return _release_row(key, "FAIL", f"{ev} nhưng report `{rel}` cũ hơn lần chạy — không do lệnh này sinh"), res
-    res.update(report_result(p))
+    res.update(report_result(p, acceptance.read_report_bytes if acceptance else Path.read_bytes))
     line = f"{ev}; report `{rel}` {res['kind']} {res['status']}: {res['detail']}"
     return _release_row(key, "PASS" if res["status"] == "PASS" else "FAIL", line), res
 
@@ -23461,7 +23463,7 @@ def build_parser() -> argparse.ArgumentParser:
     psc = sub.add_parser("static-check", help="kiểm tĩnh theo loại trên tệp của dự án (ADR-0099): nfc, …")
     psc.add_argument(
         "kind",
-        help="loại kiểm (ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt design-evidence (docs/specs/SPEC-design-evidence.md)",
+        help="loại kiểm (ADR-0099): nfc credits tokens motion trace ac-trace sbom vex pii-vn i18n dedup-leak srm llms-txt design-evidence design-outcome eval-report eval-evidence",
     )
     psc.add_argument("paths", nargs="*", help="tệp hoặc thư mục (mặc định thư mục hiện tại)")
     psc.add_argument("--opt", action="append", default=[], metavar="KHOÁ=GIÁ-TRỊ", help="tuỳ chọn của loại, lặp được")
