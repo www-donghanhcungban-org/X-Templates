@@ -11748,6 +11748,7 @@ XT_INPROC_DEPTH = 3  # số tầng `exec('…')` lồng đọc lại; sâu hơn 
 XT_INPROC_LOADERS = frozenset(
     {"run_path", "run_module", "_run_module_as_main", "_run_code", "spec_from_file_location", "SourceFileLoader"}
     | {"SourcelessFileLoader", "load_source", "load_module", "import_module", "find_spec", "exec_module", "__import__"}
+    | {"resolve_name", "locate", "importfile"}  # AUD-HAR-576
 )
 XT_INPROC_BUILTINS = frozenset({"exec", "eval", "compile", "execfile", "__import__"})  # chỉ khi gọi như builtin
 XT_INPROC_BUILTIN_MODS = frozenset({"builtins", "__builtins__"})  # `builtins.exec(…)`
@@ -11760,7 +11761,6 @@ XT_INPROC_RISKY_RE = re.compile(
     r"|builtins|modules|__loader__|__spec__",
     re.I,
 )
-# Script không phải Python hợp lệ: luật chữ (`import … xt`, tên hàm nạp)
 XT_INPROC_TEXT_RE = re.compile(
     r"\b(?:import|from)\b[^;\n]*\bxt(?:_design)?\b(?![\w-])|\b(?:runpy|run_path|run_module|spec_from_file_location"
     r"|Source(?:less)?FileLoader|load_source|import_module|__import__|execfile)\b"

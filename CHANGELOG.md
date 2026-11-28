@@ -10,6 +10,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 - `compose` chỉ mang trạng thái từ backlog theo tên quy ước còn được blueprint hiện tại khai báo. Khi đổi `--full` về hai tệp, bằng chứng ở backlog cũ không ghi đè thay đổi trong tệp chính.
 - T-5073 giữ đường bằng chứng thiết kế theo lần trình đầu, đối chiếu lại HEAD sau khi tính hash và giữ cả các task phụ thuộc trong lúc chờ duyệt thiết kế.
+- T-5068 (AUD-HAR-576) áp dụng chính sách nạp mã trong tiến trình của guard cho `pkgutil.resolve_name`, `pydoc.locate` và `pydoc.importfile`. Guard chặn đích không xác định và đích được bảo vệ mà bộ phân loại hiện có nhận diện.
 - T-5102 (AUD-HAR-583): bộ cài chuẩn bị các mô-đun CLI trước khi thay `xt.py` để lỗi chép mô-đun không làm gián đoạn CLI đã cài.
 - `audit plan` dùng chung kết quả Git theo SHA quét và gọi quét lại nếu không đọc được diff. Hook, agent và skill Codex được tính vào nhóm HAR (AUD-HAR-585/586).
 - `audit plan` chỉ dò một lần cho mỗi công cụ áp dụng trong một lượt, kể cả khi công cụ xuất hiện ở nhiều nhóm (D-646).
