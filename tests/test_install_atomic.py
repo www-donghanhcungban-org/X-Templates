@@ -312,6 +312,17 @@ class InstallInterruptedWriteTest(TestCase):
         self.assertFalse(install.settings_change_provable(settings, b"{}"))
         settings.read_bytes.assert_not_called()
 
+    def test_resume_keeps_confirmed_rules_if_settings_cannot_be_read(self) -> None:
+        previous = {key: ["Read(previous.md)"] if key == "allow" else [] for key in install.RULE_KEYS}
+        empty = {key: [] for key in install.RULE_KEYS}
+        install.stage_settings_rules(self.target, b"{}", empty, previous)
+        with (
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "read_bytes", side_effect=PermissionError(errno.EACCES, "simulated")) as read,
+        ):
+            self.assertEqual(install.recover_settings_rules(self.target), previous)
+            read.assert_called_once()
+
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
         with redirect_stderr(err), redirect_stdout(io.StringIO()):
