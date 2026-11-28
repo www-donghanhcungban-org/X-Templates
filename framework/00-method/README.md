@@ -16,3 +16,5 @@ updated: 2026-10-25
 | [`evidence-and-sources.md`](evidence-and-sources.md) | 13 luật chống ảo giác, bằng chứng do máy ghi, mẫu ghi nguồn | Luôn; khi viết tài liệu có số liệu/phiên bản |
 | [`conventions.md`](conventions.md) | Hợp đồng định dạng module (frontmatter, ID, mức, cấu trúc) | Khi viết/sửa file trong `framework/` |
 | [`audit.md`](audit.md) | Audit 13 nhóm: phạm vi, mức, bằng chứng, xác minh đối kháng, quét lại theo diff, Definition of Complete | Nhận dự án có sẵn; trước phát hành; định kỳ; `/audit`, `/complete` |
+| [`eval-report-contract.md`](eval-report-contract.md) | Kiểm schema, chính sách độc lập và bytes của artefact eval | Khi triển khai hoặc nghiệm thu evaluator |
+| [`design-outcome-contract.md`](design-outcome-contract.md) | Kiểm kết quả trial theo policy và danh sách người thử đã ghim | Khi đánh giá kết quả thử tác vụ |

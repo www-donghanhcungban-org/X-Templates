@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "kind": "eval-policy",
+  "policy_id": "synthetic-policy",
+  "identity": {"suite": "synthetic", "eval_version": "1-A", "dataset_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "scorer_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "environment_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "runtime": {"implementation": "example", "version": "1", "platform": "example"},
+  "case_ids": ["one"],
+  "critical_ids": ["one"],
+  "clusters": {"one": "one"},
+  "attempts_per_case": 1,
+  "min_success_rate": 1,
+  "max_infra_rate": 0,
+  "max_age_seconds": 7200,
+  "allowed_claims": ["synthetic-fixture"],
+  "allowed_execution_modes": ["fresh"],
+  "cache": "off",
+  "infra_exclusions": []
+}

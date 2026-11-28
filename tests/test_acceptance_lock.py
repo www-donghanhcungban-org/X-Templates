@@ -276,7 +276,7 @@ class AcceptanceLockTest(unittest.TestCase):
         self.assertFalse((self.base / lock.LEDGER).exists())
 
     def test_report_attribution_and_skips(self):
-        raw = b'<testsuite><testcase classname="acceptance.x.Example"/><testcase classname="acceptance.y"/><testcase><skipped/></testcase></testsuite>'
+        raw = b'<testsuite><testcase classname="acceptance.x.Example" name="a"/><testcase classname="acceptance.y" name="b"/></testsuite>'
         self.assertEqual(dict(lock.report_counts(raw, {self.case, self.other})[0]), {self.case: 1, self.other: 1})
         for raw in (
             b"<sarif/>",
@@ -285,6 +285,86 @@ class AcceptanceLockTest(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 lock.report_counts(raw, {self.case})
+
+    def test_identity_structure_and_legacy(self):
+        self.create()
+        doc = self.ledger()
+        self.assertEqual(doc["locks"][0]["testcases"][self.case], [["", "case-0"]])
+        self.report(False)
+        run = xt._release_run(self.base, "BLUEPRINT.md", "acceptance", "")
+        self.assertEqual(lock.release_rows(xt, self.base, run)[0]["result"], "PASS")
+        for xml in (
+            f'<testsuite><testcase file="{self.case}" name="case-0"/><testcase file="{self.other}" name="other"/></testsuite>',
+            f'<testsuite><testcase file="{self.case}" name="case-0"/><testcase file="{self.case}" name="case-0"/></testsuite>',
+            f'<testsuite><testcase file="{self.case}" name="case-0"><skipped/></testcase><testcase file="{self.other}" name="case-1"/></testsuite>',
+        ):
+            self.write("input.xml", xml)
+            run = xt._release_run(self.base, "BLUEPRINT.md", "acceptance", "")
+            self.assertEqual(lock.release_rows(xt, self.base, run)[0]["result"], "FAIL")
+        del doc["locks"][0]["testcases"]
+        self.write(lock.LEDGER, json.dumps(doc))
+        out = json.loads(self.cli("check", "--json"))
+        self.assertEqual(out["legacy_locks"], ["A-001"])
+        self.assertIn("acceptance amend", self.cli("check"))
+        self.assertIn("amend", lock.release_rows(xt, self.base, run)[0]["evidence"])
+        self.report(False)
+        self.write("docs/autopilot/DECISIONS.md", f"### D-003 · {xt.now_iso()}\nSửa A-001\n")
+        self.amend("D-003")
+        self.assertIn("testcases", self.ledger()["locks"][0])
+        self.assertNotIn("testcases", self.ledger()["events"][-1]["previous"])
+
+    def test_junit_contract(self):
+        good = f'<testsuites><testsuite tests="2" failures="0"><properties><property name="x"/></properties><system-out/><testcase file="{self.case}" classname="Lớp" name="a[1]"/><testcase file="{self.case}" classname="Khác" name="a[1]"/></testsuite></testsuites>'
+        self.assertEqual(len(lock.report_identities(good.encode(), {self.case})[0][self.case]), 2)
+        prefixed = good.replace(f'file="{self.case}"', f'file="./{self.case}"')
+        self.assertEqual(
+            lock.report_identities(prefixed.encode(), {self.case}), lock.report_identities(good.encode(), {self.case})
+        )
+        testcase = f'<testcase file="{self.case}" name="a"/>'
+        suites = "<testsuite>" * 100 + testcase + "</testsuite>" * 100
+        lock.report_identities(f"<testsuites>{suites}</testsuites>".encode(), {self.case})
+        with self.assertRaisesRegex(ValueError, "namespace"):
+            lock.report_identities(b'<testsuite xmlns:sample="urn:sample"/>', {self.case})
+
+    def test_release_oversized_report(self):
+        self.create()
+        self.report(False)
+        with patch.object(lock, "MAX_BYTES", 12):
+            row, _ = xt._release_run(self.base, "BLUEPRINT.md", "acceptance", "")
+        self.assertEqual(row["result"], "FAIL")
+        self.assertIn("5 MiB", row["evidence"])
+
+    def test_junit_rejects_invalid_reports(self):
+        for body in (
+            '<testcase name=""/>',
+            '<testcase name="a" status="unknown"/>',
+            '<testcase name="a" status="passed"><failure/></testcase>',
+            '<properties><testcase name="a"/></properties>',
+            '<system-out><testcase name="a"/></system-out>',
+            "<unknown/>",
+            '<testcase name="a"><failure/><error/></testcase>',
+        ):
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                lock.report_identities(f"<testsuite>{body}</testsuite>".encode(), {self.case})
+        for xml in ('<testsuite tests="1"/>', '<testsuite tests="-1"/>', '<testsuite xmlns="x"/>'):
+            with self.subTest(xml=xml), self.assertRaises(ValueError):
+                lock.report_identities(xml.encode(), {self.case})
+
+    def test_junit_ambiguity_and_limits(self):
+        raw = b'<testsuite><testcase classname="acceptance.x.Example" name="a"/></testsuite>'
+        with self.assertRaisesRegex(ValueError, "đúng một file"):
+            lock.report_identities(raw, {"acceptance/x.py", "acceptance/x.js"})
+        with patch.object(lock, "MAX_BYTES", 2), self.assertRaisesRegex(ValueError, "5 MiB"):
+            lock.report_identities(raw, {self.case})
+        nested = ("<testsuite>" * 102 + "</testsuite>" * 102).encode()
+        with self.assertRaisesRegex(ValueError, "quá sâu"):
+            lock.report_identities(nested, {self.case})
+
+    def test_existing_lock_rejects_skipped_baseline(self):
+        self.write("docs/autopilot/DECISIONS.md", "### D-001 · 2020-01-01\n")
+        self.write("input.xml", f'<testsuite><testcase file="{self.case}" name="a"><skipped/></testcase></testsuite>')
+        self.write("rc", "0")
+        self.assertIn("skip", self.create("--existing", "D-001", code=1))
 
     def test_snapshot_bounds_and_ledger_validation(self):
         (self.base / "acceptance/link").symlink_to("/dev/null")
@@ -297,6 +377,10 @@ class AcceptanceLockTest(unittest.TestCase):
             lock.raise_walk_error(OSError())
         self.create()
         doc = self.ledger()
+        row = doc["locks"][0]
+        for manifest in (None, {}, {self.case: [["", ""]], self.other: [["", "ok"]]}):
+            with self.subTest(manifest=manifest), self.assertRaises(ValueError):
+                lock._validate_manifest({**row, "testcases": manifest})
         bad = [
             {},
             {**doc, "locks": []},

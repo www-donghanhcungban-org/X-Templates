@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "kind": "eval-report",
+  "identity": {"suite": "synthetic", "eval_version": "1-A", "dataset_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "scorer_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "environment_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  "run_id": "sample",
+  "timestamp": "2026-11-28T14:00:00Z",
+  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "dirty": false,
+  "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "runtime": {"implementation": "example", "version": "1", "platform": "example"},
+  "claim": "synthetic-fixture",
+  "execution": {"mode": "fresh", "cache": "off", "attempts_per_case": 1},
+  "cases": [{"id": "one", "attempt": 1, "cluster": "one", "status": "pass", "evidence_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}],
+  "counts": {"total": 1, "eligible": 1, "pass": 1, "fail": 0, "infra_failure": 0, "error": 0, "unscored": 0, "skipped": 0}
+}
