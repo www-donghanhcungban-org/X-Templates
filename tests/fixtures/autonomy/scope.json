@@ -2,6 +2,12 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm reflow bằng fixture HTML và Chromium: `node --test tests_e2e/verify_render.test.mjs`.",
+   "ids": [
+    "AUD-HAR-567"
+   ]
+  },
+  {
    "reason": "Kiểm hồ sơ license và lockfile npm bằng `python3 -m unittest tests.test_ci.SupplyChainArtifactsTest`.",
    "ids": [
     "AUD-DEP-041"
