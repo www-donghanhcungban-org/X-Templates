@@ -2,6 +2,14 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm reflow của slot, phạm vi ngoại lệ shadow và giới hạn hiển thị bằng fixture HTML trên Chromium: `node --test tests_e2e/verify_render.test.mjs`.",
+   "ids": [
+    "AUD-A11Y-006",
+    "AUD-A11Y-007",
+    "AUD-A11Y-008"
+   ]
+  },
+  {
    "reason": "Mô phỏng gián đoạn installer, khôi phục nguồn gốc rule và kiểm chẩn đoán hook bằng fixture cục bộ: `python3 -m unittest tests.test_install_atomic tests.test_doctor.DoctorHookSiblingTest`.",
    "ids": [
     "AUD-HAR-574",

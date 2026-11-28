@@ -611,6 +611,18 @@ test('measured cuts take precedence over earlier UNMEASURED results within the 2
   assert.match(diagnostics[0], /^✗ .*check=reflow element="#actual-cut" — chữ bị cắt/);
 });
 
+test('strict checks an unmeasured reflow region beyond the reporting limit', async (t) => {
+  const image = `<img alt="" src="${SAMPLE_IMAGE}" width="240" height="20">`;
+  const clips = Array.from({ length: 21 }, (_, index) =>
+    `<div id="pane-${index}" style="width:120px;overflow:hidden">${image}</div>`);
+  const sample = await fixture(t, page({ markup: clips.join('') }));
+  const exceptions = await sample.exceptions(clips.slice(0, 20).map((_, index) =>
+    exception(sample.target, { check: 'reflow', element: `#pane-${index}` })));
+  const result = await sample.run(['--strict', '--widths', '320', '--exceptions', exceptions]);
+  status(result, 1);
+  assert.match(result.stdout, /21 UNMEASURED \(20 có ngoại lệ, 1 chưa miễn\)/);
+});
+
 test('painted pseudo remains relevant with overridden visibility, ellipsis and an inset content-box clip', async (t) => {
   const sample = await fixture(t, page({
     css: '.clip { width: 100px; overflow: hidden; }' +
@@ -669,6 +681,52 @@ test('reflow descends into open shadow roots: cut text and a clipper inside the 
   status(fitsResult, 0);
   assert.doesNotMatch(fitsResult.stdout, /^✗ /m);
   assert.match(fitsResult.stdout, /^REFLOW .*viewport=320x800 .*shadow_measured=[1-9]\d* shadow_closed_not_measured=0$/m);
+});
+
+test('reflow checks assigned slot content inside an open shadow clipper', async (t) => {
+  const clip = (label) => page({
+    markup: `<sample-box id="host"><span>${label}</span></sample-box>
+      <script>
+        customElements.define("sample-box", class extends HTMLElement {
+          connectedCallback() {
+            this.attachShadow({ mode: "open" }).innerHTML =
+              '<div id="clip" style="overflow:hidden;width:100px;white-space:nowrap;font:20px monospace">' +
+              '<slot><span>12345678901234567890</span></slot></div>';
+          }
+        });
+      </script>`,
+  });
+  const overflow = await fixture(t, clip('12345678901234567890'));
+  const clipped = await overflow.run(['--strict', '--widths', '320']);
+  status(clipped, 1);
+  assert.match(clipped.stdout, /^✗ .*check=reflow element="#host >>> div#clip"/m);
+  const fits = await fixture(t, clip('Fits'));
+  const safe = await fits.run(['--strict', '--widths', '320']);
+  status(safe, 0);
+  assert.doesNotMatch(safe.stdout, /check=reflow/);
+});
+
+test('distinct idless shadow regions have distinct reflow exception scopes', async (t) => {
+  const sample = await fixture(t, page({
+    markup: `<sample-box id="host"></sample-box>
+      <script>
+        customElements.define("sample-box", class extends HTMLElement {
+          connectedCallback() {
+            this.attachShadow({ mode: "open" }).innerHTML = ["First panel", "Second panel"].map(label =>
+              '<div role="region" tabindex="0" aria-label="' + label +
+              '" style="width:120px;overflow:auto"><div style="width:240px;height:20px"></div></div>').join("");
+          }
+        });
+      </script>`,
+  }));
+  const exceptions = await sample.exceptions([
+    exception(sample.target, { check: 'reflow', element: '#host >>> div:nth-of-type(1)' }),
+  ]);
+  const result = await sample.run(['--strict', '--widths', '320', '--exceptions', exceptions]);
+  status(result, 1);
+  assert.match(result.stdout, /^EXEMPTED .*element="#host >>> div:nth-of-type\(1\)"/m);
+  assert.match(result.stdout, /^UNMEASURED .*element="#host >>> div:nth-of-type\(2\)"/m);
+  assert.doesNotMatch(result.stdout, /^EXEMPTED .*element="#host >>> div:nth-of-type\(2\)"/m);
 });
 
 test('an image sticking out of an overflow:hidden box is UNMEASURED, also inside an open shadow root', async (t) => {
