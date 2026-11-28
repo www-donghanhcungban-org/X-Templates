@@ -6,6 +6,8 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 
 ## [Unreleased]
 
+- T-5067 (AUD-HAR-584): khi bộ luật phát sinh lỗi nội bộ, adapter guard `core` dùng quyết định dự phòng của chế độ đã chuẩn hoá, cùng chính sách với Bash.
+
 - D-649 thêm `static-check eval-report`, `eval-evidence` và `design-outcome`. Khóa nghiệm thu mới ghim từng testcase JUnit. Khóa legacy cần `acceptance amend` trước khi cổng phát hành chấp nhận.
 
 - T-5098 (AUD-HAR-573): guard bảo vệ cache bytecode của CLI và các gói đi kèm trong repo khung lẫn bản cài. `scripts/` của ứng dụng vẫn dùng được cache riêng khi CLI đã cài tại `.xtemplates/`.
