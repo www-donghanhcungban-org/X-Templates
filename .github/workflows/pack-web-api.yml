@@ -1,4 +1,4 @@
-name: Diagnostic Python 3.13 shard
+name: Diagnostic main Python 3.13 shard
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
           path: instrumentation
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 3ed7abeb688faab4b31aa48e56fb414a4c89a5a7
+          ref: 614cbe3ec7eb6b691b67df25e87c0de1b6bc539c
           fetch-depth: 0
           persist-credentials: false
           path: source
@@ -40,16 +40,14 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ matrix.sample }}" == "1" ]]; then
-            python instrumentation/diagnostics/profile_shard.py source result/baseline
-            python instrumentation/diagnostics/profile_shard.py source result/prioritize --prioritize
+            python instrumentation/diagnostics/recheck_main.py source result baseline current
           else
-            python instrumentation/diagnostics/profile_shard.py source result/prioritize --prioritize
-            python instrumentation/diagnostics/profile_shard.py source result/baseline
+            python instrumentation/diagnostics/recheck_main.py source result current baseline
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: ${{ !cancelled() }}
         with:
           name: py313-profile-${{ matrix.sample }}
-          path: result/*/profile.json
+          path: result/
           if-no-files-found: error
           retention-days: 7
