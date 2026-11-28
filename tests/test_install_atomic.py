@@ -407,6 +407,40 @@ class InstallInterruptedWriteTest(TestCase):
                         else:
                             self.assertFalse(proposal.exists())
 
+    def test_plan_previews_update_using_recoverable_legacy_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            rel = ".claude/hooks/sample.sh"
+            source, installed = root / rel, self.target / rel
+            source.parent.mkdir(parents=True)
+            installed.parent.mkdir(parents=True)
+            previous, current = b"#!/bin/sh\n# previous sample\n", b"#!/bin/sh\n# current sample\n"
+            source.write_bytes(current)
+            installed.write_bytes(previous)
+            manifest = self.target / install.MANIFEST
+            manifest.parent.mkdir()
+            legacy = self.target / install.LEGACY_DIR
+            legacy.mkdir()
+            full = json.dumps({rel: install.sha256(previous)}).encode()
+            (legacy / "harness.sha256.json").write_bytes(full)
+            manifest.write_bytes(full[:12])
+            with (
+                mock.patch.object(install, "SRC", root),
+                mock.patch.object(install, "harness_sources", return_value=[source]),
+                mock.patch.object(install, "root_template_jobs", return_value=[]),
+            ):
+                self.assertEqual(
+                    install.plan_files(self.target, False, False, False), [{"path": rel, "action": "updated"}]
+                )
+                self.assertEqual(manifest.read_bytes(), full[:12])
+                self.assertEqual(installed.read_bytes(), previous)
+                self.assertTrue(legacy.is_dir())
+                install.migrate_legacy(self.target)
+                stats = Counter()
+                install.copy_harness_files(self.target, False, install.load_manifest(self.target), stats)
+                self.assertEqual(stats, Counter(updated=1))
+                self.assertEqual(installed.read_bytes(), current)
+
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
         with redirect_stderr(err), redirect_stdout(io.StringIO()):

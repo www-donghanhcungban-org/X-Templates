@@ -311,8 +311,15 @@ def load_manifest(target: Path) -> dict[str, str]:
     """Đường dẫn → hash hex theo `harness.sha256.json`: `sha256:<hex>` hay hex trần đều về hex (`manifest_hash`); giá
     trị không phải chuỗi bỏ qua như chưa biết hash; file thiếu/hỏng/không phải object → rỗng."""
     try:
-        data = json.loads((target / MANIFEST).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        return parse_manifest((target / MANIFEST).read_bytes())
+    except OSError:
+        return {}
+
+
+def parse_manifest(raw: bytes) -> dict[str, str]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except ValueError:
         return {}
     if not isinstance(data, dict):
         return {}
@@ -324,7 +331,7 @@ def load_rules(target: Path) -> dict[str, list[str]]:
     try:
         rules = json.loads((target / MANIFEST_V2).read_text(encoding="utf-8")).get("rules", {})
         return {k: [r for r in rules.get(k, []) if isinstance(r, str)] for k in RULE_KEYS}
-    except (OSError, ValueError, AttributeError, TypeError):
+    except OSError, ValueError, AttributeError, TypeError:
         return {k: [] for k in RULE_KEYS}
 
 
@@ -332,7 +339,7 @@ def installed_preset(target: Path) -> str | None:
     """Preset đã áp dụng khi tạo xt.yaml; thiếu/hỏng/không biết → hành vi mẫu cũ, không suy từ cấu hình dự án."""
     try:
         value = json.loads((target / MANIFEST_V2).read_text(encoding="utf-8")).get("policy", {}).get("install_preset")
-    except (OSError, ValueError, AttributeError):
+    except OSError, ValueError, AttributeError:
         return None
     return value if isinstance(value, str) and value in INSTALL_PRESETS else None
 
@@ -637,7 +644,7 @@ def own_permissions(target: Path) -> bool:
     tương đối `bash .claude/hooks/x.sh` (`_absolute_form`, `_relative_hooks`; ADR-0073). Thiếu/không đọc được → False."""
     try:
         return bool(OWN_PERMISSIONS_RE.search((target / "xt.yaml").read_text(encoding="utf-8-sig")))
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return False
 
 
@@ -779,7 +786,7 @@ def settings_text(src: str, value: Any) -> str:
         text = json_preserving(src, value)
         if _same_json(json.loads(text), value):
             return text + ("\r\n" if "\r\n" in src else "\n")
-    except (ValueError, IndexError, KeyError, TypeError):
+    except ValueError, IndexError, KeyError, TypeError:
         pass
     return json.dumps(value, ensure_ascii=False, indent=2) + "\n"
 
@@ -827,7 +834,7 @@ def framework_label(explicit: str | None) -> str:
         )
         if r.returncode == 0 and r.stdout.strip():
             return f"{version} ({r.stdout.strip()})"
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         pass
     return version
 
@@ -861,7 +868,7 @@ def git_subdir_of(target: Path) -> Path | None:
             timeout=10,
             env=env,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     top = Path(r.stdout.strip()).resolve() if r.returncode == 0 and r.stdout.strip() else None
     return None if top is None or top == target.resolve() else top
@@ -1183,7 +1190,7 @@ def load_manifest_doc(target: Path) -> dict[str, Any]:
     """manifest.json dạng object (thiếu/hỏng → {})."""
     try:
         doc = json.loads((target / MANIFEST_V2).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return {}
     return doc if isinstance(doc, dict) else {}
 
@@ -1255,7 +1262,7 @@ def infer_root_hashes(target: Path) -> dict[str, str]:
         if p.is_file() and not p.is_symlink():
             try:
                 out[name] = root_template_hash(p)
-            except (OSError, UnicodeDecodeError):
+            except OSError, UnicodeDecodeError:
                 pass  # không suy được → phân loại như chưa biết hash (`.xtemplates-new` khi khác mẫu)
     return out
 
@@ -1282,7 +1289,7 @@ def git_hooks_dir(target: Path) -> Path | None:
         r = subprocess.run(
             ["git", "-C", str(target), "rev-parse", "--git-path", "hooks"], capture_output=True, text=True, timeout=10
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     out = r.stdout.strip()
     if r.returncode != 0 or not out:
@@ -1304,7 +1311,7 @@ def hooks_symlink(target: Path, hooks: Path) -> bool:
         via = Path(os.path.normpath(hooks)).is_relative_to(root) or any(
             p.resolve().is_relative_to(root) for p in hooks.parents
         )
-    except (OSError, RuntimeError):  # vòng symlink: không biết nơi ghi → không ghi
+    except OSError, RuntimeError:  # vòng symlink: không biết nơi ghi → không ghi
         return True
     if not via or real.is_relative_to(root):
         return False
@@ -1348,7 +1355,7 @@ def git_common_dir(target: Path) -> Path | None:
         r = subprocess.run(
             ["git", "-C", str(target), "rev-parse", "--git-common-dir"], capture_output=True, text=True, timeout=10
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     out = r.stdout.strip()
     if r.returncode != 0 or not out:
@@ -1437,7 +1444,7 @@ def gemini_merged(dst: Path, src: Path) -> dict[str, Any] | None:
     ours = json.loads(src.read_text(encoding="utf-8"))["hooks"]["BeforeTool"]
     try:
         data = json.loads(dst.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         data = None
     hooks = data.get("hooks") if isinstance(data, dict) else None
     if not isinstance(data, dict) or not isinstance(hooks, (dict, type(None))):
@@ -1648,7 +1655,7 @@ def codex_tier_model(name: str) -> str | None:
             (SRC / "framework" / "templates" / "harness" / "model-tiers.json").read_text(encoding="utf-8")
         )
         model = table["vendors"]["openai"][table["roles"][name]]["id"]
-    except (OSError, ValueError, KeyError, TypeError):
+    except OSError, ValueError, KeyError, TypeError:
         return None
     return model if isinstance(model, str) and model else None
 
@@ -1879,7 +1886,7 @@ def git_tracked(root: Path, paths: tuple[str, ...]) -> set[str] | None:
         if top.returncode or Path(os.fsdecode(top.stdout.strip())).resolve() != root.resolve():
             return None
         r = subprocess.run([*git, "ls-files", "-z", "--", *paths], capture_output=True, timeout=30, env=env, check=True)
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     return {p.decode("utf-8", "replace") for p in r.stdout.split(b"\0") if p}
 
@@ -2022,7 +2029,7 @@ def gitignore_missing(dst: Path, src: Path) -> list[str]:
     nguyên, chỉ nối thêm (review lát B 🟢); không đọc được → rỗng (giữ file, không nối)."""
     try:
         have = set(dst.read_text(encoding="utf-8").splitlines())
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return []
     return [line for line in src.read_text(encoding="utf-8").splitlines() if line and line not in have]
 
@@ -2337,7 +2344,7 @@ def progress_with_head(text: str, target: Path) -> str:
     cmd = ["git", "-C", str(target), "rev-parse", "--show-toplevel", "HEAD", "--abbrev-ref", "HEAD"]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return text
     out = r.stdout.split("\n")
     top, head, branch = (out + ["", "", ""])[:3]
@@ -2355,7 +2362,7 @@ def ruleset_required_checks() -> list[str]:
             if r["type"] == "required_status_checks"
             for c in r["parameters"]["required_status_checks"]
         ]
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         return []
 
 
@@ -2450,7 +2457,7 @@ def gitignore_hits(target: Path, rels: list[str], no_index: bool = True) -> list
     cmd = ["git", "-C", str(target), "check-ignore", "-v", "-z", "--stdin", *(["--no-index"] if no_index else [])]
     try:
         r = subprocess.run(cmd, input="\0".join(rels) + "\0", capture_output=True, text=True, timeout=30, check=False)
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     if r.returncode not in (0, 1):
         return None
@@ -2518,13 +2525,32 @@ def legacy_manifest_complete(data: bytes) -> bool:
         return False
 
 
-def restore_partial_legacy_manifest(source: Path, target: Path) -> None:
-    current = target.read_bytes()
+def partial_legacy_manifest(source: Path, manifest: Path) -> bytes | None:
+    current = manifest.read_bytes()
     if legacy_manifest_complete(current):
-        return
+        return None
     full = source.read_bytes()
     if len(current) < len(full) and full.startswith(current) and legacy_manifest_complete(full):
-        write_bytes_atomic(target, full)
+        return full
+    return None
+
+
+def legacy_manifest_replacement(target: Path) -> tuple[bytes, int | None] | None:
+    """Chọn nội dung và mode migration dự kiến để --plan và lần cài dùng cùng hash."""
+    legacy = target / LEGACY_DIR
+    if not legacy.is_dir() or legacy.is_symlink():
+        return None
+    source = legacy / "harness.sha256.json"
+    if not source.is_file():
+        return None
+    manifest = target / MANIFEST
+    if not manifest.exists():
+        return source.read_bytes(), stat.S_IMODE(source.stat().st_mode)
+    if not manifest.is_symlink() and manifest.is_file():
+        recovered = partial_legacy_manifest(source, manifest)
+        if recovered is not None:
+            return recovered, None
+    return None
 
 
 def migrate_legacy(target: Path) -> None:
@@ -2532,15 +2558,13 @@ def migrate_legacy(target: Path) -> None:
     (cài lại được), đổi `xs.yaml` → `xt.yaml` — dev-task.sh chỉ đọc tên mới, để nguyên thì cổng thành no-op."""
     legacy = target / LEGACY_DIR
     if legacy.is_dir() and not legacy.is_symlink():
-        old_manifest = legacy / "harness.sha256.json"
         manifest = target / MANIFEST
         if manifest.is_symlink() and not manifest.exists():
             drop_symlink(manifest)  # liên kết treo qua được `exists()` rồi copy2 ghi xuyên nó (AUD-SEC-616)
-        if old_manifest.is_file():
-            if not manifest.exists():
-                write_bytes_atomic(manifest, old_manifest.read_bytes(), mode=stat.S_IMODE(old_manifest.stat().st_mode))
-            elif not manifest.is_symlink() and manifest.is_file():
-                restore_partial_legacy_manifest(old_manifest, manifest)
+        replacement = legacy_manifest_replacement(target)
+        if replacement is not None:
+            data, mode = replacement
+            write_bytes_atomic(manifest, data, mode=mode)
         shutil.rmtree(legacy)
         log(f"  {LEGACY_DIR}/ → .xtemplates/ (đã xoá bản sao cũ, giữ manifest hash)")
     old_yaml, new_yaml = target / LEGACY_YAML, target / "xt.yaml"
@@ -2561,7 +2585,7 @@ def legacy_refs(target: Path) -> list[str]:
             continue
         try:
             text = p.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except OSError, UnicodeDecodeError:
             continue
         if LEGACY_RE.search(text):
             hits.append(p.relative_to(target).as_posix())
@@ -2577,7 +2601,7 @@ def installed_label(xt_dir: Path) -> str | None:
     """Nhãn `.xtemplates/VERSION` có TRƯỚC lần cài này (None: cài mới hoặc không đọc được)."""
     try:
         return (xt_dir / "VERSION").read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeDecodeError):
+    except OSError, UnicodeDecodeError:
         return None
 
 
@@ -2806,7 +2830,9 @@ def plan_files(
 ) -> list[dict[str, Any]]:
     """Hành động dự kiến cho từng file harness/gốc/GitHub: copied | kept | updated | kept-own | updated-new |
     skipped-symlink. Cùng hash như cài thật: manifest, file gốc chưa có hash thì suy từ mẫu cũ (`infer_root_hashes`)."""
-    hashes = {**infer_root_hashes(target), **load_manifest(target)}  # manifest thắng hash suy
+    replacement = legacy_manifest_replacement(target)
+    installed = load_manifest(target) if replacement is None else parse_manifest(replacement[0])
+    hashes = {**infer_root_hashes(target), **installed}  # manifest thắng hash suy
     jobs: list[PlanJob] = []
     if not no_harness:
         jobs += [(src, src.relative_to(SRC).as_posix(), force_harness, None, None) for src in harness_sources(target)]
@@ -2980,7 +3006,7 @@ def new_trusted_identity() -> dict[str, str]:
                     timeout=10,
                     check=False,
                 )
-            except (OSError, subprocess.SubprocessError, UnicodeError):
+            except OSError, subprocess.SubprocessError, UnicodeError:
                 continue
             value = result.stdout.strip()
             if result.returncode == 0 and new_identity_value(key, value):
