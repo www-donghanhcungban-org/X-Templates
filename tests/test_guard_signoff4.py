@@ -15,19 +15,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 os.environ.setdefault("XT_GUARD_PHASE", "harden")
 sys.path.insert(0, str(ROOT / ".claude" / "hooks"))
+sys.path.insert(0, str(ROOT / "tests"))
 import guard
+from test_guard_default_deny import assert_cache_cleanup_layouts
 
 H = chr(126)  # `~` dựng bằng chr: chữ xoá home không nằm nguyên văn trong tệp test
 ATTR = "Claude-Session: x"  # dòng ghi công AI (`AI_ATTRIBUTION_RE`)
 HEREDOC_BODY = "\"$(cat <<'EOF'\nfix: x\nEOF\n)\""
 
 
-def decide(cmd: str) -> dict:
+def decide(cmd: str, root: Path = ROOT) -> dict:
     with (
-        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(ROOT), "XT_GUARD_POLICY": ""}),
+        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "XT_GUARD_POLICY": ""}),
         mock.patch.object(guard, "_current_branch", return_value="feat"),
     ):
-        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(ROOT)))
+        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(root)))
 
 
 BUDGET_CASES = (
@@ -154,7 +156,6 @@ ALLOW = (
     'uv run --frozen pytest -k "$K"',
     "uv run -- python3 -c 'print(1)'",
     "find docs -name '*.md' | xargs sed -i s/a/b/",
-    "find . -name '*.pyc' | xargs rm -f",
     "ls | xargs -I{} rm -f {}",
     "XT=1 git ls-files -z src | xargs -0 rm -f",  # T-3942: `git ls-files` trần liệt kê tệp hàng rào → BUDGET
     'a=(status); git "${a[*]}"',
@@ -189,6 +190,9 @@ class SignOff4AllowTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 d = decide(cmd)
                 self.assertEqual(d["decision"], "", d.get("reason"))
+
+    def test_cache_cleanup(self):
+        assert_cache_cleanup_layouts(self, decide, ("find . -name '*.pyc' | xargs rm -f",))
 
     def test_xargs_hint_lists_targets(self):
         reason = str(decide("echo a | xargs sh -c 'echo \"$1\"' _")["reason"])

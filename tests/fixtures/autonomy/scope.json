@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Kiểm quyết định của guard qua mô hình repo khung, bản cài cạnh scripts của ứng dụng, liên kết tượng trưng và thao tác đồng thời. Gate: `python3 -m unittest tests.test_hooks.CliCacheFenceTest`.",
+   "ids": ["AUD-HAR-573"]
+  },
+  {
    "reason": "Phép kiểm AUD-HAR-579 đối chiếu danh sách ứng viên tên và điểm dừng của bộ đọc đối số bằng dữ liệu thuần. Adapter guard chỉ trả quyết định cuối. Gate: `python3 -m unittest tests.test_guard_tag_glob_oracle`.",
    "ids": ["AUD-HAR-579"]
   },

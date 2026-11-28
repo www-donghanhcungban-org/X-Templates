@@ -2548,9 +2548,9 @@ class _FenceRootsMixin:
     # luật/lỗi tập con (BUDGET bị ném) → deny. Mặc định: luôn deny.
     STRICT_ACT = {"HOOK_BYPASS": "ask", "WIPE_OUTSIDE": "ask", "RULE_DENY": "deny", "BUDGET": "deny"}
 
-    def bash(self, root: str, cmd: str, policy: str = "strict") -> tuple[str, str]:
+    def bash(self, root: str, cmd: str, policy: str = "strict", cwd: str | None = None) -> tuple[str, str]:
         with mock.patch.dict(os.environ, {"XT_GUARD_POLICY": policy}):
-            out = self.g.bash_decision(cmd, root)
+            out = self.g.bash_decision(cmd, root, cwd)
         if policy != "strict":
             out = self.g.apply_policy(out)
             return str(out.get("decision") or ""), str(out.get("code") or "")
@@ -2578,6 +2578,120 @@ class _FenceRootsMixin:
         for root, policy in itertools.product(roots or self.roots, self.POLICIES):
             with self.subTest(root=os.path.basename(root), policy=policy, cmd=cmd):
                 self.assertEqual(self.bash(root, cmd, policy)[0], "")
+
+
+class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        installed = Path(self.target, ".xtemplates/scripts/xt.py")
+        installed.parent.mkdir()
+        installed.touch()
+        for root in self.roots:
+            for scripts in ("scripts", ".xtemplates/scripts"):
+                for package in ("", "xt_app", "xt_checks"):
+                    Path(root, scripts, package, "__pycache__").mkdir(parents=True, exist_ok=True)
+
+    def test_cache_writes_follow_cli_layout(self):
+        for root, scripts in ((self.frame, "scripts"), (self.target, ".xtemplates/scripts")):
+            for package in ("", "xt_app", "xt_checks"):
+                cache = Path(scripts, package, "__pycache__")
+                member = cache / "sample.pyc"
+                self.assert_blocked(f"touch {member}", roots=(root,))
+                self.assert_blocked(f"chmod 700 {cache}", roots=(root,))
+                self.assert_allowed(f"stat {cache}", roots=(root,))
+                for policy in self.POLICIES:
+                    with self.subTest(root=root, member=member, policy=policy):
+                        self.assertEqual(self.edit(root, str(member), policy=policy), ("deny", "HOOK_BYPASS"))
+
+    def test_application_and_uncertain_ownership(self):
+        for root, scripts in ((self.frame, "src"), (self.target, "scripts")):
+            path = scripts + "/__pycache__/sample.pyc"
+            self.assert_allowed(f"touch {path}", roots=(root,))
+            for policy in self.POLICIES:
+                with self.subTest(root=root, path=path, policy=policy):
+                    self.assertEqual(self.edit(root, path, policy=policy)[0], "")
+        self.assert_blocked("touch scripts/__pycache__/sample.pyc", roots=(self.bare,))
+        self.assert_blocked("touch .xtemplates/scripts/__pycache__/sample.pyc", roots=(self.bare,))
+
+    def test_cache_path_resolution_and_traversal(self):
+        for root, scripts in ((self.frame, "scripts"), (self.target, ".xtemplates/scripts")):
+            cache = Path(root, scripts, "__pycache__")
+            Path(root, "cache-alias").symlink_to(cache, target_is_directory=True)
+            for command in (
+                "touch cache-alias/sample.pyc",
+                f"cd {scripts} && touch __pycache__/sample.pyc",
+                'cd "$dir" && touch sample.pyc',
+                f"touch {scripts}/__pycache_?/sample.pyc",
+                f"mv {scripts} archived",
+                f"find {scripts} -name '__pycache__' -delete",
+                f"find ./{scripts} -path './{scripts}/__pycache__' -delete",
+                f"find {scripts} -name '__pycache__' -print0 | xargs -0 rm -r",
+                f"git restore --source=HEAD~ -- {scripts}",
+                f"tar -xf fixtures.tar {scripts}/__pycache__",
+            ):
+                self.assert_blocked(command, ("HOOK_BYPASS", "BUDGET"), roots=(root,))
+            self.assertEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "default")[0], "")
+            self.assertNotEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "strict")[1], "HOOK_BYPASS")
+            self.assertEqual(self.bash(root, f"find {scripts} -name '*.tmp' -exec rm -f {{}} +", "default")[0], "")
+            work = Path(root, scripts)
+            self.assert_blocked(f"find {work} -path '{cache}' -delete", roots=(root,))
+            self.assert_blocked(f"find {scripts} -name '__pycache__' -exec stat {{}} + -delete", roots=(root,))
+        self.assert_allowed("find scripts -name '__pycache__' -delete", roots=(self.target,))
+
+    def test_symlinked_install_keeps_cache_fenced(self):
+        installed = Path(self.target, ".xtemplates/scripts/xt.py")
+        installed.unlink()
+        app_cli = Path(self.target, "scripts/xt.py")
+        app_cli.touch()
+        installed.symlink_to(app_cli)
+        self.assert_blocked("touch scripts/__pycache__/sample.pyc", roots=(self.target,))
+
+    def test_no_project_context_preserves_application_cache(self):
+        self.assert_allowed("find src -name '__pycache__' -delete", roots=("",))
+
+    def test_xargs_cache_paths_are_resolved_from_project_and_cwd(self):
+        cache = Path(".xtemplates/scripts/__pycache__/sample.pyc")
+        app_cache = Path(self.target, "src", cache)
+        app_cache.parent.mkdir(parents=True)
+        app_cache.touch()
+        for command, cwd in (
+            (f"ls -d src/{cache} | xargs rm -f", None),
+            (f"ls -d {cache} | xargs rm -f", str(Path(self.target, "src"))),
+            (f"ls -d {app_cache} | xargs rm -f", None),
+            (f"grep -rl cache src/{cache.parent} | xargs rm -f", None),
+        ):
+            with self.subTest(command=command, cwd=cwd):
+                self.assertEqual(self.bash(self.target, command, "default", cwd)[0], "")
+                self.assertIn(self.bash(self.target, command, "strict", cwd), (("", ""), ("ask", "OTHER_ASK")))
+        self.assert_blocked(f"ls -d {cache} | xargs rm -f", ("HOOK_BYPASS", "BUDGET"), roots=(self.target,))
+        self.assert_blocked(f"cd src && ls -d ../{cache} | xargs rm -f", ("BUDGET",), roots=(self.target,))
+        declared_cache = Path(self.target, cache.parent)
+        declared_cache.rmdir()
+        declared_cache.symlink_to(app_cache.parent, target_is_directory=True)
+        self.assert_blocked(f"grep -rl cache {cache.parent} | xargs rm -f", ("BUDGET",), roots=(self.target,))
+
+    def test_find_keeps_uncertain_cache_listing_protected(self):
+        cache = Path(self.frame, "scripts/__pycache__")
+        cleanup = "find scripts -name '*.pyc' -delete"
+        listed = "find scripts -name '*.pyc' | xargs rm -f"
+        self.assert_allowed(cleanup, roots=(self.frame,))
+        self.assert_allowed(listed, roots=(self.frame,))
+        for name in ("one.tmp", "two.tmp"):
+            (cache / name).touch()
+        with mock.patch.object(self.g, "OUTSIDE_SCAN_MAX", 1):
+            self.assert_blocked(cleanup, roots=(self.frame,))
+            self.assert_blocked(listed, ("BUDGET",), roots=(self.frame,))
+            indexed = "git ls-files 'scripts/__pycache__/*.pyc' | xargs rm -f"
+            self.assert_blocked(indexed, ("BUDGET",), roots=(self.frame,))
+            self.assert_allowed("git ls-files src/app.py | xargs rm -f", roots=(self.frame,))
+            self.assert_allowed("find src -name '*.pyc' -delete", roots=(self.frame,))
+
+    def test_concurrent_edits_keep_project_ownership_separate(self):
+        path = "scripts/__pycache__/sample.pyc"
+        roots = (self.frame, self.target) * 12
+        with concurrent.futures.ThreadPoolExecutor(4) as pool:
+            actions = list(pool.map(lambda root: self.g.edit_decision(path, root)[0], roots))
+        self.assertEqual(actions, ["deny", ""] * 12)
 
 
 class FenceRestoreFromRevTest(_FenceRootsMixin, unittest.TestCase):

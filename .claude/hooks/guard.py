@@ -1209,8 +1209,8 @@ def edit_decision(path: str, root: str, tool_input: Optional[Dict[str, object]] 
     ):
         return "deny", GIT_HOOK_WHY.format(rel) + "."
     signed = _go_sign_deny(path, rel, root, tool_input) or _prod_decided_deny(path, rel, root, tool_input)
-    if signed:
-        return "deny", signed
+    if signed or _cli_cache_fence(path, rel, root):
+        return "deny", signed or CodedReason(f"Cache của CLI do Python sinh ({rel}). Sửa tệp nguồn.", "HOOK_BYPASS")
     if kind == "capability":
         return "ask", "Sửa cấu hình " + CAPABILITY_WHY.format(rel) + "."
     if kind == "secret" and not build_local_secret(path, root, root):
@@ -4463,8 +4463,7 @@ XARGS_FEED_RE = re.compile(
     r"(?:^|[;&|(])\s*(?:(?:[A-Za-z_]\w*=\S*|command|env|nice|timeout|stdbuf|ionice|nohup|setsid|time|-\S+|\d\S*)\s+)*"
     r"(find|git\s+ls-files|ls|echo|grep|rg|ag|git\s+grep)(\s[^|;&]*)\|\s*xargs(?![\w-])"
 )
-# T-3951 A10: nguồn xargs `grep -rl`/`rg -l`/`git grep -l`/`ag -l` — chỉ liệt kê tệp dưới thư mục/tệp nêu ở đối số: qua
-# khi mọi đối số đường là chữ trơn dưới gốc, không phải gốc/cha của nó, không thư mục hàng rào và không chứa `.git`
+# T-3951 A10: grep/rg/ag chỉ liệt kê ở đường chữ dưới gốc, ngoài hàng rào và repo con.
 GREP_SOURCES = frozenset({"grep", "rg", "ag", "git grep"})
 GREP_PAT_OPTS = frozenset({"-e", "-f", "--regexp", "--file"})
 GREP_VALUE_OPTS = frozenset({"-m", "-A", "-B", "-C", "--max-count", "-g", "--glob", "-t", "--type", "-T", "-d", "-D"})
@@ -4489,28 +4488,20 @@ def _grep_paths(words: List[str]) -> List[str]:
 def _grep_source_safe(words: List[str], root: str, here: str) -> bool:
     paths = _grep_paths(words)
     for p in paths:
-        full = os.path.realpath(os.path.join(here, os.path.expanduser(p)))
-        rel = os.path.relpath(full, os.path.realpath(root))
+        target = os.path.join(here, os.path.expanduser(p))
+        rel = os.path.relpath(os.path.realpath(target), os.path.realpath(root))
         bad = re.search(r"[$`~]", p) or _xargs_fence_word(p, root) or rel == "." or rel.split("/", 1)[0] == ".."
-        if bad or os.path.lexists(os.path.join(full, ".git")):
+        if bad or _cli_cache_fence(target, rel, root, parents=True) or os.path.lexists(os.path.join(target, ".git")):
             return False
     return bool(paths)
 
 
 XARGS_WORD_RE = re.compile(r"(?<![\w-])xargs(?![\w-])")
-# T-3940: `ls -a`/`-A` có thể ra tệp hàng rào; T-3942: đoạn dấu chấm chỉ tính thư mục hàng rào (`XARGS_DOT_RE`)
 LS_ALL_RE = re.compile(r"-[a-zA-Z]*[aA][a-zA-Z]*")
 CD_ONLY_RE = re.compile(r"(?<![\w.-])(?:cd|pushd|popd)(?![\w.-])")
 
 
 def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
-    """Mọi `xargs` của lệnh nhận stdin trực tiếp từ `find`/`git ls-files`/`ls`/`echo` (T-3937) mà nguồn không thể liệt
-    kê tệp hàng rào (T-3942, cổng ký lần 6 — thay luật "không `cd`, không đoạn dấu chấm" của T-3940):
-    - `cd`/`pushd`/`popd`: mọi lệnh có thư mục giải được, trong dự án, ngoài thư mục hàng rào (`_xargs_dirs`);
-    - `echo`/`ls`: toán hạng không chạm thư mục hàng rào hay đoạn dấu chấm có glob, `ls` không `-a`/`-A`; `echo` không
-      có `\\` hay `xpg_echo` (`echo -e '\\x2eclaude'`), viết lại được thành lệnh trơn (`_xargs_fed_all`);
-    - `find`/`git ls-files`: không tệp hàng rào nào (`_xargs_fence_paths`) dưới gốc tìm khớp mọi bộ lọc dương
-      (`-name`/`-iname`/`-path`/pathspec — `_xargs_find_safe`, `_xargs_lsfiles_safe`)."""
     feeds = list(XARGS_FEED_RE.finditer(cmd))
     if len(feeds) != len(XARGS_WORD_RE.findall(cmd)) or "xpg_echo" in cmd:
         return False
@@ -4528,7 +4519,7 @@ def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
                 return False
         elif m[1] in ("ls", "echo"):
             bad = any(_xargs_fence_word(w, root) or "\\" in w and m[1] == "echo" for w in words)
-            bad = bad or any(_xargs_fence_word(_xargs_from_root(w, root, d), root) for w in words for d in here)
+            bad = bad or any(_xargs_fence_word(w, root, d) for w in words for d in here)
             if bad or m[1] == "ls" and any(LS_ALL_RE.fullmatch(w) for w in words):
                 return False
         elif not all(_xargs_source_safe(m[1], words, root, d) for d in here):
@@ -4536,12 +4527,8 @@ def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
     return True
 
 
-# T-3942: thư mục hàng rào (đoạn đầu đường tương đối với gốc dự án) và tệp hàng rào mẫu cho nguồn của xargs — tệp mà
-# lệnh xoá/ghi trực tiếp bị chặn (FENCE/EVIDENCE/GIT_HOOK/SECRET). Mẫu bí mật nằm ở mọi thư mục.
-# AUD-SEC-987: `.codex` (hàng rào `hooks.json`, agent) và `.agents` (skill của Codex) như `.claude` (ADR-0082).
-# AUD-SEC-989: thư mục tệp nối guard của host khác (`XARGS_ADAPTER_DIRS`; `.github` chỉ đoạn `.github/hooks`) — chỉ
-# khi tệp nối có thật (`_fence_entry_live`), như luật hàng rào.
 XARGS_FENCE_DIRS = frozenset({".claude", ".autopilot", ".git", ".codex", ".agents"})
+XARGS_FENCE_SCAN_DIRS = ".claude .claude/hooks .autopilot .autopilot/evidence .git .git/hooks .codex .agents".split()
 XARGS_ADAPTER_DIRS = (".cursor", ".github/hooks", ".grok", ".opencode", ".gemini")
 XARGS_DIR_HEADS = frozenset({"find", "ls", "git", "echo", "xargs"})  # lệnh mà thư mục chạy quyết định tệp được liệt kê
 XARGS_FENCE_FILES = (
@@ -4560,7 +4547,6 @@ XARGS_FENCE_FILES = (
     ".git/hooks/pre-commit",
     ".git/hooks/pre-push",
     ".git/hooks/commit-msg",
-    # T-3945 (R3): `.git/**` là hàng rào (`_git_inner`) — tên mẫu cho `find .` duyệt vào `.git`
     *(".git/HEAD", ".git/index", ".git/ORIG_HEAD", ".git/FETCH_HEAD", ".git/description", ".git/info/exclude"),
     *(".git/objects/pack/pack-0.pack", ".git/objects/pack/pack-0.idx", ".git/objects/pack/pack-0.rev"),
     *(".git/objects/00/00", ".git/objects/info/packs", ".git/refs/heads/main", ".git/refs/tags/v1", ".git/logs/HEAD"),
@@ -4574,14 +4560,12 @@ XARGS_FIND_PRINTS = ("-print", "-print0")  # chỉ ở cuối nhánh: đứng gi
 
 
 def _xargs_dirs(cmd: str, root: str, cwd: Optional[str]) -> Optional[List[str]]:
-    """Mọi thư mục ứng viên của nguồn liệt kê và xargs khi lệnh có `cd`/`pushd`/`popd`; None khi có thư mục không biết,
-    ngoài dự án, hay trong thư mục hàng rào (`cd .autopilot && ls | xargs …`)."""
     placed = _commands_with_cwds(tokenize(cmd), cwd or root)
     dirs = {d for argv, cands in placed if XARGS_DIR_HEADS & {posixpath.basename(t) for t in argv} for d in cands}
     if not root or None in dirs:
         return None
     real = os.path.realpath(root)
-    fence = [*XARGS_FENCE_DIRS, *_xargs_live_dirs(root)]
+    fence = [*XARGS_FENCE_DIRS, *_xargs_live_dirs(root), *_cli_cache_dirs(root)]
     for d in dirs:
         rel = os.path.relpath(os.path.realpath(str(d)), real)
         if rel == ".." or rel.startswith("../") or any(rel == f or rel.startswith(f + "/") for f in fence):
@@ -4590,13 +4574,15 @@ def _xargs_dirs(cmd: str, root: str, cwd: Optional[str]) -> Optional[List[str]]:
 
 
 def _xargs_live_dirs(root: str) -> List[str]:
-    """Thư mục tệp nối guard của host khác có tệp nối thật ở `root` (AUD-SEC-989)."""
     return [d for d in XARGS_ADAPTER_DIRS if root and _fence_entry_live(d, root)]
 
 
-def _xargs_fence_word(word: str, root: str) -> bool:
-    """Toán hạng nguồn của xargs chạm thư mục hàng rào: đoạn dấu chấm cũ (`XARGS_DOT_RE`), hay chuỗi đoạn khớp thư mục
-    tệp nối của host khác — đoạn có glob so bằng fnmatch (`.github/hook?/*`, `.github/h*/x*` — AUD-SEC-989)."""
+def _xargs_fence_word(word: str, root: str, here: Optional[str] = None) -> bool:
+    if here is not None:
+        target = posixpath.join(here, word)
+        if _cli_cache_fence(target, _rel_dir(target, root), root):
+            return True
+        word = _xargs_from_root(word, root, here)
     if XARGS_DOT_RE.search(word):
         return True
     segs = posixpath.normpath(word).split("/")
@@ -4609,27 +4595,13 @@ def _xargs_fence_word(word: str, root: str) -> bool:
 
 
 def _xargs_from_root(word: str, root: str, here: str) -> str:
-    """Toán hạng `word` của `ls`/`echo` chạy ở `here`, viết lại tính từ gốc dự án (AUD-SEC-989: `cd .github && ls -d
-    hooks/*` liệt kê `.github/hooks/xt.json` mà chữ `hooks/*` không có đoạn hàng rào); `here` ngoài gốc → `word`."""
     rel = os.path.relpath(os.path.realpath(here), os.path.realpath(root)) if root else ".."
     return word if rel == ".." or rel.startswith("../") else posixpath.normpath(posixpath.join(rel, word))
 
 
 def _xargs_fence_paths(root: str) -> List[str]:
-    """Tệp hàng rào (đường tương đối với gốc): mẫu cố định cộng tên có thật trong `.claude`, `.claude/hooks`,
-    `.autopilot` (hai cấp), `.git/hooks`, `.codex` và `.agents` (AUD-SEC-987); tệp nối guard của host khác có thật
-    (AUD-SEC-989)."""
     out = [*XARGS_FENCE_FILES, *(f for f in ADAPTER_FENCE_FILES if _adapter_live(f, root))]
-    for sub in (
-        ".claude",
-        ".claude/hooks",
-        ".autopilot",
-        ".autopilot/evidence",
-        ".git",
-        ".git/hooks",
-        ".codex",
-        ".agents",
-    ):
+    for sub in XARGS_FENCE_SCAN_DIRS:
         try:
             out += [f"{sub}/{name}" for name in os.listdir(os.path.join(root, sub))]
         except OSError:
@@ -4638,20 +4610,24 @@ def _xargs_fence_paths(root: str) -> List[str]:
 
 
 def _xargs_source_safe(src: str, words: List[str], root: str, here: str) -> bool:
-    """Nguồn `find`/`git ls-files` chạy ở `here` không liệt kê được tệp hàng rào nào."""
-    real = os.path.realpath(root)
-    base = os.path.relpath(os.path.realpath(here), real)
-    rel = [posixpath.relpath(p, base) for p in _xargs_fence_paths(root)]  # theo `here`
+    base = os.path.relpath(os.path.realpath(here), os.path.realpath(root))
+    caches, uncertain = _cli_cache_candidates(root)
+    rel = [posixpath.relpath(p, base) for p in [*_xargs_fence_paths(root), *caches]]
+    unknown = {posixpath.relpath(p, base) for p in uncertain}
     if src == "find":
-        return _xargs_find_safe(words, rel)
-    return _xargs_lsfiles_safe(words, rel)
+        return _xargs_find_safe(words, rel, uncertain=unknown, here=here)
+    return _xargs_lsfiles_safe(words, rel, unknown)
 
 
-def _xargs_find_safe(words: List[str], fence: List[str]) -> bool:
-    """`find` không in tệp hàng rào: mỗi nhánh `-o` là AND các bộ lọc dương (không sau `!`/`-not`) đứng trước hành động
-    in đầu tiên; ngoặc, `,`, hành động in chữ tuỳ ý/chạy lệnh (`-printf`, `-exec`…) → không chắc."""
-    k = next((i for i, w in enumerate(words) if w[:1] in "-!(" or w == ","), len(words))
-    starts, expr = words[:k] or ["."], words[k:]
+def _xargs_find_safe(
+    words: List[str],
+    fence: List[str],
+    extra_names: Tuple[str, ...] = XARGS_SECRET_NAMES,
+    uncertain: Iterable[str] = (),
+    here: str = "",
+) -> bool:
+    starts, k = _find_parts(words)
+    expr = words[k:]
     if {"(", ")"} & set(expr) and {"-o", "-or", "!", "-not"} & set(expr):
         return False  # ngoặc chỉ bỏ được khi biểu thức thuần AND (`find src \( -name '*.py' \)`)
     expr = [w for w in expr if w not in ("(", ")")]
@@ -4665,14 +4641,24 @@ def _xargs_find_safe(words: List[str], fence: List[str]) -> bool:
             branches.append([])
         elif w in XARGS_FIND_FILTERS and i + 1 < len(expr) and not (i and expr[i - 1] in ("!", "-not")):
             branches[-1].append((w, expr[i + 1]))
+    here = os.path.realpath(here) if here else ""
+    check = _find_traversal_check(words[:k], expr) if fence else None
     for start in starts:
-        s = posixpath.normpath(start)
-        if ".git" in s.split("/"):  # T-3945 (R3): gốc tìm trong `.git` — mọi tệp ở đó là hàng rào
+        target = posixpath.join(here, start) if here else ""
+        s = os.path.relpath(os.path.realpath(target), here) if here else posixpath.normpath(start)
+        if (
+            ".git" in s.split("/")
+            or UNRESOLVED_TARGET_CHARS.intersection(start)
+            or start.startswith("~")
+            or (check is not None and check(target))
+        ):
             return False
-        reach = [p for p in fence if s == "." or p == s or p.startswith(s + "/")]
-        reach += [posixpath.join(s, n) for n in XARGS_SECRET_NAMES]
-        found = ["./" + p if start.startswith("./") or start == "." else p for p in reach]
-        if any(all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found):
+        reach = [p for p in fence if p == s or p.startswith(s + "/") or s == "." and p.split("/", 1)[0] != ".."]
+        reach += [posixpath.join(s, n) for n in extra_names]
+        found = [start if p == s else posixpath.join(start, posixpath.relpath(p, s)) for p in reach]
+        if set(reach).intersection(uncertain) or any(
+            all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found
+        ):
             return False
     return True
 
@@ -4685,7 +4671,7 @@ def _xargs_find_match(op: str, pat: str, path: str) -> bool:
     return fnmatch.fnmatchcase(name.casefold() if fold else name, pat.casefold() if fold else pat)
 
 
-def _xargs_lsfiles_safe(words: List[str], fence: List[str]) -> bool:
+def _xargs_lsfiles_safe(words: List[str], fence: List[str], uncertain: Iterable[str] = ()) -> bool:
     specs = [w for w in words if w[:1] != "-"]
     if not specs:
         return not any(p[:3] != "../" for p in fence)
@@ -4693,7 +4679,9 @@ def _xargs_lsfiles_safe(words: List[str], fence: List[str]) -> bool:
         if spec[:1] == ":":
             return False  # pathspec magic
         s = posixpath.normpath(spec)
-        if any(fnmatch.fnmatchcase(p, s) or p.startswith(s + "/") or s == "." for p in fence if p[:3] != "../"):
+        direct = any(fnmatch.fnmatchcase(p, s) or p.startswith(s + "/") or s == "." for p in fence if p[:3] != "../")
+        unknown = any(all(map(fnmatch.fnmatchcase, p.split("/"), s.split("/"))) for p in uncertain if p[:3] != "../")
+        if direct or unknown:
             return False
     return True
 
@@ -6872,12 +6860,7 @@ def _raw_word_dynamic(word: str, whole: str) -> bool:
 def _argv_shell_check(
     cmd: str, tokens: List[str], strict: bool, asks: List[str], res: Dict[str, object], root: str, cwd: Optional[str]
 ) -> None:
-    """Chặn (BUDGET) khi `_argv_shell_why` có lý do — trừ khi câu hỏi nguy hiểm của luật cũ đã làm lệnh bị chặn (giữ mã
-    của luật cũ: HOOK_BYPASS…). Chữ lỏng (guard tự dựng) không qua tập con. Cờ bỏ hook đã đặt trong `res` đi theo lỗi
-    (review #433 R1 — adapter host khác đọc `push_no_verify`). Câu hỏi mã BUDGET (`gh pr close 5 ${a[@]}` — AUD-SEC-598)
-    không tính: nó là ask ở strict, lỗi tập con là deny ở mọi chính sách. Câu hỏi của luật hàng rào mới (AUD-SEC-988/989,
-    `_new_fence_ask`; AUD-SEC-996a FOLLOW_TAGS_MARK) và mã merge mới (ADR-0096) cũng không tính: thêm luật không được
-    làm deny BUDGET của lệnh cũ thành ask ở strict."""
+    """Giữ mã chặn của luật cũ và cờ bỏ hook (#433). Luật mới không đổi deny BUDGET thành ask ở strict."""
     why = _argv_shell_why(cmd, tokens, root, cwd) if strict else ""
     kept = [
         a
@@ -6894,11 +6877,9 @@ def _argv_shell_check(
 
 
 def _new_fence_ask(ask: str) -> bool:
-    """Câu hỏi do luật AUD-SEC-988 (khôi phục từ nguồn khác, dấu `FENCE_NEW_TAG`), AUD-SEC-989 (hàng rào ở thư mục của
-    host khác) hay AUD-SEC-990 (giải nén thành viên, `FENCE_EXTRACT_TAG`) sinh — nhận theo chữ; nhận thừa chỉ làm lệnh
-    giữ BUDGET (chiều chặt)."""
+    """Nhận câu hỏi của AUD-SEC-988/989/990 và AUD-HAR-573 để giữ mã BUDGET cũ."""
     fence = FENCE_WHY.split("(", 1)[0]
-    new = FENCE_NEW_TAG in ask or FENCE_EXTRACT_TAG in ask
+    new = FENCE_NEW_TAG in ask or FENCE_EXTRACT_TAG in ask or ask.startswith(CLI_CACHE_WHY.split("(", 1)[0])
     return new or fence in ask and any(d in ask for d in ADAPTER_FENCE_DIRS)
 
 
@@ -10831,8 +10812,6 @@ UNRESOLVED_TARGET_CHARS = set("$`*?[{}")
 
 
 def _local(target: Optional[str], root: str, cwd: Optional[str], typed: bool = True) -> bool:
-    """Đích chắc chắn nằm trong dự án hoặc thư mục tạm (không phải chính gốc thư mục tạm — `chmod -R 777 /tmp` chạm file
-    người khác): thư mục đang đứng biết, không biến/backtick/glob/`{}`, không `~-`."""
     if cwd is None or not target or (typed and UNRESOLVED_TARGET_CHARS & set(target)) or OLDPWD_REF_RE.match(target):
         return False
     if FIND_FOUND in target:  # `find /etc -exec chmod 777 {} +`: file tìm thấy dưới gốc của find, không phải trong cwd
@@ -10883,8 +10862,6 @@ FIND_EXEC_END = (";", "+")  # so bằng `str(t)`: `\;`/`';'` là `LitWord` (ch�
 
 
 def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str]:
-    """`find <gốc…> -delete` / `-exec rm … {}`: xoá các file khớp dưới gốc — gốc là `/`, `~` → deny; gốc ngoài dự án
-    → ask. Lệnh trong `-exec … ;|+` còn được quét như lệnh thường (`{}` = một file tìm thấy)."""
     roots, i = _find_parts(args)
     deleting = "-delete" in args[i:]
     for k, a in enumerate(args):
@@ -10894,7 +10871,6 @@ def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str
             FIND_FOUND if t == "{}" else t
             for t in itertools.takewhile(lambda t: str(t) not in FIND_EXEC_END, args[k + 1 :])
         ]
-        # lệnh của -exec bắt đầu ở độ sâu 2: còn hai lớp shell lồng (`bash -c '… sh -c "…"'`, review #159)
         verdict = bash_decision(_join_tokens(sub), root, cwd, MAX_NEST - 2)  # dấu trần giữ là toán tử như trước
         if verdict["decision"] in ("deny", "ask"):
             return str(verdict["decision"]), f"find {a}: {verdict['reason']}"
@@ -10915,14 +10891,12 @@ def _find_rule(args: List[str], root: str, cwd: Optional[str]) -> Tuple[str, str
     return ("ask", f"find xoá file ngoài thư mục dự án ({outside[0]})") if outside else ("", "")
 
 
-# D-153: `find` có `-delete`/`-exec…` trong CHUỖI GỐC (không qua token — shlex bỏ dấu thoát nên `\(`, `\;` cắt argv).
 FIND_WORD_RE = re.compile(r"(?<![\w.-])find(?![\w.-])")
 FIND_ACT_RE = re.compile(r"(?<![\w-])-(?:delete|exec|execdir|ok|okdir)(?![\w-])")
 FIND_WRITE_RE = re.compile(r"(?<![\w-])-(?:delete|fprint0?|fprintf|fls)(?![\w-])")
 FIND_EXEC_CMD_RE = re.compile(r"(?<![\w-])-(?:exec|execdir|ok|okdir)(?![\w-])(?:[ \t]+(\S+))?")
 FIND_OUT_RE = re.compile(r"(?<![\w-])-(?:fprint0?|fprintf|fls)[ \t]+(\S+)")
 CD_WORD_RE = re.compile(r"(?<![\w.-])(?:cd|pushd|popd)(?![\w.-])")
-# D-154: -exec từ gốc được miễn khi chỉ chạy các lệnh đọc này (danh sách đóng — không shell/trình thông dịch/xargs/env)
 FIND_ROOT_RO_EXEC = frozenset(
     # không `rg` (`--pre <lệnh>` chạy lệnh tuỳ ý), không `file` (`file -C` ghi magic.mgc)
     "cat grep egrep fgrep ls head tail wc stat du sha256sum sha1sum md5sum basename dirname realpath echo "
@@ -10935,8 +10909,6 @@ FIND_ROOT_WHY = (
 
 
 def _find_starts(rest: str) -> List[str]:
-    """Điểm bắt đầu sau một từ `find` trong chuỗi gốc: bỏ `-H/-L/-P/-O<n>/-D <x>/--`, dừng ở từ bắt đầu bằng `-`, `(`,
-    `\\(`, `!` hay toán tử shell; nháy và `\\` bị bỏ."""
     out: List[str] = []
     words = iter(rest.split("\n", 1)[0].split())
     for w in words:
@@ -10955,24 +10927,19 @@ def _find_starts(rest: str) -> List[str]:
 
 
 def _find_exec_readonly(rest: str) -> bool:
-    """D-154: không `-delete`/`-fprint*`/`-fls` và MỌI `-exec`/`-execdir`/`-ok`/`-okdir` chạy lệnh TÊN TRẦN (không `/`
-    — `./cat` không phải cat) trong `FIND_ROOT_RO_EXEC`; lệnh là `{}`, biến hay thiếu → không miễn."""
+    """D-154 miễn find chỉ đọc khi mọi lệnh con dùng tên trần trong danh sách cho phép."""
     if FIND_WRITE_RE.search(rest):
         return False
     return all(c.strip("'\"") in FIND_ROOT_RO_EXEC for c in FIND_EXEC_CMD_RE.findall(rest))
 
 
 def _find_bad_start(s: str, root: str, cwd: Optional[str], moved: bool) -> bool:
-    """Điểm bắt đầu rỗng/không xác định, tương đối sau `cd`/`pushd`/`popd` trong cùng lệnh, hay chạm gốc/`.git`."""
     unknown = not s or bool(set(s) & UNRESOLVED_TARGET_CHARS) or (moved and not s.startswith(("/", "~")))
     return unknown or _wipes_root(s, root, cwd)
 
 
 def find_root_scan(cmd: str, root: str, cwd: Optional[str]) -> str:
-    """D-153: lý do chặn khi một `find` có hành động xoá/`-exec` bắt đầu từ gốc dự án, tổ tiên hay `gốc/.git`, không có
-    điểm bắt đầu khi đang đứng ở đó, hoặc điểm bắt đầu không xác định (`$`, backtick, glob, `{}`, tương đối sau `cd`);
-    hoặc `-fprint*`/`-fls` ghi vào `gốc/.git`. Quét bản bỏ `"`/`'`/`\\` (`fi""nd`, `f\\ind` vẫn là find). Chữ `find`
-    trong đối số có nháy cũng tính (AUD-SEC-410 mở, D-329): nhiều lệnh chạy chữ đó (`git rebase --exec`, `make --eval`)."""
+    """D-153: quét chuỗi gốc để chặn find thay đổi gốc dự án, `.git` hoặc đích không xác định."""
     norm = re.sub(r"[\"'\\]", "", join_continuations(_data_heredoc_head(cmd)))
     for m in FIND_WORD_RE.finditer(norm):
         rest = norm[m.end() :]
@@ -10988,9 +10955,7 @@ def find_root_scan(cmd: str, root: str, cwd: Optional[str]) -> str:
     return ""
 
 
-# AUD-SEC-889: cả lệnh chỉ là `cat >[>] TỆP <<'D'` (hay `cat <<'D' >[>] TỆP`) — delimiter có nháy (thân không mở rộng),
-# đích chữ trơn, không ống/lệnh khác — thân là dữ liệu ghi ra tệp, không phải lệnh `find`. Dòng thân trùng delimiter
-# (bash đóng heredoc sớm, phần sau là lệnh) → không nhận.
+# AUD-SEC-889: chỉ tách đầu lệnh cat ghi một heredoc dữ liệu, delimiter có nháy và không lặp trong thân.
 DATA_HEREDOC_RE = re.compile(
     r"(cat[ \t]+(?:>>?[ \t]*[\w./-]+[ \t]+<<[ \t]*(['\"])(\w+)\2|<<[ \t]*(['\"])(\w+)\4[ \t]+>>?[ \t]*[\w./-]+))[ \t]*\n"
     r"(.*\n)?(\w+)\n?",
@@ -11008,21 +10973,50 @@ def _data_heredoc_head(cmd: str) -> str:
 
 
 def _find_parts(args: List[str]) -> Tuple[List[str], int]:
-    """(gốc, vị trí bắt đầu biểu thức) của `find`: bỏ tuỳ chọn toàn cục đứng trước gốc (`-H`/`-L`/`-P`, `-D <opt>`,
-    `-O<n>`) — `find -L .autopilot -delete` từng bị đọc thành gốc `.` (reviewer #132)."""
     i = 0
-    while i < len(args) and (args[i] in ("-H", "-L", "-P") or re.fullmatch(r"-O\d", args[i])):
-        i += 1
-    if args[i : i + 1] == ["-D"]:
-        i += 2
+    while i < len(args) and (args[i] in ("-H", "-L", "-P", "-D", "--") or re.fullmatch(r"-O\d", args[i])):
+        i += 2 if args[i] == "-D" else 1
     j = i
-    while j < len(args) and not args[j].startswith(("-", "(", "!")):
+    while j < len(args) and args[j] != "," and not args[j].startswith(("-", "(", "!")):
         j += 1
     return args[i:j] or ["."], j
 
 
+def _find_traversal_check(prefix: List[str], expr: List[str]) -> Optional[Callable[[str], bool]]:
+    """Dò link với trần dùng chung giữa các điểm bắt đầu. True khi chưa chứng minh được cây."""
+    links = next((arg for arg in reversed(prefix) if arg in ("-L", "-P", "-H")), "")
+    if "-files0-from" in expr:
+        return lambda _: True
+    if links != "-L" and "-follow" not in expr:
+        return None
+    depths = [value for flag, value in zip(expr, expr[1:]) if flag == "-maxdepth"]
+    limit = int(depths[0]) if len(depths) == 1 and re.fullmatch(r"[0-9]{1,3}", depths[0]) else OUTSIDE_SCAN_MAX
+    remaining = OUTSIDE_SCAN_MAX
+
+    @functools.cache
+    def uncertain(target: str) -> bool:
+        nonlocal remaining
+        pending = [(target, 0)]
+        while pending and remaining:
+            _tick()
+            path, depth = pending.pop()
+            remaining -= 1
+            try:
+                mode = os.lstat(path).st_mode
+            except OSError:
+                return True
+            if stat.S_ISLNK(mode):
+                return True
+            names = _outside_names(path) if depth < limit and stat.S_ISDIR(mode) else []
+            if names is None or len(pending) + len(names) > remaining:
+                return True
+            pending.extend((os.path.join(path, name), depth + 1) for name in names)
+        return bool(pending)
+
+    return uncertain
+
+
 def _find_delete_roots(args: List[str]) -> List[str]:
-    """Gốc của `find … -delete` / `-exec rm|shred|unlink …`: lệnh xoá file dưới các gốc này (reviewer #132)."""
     roots, i = _find_parts(args)
     deleting = "-delete" in args[i:] or any(
         sub and posixpath.basename(sub[0]) in ("rm", "shred", "unlink") for sub in _find_exec_argvs(["find", *args[i:]])
@@ -11030,35 +11024,16 @@ def _find_delete_roots(args: List[str]) -> List[str]:
     return roots if deleting else []
 
 
-# `find … -exec <lệnh>` chỉ ĐỌC file thì không đụng bằng chứng; lệnh khác (mv, sed -i, sh -c, tee…) coi là có thể ghi.
-FIND_READONLY_EXEC = {
-    *(
-        "cat",
-        "grep",
-        "egrep",
-        "fgrep",
-        "head",
-        "tail",
-        "ls",
-        "wc",
-        "stat",
-        "file",
-        "jq",
-        "diff",
-        "cmp",
-        "echo",
-        "printf",
-    ),
-    *("sha256sum", "sha1sum", "md5sum", "basename", "dirname", "readlink", "realpath", "du", "test", "["),
-}
+FIND_READONLY_EXEC = set(
+    "cat grep egrep fgrep head tail ls wc stat file jq diff cmp echo printf "
+    "sha256sum sha1sum md5sum basename dirname readlink realpath du test [".split()
+)
 FIND_FILE_OUT = {"-fprint", "-fprint0", "-fprintf", "-fls"}  # ghi kết quả vào file (đối số kế tiếp)
 FIND_NAME_TESTS = {"-path", "-ipath", "-wholename", "-iwholename", "-regex", "-iregex", "-name", "-iname", "-lname"}
 EVIDENCE_NAMES = {"verified.json", "runs.jsonl", "reviews.json"}  # tên đặc thù của file trong `.autopilot/`
 
 
 def _find_name_hints(expr: List[str]) -> List[str]:
-    """`-path './.autopilot/*'`, `-name verified.json`: gốc `.` nhưng bộ lọc chỉ trúng bằng chứng — trả đường dẫn giả
-    `.autopilot/<tên>` để xét như đích ghi."""
     out: List[str] = []
     for k, a in enumerate(expr[:-1]):
         val = expr[k + 1]
@@ -11069,8 +11044,6 @@ def _find_name_hints(expr: List[str]) -> List[str]:
 
 
 def _find_evidence_targets(args: List[str]) -> List[str]:
-    """Đích mà `find` có thể ghi/sửa ngoài việc xoá: `-exec` chạy lệnh không chỉ-đọc dưới các gốc (kể cả bộ lọc trúng
-    bằng chứng), `-fprint FILE`. Chỉ dùng để xét `.autopilot/` (ADR-0026) — gốc `.` thường không phải cổng."""
     roots, i = _find_parts(args)
     expr = args[i:]
     out = [expr[k + 1] for k, a in enumerate(expr[:-1]) if a in FIND_FILE_OUT]
@@ -15382,9 +15355,9 @@ def _pathspec_magic(spec: str) -> Optional[Tuple[bool, str, bool, bool]]:
 
 
 def _restore_covers(x: str, root: str) -> bool:
-    """Đường tuyệt đối `x` là tệp/thư mục hàng rào hay tổ tiên của tệp hàng rào ở gốc (kể cả tổ tiên của chính gốc)."""
+    """Đường tuyệt đối phủ hàng rào, gồm cả gốc và tổ tiên của gốc."""
     rel = _rel_dir(x, root)
-    if rel in ("", ".") or _is_fence(x, root):
+    if rel in ("", ".") or _fence_why(x, root):
         return True
     if rel.startswith("/"):  # `rel_path` trả đường tuyệt đối khi ra ngoài gốc
         return os.path.realpath(root).startswith(os.path.realpath(x).rstrip("/") + "/")
@@ -15392,8 +15365,8 @@ def _restore_covers(x: str, root: str) -> bool:
 
 
 def _restore_fence_files(root: str) -> List[str]:
-    """Tệp hàng rào đang có hiệu lực ở gốc (của host khác: chỉ khi tệp nối có thật — `_fence_entry_live`)."""
-    return [f for f in (*FENCE_FILES, ".claude/hooks/guard.py") if _fence_entry_live(f, root)]
+    live = [f for f in (*FENCE_FILES, ".claude/hooks/guard.py") if _fence_entry_live(f, root)]
+    return [*live, *_cli_cache_dirs(root)]
 
 
 def _restore_fence_names(root: str) -> List[str]:
@@ -15407,8 +15380,7 @@ def _restore_fence_names(root: str) -> List[str]:
 
 
 def _restore_glob_hit(x: str, root: str, icase: bool) -> bool:
-    """Pathspec có glob/`icase` (đường tuyệt đối) khớp tệp hàng rào hay thư mục tổ tiên của nó, hay là thư mục chứa
-    nó: `*` qua `/` như wildmatch của git không `:(glob)`; gốc hay ra ngoài gốc → coi là khớp."""
+    """Git pathspec glob/`icase` phủ hàng rào. `*` qua `/`, gốc và ngoài gốc đều tính là phủ."""
     rel = _rel_dir(x, root)
     if rel in ("", ".") or rel.startswith("/"):
         return True
@@ -15418,8 +15390,7 @@ def _restore_glob_hit(x: str, root: str, icase: bool) -> bool:
 
 
 def _restore_spec_hit(spec: str, root: str, base: Optional[str], icase_all: bool = False) -> str:
-    """'dyn' (đường không đọc chắc), 'fence' (phủ hàng rào) hay '' cho một pathspec của lệnh khôi phục từ nguồn khác;
-    magic dài không đóng → 'fence' (chiều chặt); `icase_all`: `--icase-pathspecs`/`GIT_ICASE_PATHSPECS`."""
+    """'dyn' khi đích mơ hồ, 'fence' khi phủ hàng rào hay magic chưa đóng, còn lại ''."""
     if spec == RESTORE_UNREAD or set(spec) & {"$", "`"}:
         return "dyn"
     magic = _pathspec_magic(spec)
@@ -15441,8 +15412,7 @@ def _restore_excluded(spec: str) -> bool:
 def _fence_restore_asks(
     n: List[str], argv: List[str], root: str, cwd: Optional[str], env: Optional[Dict[str, str]] = None
 ) -> List[str]:
-    """AUD-SEC-988: câu hỏi cho lệnh git đưa nội dung từ nguồn khác chỉ mục/HEAD vào đường phủ hàng rào. Pathspec loại
-    trừ (`:!x`) không bớt phạm vi (chiều chặt); chỉ có loại trừ = cả cây như git."""
+    """AUD-SEC-988: Git ghi từ nguồn khác HEAD/chỉ mục. Pathspec loại trừ không thu hẹp phạm vi."""
     if n[:1] != ["git"] or len(n) < 2 or n[1] not in RESTORE_SUBS:
         return []
     assigned = [*(a.split("=", 1)[0] for a in argv if "=" in a), *(env or {})]  # `GIT_DIR=x git …`, `export GIT_DIR=x`
@@ -15451,8 +15421,7 @@ def _fence_restore_asks(
     rev, specs = _restore_spec(n, other, base)
     icase = RESTORE_ICASE_FLAG in argv or RESTORE_ICASE_ENV in assigned
     live = [s for s in specs if not _restore_excluded(s)] or [":/"][: len(specs)]
-    # cây làm việc dời (`--work-tree`, `GIT_WORK_TREE`, `core.worktree`): pathspec tính từ thư mục guard không giải →
-    # mọi pathspec coi là phủ hàng rào (`git --work-tree=.claude checkout <rev> -- hooks/guard.py`)
+    # Cây làm việc dời: coi mọi pathspec là phủ hàng rào.
     moved = any(RESTORE_TREE_MOVED_RE.fullmatch(a) for a in [*argv, *assigned])
     hits = [(s, "fence" if moved else _restore_spec_hit(s, root, base, icase)) for s in live]
     what = f"git {n[1]} từ `{rev}`"
@@ -15464,9 +15433,7 @@ PYCACHE_ENV_RE = re.compile(r"PYTHONPYCACHEPREFIX=(.+)")
 
 
 def _checkout_index_targets(args: List[str]) -> List[str]:
-    """`git checkout-index [--prefix=P] [path…]` ghi `P` + đường dẫn trong chỉ mục (nối CHUỖI, không nối thư mục):
-    đích là P, từng P+path, và `.autopilot` khi P là tiền tố chữ của nó (`--prefix=.auto` + path `pilot/…`) — AUD-SEC-074
-    (`--prefix=.autopilot/…` từng ghi file vào vùng rào mà guard không thấy)."""
+    """AUD-SEC-074: nối chuỗi prefix và path, xét cả prefix chưa đủ tên `.autopilot`."""
     vals = _flag_values(args, ("--prefix",))
     prefix = vals[-1] if vals else ""
     pos = _positionals(args, ("--prefix",))
@@ -15484,9 +15451,7 @@ GIT_WRITERS: Dict[str, Callable[[List[str]], List[str]]] = {
 
 
 def _pycache_targets(n: List[str], argv: List[str]) -> List[str]:
-    """Thư mục bytecode mà Python sẽ ghi: `-X pycache_prefix=P`/`-Xpycache_prefix=P`, `PYTHONPYCACHEPREFIX=P` (gán đầu
-    lệnh, `env`, `export`) — AUD-SEC-074. Hook không còn nạp bytecode từ cache (review PR #182) nên đây chỉ là một
-    đường ghi file như mọi đường khác: prefix trỏ vào vùng rào (`.autopilot/`, hook, cổng) vẫn là ghi tay vào đó."""
+    """AUD-SEC-074: `-X pycache_prefix=P` và `PYTHONPYCACHEPREFIX=P` ghi bytecode dưới P."""
     out = [m.group(1) for t in argv if (m := PYCACHE_ENV_RE.fullmatch(t))]
     if n and INTERP_RE.fullmatch(n[0]):
         xs = [n[i + 1] for i, a in enumerate(n[:-1]) if a == "-X"] + [a[2:] for a in n if a.startswith("-X")]
@@ -15547,28 +15512,20 @@ def _commit_flag_args(args: List[str]) -> List[str]:
     return out
 
 
-# Hàng rào của harness (AUD-SEC-046): Bash ghi đè/xoá/dời = gỡ hàng rào mà không để lại diff đọc được → chặn. Sửa hook
-# bằng Edit/Write vẫn được (ADR-0018: sửa cấu hình hook cho chạy, nêu lý do); khôi phục bằng `git checkout -- <file>`.
-# AUD-SEC-987: `.codex/hooks.json` nối guard cho Codex CLI (ADR-0082) — gỡ nó là tắt hook như gỡ `.claude/settings.json`.
-# AUD-SEC-989: tệp nối guard `install.py --harness` cài cho host khác (ADR-0064 lát B) như `.codex/hooks.json`; Gemini
-# gộp hook vào `.gemini/settings.json` (cấu hình + hook trong một tệp, như `.claude/settings.json`). Thư mục: cha và ông
-# của tệp nối — trừ `.github` (workflow/ruleset dùng hằng ngày: chỉ rào `.github/hooks`). Tệp/thư mục của host khác chỉ
-# là hàng rào khi tệp nối CÓ THẬT lúc xét (`_fence_entry_live`): dự án không cài adapter đó không có gì để bảo vệ, không
-# bị chặn thêm; xoá tệp nối ở lệnh trước trong cùng lệnh ghép tự nó bị chặn. `.claude/*`, `.codex/hooks.json`: luôn rào.
+# ADR-0018/AUD-SEC-046/987/989: Bash giữ hàng rào Claude/Codex và các adapter đã cài. Edit/Write vẫn sửa được cấu hình.
 LEGACY_FENCE_FILES = (".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json")
 LEGACY_FENCE_PATTERNS = (".claude/hooks/*", *LEGACY_FENCE_FILES)
 LEGACY_FENCE_DIRS = frozenset({".claude", ".claude/hooks", ".codex"})
 ADAPTER_FENCE_FILES: Tuple[str, ...] = (".cursor/hooks.json", ".github/hooks/xt.json", ".grok/hooks/xt.json")
 ADAPTER_FENCE_FILES += (".opencode/plugins/xt.ts", ".gemini/settings.json")
-# thư mục rào của host khác → tệp nối nằm dưới nó
 ADAPTER_FENCE_DIRS: Dict[str, Tuple[str, ...]] = {
     d: tuple(f for f in ADAPTER_FENCE_FILES if f.startswith(d + "/"))
     for d in (".cursor", ".github/hooks", ".grok", ".grok/hooks", ".opencode", ".opencode/plugins", ".gemini")
 }
 FENCE_FILES = (*LEGACY_FENCE_FILES, *ADAPTER_FENCE_FILES)
-FENCE_PATTERNS = (".claude/hooks/*", *FENCE_FILES)
 FENCE_DIRS = {*LEGACY_FENCE_DIRS, *ADAPTER_FENCE_DIRS}
 FENCE_WHY = "ghi/xoá hàng rào qua Bash ({}) — tắt hook của khung; sửa bằng Edit/Write, khôi phục bằng git checkout"
+CLI_CACHE_WHY = "ghi/xoá bytecode của CLI ({}) — tắt hook của khung qua cache của mô-đun"
 
 
 PERM_CMDS = ("chmod", "chown", "chgrp", "chattr", "setfacl")
@@ -15590,8 +15547,7 @@ def _fence_entry_live(k: str, root: str) -> bool:
 
 
 def _fence_glob(target: str, root: str) -> bool:
-    """Glob (`.claude/*/guard.py`) shell nở ra file hàng rào — so theo đoạn như shell: `*` không qua `/`, không khớp
-    dotfile (T-3532). Mục của host khác chỉ tính khi tệp nối có thật (`rm -rf .github/*` ở dự án không cài Copilot)."""
+    """T-3532: glob shell theo đoạn, giữ quy tắc dotfile và chỉ tính adapter đang có hiệu lực."""
     pat = _rel_dir(target, root).split("/")
     if not set("".join(pat)) & set("*?["):
         return False
@@ -15607,6 +15563,37 @@ def _fence_glob(target: str, root: str) -> bool:
     )
 
 
+CLI_CACHE_SUFFIXES = ("__pycache__", "xt_app/__pycache__", "xt_checks/__pycache__")
+
+
+def _cli_cache_dirs(root: str) -> Tuple[str, ...]:
+    """AUD-HAR-573: dùng ưu tiên CLI của hook. Chỉ miễn scripts ứng dụng khi xác nhận CLI đã cài tại chỗ."""
+    if not root:
+        return ()
+    base = os.path.realpath(root)
+    installed = os.path.join(base, ".xtemplates/scripts/xt.py")
+    local = os.path.isfile(installed) and os.path.realpath(installed) == installed
+    frame = os.path.lexists(os.path.join(base, "framework/00-method/README.md"))
+    prefixes = (".xtemplates/scripts",) if local and not frame else (".xtemplates/scripts", "scripts")
+    return tuple(f"{p}/{s}" for p in prefixes for s in CLI_CACHE_SUFFIXES)
+
+
+def _cli_cache_candidates(root: str) -> Tuple[List[str], Set[str]]:
+    listings = {d: _outside_names(os.path.join(root, d)) for d in _cli_cache_dirs(root)}
+    paths = [*listings, *(f"{d}/{f}" for d, names in listings.items() for f in names or [])]
+    return paths, {d for d, names in listings.items() if names is None}
+
+
+def _cli_cache_fence(target: str, rel: str, root: str, parents: bool = False) -> bool:
+    mentions_cache = "__pycache__" in target or "__pycache__" in rel or GLOB_RE.search(rel)
+    if not root or not target or not (parents or mentions_cache):
+        return False
+    literal = posixpath.relpath(os.path.join(root, target), root)
+    paths = [p.split("/") for p in (literal, rel)]
+    caches = [d.split("/") for d in _cli_cache_dirs(root)]
+    return any((parents or len(p) >= len(d)) and all(map(fnmatch.fnmatchcase, d, p)) for d in caches for p in paths)
+
+
 def _is_fence(target: str, root: str) -> bool:
     if not target or _norm_path(target).startswith("/dev/"):  # `/dev/../<gốc>/…` không phải thiết bị (AUD-SEC-511)
         return False
@@ -15616,6 +15603,12 @@ def _is_fence(target: str, root: str) -> bool:
     if rel in ADAPTER_FENCE_DIRS and _fence_entry_live(rel, root):
         return True
     return _match_any(rel, ADAPTER_FENCE_FILES) and _adapter_live(rel, root) or _fence_glob(target, root)
+
+
+def _fence_why(target: str, root: str, label: str = "") -> str:
+    if _is_fence(target, root):
+        return FENCE_WHY.format(label or target)
+    return CLI_CACHE_WHY.format(label or target) if _cli_cache_fence(target, _rel_dir(target, root), root) else ""
 
 
 def _at(target: str, cwd: Optional[str]) -> str:
@@ -15643,9 +15636,7 @@ def _resolve_target(t: str, root: str, cwd: Optional[str]) -> str:
     return _at(t, cwd)
 
 
-# D-106: thư mục đang đứng không biết (`cd "$X"`, `cd -`, `pushd +1`, `popd`, CDPATH) → đích tương đối thử ở gốc và
-# mọi thư mục canh. Ở thư mục canh chỉ tính khi file đã có hoặc tên là tên được canh ở đó — `cd "$X" && echo > a.txt`
-# không bị chặn chỉ vì `.claude/hooks/a.txt` khớp mẫu `.claude/hooks/*`.
+# D-106: cwd mơ hồ thì thử ở gốc và trong thư mục canh khi tên có thật hoặc nằm trong tập tên rào.
 GIT_HOOK_NAMES = frozenset(
     "applypatch-msg pre-applypatch post-applypatch pre-commit pre-merge-commit prepare-commit-msg commit-msg post-commit "
     "pre-rebase post-checkout post-merge pre-push pre-receive update proc-receive post-receive post-update "
@@ -15669,8 +15660,7 @@ UP_LEAD_RE = re.compile(r"^(?:\.\.(?:/|$))+")  # `..` đầu đường đã chu�
 
 
 def _where(t: str, root: str, cwd: Optional[str]) -> List[str]:
-    """Các đích có thể của `t`: thư mục biết → một đích (`_resolve_target`); không biết (None) → gốc dự án cộng thư mục
-    canh nào có file đó hoặc tên được canh (D-106). `~-/x`, `$OLDPWD/x` = `x` ở thư mục không biết (AUD-SEC-097)."""
+    """Các đích có thể của t. `~-`/`$OLDPWD` dùng cwd mơ hồ (AUD-SEC-097)."""
     old = OLDPWD_REF_RE.match(t)
     if old:
         return _where(t[old.end() :].lstrip("/") or ".", root, None)
@@ -15687,11 +15677,9 @@ def _where(t: str, root: str, cwd: Optional[str]) -> List[str]:
     return _unknown_where(t, root)
 
 
-# AUD-SEC-521: fd mở trên THƯ MỤC (`exec 3< d`, `{fd}< d`, `< d`) — `/dev/fd/3/f` là `d/f` (kernel theo liên kết của fd
-# rồi đi tiếp). Tiền tố fd giải theo chữ như AUD-SEC-511 (`/dev/./fd/3`, `//dev/fd/3`, `/dev/../dev/fd/3`).
+# AUD-SEC-521: fd mở trên thư mục, `/dev/fd/3/f` có thể là `d/f`. Chuẩn hoá tiền tố fd theo chữ (AUD-SEC-511).
 FD_DIR_RE = re.compile(r"/dev/(?:fd/\d+|std(?:in|out|err))|/proc/[^/]+/fd/\d+")
-# Đích của `<` (không `<<`, `<<<`, `<>`, `<&`, `<(`) trong chữ lệnh, kể cả lệnh lồng: nguyên văn, có nháy hay không;
-# không phân theo số fd (`4<&3` sao chép, `{fd}<` không biết số) — mọi thư mục mở là ứng viên cho mọi `/dev/fd/N/…`.
+# Đích nguyên văn của `<`, kể cả lệnh lồng. Mọi thư mục mở đều là ứng viên vì fd có thể được sao chép.
 FD_OPEN_RE = re.compile(r"(?<!<)<(?![<>&(])[ \t]*(?:'([^']*)'|\"([^\"$`\\]*)\"|([^\s;&|()<>`$'\"\\]+))")
 FD_DIRS: contextvars.ContextVar[Tuple[str, ...]] = contextvars.ContextVar("FD_DIRS", default=())
 
@@ -15718,8 +15706,7 @@ def _fd_dir_tail(path: str) -> Optional[str]:
 
 
 def _subst_tail(t: str) -> Optional[str]:
-    """Phần sau các thay lệnh `$(…)`/`` `…` `` đứng đầu đích `t` (không số học `$((`); không mở đầu bằng thay lệnh hay
-    thay lệnh không đóng → None. Guard không biết chữ thay lệnh in ra: rỗng thì đích là đuôi (AUD-SEC-612)."""
+    """Đuôi sau các thay lệnh đã đóng đứng đầu t (AUD-SEC-612)."""
     i = 0
     while t.startswith(("$(", "`"), i) and not t.startswith("$((", i):
         end = t.find("`", i + 1) + 1 if t[i] == "`" else _raw_group_end(t, i + 2, "(")
@@ -15730,9 +15717,7 @@ def _subst_tail(t: str) -> Optional[str]:
 
 
 def _fd_where(t: str, root: str, cwd: Optional[str]) -> List[str]:
-    """`t` dưới thư mục mở trên fd (AUD-SEC-521): đuôi ở thư mục không biết (D-106), ở mọi thư mục mở bằng `<` trong
-    lệnh (`FD_DIRS`), và — khi đuôi leo bằng `..` — ở gốc hệ thống; `t` khác giữ nguyên. Thư mục mở chỉ ghép một tầng
-    (`exec 3< /dev/fd/3` không lặp vô hạn)."""
+    """AUD-SEC-521: đuôi dưới fd thử ở cwd mơ hồ, mỗi thư mục mở bằng `<` và `/` khi leo bằng `..`."""
     tail = _fd_dir_tail(t)
     if tail is None:
         return [t]
@@ -15757,6 +15742,9 @@ def _unknown_where(t: str, root: str) -> List[str]:
             p = posixpath.normpath(posixpath.join(root, d, x))
             if os.path.lexists(p) or x.split("/", 1)[0] in names:
                 out.append(p)
+        if "__pycache__" in x or x.endswith(".pyc") or GLOB_RE.search(x):
+            for d in _cli_cache_dirs(root):
+                out.append(posixpath.join(root, posixpath.dirname(d) if "__pycache__" in x else d, x))
     return out
 
 
@@ -15774,7 +15762,7 @@ def _perm_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> 
     """Đổi quyền git hook/hàng rào (`chmod 000 guard.py` → hook fail-open); đích từ xargs/file → chặn."""
     pos = _positionals(n[1:], PERM_VALUE_FLAGS if n[0] in PERM_CMDS[3:] else ())  # chmod: `-x` là mode
     asks = [GIT_HOOK_WHY.format(t) for t in pos if any(_git_hook_target(x, root) for x in _where(t, root, cwd))]
-    asks += [FENCE_WHY.format(t) for t in pos if any(_is_fence(x, root) for x in _where(t, root, cwd))]
+    asks += [why for t in pos if (why := next((w for x in _where(t, root, cwd) if (w := _fence_why(x, root, t))), ""))]
     hidden = _xargs_wrapped(argv) or any(a.split("=")[0] == "--restore" for a in n)
     return asks + ([PERM_NO_TARGET_WHY] if hidden else [])
 
@@ -15806,7 +15794,7 @@ def _write_asks(
     targets += _glob_targets(targets, root, cwd)  # T-3954 C2
     found = [x for t in find_evidence for x in _where(t, root, cwd) if t not in targets]
     asks += [EVIDENCE_WHY.format(t) for t in found if _target_kind(t, root) == "evidence"]
-    asks += [FENCE_WHY.format(t) for t in found if _is_fence(t, root)]
+    asks += [why for t in found if (why := _fence_why(t, root))]
     # AUD-SEC-424: ghi THÔ `>> ~/.gitconfig` (`git config -f ~/.gitconfig <khoá>` do luật khoá của git config xét)
     # review #431: cả đích đã giải theo thư mục đang đứng (`cd /etc && >> gitconfig`), như vòng `.git/config` dưới đây
     # AUD-SEC-435: cả realpath của đích (symlink tên trung tính `lnk` -> `~/.gitconfig` có sẵn lúc kiểm)
@@ -15831,6 +15819,7 @@ def _write_asks(
         set(_where(cfg, root, cwd)) if cfg and cfg not in write_targets(n, argv) and not _git_config_edit(n) else set()
     )
     asks += _target_asks(targets, root, cwd, keyed)
+    asks += _cli_cache_tree_asks(n, argv, root, cwd)
     restored = [(t, _target_kind(x, root)) for t in _git_file_targets(n) for x in _where(t, root, cwd)]
     asks += [
         f"ghi file bí mật qua Bash (git lấy từ commit khác): {t}"
@@ -15853,8 +15842,8 @@ def _target_asks(targets: List[str], root: str, cwd: Optional[str], keyed: Set[s
     for target in (x for t in targets for x in _where(t, root, cwd)):
         _tick()
         kind = _target_kind(target, root)
-        if _is_fence(target, root):
-            asks.append(FENCE_WHY.format(target))
+        if fence := _fence_why(target, root):
+            asks.append(fence)
         elif target and (_git_hook_target(target, root, target in keyed) or _git_written(target, keyed, root, cwd)):
             asks.append(GIT_HOOK_WHY.format(target))
         elif kind == "secret":
@@ -16146,8 +16135,8 @@ def _fence_argv_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str
         if not FENCE_PATH_RE.fullmatch(p) or p[:1] == "-" or not p.strip("./"):
             continue
         for x in [*_where(p, root, cwd), *_real_targets(p, root, cwd), *_glob_targets([p], root, cwd)]:
-            if _is_fence(x, root):
-                out.append(FENCE_WHY.format(x))
+            if fence := _fence_why(x, root):
+                out.append(fence)
             elif _git_written(x, set(), root, cwd):
                 out.append(GIT_HOOK_WHY.format(x))
             elif _target_kind(x, root) == "evidence":
@@ -16155,14 +16144,8 @@ def _fence_argv_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str
     return list(dict.fromkeys(out))
 
 
-# AUD-SEC-990: giải nén có thành viên/mẫu nêu trên dòng lệnh (tar/gtar/bsdtar, unzip, 7z, cpio -i, pax -r, ar x, jar x)
-# ghi `thư mục giải nén/thành viên` — phủ tệp/thư mục hàng rào (là, nằm trong, tổ tiên của tệp hàng rào; gốc hay tổ tiên
-# của gốc) → như ghi hàng rào qua Bash. Thành viên so như glob (`*` qua `/`, khớp dotfile — unzip/cpio/bsdtar/`tar
-# --wildcards`), không phân hoa thường (FS macOS, `unzip -C`, `tar --ignore-case`) — chiều chặt. Ranh giới (giữ nền):
-# không nêu thành viên (cả `-T`/`--files-from` tệp, tên từ ống, thành viên hoàn toàn động `"$M"`) — nội dung archive
-# guard không đọc, cùng lớp với `cp -r src/. .`/`rsync -a src/ .`; loại trừ (`--exclude`, `unzip -x`) không bớt phạm vi.
-# AUD-SEC-992: đường đích của thành viên qua CÙNG bộ kiểm đích ghi của `cp` (`_target_asks`: bằng chứng, hook/cấu hình
-# git, bí mật, cổng, …) — `tar -xf a.tar .autopilot/state.json` ra quyết định như `cp x .autopilot/state.json`.
+# AUD-SEC-990/992: xét từng đích của thành viên archive được nêu. Glob qua `/` và dotfile, không phân hoa thường.
+# Tên từ tệp/ống, tên hoàn toàn động và cả gói không đọc nội dung. Loại trừ không thu hẹp phạm vi xét.
 FENCE_EXTRACT_TAG = "(AUD-SEC-990)"
 EXTRACT_DYN_RE = re.compile(r"\$\{[^}]*\}|\$\([^)]*\)|`[^`]*`|\$\w+")
 SEVEN_ZIP_INCLUDE_RE = re.compile(r"-i(?:r[-0]?)?!(.+)", re.I)  # `-i!mẫu`, `-ir!mẫu` (7-Zip cmdline/switches/include)
@@ -16301,15 +16284,14 @@ def _whole_prefix(pat: str) -> Optional[str]:
 def _extract_covers(p: str, root: str, names: List[str]) -> bool:
     """Đường/mẫu tuyệt đối `p` mà giải nén ghi phủ hàng rào: `_is_fence`, hay khớp (fnmatch, không phân hoa thường)/là
     tổ tiên của một mục trong `names` (tệp hàng rào, tổ tiên của chúng, gốc và tổ tiên của gốc)."""
-    if _is_fence(p, root):
+    if _fence_why(p, root):
         return True
     pat = p.casefold()
     return any(fnmatch.fnmatchcase(x, pat) or x.startswith(pat.rstrip("/") + "/") for x in names)
 
 
 def _fence_extract_hit(pairs: ExtractPairs, mode: Set[str], root: str, cwd: Optional[str]) -> str:
-    """Thành viên đầu tiên mà đường đích phủ hàng rào (glob, tổ tiên, gốc, không phân hoa thường — `_extract_covers`);
-    thư mục giải nén động (`-C "$D"`) có thể là gốc. Mỗi thư mục/thành viên giải một lần, dừng ở lần trúng đầu."""
+    """Thành viên đầu tiên phủ hàng rào. Thư mục giải nén động có thể là gốc."""
     names = [posixpath.join(root, f).casefold() for f in _restore_fence_names(root)]
     names += [(root.rsplit("/", k)[0] or "/").casefold() for k in range(root.count("/") + 1)]
     bases: Dict[str, List[str]] = {}
@@ -16334,9 +16316,7 @@ def _extract_targets(pairs: ExtractPairs, mode: Set[str]) -> List[str]:
 
 
 def _extract_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> List[str]:
-    """AUD-SEC-990/992: câu hỏi cho lệnh giải nén có thành viên nêu trên dòng lệnh — đường đích qua bộ kiểm đích ghi của
-    `cp` (`_target_asks`, cấu hình git toàn cục, dotfile nhà) và luật phủ hàng rào (`_fence_extract_hit`). Mọi câu hỏi
-    mang `FENCE_EXTRACT_TAG`: luật mới không thay lỗi tập con (BUDGET) của nền thành ask ở strict."""
+    """AUD-SEC-990/992: xét đích ghi và hàng rào. `FENCE_EXTRACT_TAG` giữ BUDGET ở strict."""
     pairs, mode = _extract_pairs(n)
     if X_RENAMED in mode:
         return [FENCE_WHY.format(f"giải nén `{n[0]}` đổi tên thành viên bằng mẫu {FENCE_EXTRACT_TAG}")]
@@ -16554,8 +16534,7 @@ def _go_patch_state(argv: List[str], cands: Cands, match: Callable[[str], bool] 
 
 
 def _prod_patch_asks(cmd: str, placed: List[Tuple[List[str], Cands]]) -> List[str]:
-    """AUD-SEC-804: `patch`/`git apply`/`git am` với tệp diff đọc được có header `DECISIONS*.md` → BUDGET (diff mờ —
-    stdin, tệp chưa có — do lớp danh sách trắng `_patch_file_why`)."""
+    """AUD-SEC-804: diff có `DECISIONS*.md` → BUDGET. Diff mơ hồ do `_patch_file_why` xử lý."""
     if not PATCH_WORD_RE.search(cmd):
         return []
     return [
@@ -16577,15 +16556,12 @@ def _go_diff_state(src: str, here: Optional[str], am: bool, match: Callable[[str
     return GO_DIFF_TOUCHES if any(match(p) for p in _patch_header_paths(text)) else GO_DIFF_CLEAR
 
 
-# sổ giai đoạn và thư mục tổ tiên của nó (`docs/autopilot`, `docs`)
 LEDGER_PATHS = tuple(
     dict.fromkeys("/".join(parts[:end]) for parts in LEDGER_COMPONENTS for end in range(1, len(parts) + 1))
 )
 
 
 def _ledger_hit(rel: str) -> bool:
-    """`rel` (có thể là glob, khớp từng cấp như shell — `docs/*` gồm `docs/autopilot`, `docs/*.md` thì không) là sổ giai
-    đoạn hay thư mục tổ tiên của nó: xoá/dời/khôi phục/chép đè là ghi tay sổ (AUD-HAR-154)."""
     parts = rel.split("/")
     return any(
         len(p.split("/")) == len(parts) and all(map(fnmatch.fnmatchcase, p.split("/"), parts)) for p in LEDGER_PATHS
@@ -16593,8 +16569,6 @@ def _ledger_hit(rel: str) -> bool:
 
 
 def _removed_targets(n: List[str]) -> List[str]:
-    """Đích bị xoá/dời đi/ghi đè cả cây: `rm`/`unlink`/`shred`, nguồn của `mv`/`git mv`, `git rm`, `find … -delete`,
-    pathspec của `git checkout <rev> --`/`git restore -s`."""
     name, args = (n[0], n[1:]) if n else ("", [])
     if name == "git" and args[:1] in (["rm"], ["mv"]):
         pos = _positionals(args[1:])
@@ -16607,9 +16581,46 @@ def _removed_targets(n: List[str]) -> List[str]:
     return _find_ledger_roots(args) if name == "find" else _git_file_targets(n)
 
 
+def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> List[str]:
+    if n[:1] == ["find"]:
+        roots, i = _find_parts(n[1:])
+        expr = n[i + 1 :]
+        execs = _find_exec_argvs(expr)
+        writes = any(a and posixpath.basename(a[0]) not in FIND_READONLY_EXEC for a in execs)
+        if not writes and "-delete" not in expr:
+            return []
+        action = next(j for j, word in enumerate(expr) if word == "-delete" or word in FIND_EXEC)
+        single_exec = len(execs) == 1 and action + len(execs[0]) + 2 == len(expr) and str(expr[-1]) in FIND_EXEC_END
+        filters = [*expr[:action], "-print0"] if expr[action:] == ["-delete"] or single_exec else None
+        paths, uncertain = _cli_cache_candidates(root)
+        check = _find_traversal_check(n[1 : i + 1], expr) if paths else None
+        for start in roots:
+            for x in _where(start, root, cwd):
+                if check is not None and check(os.path.join(root, x)):
+                    return [CLI_CACHE_WHY.format(start)]
+                rel = _rel_dir(x, root)
+                reach = {
+                    p: posixpath.normpath(posixpath.join(start, posixpath.relpath(p, rel)))
+                    for p in paths
+                    if p == rel or p.startswith(rel + "/") or rel == "."
+                }
+                if reach and (
+                    filters is None
+                    or uncertain.intersection(reach)
+                    or not _xargs_find_safe([start, *filters], list(reach.values()), extra_names=())
+                ):
+                    return [CLI_CACHE_WHY.format(start)]
+        return []
+    base = _git_path_dir(n, argv, cwd)
+    paths = [
+        t
+        for t in _removed_targets(n)
+        if any(_cli_cache_fence(x, _rel_dir(x, root), root, parents=True) for x in _where(t, root, base))
+    ]
+    return list(map(CLI_CACHE_WHY.format, paths))
+
+
 def _find_ledger_roots(args: List[str]) -> List[str]:
-    """Gốc của `find … -delete` có thể trúng sổ: không bộ lọc tên, bộ lọc phủ định, hay mẫu tên/đường khớp một cấp của sổ
-    (`-name '*.json'`, `-path '*autopilot*'`) — `find docs -name evidence -delete` không đụng sổ."""
     expr = args[_find_parts(args)[1] :]
     vals = [expr[k + 1].lower() for k, a in enumerate(expr[:-1]) if a in FIND_NAME_TESTS]
     names = [p.rsplit("/", 1)[-1].lower() for p in LEDGER_PATHS]
@@ -16619,16 +16630,10 @@ def _find_ledger_roots(args: List[str]) -> List[str]:
 
 
 def _git_path_dir(n: List[str], argv: List[str], cwd: Optional[str]) -> Optional[str]:
-    """Thư mục mà pathspec của lệnh git tính từ: thư mục đang đứng qua các `-C` (`_git_dir`; không biết → None). Lệnh
-    khác git → `cwd`. `--work-tree` không xét (D-281): git khớp pathspec theo đường chỉ mục tính từ gốc cây, chưa có
-    mô hình đúng — giữ như trước (`cwd`)."""
     return _git_dir(argv, cwd) if n[:1] == ["git"] else cwd
 
 
 def _ledger_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> List[str]:
-    """Ghi tay sổ giai đoạn qua thư mục: xoá/dời thư mục tổ tiên (`rm -r docs/autopilot`, `git mv docs …`, cả qua
-    `git -C docs`), hay chép/dời/liên kết vào thư mục có sẵn mà tên nguồn là tên sổ (`cp x/STAGE.json
-    docs/autopilot/`) — AUD-HAR-154."""
     removed = dict.fromkeys(_removed_targets(n))  # đích trùng chỉ giải một lần (`realpath` tốn theo độ sâu thư mục)
     base = _git_path_dir(n, argv, cwd) if removed else cwd  # chỉ đọc `-C` khi có đích xoá/dời
     found = dict.fromkeys(x for t in removed for x in _where(t, root, base))
@@ -16641,8 +16646,7 @@ def _ledger_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -
 
 
 def _copy_into_positionals(n: List[str]) -> List[str]:
-    """Đối số vị trí của lệnh chép/dời VÀO thư mục có sẵn (nguồn…, đích): `cp`/`mv`/`install`/`ln`, cả `rsync`
-    (`rsync -a src/* docs/autopilot/` — AUD-SEC-340), `scp` đích cục bộ; `-t D` → (nguồn…, D); lệnh khác → rỗng."""
+    """Toán hạng nguồn rồi đích của cp/mv/install/ln, rsync và scp cục bộ (AUD-SEC-340)."""
     if n[:1] and n[0] in COPY_OPT_TABLES:
         t_dirs, pos, _ = _copy_opts(n[0], n[1:])
         return pos + t_dirs[-1:]
@@ -16652,8 +16656,7 @@ def _copy_into_positionals(n: List[str]) -> List[str]:
 
 
 def _copied_into(n: List[str], root: str, cwd: Optional[str]) -> List[str]:
-    """`đích/<tên nguồn>` khi lệnh chép/dời VÀO thư mục (đích kết `/` hay đã là thư mục): `cp -r X/.claude .` gộp đè
-    `./.claude` có sẵn — luật đích bảo vệ phải xét cả đường này, không chỉ `.` (AUD-SEC-470)."""
+    """AUD-SEC-470: `đích/<tên nguồn>` khi chép/dời vào thư mục hiện hữu hoặc đích kết bằng `/`."""
     pos = _copy_into_positionals(n)
     if len(pos) < 2 or REMOTE_SPEC_RE.match(pos[-1]):
         return []
@@ -16662,8 +16665,7 @@ def _copied_into(n: List[str], root: str, cwd: Optional[str]) -> List[str]:
 
 
 def _copied_names(n: List[str], src: str) -> List[str]:
-    """`_copied_name`; cp giữ đường thì CẢ tên cuối — `--parents` có thể đến từ viết tắt mơ hồ (`--p`: parents/preserve,
-    AUD-SEC-495) mà bản chạy thật hiểu khác."""
+    """Khi cp giữ đường, xét cả tên cuối vì `--p` có thể là `--preserve` (AUD-SEC-495)."""
     name = _copied_name(n, src)
     base = posixpath.basename(src.rstrip("/"))
     return [name] if n[:1] != ["cp"] or name == base else [name, base]
@@ -17102,14 +17104,12 @@ def _target_kind(target: str, root: str) -> str:
     return path_kind(rel, root) or ("gate" if _dir_holds_gate(rel, root) else "")
 
 
-# Thư mục NGOÀI dự án (`mv x /tmp`) đọc tối đa chừng này mục (D-097): /tmp ≈ 20k mục làm mỗi lệnh chậm ~2,5 s; thư mục
-# nhỏ hơn thì xét đủ như trong dự án, kể cả mẫu wildcard (`tsconfig*.json`) — strict vẫn hỏi `cp x OUT/ts/`.
+# D-097: giữ trần lượt đọc thư mục (`/tmp` có thể chứa hàng chục nghìn mục).
 OUTSIDE_SCAN_MAX = 256
 
 
 def _outside_names(d: str) -> Optional[List[str]]:
-    """Tên mục của thư mục ngoài dự án `d`; None khi quá OUTSIDE_SCAN_MAX mục hoặc không đọc được (chỉ kiểm tên đích
-    danh); không phải thư mục → rỗng."""
+    """Tên mục của d. None khi quá trần hoặc lỗi đọc. Đường ngoài thư mục cho danh sách rỗng."""
     if not os.path.isdir(d) or os.path.islink(d):
         return []
     names: List[str] = []
@@ -21733,7 +21733,7 @@ def _interp_literal_ask(
         # tên sổ giai đoạn đứng riêng (`Path("docs/autopilot", "STAGE.json")`, `os.path.join(…, "STAGE.json")`) như
         # đường đủ — AUD-SEC-340
         kind = "evidence" if _ledger_tail(lit, script) else kind
-        fence = _is_fence(target, root)
+        fence = _fence_why(target, root, lit)
         git_hook = (
             _gitfile_target(target, root)
             or _global_git_config(target)
@@ -21751,7 +21751,7 @@ def _interp_literal_ask(
         if not (direct or not ro):
             continue
         if fence:
-            return FENCE_WHY.format(f"{lit} — {how}")
+            return fence.replace(lit + ")", f"{lit} — {how})", 1)
         if git_hook:  # AUD-SEC-083: như `>> .git/config`
             return GIT_HOOK_WHY.format(f"{lit} — {how}")
         if kind == "secret":  # AUD-SEC-049: dấu chặn như chuyển hướng, không chỉ hỏi

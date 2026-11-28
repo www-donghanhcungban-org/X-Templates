@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 import unittest
 import unittest.mock as mock
 from pathlib import Path
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
@@ -26,12 +28,39 @@ ATTR = "Claude-Session: x"  # dòng ghi công AI (`AI_ATTRIBUTION_RE`)
 ATTR_GLUED = "Claude-\"'Session: x'"  # bash ghép "Claude-" và "Session: x" qua hai kiểu nháy
 
 
-def decide(cmd: str) -> dict:
+def decide(cmd: str, root: Path = ROOT, cwd: Path | None = None) -> dict:
     with (
-        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(ROOT), "XT_GUARD_POLICY": ""}),
+        mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "XT_GUARD_POLICY": ""}),
         mock.patch.object(guard, "_current_branch", return_value="feat"),
     ):
-        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(ROOT)))
+        return guard.apply_policy(guard.bash_decision(cmd.replace("@H", H), str(root), str(cwd) if cwd else None))
+
+
+def cache_cleanup_projects(top: Path) -> tuple[Path, Path]:
+    frame, app = top / "frame", top / "app"
+    for root, rel in (
+        (frame, "framework/00-method/README.md"),
+        (frame, "scripts/xt.py"),
+        (frame, "scripts/__pycache__/sample.pyc"),
+        (app, ".xtemplates/scripts/xt.py"),
+        (app, "scripts/__pycache__/sample.pyc"),
+    ):
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    return frame, app
+
+
+def assert_cache_cleanup_layouts(
+    test: unittest.TestCase, classify: Callable[[str, Path], dict], commands: tuple[str, ...]
+) -> None:
+    """Giữ ca dọn cache trên app có CLI cài riêng và đối chứng với cache do khung sở hữu."""
+    frame, app = cache_cleanup_projects(Path(test.enterContext(tempfile.TemporaryDirectory())))
+    for command in commands:
+        with test.subTest(command=command):
+            allowed, denied = classify(command, app), classify(command, frame)
+            test.assertEqual(allowed["decision"], "", allowed)
+            test.assertEqual((denied["decision"], denied["code"]), ("deny", guard.BUDGET), denied)
 
 
 DENY = {
@@ -118,7 +147,6 @@ ALLOW = (
     "gh pr create --title 'fix: x' --body \"$(cat <<'EOF'\nbody\nEOF\n)\"",
     'gh pr view "$(git branch --show-current)"',
     "ls | xargs -I{} echo {}",
-    "find . -name '*.pyc' | xargs rm -f",
     "git ls-files | xargs git add",
     'tmp=$(mktemp); echo x > "$tmp"',
     'git push -u origin "$(git branch --show-current)"',
@@ -148,6 +176,97 @@ class DefaultDenyTest(unittest.TestCase):
             with self.subTest(cmd=cmd):
                 d = decide(cmd)
                 self.assertEqual(d["decision"], "", d.get("reason"))
+
+    def test_find_xargs_respects_cache_ownership(self):
+        top = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        frame, app = cache_cleanup_projects(top)
+        installed_cache = app / ".xtemplates/scripts/__pycache__"
+        installed_cache.mkdir()
+        (installed_cache / "sample.pyc").touch()
+        cleanup = "find . -name '*.pyc' | xargs rm -f"
+        (app / "scripts/installed-cache").symlink_to(installed_cache, target_is_directory=True)
+        self.assertEqual(decide(cleanup, app, app / "scripts")["decision"], "")
+        follows_links = cleanup.replace("find .", "find -L .", 1)
+        self.assertEqual(decide(follows_links, app, app / "scripts")["code"], guard.BUDGET)
+        for root in (frame, app):
+            with self.subTest(root=root):
+                decision = decide(cleanup, root)
+                self.assertEqual((decision["decision"], decision["code"]), ("deny", guard.BUDGET))
+
+    def test_find_cache_options_and_explicit_startpoints(self):
+        frame, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        installed_cache = app / ".xtemplates/scripts/__pycache__"
+        installed_cache.mkdir()
+        (installed_cache / "sample.pyc").touch()
+        (app / "scripts/installed-cache").symlink_to(installed_cache, target_is_directory=True)
+        for option in ("-P", "-H", "-O2", "-D search", "-D search -O2 -P", "-L -P", "--"):
+            with self.subTest(option=option):
+                find = f"find {option} scripts -name '*.pyc'"
+                self.assertEqual(decide(f"{find} | xargs rm -f", app)["decision"], "")
+                self.assertEqual(decide(f"{find} | xargs rm -f", frame)["code"], guard.BUDGET)
+        for root, start in ((app, app / "scripts"), (app, installed_cache.parent), (frame, frame / "scripts")):
+            with self.subTest(start=start):
+                find = f"find -P {start} -path '{start}/*' -name '*.pyc'"
+                result = decide(f"{find} | xargs rm -f", root, root / "scripts")
+                self.assertEqual(result["decision"], "" if start == app / "scripts" else "deny", result)
+        for start in ("-L scripts", "-H scripts/installed-cache"):
+            with self.subTest(start=start):
+                find = f"find {start} -name '*.pyc'"
+                self.assertEqual(decide(f"{find} | xargs rm -f", app)["code"], guard.BUDGET)
+                self.assertEqual(decide(f"{find} -delete", app)["code"], "HOOK_BYPASS")
+
+    def test_find_link_traversal_requires_bounded_readable_tree(self):
+        _, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        docs = app / "notes/adr"
+        below_maxdepth = docs / "archive"
+        below_maxdepth.mkdir(parents=True)
+        (docs / "draft.md").touch()
+        cli_cache = app / ".xtemplates/scripts/__pycache__"
+        cli_cache.mkdir()
+        (below_maxdepth / "cli-cache").symlink_to(cli_cache, target_is_directory=True)
+        source = "find -L notes -maxdepth 2 -path '*/adr/*.md'"
+        pipeline = f"{source} | xargs sed -i s/a/b/"
+        self.assertEqual(decide(pipeline, app)["decision"], "")
+        self.assertEqual(decide(f"{source} -delete", app)["decision"], "")
+        with mock.patch.object(guard, "OUTSIDE_SCAN_MAX", 1):
+            self.assertEqual(decide(pipeline, app)["code"], guard.BUDGET)
+            self.assertEqual(decide(f"{source} -delete", app)["code"], "HOOK_BYPASS")
+        (docs / "cli-cache").symlink_to(cli_cache, target_is_directory=True)
+        self.assertEqual(decide(pipeline, app)["code"], guard.BUDGET)
+        self.assertEqual(decide(f"{source} -delete", app)["code"], "HOOK_BYPASS")
+
+    def test_find_link_budget_is_shared_across_startpoints(self):
+        _, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        for name in ("notes", "guides"):
+            (app / name).mkdir()
+            (app / name / "draft.md").touch()
+        finder = "find -L {} -maxdepth 1 -name '*.md'"
+        for suffix, blocked in ((" -delete", "HOOK_BYPASS"), (" | xargs sed -i s/a/b/", guard.BUDGET)):
+            with (
+                self.subTest(suffix=suffix),
+                mock.patch.object(guard, "_outside_names", wraps=guard._outside_names) as scan,
+                mock.patch.object(guard, "_find_traversal_check", wraps=guard._find_traversal_check) as parse,
+            ):
+                reads, parses = [], []
+                for roots in ("notes", " ".join(["notes"] * 12)):
+                    self.assertEqual(decide(finder.format(roots) + suffix, app)["decision"], "")
+                    reads.append(sum(args == (str(app / "notes"),) for args, _ in scan.call_args_list))
+                    parses.append(parse.call_count)
+                    scan.reset_mock()
+                    parse.reset_mock()
+                self.assertGreater(reads[0], 0)
+                self.assertEqual(reads[0], reads[1])
+                self.assertGreater(parses[0], 0)
+                self.assertEqual(parses[0], parses[1])
+                physical = finder.format("notes").replace("-L", "-P", 1)
+                self.assertEqual(decide(physical + suffix, app)["decision"], "")
+                self.assertNotIn(mock.call(str(app / "notes")), scan.call_args_list)
+                for cap in (2, 3):
+                    with mock.patch.object(guard, "OUTSIDE_SCAN_MAX", cap):
+                        self.assertEqual(decide(finder.format("notes guides") + suffix, app)["code"], blocked)
+        (app / "inputs").write_bytes(b"notes\0")
+        from_file = "find -files0-from inputs -name '*.md' | xargs sed -i s/a/b/"
+        self.assertEqual(decide(from_file, app)["code"], guard.BUDGET)
 
     def test_value_class_is_budget_with_rewrite_hint(self):
         for cmd in (*DENY["a-value"][:10], DENY["b-runner"][2], *DENY["c-xargs"][2:5]):

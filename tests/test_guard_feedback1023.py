@@ -103,10 +103,7 @@ class WipeProjectRootTest(unittest.TestCase):
             ("rm -rf ./dist/", None),
             (f"rm -f {R}/foo.txt", None),
             ("rm foo.txt", None),
-            ("rm -rf scripts/__pycache__", None),
-            ("cd scripts && rm -rf __pycache__", None),
             (f"find {R}/build -delete", None),
-            (f"find {R}/scripts -name '*.pyc' -exec rm -f {{}} +", None),
         ):
             with self.subTest(cmd=cmd):
                 res = policy(cmd, cwd)
@@ -152,7 +149,6 @@ class WipeProjectRootTest(unittest.TestCase):
             (f"rm -rf {R}/*.pyc", None),
             (f"rm -rf {R}/*/node_modules", None),
             (f"rm -rf {R}/.github/*", None),
-            ("rm -rf scripts/__pycache__/*", None),
         ):
             with self.subTest(cmd=cmd):
                 self.assertEqual(policy(cmd, cwd)["decision"], "", cmd)
@@ -270,13 +266,10 @@ class WipeProjectRootTest(unittest.TestCase):
             ("find node_modules -delete", None),
             ("find /tmp/x -delete", None),
             ("find src -name '*.pyc' -delete", None),
-            ("find scripts -name '*.pyc' -exec rm -f {} +", None),
             ("find . -name '*.pyc'", None),  # không xoá/-exec
             ("find . -name '*.pyc' -print", None),
             ("git log --format=%s | grep -c find", None),
             ("finder -delete", None),  # không phải từ `find`
-            ("find . -name '*.pyc' -delete", f"{R}/scripts"),  # đứng ở thư mục con
-            ("find -name '*.pyc' -delete", f"{R}/scripts"),
             ("find build \\( -name '*.o' -o -name '*.a' \\) -delete", None),
             ("find build\necho -delete", None),  # điểm bắt đầu hết dòng
             # D-154: -exec chỉ đọc từ gốc được miễn
@@ -292,6 +285,36 @@ class WipeProjectRootTest(unittest.TestCase):
         ):
             with self.subTest(cmd=cmd):
                 self.assertEqual(policy(cmd, cwd)["decision"], "", cmd)
+
+    def test_guard_wipe_project_root_preserves_application_cache_cleanup(self):
+        """T-5098: những ca dọn scripts cũ phải đối chiếu quyền sở hữu cache theo từng bố cục."""
+        top = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        frame, app, partial = (top / name for name in ("frame", "app", "partial"))
+        for root, rel in (
+            (frame, "framework/00-method/README.md"),
+            (frame, "scripts/xt.py"),
+            (app, ".xtemplates/scripts/xt.py"),
+            (partial, ".xtemplates/VERSION"),
+            *((root, "scripts/__pycache__/sample.pyc") for root in (frame, app, partial)),
+        ):
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        for root, expected in ((frame, "deny"), (app, ""), (partial, "deny")):
+            for cmd, cwd in (
+                ("rm -rf scripts/__pycache__", None),
+                ("cd scripts && rm -rf __pycache__", None),
+                ("rm -rf scripts/__pycache__/*", None),
+                ("find scripts -name '*.pyc' -exec rm -f {} +", None),
+                (f"find {root}/scripts -name '*.pyc' -exec rm -f {{}} +", None),
+                ("find . -name '*.pyc' -delete", str(root / "scripts")),
+                ("find -name '*.pyc' -delete", str(root / "scripts")),
+            ):
+                with self.subTest(root=root.name, cmd=cmd, cwd=cwd):
+                    result = policy(cmd, cwd, str(root))
+                    self.assertEqual(result["decision"], expected, result)
+                    if expected:
+                        self.assertEqual(result["code"], "HOOK_BYPASS", result)
 
     def test_guard_wipe_project_root_tokenizer(self):
         """Lượt 4–5: tokenizer như trước 638f8c4 — `case find in (x) rm -rf ROOT;; esac` vẫn deny như HEAD~4."""
