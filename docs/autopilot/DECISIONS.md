@@ -1372,3 +1372,24 @@
 - Chọn: Áp hợp đồng P0 trên main, chạy test thật và giữ tách kết quả cục bộ, CI, môi trường đích.
 - Lý do (tiêu chí chất lượng cuối): Candidate đính kèm không truy cập được theo SHA và quyết định D-647/D-648 trên main thuộc việc khác. Đối chứng tập danh tính và policy độc lập tránh xanh giả. Bộ đo cục bộ dùng stdlib, giới hạn đầu vào và đối chiếu tập hợp.
 - Đường lùi: Hoàn tác từng lát checker; giữ khóa nghiệm thu cũ có lịch sử, dùng quy trình amend khi nâng phiên bản thay vì sửa sổ tay.
+
+### D-650 · 2026-11-28T18:36:45+00:00 · Sau khi đối chiếu bản nhận định ngoài ngày 28/11 (lite mode, đa host, MCP/Skills, earned autonomy), nâng cấp khung theo hướng nào trước?
+
+- Phương án: (1) Làm theo lộ trình ba pha của bản nhận định: lite mode mới, init --demo, chuyển skill sang chuẩn, adapter SDK, mức tự chủ mới, control plane. · (2) Chỉ làm phần kiểm lại còn thiếu thật: bước kế sau lệnh cài, trang chọn đường theo cỡ việc, test skill theo chuẩn, gương skill cho Gemini, khối autonomy tư vấn đọc từ sổ lát, mẫu issue, cập nhật ma trận host và adapter OpenCode 2.x.
+- Chọn: Chỉ làm phần kiểm lại còn thiếu thật: bước kế sau lệnh cài, trang chọn đường theo cỡ việc, test skill theo chuẩn, gương skill cho Gemini, khối autonomy tư vấn đọc từ sổ lát, mẫu issue, cập nhật ma trận host và adapter OpenCode 2.x.
+- Lý do (tiêu chí chất lượng cuối): Đo ở 44ee1f8 cho thấy sáu đề xuất đã có hoặc đã quyết (ADR-0012, 0055, 0064, 0068, 0082, 0093). Chỗ hở thật nằm sau lệnh cài (README 5 dòng, không bước kế), ở việc khung chưa tự kiểm skill và ở thang L0-L4 chưa có máy đọc. Phương án 2 nhỏ, đảo ngược được, không chạm guard.py và xt.py đang sát trần dòng.
+- Đường lùi: Mỗi task một PR, hoàn tác riêng; bỏ PLAN-approach-2026-11-28 nếu chủ dự án chọn lộ trình khác.
+
+### D-651 · 2026-11-28T18:36:51+00:00 · Có đưa Skills over MCP, adapter cho OpenAI Agents SDK và LangGraph, control plane, API ghép blueprint và hệ plugin vào lộ trình lúc này không?
+
+- Phương án: (1) Có: làm MCP server phân phối skill và adapter SDK ở pha 1, nền tảng ở pha 2 như bản nhận định đề xuất. · (2) Chưa: giữ skill dạng tệp làm nguồn duy nhất, ghi điều kiện mở lại cho từng mục trong research 2026-11-28 mục 7.2.
+- Chọn: Chưa: giữ skill dạng tệp làm nguồn duy nhất, ghi điều kiện mở lại cho từng mục trong research 2026-11-28 mục 7.2.
+- Lý do (tiêu chí chất lượng cuối): Tài liệu Claude Code đọc ngày 28/11 ghi MCP skills chưa hỗ trợ ở phiên cloud, claude -p, GitHub Actions và Agent SDK, là các chế độ khung chạy chính; skill MCP bỏ qua hooks và server ngoài connector không được quét. OpenAI Agents SDK và LangGraph không đọc AGENTS.md, SKILL.md hay tệp hook nên không có bề mặt dùng lại. Repo có 15 sao, 0 issue, chưa có người dùng nào chờ nền tảng. Claude Agent SDK đã nạp nguyên .claude theo mặc định.
+- Đường lùi: Mở lại từng mục khi điều kiện ở mục 7.2 xảy ra; quyết định này không xoá hay đổi mã nào.
+
+### D-652 · 2026-11-28T18:41:54+00:00 · Chủ dự án hỏi nâng trần PROGRESS.md lên 10 kB hay 100 kB được không; trả lời và làm gì?
+
+- Phương án: (1) Nâng PROGRESS_MAX_BYTES và trần của hook lên 10 240 hoặc 102 400 byte. · (2) Giữ 8 192 byte lúc này; mở task đổi cách nạp: hook SessionStart nạp theo ưu tiên mục và cắt mục Quyết định trước, đo trần bằng ký tự, kèm ADR mới.
+- Chọn: Giữ 8 192 byte lúc này; mở task đổi cách nạp: hook SessionStart nạp theo ưu tiên mục và cắt mục Quyết định trước, đo trần bằng ký tự, kèm ADR mới.
+- Lý do (tiêu chí chất lượng cuối): Tài liệu hook Claude Code đọc 2026-11-28: additionalContext trần 10 000 ký tự, vượt thì chỉ còn đường dẫn tệp và 2 000 ký tự đầu, không có cấu hình nào nâng. Đã thử 40 960 byte ở ADR-0089 và gây AUD-HAR-461 mức đỏ, ADR-0091 hạ lại. Đo hôm nay: additionalContext 7 989 ký tự, còn 1 811 ký tự tới 9 800 khi vòng tự động tắt; khi khối Autopilot đạt 2 400 ký tự thì ngân sách PROGRESS còn khoảng 6 600 ký tự, thấp hơn 7 294 ký tự hiện có, nên nâng số chỉ làm phần cuối bị cắt nhiều hơn.
+- Đường lùi: Không đổi mã ở quyết định này; bỏ T-5120 nếu chủ dự án chọn giữ nguyên cách nạp.
