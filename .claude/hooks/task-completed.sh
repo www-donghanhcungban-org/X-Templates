@@ -11,7 +11,7 @@ set -uo pipefail
 payload="$(cat)"
 command -v python3 >/dev/null 2>&1 || exit 0
 XT="$(xt_py)" || exit 0
-why="$(printf '%s' "$payload" | python3 -I -S -B -c '
+why="$(printf '%s' "$payload" | python3 -I -B -c '
 import json, re, sys
 from pathlib import Path
 

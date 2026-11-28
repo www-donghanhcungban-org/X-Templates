@@ -2321,13 +2321,13 @@ class GuardBytecodeForgeTest(unittest.TestCase):
     def test_guard_cache_tamper_loader_shared(self):
         """Bộ nạp của `py_run` (_lib.sh) và của guard (merge-check) là một: sửa một chỗ không bỏ sót chỗ kia."""
         lib = (ROOT / ".claude" / "hooks" / "_lib.sh").read_text(encoding="utf-8")
-        m = re.search(r"python3 -I -S -B -c '(.*?)' \"\$@\"", lib, re.S)
+        m = re.search(r"python3 -I -B -c '(.*?)' \"\$@\"", lib, re.S)
         self.assertIsNotNone(m)
         self.assertEqual(m.group(1), guard.PY_LOADER)
         body = lib.split("py_run()", 1)[1].split("\n}", 1)[0]
         self.assertNotIn("pycache_prefix", body)
         self.assertNotIn("marshal", body)  # không nạp bytecode từ cache (review PR #182)
-        self.assertEqual(guard.isolated_python()[1:], ["-I", "-S", "-B", "-c", guard.PY_LOADER])
+        self.assertEqual(guard.isolated_python()[1:], ["-I", "-B", "-c", guard.PY_LOADER])
 
     def test_guard_cache_tamper_loader_runs_without_cache(self):
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))

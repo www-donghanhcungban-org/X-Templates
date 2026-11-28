@@ -17,7 +17,7 @@ XT="$(xt_py)" || exit 0
 since="$(date -u +%Y-%m-%dT%H:%M:%S+00:00)"
 printf '%s' "$payload" | py_run "$XT" loop checkpoint >/dev/null 2>&1 || true
 # Chỉ in checkpoint ghi ở lần chạy này (`at` ≥ lúc bắt đầu): ghi hỏng (khoá bận…) thì checkpoint cũ sẽ dẫn sai chỗ.
-python3 -I -S -c '
+python3 -I -c '
 import json, re, sys
 root, since = sys.argv[1], sys.argv[2]
 try:

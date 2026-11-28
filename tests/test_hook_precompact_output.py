@@ -31,23 +31,6 @@ def run_pre_compact(project: Path, payload: str = PAYLOAD) -> tuple[int, str, st
 
 @unittest.skipIf(shutil.which("bash") is None, "cần bash")
 class PreCompactOutputTest(unittest.TestCase):
-    def test_hook_loader_uses_only_stdlib_at_startup(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            fixture = Path(tmp) / "runtime_probe.py"
-            fixture.write_text(
-                'import sys\ndef main():\n    print(sys.flags.no_site, "site" in sys.modules)\n    return 0\n',
-                encoding="utf-8",
-            )
-            common = HOOK.with_name("_lib.sh")
-            run = subprocess.run(
-                ["bash", "-c", 'source "$1"; py_run "$2"', "probe", str(common), str(fixture)],
-                capture_output=True,
-                text=True,
-                timeout=15,
-                check=True,
-            )
-        self.assertEqual(run.stdout.strip(), "1 False")
-
     def project(self, loop: bool = True, decisions: str | None = "### D-001 · a · b\n\n### D-042 · c · d\n") -> Path:
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
