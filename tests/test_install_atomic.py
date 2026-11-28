@@ -78,6 +78,12 @@ class WriteBytesAtomicTest(TestCase):
                 self.assertEqual(stat.S_IMODE(manifest.stat().st_mode), 0o600)
         self.assertFalse(install.legacy_manifest_complete(b'{"not-complete"'))
         self.assertFalse(install.legacy_manifest_complete(b"[1]"))
+        manifest.unlink()
+        manifest.mkdir()
+        legacy.mkdir()
+        (legacy / "harness.sha256.json").write_bytes(source)
+        install.migrate_legacy(self.tmp)
+        self.assertTrue(manifest.is_dir())
 
     def test_legacy_manifest_survives_partial_write_and_retry(self) -> None:
         legacy = self.tmp / install.LEGACY_DIR
