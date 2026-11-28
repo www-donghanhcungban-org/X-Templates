@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Phép kiểm AUD-HAR-579 đối chiếu danh sách ứng viên tên và điểm dừng của bộ đọc đối số bằng dữ liệu thuần. Adapter guard chỉ trả quyết định cuối. Gate: `python3 -m unittest tests.test_guard_tag_glob_oracle`.",
+   "ids": ["AUD-HAR-579"]
+  },
+  {
    "reason": "Corpus kiểm quyết định của guard. Ca này kiểm cờ khởi động của tiến trình qua hook PreCompact và việc nạp thư viện trong tiến trình con merge-check qua tests.test_hook_precompact_output.PreCompactOutputTest.test_checkpoint_and_renderer_start_without_site và tests.test_guard_audit1019.StdlibGuardChildTest.",
    "ids": ["AUD-HAR-572"]
   },
