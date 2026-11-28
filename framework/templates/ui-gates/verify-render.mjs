@@ -110,15 +110,28 @@ const measure = (el, nested) => {
   const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
   const lum = ([r, g, b]) => { const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
   const up = (n) => n.assignedSlot || n.parentElement || n.getRootNode().host || null;
-  // Slot đã có nội dung gán thì phần dự phòng (con của slot) không được vẽ.
-  const kids = (n) => n.localName === 'slot' && n.assignedElements().length ? n.assignedElements() : [...(n.shadowRoot ? n.shadowRoot.children : n.children)];
-  const hasText = (n) => [...n.childNodes].some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
+  // Slot có nội dung gán, kể cả nút chữ, thì phần dự phòng không được vẽ.
+  const flatKids = (n) => {
+    const assigned = n.localName === 'slot' ? n.assignedNodes() : [];
+    return assigned.length ? assigned : [...(n.shadowRoot || n).childNodes];
+  };
+  const hasText = (n) => flatKids(n).some((c) => c.nodeType === Node.TEXT_NODE && c.textContent.trim());
   // `display: contents` (kể cả slot mặc định) không có hộp nên checkVisibility trả false: xét theo cha trong cây phẳng.
   const shown = (n) => n === el || (getComputedStyle(n).display === 'contents' ? shown(up(n)) : n.checkVisibility({ opacityProperty: true, visibilityProperty: true }));
   const nodes = [el];
-  for (let i = 0; i < nodes.length && nodes.length < 200; i++) nodes.push(...kids(nodes[i]).slice(0, 200 - nodes.length));
+  let unmeasured;
+  for (let i = 0; i < nodes.length; i++) {
+    const children = flatKids(nodes[i]).filter((n) => n.nodeType === Node.ELEMENT_NODE);
+    const remaining = 200 - nodes.length;
+    nodes.push(...children.slice(0, remaining));
+    if (children.length > remaining) {
+      unmeasured = 'còn phần tử con ngoài giới hạn đo tương phản';
+      break;
+    }
+  }
   const visible = nodes.filter(shown);
   const readings = visible.filter((n) => n === el || hasText(n)).map((n) => [n, null]);
+  if (visible.length > 50) unmeasured ??= 'còn phần tử chưa xét nội dung giả';
   for (const node of visible.slice(0, 50)) {
     for (const pseudo of ['::before', '::after']) {
       const content = getComputedStyle(node, pseudo).content;
@@ -171,7 +184,7 @@ const measure = (el, nested) => {
     const large = px >= 24 || (px >= 18.66 && bold);
     return { ratio: (hi + 0.05) / (lo + 0.05), need: large ? 3 : 4.5 };
   };
-  let worst = null, unmeasured;
+  let worst = null;
   for (const item of readings) {
     const reading = read(item);
     if (reading.skip) continue;
@@ -265,6 +278,9 @@ async function auditAxe(page, AxeBuilder, tags, scope, results) {
   const axe = await new AxeBuilder({ page }).withTags(tags).analyze();
   const counts = tally();
   const defaultScope = { ...scope, state: 'default' };
+  if (![axe.passes, axe.violations, axe.incomplete, axe.inapplicable].some((rules) => rules.length)) {
+    recordUnknown(results, counts, { ...defaultScope, check: 'axe', element: null }, '--tags không chọn quy tắc axe nào');
+  }
   for (const rule of axe.passes) counts.measured += rule.nodes.length;
   for (const rule of axe.violations) {
     for (const node of rule.nodes) {
