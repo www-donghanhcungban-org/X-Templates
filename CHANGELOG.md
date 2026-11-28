@@ -7,6 +7,7 @@ Bản < 3.20.0: [`CHANGELOG-ARCHIVE.md`](CHANGELOG-ARCHIVE.md) (T-3651; `changel
 ## [Unreleased]
 
 - Kiểm reflow theo nội dung thực sự được gán vào slot của shadow root mở, gồm chữ bị cắt và ca nội dung dự phòng ẩn.
+- Ngoại lệ reflow dùng đường dẫn riêng cho mỗi vùng trong shadow root. Strict tính cả các vùng vượt giới hạn hiển thị chẩn đoán.
 
 - Installer giữ nguồn gốc rule của harness khi chạy lại sau gián đoạn giữa lúc ghi settings và hoàn tất manifest. Dữ liệu đang chờ chỉ được dùng khi khớp đúng snapshot settings đã ghi.
 

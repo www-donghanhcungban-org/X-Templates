@@ -8,6 +8,7 @@ import { parseArgs } from 'node:util';
 const HEIGHT = 800;
 const DESKTOP = 1280;
 const REFLOW_WIDTH = 400;
+const REFLOW_REPORT_LIMIT = 20;
 const THEMES = ['light', 'dark'];
 const STATES = ['default', 'hover', 'focus'];
 const INTERACTIVE = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [role=button], [tabindex]:not([tabindex="-1"])';
@@ -181,7 +182,7 @@ const measure = (el, nested) => {
 };
 
 // Tạo định danh ổn định cho phạm vi ngoại lệ, ưu tiên id duy nhất rồi dùng đường CSS đầy đủ.
-const elementPath = (el) => {
+const elementPath = (el, allowShadow = false) => {
   const parts = [];
   for (let node = el; node; node = node.parentElement) {
     const tag = CSS.escape(node.localName);
@@ -199,7 +200,7 @@ const elementPath = (el) => {
     parts.unshift(`${tag}:nth-of-type(${index})`);
   }
   const root = el.getRootNode();
-  return root instanceof ShadowRoot ? null : parts.join(' > ');
+  return !allowShadow && root instanceof ShadowRoot ? null : parts.join(' > ');
 };
 
 // Định danh trong báo cáo không mang userinfo, query hay fragment của đích (có thể chứa khoá hoặc phiên);
@@ -240,16 +241,16 @@ function printTally(label, scope, { measured, unmeasured, exempted }) {
   console.log(`${label} ${scopeText(scope)} measured=${measured} unmeasured=${unmeasured} exempted=${exempted}`);
 }
 
-function recordUnknown(results, counts, scope, detail) {
+function recordUnknown(results, counts, scope, detail, show = true) {
   counts.unmeasured++;
   results.unmeasured++;
-  console.log(`UNMEASURED ${scopeText(scope)} — ${detail}`);
+  if (show) console.log(`UNMEASURED ${scopeText(scope)} — ${detail}`);
   const exception = scope.element === null ? undefined : results.exceptions.get(scopeKey(scope));
   if (exception && !exception.expired) {
     counts.exempted++;
     results.exempted++;
     exception.applied = true;
-    console.log(`EXEMPTED ${scopeText(scope)} expires=${exception.expires} reason=${JSON.stringify(exception.reason)} evidence=${JSON.stringify(exception.evidence)}`);
+    if (show) console.log(`EXEMPTED ${scopeText(scope)} expires=${exception.expires} reason=${JSON.stringify(exception.reason)} evidence=${JSON.stringify(exception.evidence)}`);
   }
 }
 
@@ -322,8 +323,7 @@ const settle = (el) => {
 // Duyệt cả shadow root MỞ (đệ quy); shadow `closed` không đọc được từ trang nên phía gọi đếm và báo not_measured.
 // Bỏ qua điều khiển form, phần tử ẩn thị giác (`clip`, `clip-path`, hộp ≤ 1 px, sr-only) và chữ dùng ellipsis.
 // Trả `{ found, shadowMeasured }`: số phần tử trong shadow root mở đã được xét.
-const findReflow = (path) => {
-  const limit = 20;
+const findReflow = (path, limit) => {
   const cuts = [];
   const unknown = [];
   let shadowMeasured = 0;
@@ -334,11 +334,15 @@ const findReflow = (path) => {
   const visible = (n) => shown(n, true);
   const name = (el) => {
     const root = el.getRootNode();
-    if (root instanceof ShadowRoot) return `${name(root.host)} >>> ${el.localName}${el.id ? '#' + el.id : ''}`;
+    if (root instanceof ShadowRoot) {
+      const id = el.id ? '#' + CSS.escape(el.id) : '';
+      const inner = id && root.querySelectorAll(id).length === 1 ? CSS.escape(el.localName) + id : path(el, true);
+      return `${name(root.host)} >>> ${inner}`;
+    }
     return path(el) ?? el.localName;
   };
   const addUnknown = (el, kind) => {
-    if (unknown.length < limit) unknown.push({ element: name(el), kind });
+    unknown.push({ element: name(el), kind });
   };
   const isViewportScroller = (el, style) => {
     if (el === document.documentElement || el === document.scrollingElement) return true;
@@ -502,7 +506,7 @@ const findReflow = (path) => {
       if (cuts.length === limit) break;
     } else if (kind) addUnknown(el, kind);
   }
-  return { found: [...cuts, ...unknown.slice(0, limit - cuts.length)], shadowMeasured };
+  return { found: [...cuts, ...unknown], shadowMeasured };
 };
 
 // Đếm host có shadow root `closed` (trang không đọc được; CDP thấy). Trả null nếu CDP không dùng được.
@@ -589,16 +593,19 @@ async function auditPage(browser, AxeBuilder, settings, scope, results) {
     }
     // Reflow (WCAG 1.4.10) ở khổ hẹp: cuộn lồng và vùng cắt không hiện trong số đo tràn ngang của gốc.
     if (scope.width <= REFLOW_WIDTH) {
-      const { found, shadowMeasured } = await page.evaluate(`(${findReflow})(${elementPath})`);
+      const { found, shadowMeasured } = await page.evaluate(`(${findReflow})(${elementPath}, ${REFLOW_REPORT_LIMIT})`);
       const details = {
         scroll: 'vùng cuộn ngang trong trang, cần người xem',
         pseudo: 'nội dung giả rỗng có nét vẽ trong vùng có thể bị cắt, cần người xem',
         hidden: 'chữ nằm ngoài khung cắt hoặc chưa quét hết (carousel, nội dung ẩn có chủ ý, hơn 500 nút chữ; ảnh/video thò ra khỏi khung cắt), cần người xem',
       };
-      for (const { element, kind } of found) {
+      for (const [index, { element, kind }] of found.entries()) {
         const clipped = { ...scope, state: 'default', check: 'reflow', element };
         if (kind === 'cut') recordViolation(results, clipped, 'chữ bị cắt ngang bởi overflow:hidden');
-        else recordUnknown(results, tally(), clipped, details[kind]);
+        else recordUnknown(results, tally(), clipped, details[kind], index < REFLOW_REPORT_LIMIT);
+      }
+      if (found.length > REFLOW_REPORT_LIMIT) {
+        console.log(`REFLOW_LIMIT ${scopeText({ ...scope, state: 'default' })} omitted_detail=${found.length - REFLOW_REPORT_LIMIT}`);
       }
       // Shadow root đóng không đo được: không coi là đạt (not_measured); người xem hoặc khai ngoại lệ `shadow[closed]`.
       const closed = await countClosedShadows(page);

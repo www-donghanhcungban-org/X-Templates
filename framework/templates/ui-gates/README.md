@@ -97,8 +97,11 @@ chỉ áp dụng cho `UNMEASURED`. Mọi vi phạm axe, reflow hoặc tương ph
   `::before` hoặc `::after` có nội dung rỗng và nét vẽ trong vùng đang tràn hoặc có mép cắt nằm trong padding box
   cũng báo `UNMEASURED` để xem thủ công. Cổng xét màu, viền, outline, bóng và ảnh nền theo CSS đã tính. Màu, bóng
   và gradient hoàn toàn trong suốt được bỏ qua. Ảnh nền có điểm ảnh chưa đọc được vẫn cần kiểm thủ công.
-  Trong tối đa 20 chẩn đoán vùng reflow mỗi viewport và theme, các vi phạm cắt chữ đã đo được xếp trước.
-  Phép kiểm chỉ xét chiều ngang trong tài liệu chính. Cổng đi vào shadow root mở (báo `REFLOW … shadow_measured=N`); host có shadow
+  Báo tối đa 20 chẩn đoán chi tiết mỗi viewport và theme, ưu tiên vi phạm cắt chữ. Kết quả strict vẫn tính các vùng
+  chưa đo được nằm ngoài phần hiển thị. Ngoại lệ reflow trong shadow root mở dùng đường dẫn riêng qua host và
+  từng phần tử. Dùng định danh báo từ lượt chạy mới để thay ngoại lệ cũ dùng chung tên tag.
+  Phép kiểm chỉ xét chiều ngang trong tài liệu chính. Cổng đi vào shadow root mở và nội dung slot thực tế
+  (báo `REFLOW … shadow_measured=N`); host có shadow
   `closed` không đo được nên báo `UNMEASURED … not_measured` (phần tử `shadow[closed]`, khai ngoại lệ được), không coi là
   đạt. Ảnh/video/canvas/svg thò ra khỏi khung cắt báo `UNMEASURED` (cắt ảnh thường có chủ ý).
 - Ý tưởng cổng đo trên bản render tham khảo `plugin87/ux-ui-agent-skills` (MIT) qua stored 06 §7d. Mã viết cho khung.
