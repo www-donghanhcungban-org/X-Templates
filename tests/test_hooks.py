@@ -2642,6 +2642,9 @@ class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
         installed.symlink_to(app_cli)
         self.assert_blocked("touch scripts/__pycache__/sample.pyc", roots=(self.target,))
 
+    def test_no_project_context_preserves_application_cache(self):
+        self.assert_allowed("find src -name '__pycache__' -delete", roots=("",))
+
     def test_concurrent_edits_keep_project_ownership_separate(self):
         path = "scripts/__pycache__/sample.pyc"
         roots = (self.frame, self.target) * 12
