@@ -157,12 +157,6 @@ def chi2_pvalue(chi2: float, df: int) -> float:
     return min(1.0, max(0.0, p))
 
 
-def _chi_square(observed: list[int], weights: list[float]) -> tuple[float, float]:
-    scale = sum(observed) / sum(weights)
-    chi2 = sum((o - w * scale) ** 2 / (w * scale) for o, w in zip(observed, weights))
-    return chi2, chi2_pvalue(chi2, len(observed) - 1)
-
-
 def _homogeneity(hit: list[int], miss: list[int]) -> tuple[float, float]:
     """Chi-bình-phương đồng nhất bảng 2×k (exposed/không exposed × biến thể), bậc k−1; mọi ô kỳ vọng > 0."""
     seen, unseen = sum(hit), sum(miss)
@@ -370,14 +364,22 @@ def _srm_findings(path: str, recs: list[_Rec], cfg: _Config) -> list[Finding]:
         return [weights]
     k = len(names)
     total = sum(observed)
-    least = min(weights) * total / sum(weights)
+    weight_sum = sum(weights)
+    scale = total / weight_sum
+    expected = (
+        [weight * scale for weight in weights]
+        if math.isfinite(scale)
+        else [weight / weight_sum * total for weight in weights]
+    )
+    least = min(expected)
     if least < MIN_PER_VARIANT:
         message = (
             f"chưa đủ bằng chứng: kỳ vọng nhỏ nhất {least:.3g} < {MIN_PER_VARIANT} (tổng {total} mẫu, {k} biến thể)"
         )
         return [Finding(path, 0, "SRM006", message)]
     found: list[Finding] = []
-    chi2, p = _chi_square(observed, weights)
+    chi2 = sum((actual - want) ** 2 / want for actual, want in zip(observed, expected))
+    p = chi2_pvalue(chi2, k - 1)
     if p < cfg.alpha:
         message = f"SRM: chi2={chi2:.4g}, bậc {k - 1}, p={p:.3g} < {cfg.alpha:g}; số đếm {_describe(names, observed)}"
         found.append(Finding(path, 0, "SRM001", message))

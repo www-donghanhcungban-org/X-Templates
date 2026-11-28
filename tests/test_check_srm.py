@@ -203,6 +203,17 @@ class SrmTest(Base):
         self.assertEqual(self.run_check("a.csv", csv_text(rows), ratio="3:1"), [])
         self.assertEqual(self.codes(self.run_check("a.csv", csv_text(rows), ratio="1:1")), ["SRM001"])
 
+    def test_rescaling_a_ratio_preserves_sufficiency_and_significance(self) -> None:
+        for size, count_a, code in ((20, 2, "SRM006"), (220, 110, "SRM001")):
+            data = csv_text([(f"u{i}", "a" if i < count_a else "b") for i in range(size)])
+            for ratio in ("1:10", "1e307:1e308", "1e-308:1e-307"):
+                with self.subTest(size=size, ratio=ratio):
+                    self.assertEqual(self.codes(self.run_check("a.csv", data, ratio=ratio)), [code])
+
+    def test_unbalanced_ratio_at_the_expected_sample_boundary(self) -> None:
+        data = csv_text([(f"u{i}", "a" if i < 5 else "b") for i in range(1245)])
+        self.assertEqual(self.run_check("a.csv", data, ratio="1:248"), [])
+
     def test_three_variants(self) -> None:
         names = ("a", "b", "c")
         self.assertEqual(self.run_check("a.csv", csv_text(balanced(900, names))), [])

@@ -40,6 +40,7 @@
 
 | ID | Mức | Trạng thái | Tóm tắt | Bằng chứng | Gate | Ghi chú |
 |---|---|---|---|---|---|---|
+| AUD-HAR-589 | 🟠 | đã sửa | Kiểm SRM có thể bỏ cảnh báo khi dùng trọng số rất lớn hoặc rất nhỏ. | đo được: so kết quả của SRM006 và SRM001 trên cùng dữ liệu qua ba cách biểu diễn tỷ lệ. | `python3 -m unittest tests.test_check_srm` | Rà phát hành 3.37.0. Bản sửa `83fd76db`. |
 | AUD-A11Y-009 | 🔴 | đã sửa | Cổng tương phản bỏ qua phần tử hoặc pseudo sau trần đo. | đo được: Chromium chạy ca ở biên và quá trần. Kết quả giữ vi phạm đã đo và ghi phần còn lại để kiểm thủ công. | `node --test tests_e2e/verify_render.test.mjs` | Rà phát hành 3.37.0. Bản sửa `e1d63354`. |
 | AUD-A11Y-010 | 🔴 | đã sửa | Tương phản bỏ sót văn bản gán trực tiếp vào slot của shadow root mở. | đo được: Chromium đối chiếu hai màu hover trên cùng văn bản gán trực tiếp. | `node --test tests_e2e/verify_render.test.mjs` | Rà phát hành 3.37.0. Bản sửa `e1d63354`. |
 | AUD-A11Y-011 | 🔴 | đã sửa | Strict báo đạt với cấu hình axe không chọn quy tắc. | đo được: mẫu thiếu văn bản thay thế trả exit 1 với tag mặc định. Cùng mẫu với tag viết sai trả exit 0 ở bản gốc. | `node --test tests_e2e/verify_render.test.mjs` | Phát hiện có từ mốc audit trước. Bản sửa `e1d63354`. |
