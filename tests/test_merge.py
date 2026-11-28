@@ -3747,6 +3747,8 @@ class StewardGh(FakeGh):
                     if err == "oserror":
                         raise OSError("gh vắng")
                     return subprocess.CompletedProcess(cmd, 1, "", err)
+            if "--disable-auto" in cmd:
+                self.pull["auto_merge"] = None
             return subprocess.CompletedProcess(cmd, 0, "", "")
         return super().respond(cmd, **kw)
 
@@ -4187,7 +4189,8 @@ class StewardEventsTest(unittest.TestCase):
             rc, out, _ = run_main("pr", "steward", "--apply", "--event", self.event(self.check_suite(StewardGh.SHA)))
         self.assertEqual(rc, 0)
         self.assertEqual(out, f"#7 merge ✓ — {out.split(' — ', 1)[1]}")
-        self.assertFalse(any("pulls?state=open" in p for p in gh.paths()))  # không quét mọi PR
+        self.assertTrue(any("pulls?state=open" in p for p in gh.paths()))  # đọc hàng trước khi merge
+        self.assertFalse(any("/pulls/8" in p for p in gh.paths()))
         self.assertEqual(
             gh.writes,
             [
@@ -5069,7 +5072,7 @@ class StewardDispatchCiTest(unittest.TestCase):
         dispatch nó, ghim commit merge đọc lại từ PR (không theo đầu nhánh)."""
         self.github_token()
         gh = SeqGh(
-            [{}, {}, {"merged": True, "state": "closed", "merge_commit_sha": self.MERGED}], raw=self.version_pr()
+            [{}, {}, {}, {"merged": True, "state": "closed", "merge_commit_sha": self.MERGED}], raw=self.version_pr()
         )
         with gh.patch():
             rc, out, _ = run_main("pr", "steward", "--apply")
@@ -5090,7 +5093,9 @@ class StewardDispatchCiTest(unittest.TestCase):
         self.github_token()
         for path in ("GO-NO-GO.md", "docs/GO-NO-GO.md", "docs/ops/GO-NO-GO-v1.2.3.md", "notes/GO-NO-GO.md"):
             with self.subTest(path=path):
-                gh = SeqGh([{}, {}, {"merged": True, "merge_commit_sha": self.MERGED}], raw=self.version_pr((path,)))
+                gh = SeqGh(
+                    [{}, {}, {}, {"merged": True, "merge_commit_sha": self.MERGED}], raw=self.version_pr((path,))
+                )
                 with gh.patch():
                     rc, out, _ = run_main("pr", "steward", "--apply")
                 self.assertEqual(rc, 0, out)
@@ -5128,7 +5133,7 @@ class StewardDispatchCiTest(unittest.TestCase):
             "FAIL",
         ):
             with self.subTest(last=last):
-                gh = SeqGh([{}, {}, last], raw=self.version_pr())
+                gh = SeqGh([{}, {}, {}, last], raw=self.version_pr())
                 with gh.patch():
                     rc, out, _ = run_main("pr", "steward", "--apply", "--json")
                 (res,) = json.loads(out)
@@ -5138,7 +5143,7 @@ class StewardDispatchCiTest(unittest.TestCase):
                 self.assertIn("tag phát hành chưa gắn", res["warn"])
                 self.assertIn("(sha commit merge)", res["warn"])  # không gợi lệnh với sha không dùng được
                 self.assertEqual([w[3] for w in gh.writes], ["PUT", "POST"])  # merge + dispatch CI, không dispatch tag
-        gh = SeqGh([{}, {}, {"merged": True, "merge_commit_sha": self.MERGED}], raw=self.version_pr())
+        gh = SeqGh([{}, {}, {}, {"merged": True, "merge_commit_sha": self.MERGED}], raw=self.version_pr())
         gh.fail = {"gh api -X POST --hostname github.com repos/o/r/actions/workflows/release-tag.yml": "HTTP 404"}
         with gh.patch():
             rc, out, _ = run_main("pr", "steward", "--apply")

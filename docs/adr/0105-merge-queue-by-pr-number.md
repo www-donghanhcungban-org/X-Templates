@@ -1,7 +1,7 @@
 # ADR-0105: Hàng merge FIFO theo số PR — chỉ PR đầu hàng được cập nhật nhánh hoặc merge (LOOP-STOP-031)
 
 - **Trạng thái:** Đã chấp nhận ngày 2026-11-26 (D-614).
-- **Trạng thái triển khai:** Chưa triển khai — ADR này đi trước mã; các lát mã và luật `LOOP-STOP-031` theo sau.
+- **Trạng thái triển khai:** T-5075 đưa cổng FIFO vào CLI và steward; kiểm bằng dữ liệu giả trong `tests/test_merge_queue.py`.
 - **Liên quan:** [ADR-0027](0027-pr-steward-on-github.md), [ADR-0079](0079-green-check-merge.md), ADR-0036, ADR-0096, `LOOP-ORCH-013`.
 
 ## Bối cảnh
