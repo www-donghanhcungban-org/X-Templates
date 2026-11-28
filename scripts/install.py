@@ -973,9 +973,12 @@ def update_provenance(prov: dict[str, list[str]], report: dict[str, Any]) -> dic
     return out
 
 
-def stage_settings_rules(target: Path, data: bytes, rules: dict[str, list[str]]) -> None:
-    """Ghi nguồn gốc dự kiến trước khi công bố settings. Chỉ khôi phục khi khớp đúng byte đã công bố."""
-    update_manifest_doc(target, **{PENDING_SETTINGS: {"settings_hash": hash_label(sha256(data)), "rules": rules}})
+def stage_settings_rules(
+    target: Path, data: bytes, rules: dict[str, list[str]], previous: dict[str, list[str]]
+) -> None:
+    """Giữ nguồn gốc đã xác nhận trước khi thay mốc chờ. Mốc mới chỉ có hiệu lực khi khớp byte đã công bố."""
+    pending = {"settings_hash": hash_label(sha256(data)), "rules": rules}
+    update_manifest_doc(target, rules=previous, **{PENDING_SETTINGS: pending})
 
 
 def recover_settings_rules(target: Path) -> dict[str, list[str]]:
@@ -1013,7 +1016,7 @@ def install_settings(
             report,
             own,
             before_write=lambda rendered, rep: stage_settings_rules(
-                target, rendered.encode("utf-8"), update_provenance(prov, rep)
+                target, rendered.encode("utf-8"), update_provenance(prov, rep), prov
             ),
         )
         stats[r] += 1
@@ -1036,7 +1039,9 @@ def install_settings(
     rules = prov
     if r == "copied":
         rules = dict.fromkeys(RULE_KEYS, []) if own else our_rules()
-        stage_settings_rules(target, data, rules)
+        # Nếu nội dung đã giống hệt, hash không chứng minh thao tác copy đã xảy ra.
+        if not settings.is_file() or settings.read_bytes() != data:
+            stage_settings_rules(target, data, rules, prov)
     write_copy(src, settings, r, data)
     stats[r] += 1
     return rules
@@ -2802,7 +2807,9 @@ def install_plan(
         "framework": {"action": "replace", "path": ".xtemplates/framework"},
         "skills_shadowed": [] if no_harness else shadowed_skills(target),
         "legacy_migration": (target / LEGACY_DIR).is_dir() or (target / LEGACY_YAML).is_file(),
-        "settings": {"action": "skipped"} if no_harness else plan_settings(target, force_harness, load_rules(target)),
+        "settings": {"action": "skipped"}
+        if no_harness
+        else plan_settings(target, force_harness, recover_settings_rules(target)),
         "files": files,
         "git_hooks": git_hooks_plan(target, no_harness, no_git_hooks),
         "adapters": adapters_plan(target, adapters or []),

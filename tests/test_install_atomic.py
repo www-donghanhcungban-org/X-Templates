@@ -238,7 +238,7 @@ class InstallInterruptedWriteTest(TestCase):
         expected = b'{"permissions":{"allow":["Read(README.md)"]}}'
         prior = {key: [] for key in install.RULE_KEYS}
         rules = {**prior, "allow": ["Read(README.md)"]}
-        install.stage_settings_rules(self.target, expected, rules)
+        install.stage_settings_rules(self.target, expected, rules, prior)
         self.assertEqual(install.recover_settings_rules(self.target), prior)
         settings.write_bytes(b"{}")
         self.assertEqual(install.recover_settings_rules(self.target), prior)
@@ -250,8 +250,34 @@ class InstallInterruptedWriteTest(TestCase):
             **{install.PENDING_SETTINGS: {"settings_hash": install.hash_label(install.sha256(expected)), "rules": []}},
         )
         self.assertEqual(install.recover_settings_rules(self.target), prior)
-        install.stage_settings_rules(self.target, expected, {"allow": rules["allow"]})
+        install.stage_settings_rules(self.target, expected, {"allow": rules["allow"]}, prior)
         self.assertEqual(install.recover_settings_rules(self.target), prior)
+
+    def test_interruption_before_second_snapshot_keeps_first_confirmed_rules(self) -> None:
+        with (
+            mock.patch.object(Path, "read_bytes", return_value=b'{"fixture":1}'),
+            mock.patch.object(Path, "is_symlink", return_value=False),
+        ):
+            first = {key: ["Read(README.md)"] if key == "allow" else [] for key in install.RULE_KEYS}
+            empty = {key: [] for key in install.RULE_KEYS}
+            install.stage_settings_rules(self.target, b'{"fixture":1}', first, empty)
+            confirmed = install.recover_settings_rules(self.target)
+            self.assertEqual(confirmed, first)
+            install.stage_settings_rules(self.target, b'{"fixture":2}', empty, confirmed)
+            self.assertEqual(install.recover_settings_rules(self.target), first)
+            self.assertEqual(install.load_rules(self.target), first)
+
+    def test_failed_force_copy_of_identical_settings_does_not_claim_existing_rules(self) -> None:
+        prior = {key: [] for key in install.RULE_KEYS}
+        with (
+            mock.patch.object(install, "classify_copy", return_value=("copied", b"{}")),
+            mock.patch.object(install, "write_copy", side_effect=OSError(errno.ENOSPC, "simulated")),
+            mock.patch.object(Path, "is_file", return_value=True),
+            mock.patch.object(Path, "read_bytes", return_value=b"{}"),
+        ):
+            with self.assertRaises(OSError):
+                install.install_settings(self.target, True, install.Counter(), prior)
+            self.assertEqual(install.recover_settings_rules(self.target), prior)
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
