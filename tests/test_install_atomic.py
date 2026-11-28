@@ -257,6 +257,7 @@ class InstallInterruptedWriteTest(TestCase):
         with (
             mock.patch.object(Path, "read_bytes", return_value=b'{"fixture":1}'),
             mock.patch.object(Path, "is_symlink", return_value=False),
+            mock.patch.object(Path, "is_file", return_value=True),
         ):
             first = {key: ["Read(README.md)"] if key == "allow" else [] for key in install.RULE_KEYS}
             empty = {key: [] for key in install.RULE_KEYS}
@@ -291,6 +292,19 @@ class InstallInterruptedWriteTest(TestCase):
             self.assertEqual(install.install_settings(self.target, True, install.Counter(), prior), install.our_rules())
             write.assert_called_once()
             stage.assert_not_called()
+
+    def test_provenance_does_not_read_a_nonregular_settings_entry(self) -> None:
+        settings = self.target / ".claude" / "settings.json"
+        prior = {key: [] for key in install.RULE_KEYS}
+        install.stage_settings_rules(self.target, b"{}", prior, prior)
+        with (
+            mock.patch.object(Path, "is_file", return_value=False),
+            mock.patch.object(Path, "exists", return_value=True),
+            mock.patch.object(Path, "read_bytes") as read,
+        ):
+            self.assertFalse(install.settings_change_provable(settings, b"{}"))
+            self.assertEqual(install.recover_settings_rules(self.target), prior)
+            read.assert_not_called()
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()

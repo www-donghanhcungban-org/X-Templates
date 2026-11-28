@@ -985,7 +985,7 @@ def recover_settings_rules(target: Path) -> dict[str, list[str]]:
     previous = load_rules(target)
     pending = load_manifest_doc(target).get(PENDING_SETTINGS)
     settings = target / ".claude" / "settings.json"
-    if not isinstance(pending, dict) or settings.is_symlink() or parent_symlink(settings):
+    if not isinstance(pending, dict) or settings.is_symlink() or parent_symlink(settings) or not settings.is_file():
         return previous
     try:
         digest = hash_label(sha256(settings.read_bytes()))
@@ -1001,6 +1001,8 @@ def recover_settings_rules(target: Path) -> dict[str, list[str]]:
 
 def settings_change_provable(settings: Path, data: bytes) -> bool:
     """Chỉ lưu mốc mới nếu xác minh được việc công bố sẽ thay nội dung settings."""
+    if not settings.is_file():
+        return not settings.exists()
     try:
         return settings.read_bytes() != data
     except FileNotFoundError:
