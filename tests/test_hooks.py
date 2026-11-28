@@ -2632,6 +2632,10 @@ class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
                 self.assert_blocked(command, ("HOOK_BYPASS", "BUDGET"), roots=(root,))
             self.assertEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "default")[0], "")
             self.assertNotEqual(self.bash(root, f"find {scripts} -name '*.tmp' -delete", "strict")[1], "HOOK_BYPASS")
+            self.assertEqual(self.bash(root, f"find {scripts} -name '*.tmp' -exec rm -f {{}} +", "default")[0], "")
+            work = Path(root, scripts)
+            self.assert_blocked(f"find {work} -path '{cache}' -delete", roots=(root,))
+            self.assert_blocked(f"find {scripts} -name '__pycache__' -exec stat {{}} + -delete", roots=(root,))
         self.assert_allowed("find scripts -name '__pycache__' -delete", roots=(self.target,))
 
     def test_symlinked_install_keeps_cache_fenced(self):

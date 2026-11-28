@@ -4655,7 +4655,9 @@ def _xargs_find_safe(words: List[str], fence: List[str], extra_names: Tuple[str,
         s = posixpath.normpath(start)
         if ".git" in s.split("/"):  # T-3945 (R3): gốc tìm trong `.git` — mọi tệp ở đó là hàng rào
             return False
-        reach = [p for p in fence if s == "." or p == s or p.startswith(s + "/")]
+        dot = s == "."
+        follow = "-L" in words or "-follow" in expr
+        reach = [p for p in fence if p == s or p.startswith(s + "/") or dot and (follow or p.split("/", 1)[0] != "..")]
         reach += [posixpath.join(s, n) for n in extra_names]
         found = ["./" + p if start.startswith("./") or start == "." else p for p in reach]
         if any(all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found):
@@ -16536,8 +16538,7 @@ def _go_patch_state(argv: List[str], cands: Cands, match: Callable[[str], bool] 
 
 
 def _prod_patch_asks(cmd: str, placed: List[Tuple[List[str], Cands]]) -> List[str]:
-    """AUD-SEC-804: `patch`/`git apply`/`git am` với tệp diff đọc được có header `DECISIONS*.md` → BUDGET (diff mờ —
-    stdin, tệp chưa có — do lớp danh sách trắng `_patch_file_why`)."""
+    """AUD-SEC-804: diff có `DECISIONS*.md` → BUDGET. Diff mơ hồ do `_patch_file_why` xử lý."""
     if not PATCH_WORD_RE.search(cmd):
         return []
     return [
@@ -16559,14 +16560,12 @@ def _go_diff_state(src: str, here: Optional[str], am: bool, match: Callable[[str
     return GO_DIFF_TOUCHES if any(match(p) for p in _patch_header_paths(text)) else GO_DIFF_CLEAR
 
 
-# sổ giai đoạn và thư mục tổ tiên của nó (`docs/autopilot`, `docs`)
 LEDGER_PATHS = tuple(
     dict.fromkeys("/".join(parts[:end]) for parts in LEDGER_COMPONENTS for end in range(1, len(parts) + 1))
 )
 
 
 def _ledger_hit(rel: str) -> bool:
-    """AUD-HAR-154: `rel` là sổ hoặc thư mục cha, có thể là glob khớp từng đoạn."""
     parts = rel.split("/")
     return any(
         len(p.split("/")) == len(parts) and all(map(fnmatch.fnmatchcase, p.split("/"), parts)) for p in LEDGER_PATHS
@@ -16574,7 +16573,6 @@ def _ledger_hit(rel: str) -> bool:
 
 
 def _removed_targets(n: List[str]) -> List[str]:
-    """Đích bị xoá, dời đi hoặc khôi phục cả cây từ nguồn khác."""
     name, args = (n[0], n[1:]) if n else ("", [])
     if name == "git" and args[:1] in (["rm"], ["mv"]):
         pos = _positionals(args[1:])
@@ -16592,18 +16590,25 @@ def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional
     if n[:1] == ["find"]:
         roots, i = _find_parts(n[1:])
         expr = n[i + 1 :]
-        writes = any(a and posixpath.basename(a[0]) not in FIND_READONLY_EXEC for a in _find_exec_argvs(n))
+        execs = _find_exec_argvs(expr)
+        writes = any(a and posixpath.basename(a[0]) not in FIND_READONLY_EXEC for a in execs)
         if not writes and "-delete" not in expr:
             return []
+        action = next(j for j, word in enumerate(expr) if word == "-delete" or word in FIND_EXEC)
+        single_exec = len(execs) == 1 and action + len(execs[0]) + 2 == len(expr) and str(expr[-1]) in FIND_EXEC_END
+        filters = [*expr[:action], "-print0"] if expr[action:] == ["-delete"] or single_exec else None
         names = _cli_cache_dirs(root)
         paths = [*names, *(f"{d}/{f}" for d in names for f in _outside_names(os.path.join(root, d)) or ("sample.pyc",))]
         for start in roots:
             for x in _where(start, root, cwd):
                 rel = _rel_dir(x, root)
-                if any(p == rel or p.startswith(rel + "/") or rel == "." for p in paths):
-                    spelling = "./" + rel if start.startswith("./") else rel
-                    if not _xargs_find_safe([spelling, *expr], paths, extra_names=()):
-                        return [CLI_CACHE_WHY.format(start)]
+                reach = [
+                    posixpath.normpath(posixpath.join(start, posixpath.relpath(p, rel)))
+                    for p in paths
+                    if p == rel or p.startswith(rel + "/") or rel == "."
+                ]
+                if reach and (filters is None or not _xargs_find_safe([start, *filters], reach, extra_names=())):
+                    return [CLI_CACHE_WHY.format(start)]
         return []
     base = _git_path_dir(n, argv, cwd)
     paths = [
@@ -16615,7 +16620,6 @@ def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional
 
 
 def _find_ledger_roots(args: List[str]) -> List[str]:
-    """Gốc của find -delete có thể chạm sổ theo bộ lọc tên/đường."""
     expr = args[_find_parts(args)[1] :]
     vals = [expr[k + 1].lower() for k, a in enumerate(expr[:-1]) if a in FIND_NAME_TESTS]
     names = [p.rsplit("/", 1)[-1].lower() for p in LEDGER_PATHS]
@@ -16625,12 +16629,10 @@ def _find_ledger_roots(args: List[str]) -> List[str]:
 
 
 def _git_path_dir(n: List[str], argv: List[str], cwd: Optional[str]) -> Optional[str]:
-    """Cwd sau các `git -C`, hoặc cwd ban đầu với lệnh khác. D-281 giữ cách xử lý `--work-tree`."""
     return _git_dir(argv, cwd) if n[:1] == ["git"] else cwd
 
 
 def _ledger_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> List[str]:
-    """AUD-HAR-154: ghi tay sổ qua thư mục cha hoặc chép/dời/liên kết vào đúng tên sổ."""
     removed = dict.fromkeys(_removed_targets(n))  # đích trùng chỉ giải một lần (`realpath` tốn theo độ sâu thư mục)
     base = _git_path_dir(n, argv, cwd) if removed else cwd  # chỉ đọc `-C` khi có đích xoá/dời
     found = dict.fromkeys(x for t in removed for x in _where(t, root, base))
@@ -16643,8 +16645,7 @@ def _ledger_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -
 
 
 def _copy_into_positionals(n: List[str]) -> List[str]:
-    """Đối số vị trí của lệnh chép/dời VÀO thư mục có sẵn (nguồn…, đích): `cp`/`mv`/`install`/`ln`, cả `rsync`
-    (`rsync -a src/* docs/autopilot/` — AUD-SEC-340), `scp` đích cục bộ; `-t D` → (nguồn…, D); lệnh khác → rỗng."""
+    """Toán hạng nguồn rồi đích của cp/mv/install/ln, rsync và scp cục bộ (AUD-SEC-340)."""
     if n[:1] and n[0] in COPY_OPT_TABLES:
         t_dirs, pos, _ = _copy_opts(n[0], n[1:])
         return pos + t_dirs[-1:]
@@ -16663,8 +16664,7 @@ def _copied_into(n: List[str], root: str, cwd: Optional[str]) -> List[str]:
 
 
 def _copied_names(n: List[str], src: str) -> List[str]:
-    """`_copied_name`; cp giữ đường thì CẢ tên cuối — `--parents` có thể đến từ viết tắt mơ hồ (`--p`: parents/preserve,
-    AUD-SEC-495) mà bản chạy thật hiểu khác."""
+    """Khi cp giữ đường, xét cả tên cuối vì `--p` có thể là `--preserve` (AUD-SEC-495)."""
     name = _copied_name(n, src)
     base = posixpath.basename(src.rstrip("/"))
     return [name] if n[:1] != ["cp"] or name == base else [name, base]
