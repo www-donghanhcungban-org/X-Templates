@@ -24615,10 +24615,8 @@ CORE_ACTION_KEYS = ("command", "path", "tool_name")
 
 
 def _core_decision(raw: Any) -> Dict[str, object]:
-    """`{tool, command|path|tool_name, input, cwd, project_dir}` (ADR-0064) → quyết định của bộ luật. Không phải object →
-    không có gì để chặn (stdin rác, LOOP-HARNESS-018); có lệnh/đường/tool mà không suy ra chế độ, hay `command` không phải
-    chuỗi → deny UNPARSED — adapter truyền sai tên tool không được thành cho qua im lặng (AUD-SEC-346). Gốc dự án:
-    `project_dir` tuyệt đối → `CLAUDE_PROJECT_DIR` → cwd (AUD-HAR-201: host khác Claude không đặt biến đó)."""
+    """Chuẩn hoá payload adapter (ADR-0064); bỏ qua stdin rác (LOOP-HARNESS-018), chặn thao tác sai schema.
+    Ưu tiên `project_dir` tuyệt đối → `CLAUDE_PROJECT_DIR` → cwd (AUD-HAR-201)."""
     if not isinstance(raw, dict):
         return {"decision": ""}
     tool = str(raw.get("tool") or "").strip().lower()
@@ -24631,9 +24629,11 @@ def _core_decision(raw: Any) -> Dict[str, object]:
     tool_input.setdefault("file_path", raw.get("path"))
     pd = raw.get("project_dir")
     root = pd if isinstance(pd, str) and os.path.isabs(pd) else os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
-    return _rule_decision(
-        mode, {"tool_name": raw.get("tool_name"), "tool_input": tool_input, "cwd": raw.get("cwd")}, root
-    )
+    payload = {"tool_name": raw.get("tool_name"), "tool_input": tool_input, "cwd": raw.get("cwd")}
+    try:
+        return _rule_decision(mode, payload, root)
+    except Exception:
+        return _failure_decision(mode, payload, _payload_cmd(payload))
 
 
 def _core_output(out: Dict[str, object]) -> int:

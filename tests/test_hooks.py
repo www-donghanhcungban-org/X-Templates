@@ -8108,16 +8108,17 @@ class TypedDecisionTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root, True)
         Path(self.root, "xt.yaml").write_text("", encoding="utf-8")
 
-    def _main(self, args: list, payload: object, policy: str = "") -> str:
+    def _main(self, args: list, payload: object, policy: str = "", exit_code: int = 0) -> str:
         out = io.StringIO()
         raw = payload if isinstance(payload, str) else json.dumps(payload)
         with (
             mock.patch.object(sys, "argv", ["guard.py", *args]),
             mock.patch.object(sys, "stdin", io.StringIO(raw)),
             mock.patch.object(sys, "stdout", out),
+            mock.patch.object(sys, "stderr", io.StringIO()),
             mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": self.root, "XT_GUARD_POLICY": policy}),
         ):
-            self.assertEqual(self.g.main(), 0)
+            self.assertEqual(self.g.main(), exit_code)
         return out.getvalue()
 
     def test_typed_decision_codes_from_reasons(self):
@@ -8207,6 +8208,44 @@ class TypedDecisionTest(unittest.TestCase):
         self.assertEqual(self._main(["permission"], "not json"), "")
         self.assertIsNone(g._payload_cmd({"tool_input": "x"}))
         self.assertIsNone(g._payload_cmd(None))
+
+    def test_core_rule_error_matches_bash(self):
+        # Payload chỉ đọc, chỉ đi qua guard với bộ luật giả lập lỗi, không chạy lệnh.
+        cases = (
+            ("gh api /rate_limit", "deny", self.g.UNPARSED, 2),
+            ("git status --short", "allow", self.g.NO_OBJECTION, 0),
+        )
+        with mock.patch.object(self.g, "_rule_decision", side_effect=RuntimeError("fixture")):
+            for cmd, decision, code, status in cases:
+                with self.subTest(command=cmd):
+                    bash = json.loads(self._main(["bash"], {"tool_input": {"command": cmd}}))
+                    core = json.loads(
+                        self._main(["core"], {"tool": " Shell ", "input": {"command": cmd}}, exit_code=status)
+                    )
+                    self.assertEqual(core, {"decision": decision, "code": code, "reason": bash.get("reason", "")})
+                    self.assertEqual(bash["decision"], "deny" if status else "")
+                    self.assertEqual(bash["code"], code)
+            payloads = [{"tool": "shell", "command": cmd} for cmd, *_ in cases] * 4
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+                results = list(pool.map(self.g._core_decision, payloads))
+            self.assertEqual([out["decision"] for out in results], ["ask", ""] * 4)
+
+    def test_core_accepts_ordinary_reads_and_preserves_invalid_input_handling(self):
+        cmd = "git status --short"
+        bash = json.loads(self._main(["bash"], {"tool_input": {"command": cmd}}))
+        core = json.loads(self._main(["core"], {"tool": "bash", "command": cmd}))
+        self.assertEqual(bash["decision"], "")
+        self.assertEqual(core, {"decision": "allow", "code": bash["code"], "reason": bash.get("reason", "")})
+        with mock.patch.object(self.g, "_rule_decision", side_effect=AssertionError("unexpected rule call")) as rule:
+            for raw in ("not json", []):
+                self.assertEqual(
+                    json.loads(self._main(["core"], raw)),
+                    {"decision": "allow", "code": self.g.NO_OBJECTION, "reason": ""},
+                )
+            for raw in ({"tool": "unknown", "command": cmd}, {"tool": "bash", "command": 0}):
+                out = json.loads(self._main(["core"], raw, exit_code=2))
+                self.assertEqual((out["decision"], out["code"]), ("deny", self.g.UNPARSED))
+            rule.assert_not_called()
 
     def test_typed_decision_hook_script(self):
         payload = {"tool_name": "Bash", "tool_input": {"command": "git push origin main"}}
