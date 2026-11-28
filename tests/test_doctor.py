@@ -1646,7 +1646,7 @@ class DoctorHookSiblingTest(unittest.TestCase):
         "guard.py": PRINT,
     }
 
-    def run_doctor(self, files: dict[str, str], dirs: tuple[str, ...] = ()) -> list[xt.Finding]:
+    def run_doctor(self, files: dict[str, str], dirs: tuple[str, ...] = (), *, deep: bool = True) -> list[xt.Finding]:
         with tempfile.TemporaryDirectory() as tmp:
             hooks = Path(tmp) / ".claude" / "hooks"
             hooks.mkdir(parents=True)
@@ -1656,7 +1656,7 @@ class DoctorHookSiblingTest(unittest.TestCase):
                 (hooks / name).parent.mkdir(parents=True, exist_ok=True)
                 (hooks / name).write_text(body, encoding="utf-8")
             settings = {"PreToolUse": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/entry.sh"}]}]}
-            return xt._doctor_hook_files(Path(tmp), settings, deep=True)
+            return xt._doctor_hook_files(Path(tmp), settings, deep=deep)
 
     def assert_error(self, found: list[xt.Finding], name: str, text: str) -> None:
         self.assertEqual(len(found), 1, found)
@@ -1683,6 +1683,12 @@ class DoctorHookSiblingTest(unittest.TestCase):
                 files = {k: v for k, v in self.SIBLINGS.items() if k != name}
                 self.assert_error(self.run_doctor(files), name, "file không có")
                 self.assert_error(self.run_doctor({**self.SIBLINGS, name: broken}), name, "lỗi cú pháp")
+
+    def test_empty_required_hook_is_reported_without_running_it(self):
+        for deep in (False, True):
+            for name in ("entry.sh", "_lib.sh", "guard.py"):
+                with self.subTest(name=name, deep=deep):
+                    self.assert_error(self.run_doctor({**self.SIBLINGS, name: ""}, deep=deep), name, "file rỗng")
 
     def test_hidden_and_path_siblings(self):
         cases = [
