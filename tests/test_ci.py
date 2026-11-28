@@ -403,9 +403,10 @@ class SupplyChainArtifactsTest(unittest.TestCase):
 
     def test_verify_render_lockfile_runs_in_required_audit(self):
         body = (WORKFLOWS / "dep-audit.yml").read_text(encoding="utf-8")
-        job = ci_jobs(body)["pack-npm-audit"]
+        job = ci_jobs(body)["dep-audit"]
         self.assertIn(job_key(job, "name"), required_checks(RULESET))
         self.assertRegex(body, r"(?m)^  pull_request:\s*$")
+        self.assertNotRegex(job, r"(?m)^\s*(?:-\s+)?(?:if|continue-on-error):")
         self.assertRegex(
             job,
             r"(?m)^        run: npm audit --package-lock-only --ignore-scripts --audit-level=moderate "
