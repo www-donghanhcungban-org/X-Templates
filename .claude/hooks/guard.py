@@ -11744,7 +11744,6 @@ XT_INPROC_WHY = (
     " `xt_design` (mọi cách) — guard không thấy lệnh con; gọi `xt.py <lệnh>`, đọc sổ: `xt.py stage design-check --json`"
 )
 XT_INPROC_DEPTH = 3  # số tầng `exec('…')` lồng đọc lại; sâu hơn → chặt
-# Hàm nạp/chạy mã theo tên hay đường (gọi theo tên hay thuộc tính: `runpy.run_path`, `from runpy import run_path`)
 XT_INPROC_LOADERS = frozenset(
     {"run_path", "run_module", "_run_module_as_main", "_run_code", "spec_from_file_location", "SourceFileLoader"}
     | {"SourcelessFileLoader", "load_source", "load_module", "import_module", "find_spec", "exec_module", "__import__"}
@@ -11774,9 +11773,7 @@ def _xt_inproc_text(script: str) -> bool:
 
 
 def _xt_inproc_python(script: str, depth: int) -> bool:
-    """Script Python nạp `xt` trong tiến trình theo cách guard không thấy lệnh con: lời gọi hàm nạp có đối số không rõ
-    hay trỏ `xt`, hoặc `import xt` kèm tên/chữ rủi ro. Không phải Python → luật chữ; `exec('…')` lồng đọc lại tới
-    `XT_INPROC_DEPTH` tầng, sâu hơn thì chặt."""
+    """Phân tích AST để phát hiện nạp mã trong tiến trình, dùng luật chữ nếu cú pháp lỗi."""
     import ast
 
     if depth >= XT_INPROC_DEPTH:
@@ -11791,8 +11788,7 @@ def _xt_inproc_python(script: str, depth: int) -> bool:
 
 
 def _xt_loader_call(call: Any, depth: int) -> bool:
-    """`call` (ast.Call) là hàm nạp mã mà một đối số không phải chữ nguyên văn, là tên/đường `xt`, có mở rộng shell,
-    hay (cho `exec('…')`) là script lại nạp `xt`."""
+    """Lời gọi hàm nạp mã có đích không tĩnh, đích được bảo vệ hoặc mã nạp lồng."""
     import ast
 
     f = call.func
@@ -11802,12 +11798,16 @@ def _xt_loader_call(call: Any, depth: int) -> bool:
     if name not in XT_INPROC_LOADERS and not (builtin and name in XT_INPROC_BUILTINS):
         return False
     for a in [*call.args, *(k.value for k in call.keywords)]:
-        v = a.value if isinstance(a, ast.Constant) else None
         if not isinstance(a, ast.Constant):
             return True
+        v = a.value
         text = v.decode("utf-8", "replace") if isinstance(v, bytes) else v if isinstance(v, str) else ""
         if XT_INPROC_NAME_RE.fullmatch(text) or _opaque(text) or (text and _xt_inproc_python(text, depth + 1)):
             return True
+        if name in ("resolve_name", "locate"):
+            module = text.partition(":")[0] if name == "resolve_name" else ".".join(filter(None, text.split(".")))
+            if re.match(rf"(?:{XT_INPROC_NAME_RE.pattern})(?=\.|\Z)", module, XT_INPROC_NAME_RE.flags):
+                return True
     return False
 
 
