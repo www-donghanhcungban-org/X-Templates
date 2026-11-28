@@ -1,6 +1,6 @@
 name: Dependency audit
 
-# Quét lỗ hổng phụ thuộc (BASE-DEP-004): Python (job `dep-audit`) và lockfile pnpm của gói web-api-ts (job `pack-npm-audit`) — mỗi PR, push main, hằng tuần và chạy tay.
+# Quét lỗ hổng phụ thuộc (BASE-DEP-004): Python (job `dep-audit`), lockfile của gói web-api-ts và verify-render (job `pack-npm-audit`) — mỗi PR, push main, hằng tuần và chạy tay.
 # Khung chỉ dùng thư viện chuẩn lúc chạy; các gói ở đây là công cụ cổng (requirements-dev.txt) và chính pip-audit. Gói E2E (requirements-e2e.txt, D-133) chỉ chạy ở job `app-e2e`.
 on:
   pull_request:
@@ -70,3 +70,5 @@ jobs:
           # pnpm 12 mặc định cài phụ thuộc trước `pnpm <script>`; job này không cài, bước chỉ cần node.
           PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN: "false"
         run: pnpm audit:exceptions
+      - name: Quét lockfile npm của verify-render (AUD-DEP-040)
+        run: npm audit --package-lock-only --ignore-scripts --audit-level=moderate --prefix tests_e2e/verify-render-deps
