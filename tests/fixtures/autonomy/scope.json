@@ -2,6 +2,10 @@
  "note": "ID bắt buộc (REC §2 + 🔴/🟠 đã sửa) mà corpus autonomy-bench không phủ, kèm lý do; thêm ca thì gỡ ID khỏi đây.",
  "out_of_scope": [
   {
+   "reason": "Corpus guard không có cách mô phỏng ngoại lệ trong bộ quyết định của adapter core. Gate dùng mock RuntimeError và ca đọc đối chứng: `python3 -m unittest tests.test_hooks.TypedDecisionTest`.",
+   "ids": ["AUD-HAR-584"]
+  },
+  {
    "reason": "Kiểm tính bất biến theo thang đo của cùng một tỷ lệ SRM bằng bảng dữ liệu giả trong tests.test_check_srm.",
    "ids": ["AUD-HAR-589"]
   },
