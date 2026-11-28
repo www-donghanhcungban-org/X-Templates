@@ -6,6 +6,7 @@ import argparse
 import io
 import json
 import sys
+import tempfile
 from contextlib import redirect_stdout
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -390,6 +391,29 @@ class MergeQueueTests(TestCase):
 
 
 class StewardQueueIntegrationTests(TestCase):
+    def test_doctor_rejects_invalid_queue_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for key, value in (("merge_queue", "other"), ("merge_queue_stall_minutes", "-1")):
+                with self.subTest(key=key):
+                    (base / "xt.yaml").write_text(f"{key}: {value}\n", encoding="utf-8")
+                    findings = xt._doctor_merge(base)
+                    self.assertEqual(len(findings), 1)
+                    self.assertEqual(findings[0].level, "error")
+                    self.assertIn(key, findings[0].msg)
+
+    def test_steward_apply_holds_write_when_live_gate_changes(self):
+        out = {"pr": OURS, "head": sha(OURS), "action": "merge"}
+        with (
+            mock.patch.object(xt, "_steward_stale", return_value=""),
+            mock.patch.object(queue, "before_action", return_value="fixture: CI chưa đạt") as recheck,
+            mock.patch.object(xt, "_steward_run") as writes,
+        ):
+            result = xt._steward_apply(out, {}, REPO, [["fixture"]])
+        recheck.assert_called_once_with(xt, out, REPO, "main")
+        writes.assert_not_called()
+        self.assertIn("fixture: CI chưa đạt", result["note"])
+
     def test_cli_and_steward_hold_candidates_through_ci_and_review(self):
         rows = {12: details(12, case="wait"), 18: details(18, case="update"), 40: details(40)}
 
