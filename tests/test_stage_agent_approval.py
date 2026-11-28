@@ -499,6 +499,29 @@ class XtInProcessGuardTest(unittest.TestCase):
         self.assertTrue(guard._xt_inproc_text("from scripts.xt_design import read"))
         self.assertFalse(guard._xt_inproc_text("import xt_designer"))
 
+    def test_named_stdlib_loaders_follow_static_target_policy(self):
+        # AUD-HAR-576: chỉ phân loại chuỗi lệnh; không thực thi nội dung Python.
+        for module, function, target in (
+            ("pkgutil", "resolve_name", "json"),
+            ("pydoc", "locate", "json"),
+            ("pydoc", "importfile", "tests_e2e/__init__.py"),
+        ):
+            with self.subTest(loader=function, target="literal"):
+                cmd = f'python3 -c "import {module}; {module}.{function}(\'{target}\')"'
+                self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
+            with self.subTest(loader=function, target="variable"):
+                cmd = f'python3 -c "import {module}; name=\'{target}\'; {module}.{function}(name)"'
+                out = self.decide(cmd)
+                self.assertEqual((out.get("decision"), out.get("code")), ("deny", "STAGE_APPROVE"))
+
+    def test_local_locate_and_ordinary_python_remain_allowed(self):
+        for cmd in (
+            'python3 -c "def locate(name): return name\nprint(locate(\'json\'))"',
+            'python3 -c "import json; name=\'json\'; print(json.dumps(name))"',
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertNotEqual(self.decide(cmd).get("decision"), "deny")
+
     def test_python_scan_helpers(self):
         self.assertFalse(guard._xt_inproc_python("x = (", 0))  # không phải Python: luật chữ, không nạp xt
         self.assertTrue(guard._xt_inproc_python("exec('exec(\"exec(1)\")')", guard.XT_INPROC_DEPTH))  # quá sâu: chặt
