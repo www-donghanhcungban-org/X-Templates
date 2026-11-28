@@ -10,6 +10,10 @@
    "ids": ["AUD-HAR-583"]
   },
   {
+   "reason": "Kiểm cờ bộ nạp Python và đầu ra hook bằng tests.test_hook_precompact_output cùng tests.test_hooks.",
+   "ids": ["AUD-HAR-572"]
+  },
+  {
    "reason": "Kiểm reflow của slot, phạm vi ngoại lệ shadow và giới hạn hiển thị bằng fixture HTML trên Chromium: `node --test tests_e2e/verify_render.test.mjs`.",
    "ids": [
     "AUD-A11Y-006",
