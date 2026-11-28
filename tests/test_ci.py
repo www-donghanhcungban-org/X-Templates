@@ -401,6 +401,22 @@ class SupplyChainArtifactsTest(unittest.TestCase):
             self.assertNotIn(forbidden, job)
         self.assertEqual(len(re.findall(r"uses: pnpm/action-setup@[0-9a-f]{40} ", job)), 1)
 
+    def test_verify_render_lockfile_runs_in_required_audit(self):
+        body = (WORKFLOWS / "dep-audit.yml").read_text(encoding="utf-8")
+        job = ci_jobs(body)["dep-audit"]
+        self.assertIn(job_key(job, "name"), required_checks(RULESET))
+        self.assertRegex(body, r"(?m)^  pull_request:\s*$")
+        self.assertNotRegex(job, r"(?m)^\s*(?:-\s+)?(?:if|continue-on-error):")
+        self.assertRegex(
+            job,
+            r"(?m)^        run: npm audit --package-lock-only --ignore-scripts --audit-level=moderate "
+            r"--prefix tests_e2e/verify-render-deps$",
+        )
+
+    def test_dependabot_tracks_verify_render_lockfile_directory(self):
+        body = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+        self.assertRegex(body, r"(?m)^  - package-ecosystem: npm\n    directory: /tests_e2e/verify-render-deps$")
+
     def test_release_tag_attests_archive_before_push(self):
         body = (WORKFLOWS / "release-tag.yml").read_text(encoding="utf-8")
         for perm in ("id-token: write", "attestations: write"):
