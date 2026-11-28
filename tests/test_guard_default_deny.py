@@ -164,6 +164,7 @@ class DefaultDenyTest(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.touch()
         cleanup = "find . -name '*.pyc' | xargs rm -f"
+        (app / "scripts/installed-cache").symlink_to(app / ".xtemplates/scripts/__pycache__", target_is_directory=True)
         self.assertEqual(decide(cleanup, app, app / "scripts")["decision"], "")
         follows_links = cleanup.replace("find .", "find -L .", 1)
         self.assertEqual(decide(follows_links, app, app / "scripts")["code"], guard.BUDGET)

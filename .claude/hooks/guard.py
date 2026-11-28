@@ -4463,8 +4463,7 @@ XARGS_FEED_RE = re.compile(
     r"(?:^|[;&|(])\s*(?:(?:[A-Za-z_]\w*=\S*|command|env|nice|timeout|stdbuf|ionice|nohup|setsid|time|-\S+|\d\S*)\s+)*"
     r"(find|git\s+ls-files|ls|echo|grep|rg|ag|git\s+grep)(\s[^|;&]*)\|\s*xargs(?![\w-])"
 )
-# T-3951 A10: nguồn xargs `grep -rl`/`rg -l`/`git grep -l`/`ag -l` — chỉ liệt kê tệp dưới thư mục/tệp nêu ở đối số: qua
-# khi mọi đối số đường là chữ trơn dưới gốc, không phải gốc/cha của nó, không thư mục hàng rào và không chứa `.git`
+# T-3951 A10: grep/rg/ag chỉ liệt kê ở đường chữ dưới gốc, ngoài hàng rào và repo con.
 GREP_SOURCES = frozenset({"grep", "rg", "ag", "git grep"})
 GREP_PAT_OPTS = frozenset({"-e", "-f", "--regexp", "--file"})
 GREP_VALUE_OPTS = frozenset({"-m", "-A", "-B", "-C", "--max-count", "-g", "--glob", "-t", "--type", "-T", "-d", "-D"})
@@ -4492,19 +4491,17 @@ def _grep_source_safe(words: List[str], root: str, here: str) -> bool:
         full = os.path.realpath(os.path.join(here, os.path.expanduser(p)))
         rel = os.path.relpath(full, os.path.realpath(root))
         bad = re.search(r"[$`~]", p) or _xargs_fence_word(p, root) or rel == "." or rel.split("/", 1)[0] == ".."
-        if bad or os.path.lexists(os.path.join(full, ".git")):
+        if bad or _cli_cache_fence(full, rel, root, parents=True) or os.path.lexists(os.path.join(full, ".git")):
             return False
     return bool(paths)
 
 
 XARGS_WORD_RE = re.compile(r"(?<![\w-])xargs(?![\w-])")
-# T-3940: `ls -a`/`-A` có thể ra tệp hàng rào; T-3942: đoạn dấu chấm chỉ tính thư mục hàng rào (`XARGS_DOT_RE`)
 LS_ALL_RE = re.compile(r"-[a-zA-Z]*[aA][a-zA-Z]*")
 CD_ONLY_RE = re.compile(r"(?<![\w.-])(?:cd|pushd|popd)(?![\w.-])")
 
 
 def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
-    """T-3937/3942: stdin trực tiếp từ find/git ls-files/ls/echo, cwd xác định trong dự án và nguồn tránh hàng rào."""
     feeds = list(XARGS_FEED_RE.finditer(cmd))
     if len(feeds) != len(XARGS_WORD_RE.findall(cmd)) or "xpg_echo" in cmd:
         return False
@@ -4522,7 +4519,7 @@ def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
                 return False
         elif m[1] in ("ls", "echo"):
             bad = any(_xargs_fence_word(w, root) or "\\" in w and m[1] == "echo" for w in words)
-            bad = bad or any(_xargs_fence_word(_xargs_from_root(w, root, d), root) for w in words for d in here)
+            bad = bad or any(_xargs_fence_word(w, root, d) for w in words for d in here)
             if bad or m[1] == "ls" and any(LS_ALL_RE.fullmatch(w) for w in words):
                 return False
         elif not all(_xargs_source_safe(m[1], words, root, d) for d in here):
@@ -4530,8 +4527,8 @@ def _xargs_listed(cmd: str, root: str = "", cwd: Optional[str] = None) -> bool:
     return True
 
 
-# T-3942: thư mục và tệp mẫu cho nguồn xargs. AUD-SEC-987/989: thêm Codex và adapter đã cài.
 XARGS_FENCE_DIRS = frozenset({".claude", ".autopilot", ".git", ".codex", ".agents"})
+XARGS_FENCE_SCAN_DIRS = ".claude .claude/hooks .autopilot .autopilot/evidence .git .git/hooks .codex .agents".split()
 XARGS_ADAPTER_DIRS = (".cursor", ".github/hooks", ".grok", ".opencode", ".gemini")
 XARGS_DIR_HEADS = frozenset({"find", "ls", "git", "echo", "xargs"})  # lệnh mà thư mục chạy quyết định tệp được liệt kê
 XARGS_FENCE_FILES = (
@@ -4550,7 +4547,6 @@ XARGS_FENCE_FILES = (
     ".git/hooks/pre-commit",
     ".git/hooks/pre-push",
     ".git/hooks/commit-msg",
-    # T-3945 (R3): `.git/**` là hàng rào (`_git_inner`) — tên mẫu cho `find .` duyệt vào `.git`
     *(".git/HEAD", ".git/index", ".git/ORIG_HEAD", ".git/FETCH_HEAD", ".git/description", ".git/info/exclude"),
     *(".git/objects/pack/pack-0.pack", ".git/objects/pack/pack-0.idx", ".git/objects/pack/pack-0.rev"),
     *(".git/objects/00/00", ".git/objects/info/packs", ".git/refs/heads/main", ".git/refs/tags/v1", ".git/logs/HEAD"),
@@ -4564,13 +4560,12 @@ XARGS_FIND_PRINTS = ("-print", "-print0")  # chỉ ở cuối nhánh: đứng gi
 
 
 def _xargs_dirs(cmd: str, root: str, cwd: Optional[str]) -> Optional[List[str]]:
-    """Cwd ứng viên của nguồn và xargs. None nếu mơ hồ, ngoài dự án hoặc trong hàng rào."""
     placed = _commands_with_cwds(tokenize(cmd), cwd or root)
     dirs = {d for argv, cands in placed if XARGS_DIR_HEADS & {posixpath.basename(t) for t in argv} for d in cands}
     if not root or None in dirs:
         return None
     real = os.path.realpath(root)
-    fence = [*XARGS_FENCE_DIRS, *_xargs_live_dirs(root)]
+    fence = [*XARGS_FENCE_DIRS, *_xargs_live_dirs(root), *_cli_cache_dirs(root)]
     for d in dirs:
         rel = os.path.relpath(os.path.realpath(str(d)), real)
         if rel == ".." or rel.startswith("../") or any(rel == f or rel.startswith(f + "/") for f in fence):
@@ -4579,12 +4574,15 @@ def _xargs_dirs(cmd: str, root: str, cwd: Optional[str]) -> Optional[List[str]]:
 
 
 def _xargs_live_dirs(root: str) -> List[str]:
-    """Thư mục cache của CLI và thư mục adapter có tệp nối (AUD-HAR-573, AUD-SEC-989)."""
-    return [*_cli_cache_dirs(root), *(d for d in XARGS_ADAPTER_DIRS if root and _fence_entry_live(d, root))]
+    return [d for d in XARGS_ADAPTER_DIRS if root and _fence_entry_live(d, root)]
 
 
-def _xargs_fence_word(word: str, root: str) -> bool:
-    """Toán hạng nguồn chạm thư mục hàng rào, xét glob từng đoạn."""
+def _xargs_fence_word(word: str, root: str, here: Optional[str] = None) -> bool:
+    if here is not None:
+        target = posixpath.join(here, word)
+        if _cli_cache_fence(target, _rel_dir(target, root), root):
+            return True
+        word = _xargs_from_root(word, root, here)
     if XARGS_DOT_RE.search(word):
         return True
     segs = posixpath.normpath(word).split("/")
@@ -4597,26 +4595,13 @@ def _xargs_fence_word(word: str, root: str) -> bool:
 
 
 def _xargs_from_root(word: str, root: str, here: str) -> str:
-    """Viết lại toán hạng ls/echo theo gốc dự án. Nếu here ngoài gốc thì giữ nguyên (AUD-SEC-989)."""
     rel = os.path.relpath(os.path.realpath(here), os.path.realpath(root)) if root else ".."
     return word if rel == ".." or rel.startswith("../") else posixpath.normpath(posixpath.join(rel, word))
 
 
 def _xargs_fence_paths(root: str) -> List[str]:
-    """Mẫu cố định, tên trong thư mục rào và tệp adapter đã cài, tính từ gốc dự án."""
-    caches = _cli_cache_dirs(root)
-    out = [*XARGS_FENCE_FILES, *caches, *(f for f in ADAPTER_FENCE_FILES if _adapter_live(f, root))]
-    for sub in (
-        ".claude",
-        ".claude/hooks",
-        ".autopilot",
-        ".autopilot/evidence",
-        ".git",
-        ".git/hooks",
-        ".codex",
-        ".agents",
-        *caches,
-    ):
+    out = [*XARGS_FENCE_FILES, *(f for f in ADAPTER_FENCE_FILES if _adapter_live(f, root))]
+    for sub in XARGS_FENCE_SCAN_DIRS:
         try:
             out += [f"{sub}/{name}" for name in os.listdir(os.path.join(root, sub))]
         except OSError:
@@ -4625,17 +4610,21 @@ def _xargs_fence_paths(root: str) -> List[str]:
 
 
 def _xargs_source_safe(src: str, words: List[str], root: str, here: str) -> bool:
-    """Nguồn `find`/`git ls-files` chạy ở `here` không liệt kê được tệp hàng rào nào."""
-    real = os.path.realpath(root)
-    base = os.path.relpath(os.path.realpath(here), real)
-    rel = [posixpath.relpath(p, base) for p in _xargs_fence_paths(root)]  # theo `here`
+    base = os.path.relpath(os.path.realpath(here), os.path.realpath(root))
+    caches, uncertain = _cli_cache_candidates(root)
+    rel = [posixpath.relpath(p, base) for p in [*_xargs_fence_paths(root), *caches]]
+    unknown = {posixpath.relpath(p, base) for p in uncertain}
     if src == "find":
-        return _xargs_find_safe(words, rel)
-    return _xargs_lsfiles_safe(words, rel)
+        return _xargs_find_safe(words, rel, uncertain=unknown)
+    return _xargs_lsfiles_safe(words, rel, unknown)
 
 
-def _xargs_find_safe(words: List[str], fence: List[str], extra_names: Tuple[str, ...] = XARGS_SECRET_NAMES) -> bool:
-    """Mỗi nhánh -o phải loại hết tệp hàng rào bằng các bộ lọc dương trước hành động in. Cú pháp mơ hồ trả False."""
+def _xargs_find_safe(
+    words: List[str],
+    fence: List[str],
+    extra_names: Tuple[str, ...] = XARGS_SECRET_NAMES,
+    uncertain: Iterable[str] = (),
+) -> bool:
     k = next((i for i, w in enumerate(words) if w[:1] in "-!(" or w == ","), len(words))
     starts, expr = words[:k] or ["."], words[k:]
     if {"(", ")"} & set(expr) and {"-o", "-or", "!", "-not"} & set(expr):
@@ -4660,7 +4649,9 @@ def _xargs_find_safe(words: List[str], fence: List[str], extra_names: Tuple[str,
         reach = [p for p in fence if p == s or p.startswith(s + "/") or dot and (follow or p.split("/", 1)[0] != "..")]
         reach += [posixpath.join(s, n) for n in extra_names]
         found = ["./" + p if start.startswith("./") or start == "." else p for p in reach]
-        if any(all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found):
+        if set(reach).intersection(uncertain) or any(
+            all(_xargs_find_match(op, pat, p) for op, pat in b) for b in branches for p in found
+        ):
             return False
     return True
 
@@ -4673,7 +4664,7 @@ def _xargs_find_match(op: str, pat: str, path: str) -> bool:
     return fnmatch.fnmatchcase(name.casefold() if fold else name, pat.casefold() if fold else pat)
 
 
-def _xargs_lsfiles_safe(words: List[str], fence: List[str]) -> bool:
+def _xargs_lsfiles_safe(words: List[str], fence: List[str], uncertain: Iterable[str] = ()) -> bool:
     specs = [w for w in words if w[:1] != "-"]
     if not specs:
         return not any(p[:3] != "../" for p in fence)
@@ -4681,7 +4672,9 @@ def _xargs_lsfiles_safe(words: List[str], fence: List[str]) -> bool:
         if spec[:1] == ":":
             return False  # pathspec magic
         s = posixpath.normpath(spec)
-        if any(fnmatch.fnmatchcase(p, s) or p.startswith(s + "/") or s == "." for p in fence if p[:3] != "../"):
+        direct = any(fnmatch.fnmatchcase(p, s) or p.startswith(s + "/") or s == "." for p in fence if p[:3] != "../")
+        unknown = any(all(map(fnmatch.fnmatchcase, p.split("/"), s.split("/"))) for p in uncertain if p[:3] != "../")
+        if direct or unknown:
             return False
     return True
 
@@ -15374,7 +15367,6 @@ def _restore_covers(x: str, root: str) -> bool:
 
 
 def _restore_fence_files(root: str) -> List[str]:
-    """Mục hàng rào đang có hiệu lực, tính từ gốc."""
     live = [f for f in (*FENCE_FILES, ".claude/hooks/guard.py") if _fence_entry_live(f, root)]
     return [*live, *_cli_cache_dirs(root)]
 
@@ -15586,6 +15578,12 @@ def _cli_cache_dirs(root: str) -> Tuple[str, ...]:
     frame = os.path.lexists(os.path.join(base, "framework/00-method/README.md"))
     prefixes = (".xtemplates/scripts",) if local and not frame else (".xtemplates/scripts", "scripts")
     return tuple(f"{p}/{s}" for p in prefixes for s in CLI_CACHE_SUFFIXES)
+
+
+def _cli_cache_candidates(root: str) -> Tuple[List[str], Set[str]]:
+    listings = {d: _outside_names(os.path.join(root, d)) for d in _cli_cache_dirs(root)}
+    paths = [*listings, *(f"{d}/{f}" for d, names in listings.items() for f in names or [])]
+    return paths, {d for d, names in listings.items() if names is None}
 
 
 def _cli_cache_fence(target: str, rel: str, root: str, parents: bool = False) -> bool:
@@ -16586,7 +16584,6 @@ def _removed_targets(n: List[str]) -> List[str]:
 
 
 def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional[str]) -> List[str]:
-    """Bảo vệ cache khi thao tác trên cả cây, vẫn xét bộ lọc tên dương của find."""
     if n[:1] == ["find"]:
         roots, i = _find_parts(n[1:])
         expr = n[i + 1 :]
@@ -16597,17 +16594,20 @@ def _cli_cache_tree_asks(n: List[str], argv: List[str], root: str, cwd: Optional
         action = next(j for j, word in enumerate(expr) if word == "-delete" or word in FIND_EXEC)
         single_exec = len(execs) == 1 and action + len(execs[0]) + 2 == len(expr) and str(expr[-1]) in FIND_EXEC_END
         filters = [*expr[:action], "-print0"] if expr[action:] == ["-delete"] or single_exec else None
-        names = _cli_cache_dirs(root)
-        paths = [*names, *(f"{d}/{f}" for d in names for f in _outside_names(os.path.join(root, d)) or ("sample.pyc",))]
+        paths, uncertain = _cli_cache_candidates(root)
         for start in roots:
             for x in _where(start, root, cwd):
                 rel = _rel_dir(x, root)
-                reach = [
-                    posixpath.normpath(posixpath.join(start, posixpath.relpath(p, rel)))
+                reach = {
+                    p: posixpath.normpath(posixpath.join(start, posixpath.relpath(p, rel)))
                     for p in paths
                     if p == rel or p.startswith(rel + "/") or rel == "."
-                ]
-                if reach and (filters is None or not _xargs_find_safe([start, *filters], reach, extra_names=())):
+                }
+                if reach and (
+                    filters is None
+                    or uncertain.intersection(reach)
+                    or not _xargs_find_safe([start, *filters], list(reach.values()), extra_names=())
+                ):
                     return [CLI_CACHE_WHY.format(start)]
         return []
     base = _git_path_dir(n, argv, cwd)
