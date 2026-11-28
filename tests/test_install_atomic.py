@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -341,6 +342,31 @@ class InstallInterruptedWriteTest(TestCase):
         ):
             self.assertEqual(install.recover_settings_rules(self.target), previous)
             read.assert_called_once()
+
+    def test_installer_reports_partial_legacy_hook_and_preserves_project_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as scratch:
+            root = Path(scratch)
+            rel = ".claude/hooks/sample.sh"
+            source, installed = root / rel, self.target / rel
+            source.parent.mkdir(parents=True)
+            installed.parent.mkdir(parents=True)
+            complete = b"#!/bin/sh\n# demo fixture\nprintf sample\n"
+            source.write_bytes(complete)
+            expected = install.sha256(complete)
+            for data, should_warn in ((complete[:25], True), (b"#!/bin/sh\nprintf custom\n", False)):
+                with self.subTest(should_warn=should_warn):
+                    installed.write_bytes(data)
+                    log = io.StringIO()
+                    with (
+                        mock.patch.object(install, "SRC", root),
+                        mock.patch.object(install, "harness_sources", return_value=[source]),
+                        redirect_stderr(log),
+                        redirect_stdout(log),
+                    ):
+                        result = install.copy_harness_files(self.target, False, {rel: expected}, Counter())
+                    self.assertEqual(result, {rel: expected})
+                    self.assertEqual(installed.read_bytes(), data)
+                    self.assertEqual("có thể bị ghi cụt" in log.getvalue(), should_warn)
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()

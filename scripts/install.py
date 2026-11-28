@@ -1135,7 +1135,12 @@ def copy_harness_files(
     new_manifest: dict[str, str] = {}
     for src in harness_sources(target):
         rel = src.relative_to(SRC).as_posix()
-        r = copy_if_absent(src, target / rel, force_harness, installed_hash=manifest.get(rel))
+        dst = target / rel
+        r = copy_if_absent(src, dst, force_harness, installed_hash=manifest.get(rel))
+        if r == "kept-own" and rel.startswith(".claude/hooks/"):
+            current, template = dst.read_bytes(), src.read_bytes()
+            if len(current) < len(template) and template.startswith(current):
+                log(f"  ⚠ {rel} có thể bị ghi cụt: chỉ còn phần đầu mẫu. Đã giữ file để đối chiếu và khôi phục.")
         stats[r] += 1
         if r in HASHED:
             new_manifest[rel] = sha256(src.read_bytes())
