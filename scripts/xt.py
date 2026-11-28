@@ -92,7 +92,7 @@ Lệnh:
   grant-check GROUP [KHOÁ=GIÁ_TRỊ ...] [--plan F] [--json]
                                 Việc production có nằm trong mục Ủy quyền production của PLAN.md không (exit 0 =
                                 trong ủy quyền; 1 = ngoài → loop defer; thiếu mục = ngoài).
-  merge-watch [--pr PR] [--interval 30] [--max-minutes 240]
+  merge-watch [--pr PR] [--interval 30] [--max-minutes 240] [--observe-context]
                                 Gọi merge-check mỗi `interval` giây tới khi verdict ≠ wait (exit 0 = đã merge/merge,
                                 1 = cần hành động, 2 = lỗi đọc PR 3 lần liền, 3 = hết giờ); chạy nền, không tốn token.
   doctor [--fix] [--json]       Audit khung đã cài trước /autopilot (Python/git, hook + file hook, skill, AGENTS/CLAUDE,
@@ -7866,6 +7866,7 @@ def _pr_rest(
     target: Optional[RepoTarget] = None,
     *,
     on_selector: Optional[Callable[[str], None]] = None,
+    on_merge_context: Optional[Callable[[Tuple[str, str]], None]] = None,
 ) -> Dict[str, Any]:
     """Dựng JSON dạng `gh pr view --json MERGE_FIELDS` chỉ bằng REST — `merge_decision` dùng nguyên như trước.
     `local_check=False` (app chỉ đọc, ADR-0038): không kiểm xung đột cục bộ (`git fetch` + `merge-tree` ghi ref/object)."""
@@ -7883,6 +7884,7 @@ def _pr_rest(
         _pr_rest_details,
         PrInputError,
         on_selector,
+        on_merge_context,
     )
 
 
@@ -8007,7 +8009,11 @@ def load_pr(args: argparse.Namespace) -> Dict[str, Any]:
     """JSON của PR: `--pr-json FILE|-` (định dạng `gh pr view --json MERGE_FIELDS`) hoặc lấy qua REST; lỗi → PrInputError."""
     try:
         if not args.pr_json:
-            return _pr_rest(args.pr, on_selector=getattr(args, "on_pr_selector", None))
+            return _pr_rest(
+                args.pr,
+                on_selector=getattr(args, "on_pr_selector", None),
+                on_merge_context=getattr(args, "on_merge_context", None),
+            )
         text = sys.stdin.read() if args.pr_json == "-" else Path(args.pr_json).read_text(encoding="utf-8")
         data = json.loads(text)
     except (OSError, json.JSONDecodeError) as exc:
@@ -17108,15 +17114,24 @@ def cmd_release_sign(args: argparse.Namespace) -> int:
 WATCH_ERROR_LIMIT = 3  # lần lỗi đọc PR liên tiếp tối đa trước khi merge-watch bỏ cuộc (mạng chập chờn không đáng dừng)
 
 
-def _merge_check_json(pr: Optional[str]) -> Tuple[int, Dict[str, Any], str]:
+def _merge_check_json(pr: Optional[str], observe_context: bool = False) -> Tuple[int, Dict[str, Any], str]:
     """`cmd_merge_check --json` chạy trong tiến trình: (exit, JSON, stderr). Dùng lại đúng đường quyết định của
     `merge-check` (cấu hình xt.yaml, ngoại lệ cứng…) nên `merge-watch` không có luật riêng."""
     out, err = io.StringIO(), io.StringIO()
     resolved: List[str] = []
+    evidence: Dict[str, Tuple[str, str]] = {}
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        rc = cmd_merge_check(argparse.Namespace(pr=pr, pr_json=None, json=True, on_pr_selector=resolved.append))
+        rc = cmd_merge_check(
+            argparse.Namespace(
+                pr=pr,
+                pr_json=None,
+                json=True,
+                on_pr_selector=resolved.append,
+                on_merge_context=(lambda value: evidence.update(live_merge_context=value)) if observe_context else None,
+            )
+        )
     fallback = {"live_selector": resolved[0]} if resolved else {}
-    return rc, (json.loads(out.getvalue()) if rc != 2 else fallback), err.getvalue()
+    return rc, ({**json.loads(out.getvalue()), **evidence} if rc != 2 else fallback), err.getvalue()
 
 
 def _watch_pr_next(pr: Optional[str]) -> None:
@@ -17132,28 +17147,17 @@ def _watch_pr_next(pr: Optional[str]) -> None:
         print("pr next → " + out.getvalue().strip().replace("\n", "\n  "), flush=True)
 
 
-def _watch_final(d: Dict[str, Any], selector: str) -> int:
-    """In bước kế (+ kết quả `pr next` khi PR còn mở) và trả exit khi verdict ≠ wait: 0 = PR đã merge hoặc đủ điều kiện
-    merge, 1 = cần hành động/người."""
-    if d["next"]:
-        print(f"→ {d['next']}", flush=True)
-    merged = d["verdict"] == "closed" and "PR đã MERGED" in d["reasons"][0]
-    if d["verdict"] != "closed":
-        _watch_pr_next(selector)
-    return 0 if merged or d["verdict"] == "merge" else 1
-
-
 def cmd_merge_watch(args: argparse.Namespace) -> int:
     """Gọi `merge-check` mỗi `--interval` giây (mặc định 30) tới khi verdict ≠ wait (ADR-0021). Chạy nền (`run_in_background`): thoát
     thì agent được đánh thức, không tốn token mỗi lượt hỏi. Exit: 0 đã merge/`merge`, 1 cần hành động (review/update/fix/human/
     đóng không merge), 2 lỗi đọc PR `WATCH_ERROR_LIMIT` lần liền, 3 hết `--max-minutes` mà PR vẫn chờ, 141 bên đọc đóng ống."""
     _sibling_imports()
-    from xt_merge_intent import watch_selector
+    from xt_merge_intent import finish_watch, watch_selector
 
     deadline, selector = time.monotonic() + args.max_minutes * 60, args.pr
     errors = 0
     while True:
-        rc, d, err = _merge_check_json(selector)
+        rc, d, err = _merge_check_json(selector, args.observe_context)
         stamp = _dt.datetime.now().strftime("%H:%M:%S")
         selector = watch_selector(d, selector or "")
         if rc == 2:
@@ -17165,7 +17169,7 @@ def cmd_merge_watch(args: argparse.Namespace) -> int:
             errors = 0
             print(f"[{stamp}] {d['verdict'].upper()} · PR #{d['pr']} — {'; '.join(d['reasons'])}", flush=True)
             if d["verdict"] != "wait":
-                return _watch_final(d, selector)
+                return finish_watch(sys.modules[__name__], d, selector, args.observe_context)
         if time.monotonic() + args.interval > deadline:
             print(f"[{stamp}] hết {args.max_minutes} phút mà PR vẫn chờ — chạy lại merge-watch", flush=True)
             return 3
@@ -23229,6 +23233,7 @@ def build_parser() -> argparse.ArgumentParser:
     pw.add_argument("--pr", help="số/URL/nhánh của PR (mặc định PR của nhánh hiện tại)")
     pw.add_argument("--interval", type=int, default=30, help="giây giữa hai lần kiểm (mặc định 30)")
     pw.add_argument("--max-minutes", type=int, default=240, help="tổng thời gian chờ tối đa (mặc định 240)")
+    pw.add_argument("--observe-context", action="store_true", help="lưu mốc merge cục bộ sau khi GitHub báo đã merge")
     pw.set_defaults(fn=cmd_merge_watch)
     pg = sub.add_parser(
         "grant-check", help="việc production có nằm trong Ủy quyền production của PLAN.md không (ADR-0022)"

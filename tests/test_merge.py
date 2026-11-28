@@ -1671,7 +1671,7 @@ class MergeWatchTest(unittest.TestCase):
         seq = iter(results)
         self.pr_next_calls: list[str] = []
         with (
-            unittest.mock.patch.object(xt, "_merge_check_json", side_effect=lambda pr: next(seq)),
+            unittest.mock.patch.object(xt, "_merge_check_json", side_effect=lambda pr, observe_context: next(seq)),
             unittest.mock.patch.object(xt, "_watch_pr_next", side_effect=self.pr_next_calls.append),
         ):
             rc, out, _ = run_main("merge-watch", "--pr", "7", *extra)

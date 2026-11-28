@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import shlex
+import stat
 import urllib.parse
 from contextlib import contextmanager
 from contextvars import ContextVar
+from pathlib import Path
+from types import ModuleType
 from typing import Any, Callable, Iterator, NamedTuple
 
 HOST_LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
@@ -237,6 +242,7 @@ def read_pr(
     details: PrDetails,
     error: type[Exception],
     on_selector: Callable[[str], None] | None = None,
+    on_merge_context: Callable[[tuple[str, str]], None] | None = None,
 ) -> dict[str, Any]:
     repo = target.path
     with at_host(setting, target.host):
@@ -249,6 +255,8 @@ def read_pr(
             raise error(f"không xác minh được phản hồi duy nhất cho PR #{number}")
         pull = values[0]
         intent = verified(pull, repo, number, target.host, error)
+        if on_merge_context is not None and intent and (metadata := _merge_context_metadata(pull)):
+            on_merge_context(metadata)
         result = details(repo, number, local_check, pull, intent._asdict() if intent else None)
         return {**result, "live_host": target.host, "live_selector": route}
 
@@ -381,6 +389,128 @@ def dispatch_ci(out: dict[str, Any], target: RepoTarget, base: str, run: WriteCo
             + workflow_run(target, name, base)
         )
         out["warn"] = "; ".join(x for x in (out.get("warn"), text) if x)
+
+
+MAX_CHECKPOINT_BYTES = 4096
+
+
+def _confirmed_context_merge(runtime: ModuleType, decision: dict[str, Any]) -> tuple[MergeIntent, str, str] | None:
+    # `live_selector` được đọc từ origin đã ghim. Không dựng endpoint từ dữ liệu lưu trên đĩa.
+    raw_selector = decision.get("live_selector")
+    selector = PR_URL.fullmatch(raw_selector) if isinstance(raw_selector, str) else None
+    first_metadata = decision.get("live_merge_context")
+    if not selector or not first_metadata:
+        return None
+    path = f"repos/{selector['repo']}/pulls/{selector['pr']}"
+    values = runtime._gh_api(path, host=selector["host"])
+    if len(values) != 1 or not isinstance(values[0], dict):
+        return None
+    pull = values[0]
+    intent = MergeIntent.from_pull(pull)
+    if not intent or (intent.host, intent.path, intent.pr, intent.expected_head) != (
+        selector["host"],
+        path,
+        decision.get("pr"),
+        decision.get("head"),
+    ):
+        return None
+    metadata = _merge_context_metadata(pull)
+    if metadata is None or metadata != first_metadata:
+        return None
+    return intent, *metadata
+
+
+def _merge_context_metadata(pull: dict[str, Any]) -> tuple[str, str] | None:
+    if pull.get("merged") is not True or pull.get("state") != "closed":
+        return None
+    merge_sha = pull.get("merge_commit_sha")
+    if not isinstance(merge_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", merge_sha):
+        return None
+    base_branch = pull["base"].get("ref")  # MergeIntent đã kiểm `base.repo`.
+    if not isinstance(base_branch, str) or len(base_branch) > 255 or not base_branch.isprintable():
+        return None
+    return merge_sha, base_branch
+
+
+def _context_checkpoint_text(
+    runtime: ModuleType, base: Path, intent: MergeIntent, merge_sha: str, base_branch: str
+) -> str:
+    if runtime._git(base, "check-ref-format", f"refs/heads/{base_branch}").returncode != 0:
+        return ""
+    return (
+        json.dumps(
+            {
+                "schema": 1,
+                "host": intent.host,
+                "repo": intent.repo,
+                "pr": intent.pr,
+                "head": intent.expected_head,
+                "merge_sha": merge_sha,
+                "base_branch": base_branch,
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+
+def _context_checkpoint_matches(path: Path, expected: bytes) -> bool:
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return False
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise OSError("checkpoint phải là tệp thường")
+        # Chỉ nhận đúng biểu diễn do máy ghi từ bằng chứng REST hiện tại, không phân tích nội dung cục bộ.
+        with os.fdopen(fd, "rb", closefd=False) as stream:
+            return stream.read(MAX_CHECKPOINT_BYTES + 1) == expected
+    finally:
+        os.close(fd)
+
+
+def _save_context_checkpoint(runtime: ModuleType, base: Path, checkpoint: str, intent: MergeIntent) -> None:
+    expected = checkpoint.encode("ascii")
+    if not expected or len(expected) > MAX_CHECKPOINT_BYTES:
+        return
+    key = hashlib.sha256(intent.target.pull_url(intent.pr).encode("ascii")).hexdigest()
+    name = f"merge-context-{key}.json"
+    # `check-ignore` có xét index, nên đường dẫn bị track sẽ bị từ chối kể cả khi có mẫu ignore.
+    path = runtime.state_write_dir(base, name)
+    lock = path.with_name(runtime.STATE_LOCK_FILE)
+    folder = path.parent.relative_to(base).as_posix() + "/"  # chỉ rõ thư mục trước lần ghi đầu tiên
+    rel = [folder, path.relative_to(base).as_posix(), lock.relative_to(base).as_posix()]
+    ignored = runtime._git(base, "check-ignore", "--", *rel, env=runtime._go_git_env())
+    if ignored.returncode != 0 or ignored.stdout.splitlines() != rel:
+        return
+    with runtime._state_lock(base):
+        if not _context_checkpoint_matches(path, expected):
+            runtime.write_atomic(path, checkpoint)
+
+
+def observe_merge(runtime: ModuleType, decision: dict[str, Any]) -> None:
+    """Đối chiếu lại qua REST trước khi đọc mốc cũ, giữ nguyên verdict khi quan sát gặp lỗi."""
+    try:
+        confirmed = _confirmed_context_merge(runtime, decision)
+        if confirmed:
+            intent, merge_sha, base_branch = confirmed
+            base = runtime.project_dir()
+            checkpoint = _context_checkpoint_text(runtime, base, intent, merge_sha, base_branch)
+            _save_context_checkpoint(runtime, base, checkpoint, intent)
+    except (OSError, ValueError, RecursionError, runtime.PrInputError):
+        return
+
+
+def finish_watch(runtime: ModuleType, decision: dict[str, Any], selector: str, observe_context: bool) -> int:
+    """In bước kế và trả exit khi verdict khác `wait`."""
+    if decision["next"]:
+        print(f"→ {decision['next']}", flush=True)
+    merged = decision["verdict"] == "closed" and "PR đã MERGED" in decision["reasons"][0]
+    if merged and observe_context:
+        observe_merge(runtime, decision)
+    if decision["verdict"] != "closed":
+        runtime._watch_pr_next(selector)
+    return 0 if merged or decision["verdict"] == "merge" else 1
 
 
 def dispatch_tag(
