@@ -4,6 +4,13 @@
   "policy": "default"
  },
  "cases": [
+  {"id":"guard-har576-resolve-name-literal","origin":"control","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pkgutil; pkgutil.resolve_name('json')\""},"expect":{"allowed":true}},
+  {"id":"guard-har576-resolve-name-variable","origin":"audit","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pkgutil; name='json'; pkgutil.resolve_name(name)\""},"expect":{"allowed":false,"decision":"deny","code":"STAGE_APPROVE"}},
+  {"id":"guard-har576-locate-literal","origin":"control","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pydoc; pydoc.locate('json')\""},"expect":{"allowed":true}},
+  {"id":"guard-har576-locate-variable","origin":"audit","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pydoc; name='json'; pydoc.locate(name)\""},"expect":{"allowed":false,"decision":"deny","code":"STAGE_APPROVE"}},
+  {"id":"guard-har576-importfile-literal","origin":"control","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pydoc; pydoc.importfile('tests_e2e/__init__.py')\""},"expect":{"allowed":true}},
+  {"id":"guard-har576-importfile-variable","origin":"audit","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"import pydoc; name='tests_e2e/__init__.py'; pydoc.importfile(name)\""},"expect":{"allowed":false,"decision":"deny","code":"STAGE_APPROVE"}},
+  {"id":"guard-har576-local-locate","origin":"control","refs":["AUD-HAR-576"],"input":{"command":"python3 -c \"def locate(name): return name\nprint(locate('json'))\""},"expect":{"allowed":true}},
   {
    "id": "guard-acceptance-ledger-requires-cli",
    "origin": "control",
