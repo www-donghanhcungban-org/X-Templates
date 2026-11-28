@@ -42,4 +42,4 @@
 
 ### Lát 4 — Hồ sơ license verify-render theo D-642
 
-- [ ] `T-5095` AUD-DEP-041: bổ sung inventory bốn gói npm ghim của verify-render và chứng cứ license trực tiếp/bắc cầu. Kiểm bảng khớp phiên bản trong lock (nguồn: audit:AUD-DEP-041, D-642) (files: docs/ops/DEPENDENCIES.md, tests/test_ci.py, tests/fixtures/autonomy/scope.json, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_ci.SupplyChainArtifactsTest`
+- [x] `T-5095` AUD-DEP-041: bổ sung inventory bốn gói npm ghim của verify-render và chứng cứ license trực tiếp/bắc cầu. Kiểm bảng khớp phiên bản trong lock (nguồn: audit:AUD-DEP-041, D-642) (files: docs/ops/DEPENDENCIES.md, tests/test_ci.py, tests/fixtures/autonomy/scope.json, docs/ops/AUDIT-STATUS.md, CHANGELOG.md; topo: review) — Gate: `python3 -m unittest tests.test_ci.SupplyChainArtifactsTest`
