@@ -11,7 +11,7 @@ import datetime as _dt
 from typing import Any, Dict, List, Tuple
 
 from xt_app.server import Ctx, Routes
-from xt_merge_intent import RepoTarget
+from xt_merge_intent import RepoTarget, at_host
 
 DAYS_DEFAULT = 7
 DAYS_MAX = 90
@@ -91,7 +91,9 @@ def _pr_stats(ctx: Ctx) -> Tuple[int, Dict[str, Any]]:
     xt = ctx.xt
     now = _dt.datetime.now(_dt.timezone.utc)
     try:
-        prs, runs, cut = xt._pr_stats_fetch("repos/{owner}/{repo}", now - _dt.timedelta(days=days))
+        target = xt._pr_checkout()
+        with at_host(xt.PR_READ_HOST, target.host):
+            prs, runs, cut = xt._pr_stats_fetch(target.path, now - _dt.timedelta(days=days))
         stats = xt.pr_stats(prs, runs, now, days, cut)
     except (xt.PrInputError, *_DATA_ERRORS) as exc:
         return _unavailable(exc)
