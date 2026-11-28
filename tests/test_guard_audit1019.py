@@ -34,6 +34,38 @@ def _load_guard():
 guard = _load_guard()
 
 
+class StdlibGuardChildTest(unittest.TestCase):
+    def test_merge_check_starts_without_site_and_loads_its_sibling(self):
+        tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        scripts = tmp / ".xtemplates" / "scripts"
+        scripts.mkdir(parents=True)
+        entry = scripts / "xt.py"
+        entry.write_text(
+            "import json, sys\n"
+            "from companion import value\n"
+            "def main():\n"
+            "    print(json.dumps(dict(no_site=sys.flags.no_site, site_loaded='site' in sys.modules, "
+            "isolated=sys.flags.isolated, no_bytecode=sys.dont_write_bytecode, argv=sys.argv, value=value)))\n"
+            "    return 0\n",
+            encoding="utf-8",
+        )
+        (scripts / "companion.py").write_text("value = 'đồng hành'\n", encoding="utf-8")
+        with mock.patch.object(guard, "__file__", str(tmp / ".claude" / "hooks" / "guard.py")):
+            got = guard.merge_check(["42"], str(tmp))
+        self.assertEqual(
+            got,
+            {
+                "no_site": 1,
+                "site_loaded": False,
+                "isolated": 1,
+                "no_bytecode": True,
+                "argv": [str(entry), "merge-check", "--json", "--pr", "42"],
+                "value": "đồng hành",
+            },
+        )
+        self.assertFalse((scripts / "__pycache__").exists())
+
+
 def final(cmd: str, root: Path = ROOT) -> str:
     """Quyết định cuối ở chính sách mặc định (không hỏi): `deny` hoặc rỗng (cho chạy)."""
     with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "XT_GUARD_POLICY": ""}):
@@ -2298,6 +2330,7 @@ class GuardBytecodeForgeTest(unittest.TestCase):
             "PY_LOADER + đối số cache cũ": [
                 sys.executable,
                 "-I",
+                "-S",
                 "-B",
                 "-c",
                 guard.PY_LOADER,
@@ -2321,13 +2354,13 @@ class GuardBytecodeForgeTest(unittest.TestCase):
     def test_guard_cache_tamper_loader_shared(self):
         """Bộ nạp của `py_run` (_lib.sh) và của guard (merge-check) là một: sửa một chỗ không bỏ sót chỗ kia."""
         lib = (ROOT / ".claude" / "hooks" / "_lib.sh").read_text(encoding="utf-8")
-        m = re.search(r"python3 -I -B -c '(.*?)' \"\$@\"", lib, re.S)
+        m = re.search(r"python3 -I -S -B -c '(.*?)' \"\$@\"", lib, re.S)
         self.assertIsNotNone(m)
         self.assertEqual(m.group(1), guard.PY_LOADER)
         body = lib.split("py_run()", 1)[1].split("\n}", 1)[0]
         self.assertNotIn("pycache_prefix", body)
         self.assertNotIn("marshal", body)  # không nạp bytecode từ cache (review PR #182)
-        self.assertEqual(guard.isolated_python()[1:], ["-I", "-B", "-c", guard.PY_LOADER])
+        self.assertEqual(guard.isolated_python()[1:], ["-I", "-S", "-B", "-c", guard.PY_LOADER])
 
     def test_guard_cache_tamper_loader_runs_without_cache(self):
         tmp = Path(self.enterContext(tempfile.TemporaryDirectory()))
