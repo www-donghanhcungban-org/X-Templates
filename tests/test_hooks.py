@@ -2679,6 +2679,7 @@ class CliCacheFenceTest(_FenceRootsMixin, unittest.TestCase):
             self.assert_blocked(listed, ("BUDGET",), roots=(self.frame,))
             indexed = "git ls-files 'scripts/__pycache__/*.pyc' | xargs rm -f"
             self.assert_blocked(indexed, ("BUDGET",), roots=(self.frame,))
+            self.assert_allowed("git ls-files src/app.py | xargs rm -f", roots=(self.frame,))
             self.assert_allowed("find src -name '*.pyc' -delete", roots=(self.frame,))
 
     def test_concurrent_edits_keep_project_ownership_separate(self):
