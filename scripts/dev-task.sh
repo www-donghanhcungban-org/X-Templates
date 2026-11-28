@@ -33,6 +33,7 @@
 #          mỗi dòng một id test (sắp xếp, bỏ trùng). Có khoá `test_weights` (file JSON {"id": giây}) → chia tham lam
 #          LPT theo trọng số (`xt.py test-shard-plan`: nặng trước, vào shard nhẹ nhất; id lạ lấy trung vị; file hỏng →
 #          đỏ exit 2, file vắng → mọi id cùng trọng số); không khai → id thứ k (đếm từ 0) thuộc shard (k mod N) + 1.
+#          XT_SHARD_FIRST đưa id khớp nguyên dòng lên đầu shard đã chọn, giữ thứ tự của các id còn lại.
 #          Mỗi id chạy `test_unit` (id ở "$1") song song theo số CPU. DIR → export XT_COV_DIR=DIR để `test_unit` ghi
 #          dữ liệu coverage vào đó. Đỏ khi `test_list` đỏ, ít hơn XT_MIN_TESTS id (mặc định 1) hoặc shard rỗng.
 #   test-weights = đo lại file `test_weights`: chạy `test_unit` lần lượt từng id (coverage vào thư mục tạm), ghi giây
@@ -520,6 +521,14 @@ test_shard() { # $1=I (1..N) $2=N [$3=thư mục dữ liệu coverage]
   fi
   pick="$(printf '%s\n' "$ids" | shard_pick "$i" "$n")" || return $?
   [ -n "$pick" ] || { log "test-shard: shard $i/$n rỗng (chỉ $total id) — giảm N"; return 1; }
+  if [ -n "${XT_SHARD_FIRST:-}" ]; then
+    pick="$(printf '%s\n' "$pick" | awk '
+      BEGIN { first = ENVIRON["XT_SHARD_FIRST"] }
+      ($0 "") == first { print; next }
+      { remaining[++count] = $0 }
+      END { for (i = 1; i <= count; i++) print remaining[i] }
+    ')" || return $?
+  fi
   log "test-shard $i/$n: $(printf '%s\n' "$pick" | grep -c .)/$total id"
   printf '%s\n' "$pick" | (cd "$ROOT" && run_counted xargs -r -P "$(shard_jobs)" -n 1 bash -o pipefail -c "$unit" _)
 }
