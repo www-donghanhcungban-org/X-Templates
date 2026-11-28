@@ -235,6 +235,39 @@ class DefaultDenyTest(unittest.TestCase):
         self.assertEqual(decide(pipeline, app)["code"], guard.BUDGET)
         self.assertEqual(decide(f"{source} -delete", app)["code"], "HOOK_BYPASS")
 
+    def test_find_link_budget_is_shared_across_startpoints(self):
+        _, app = cache_cleanup_projects(Path(self.enterContext(tempfile.TemporaryDirectory())))
+        for name in ("notes", "guides"):
+            (app / name).mkdir()
+            (app / name / "draft.md").touch()
+        finder = "find -L {} -maxdepth 1 -name '*.md'"
+        for suffix, blocked in ((" -delete", "HOOK_BYPASS"), (" | xargs sed -i s/a/b/", guard.BUDGET)):
+            with (
+                self.subTest(suffix=suffix),
+                mock.patch.object(guard, "_outside_names", wraps=guard._outside_names) as scan,
+                mock.patch.object(guard, "_find_traversal_check", wraps=guard._find_traversal_check) as parse,
+            ):
+                reads, parses = [], []
+                for roots in ("notes", " ".join(["notes"] * 12)):
+                    self.assertEqual(decide(finder.format(roots) + suffix, app)["decision"], "")
+                    reads.append(sum(args == (str(app / "notes"),) for args, _ in scan.call_args_list))
+                    parses.append(parse.call_count)
+                    scan.reset_mock()
+                    parse.reset_mock()
+                self.assertGreater(reads[0], 0)
+                self.assertEqual(reads[0], reads[1])
+                self.assertGreater(parses[0], 0)
+                self.assertEqual(parses[0], parses[1])
+                physical = finder.format("notes").replace("-L", "-P", 1)
+                self.assertEqual(decide(physical + suffix, app)["decision"], "")
+                self.assertNotIn(mock.call(str(app / "notes")), scan.call_args_list)
+                for cap in (2, 3):
+                    with mock.patch.object(guard, "OUTSIDE_SCAN_MAX", cap):
+                        self.assertEqual(decide(finder.format("notes guides") + suffix, app)["code"], blocked)
+        (app / "inputs").write_bytes(b"notes\0")
+        from_file = "find -files0-from inputs -name '*.md' | xargs sed -i s/a/b/"
+        self.assertEqual(decide(from_file, app)["code"], guard.BUDGET)
+
     def test_value_class_is_budget_with_rewrite_hint(self):
         for cmd in (*DENY["a-value"][:10], DENY["b-runner"][2], *DENY["c-xargs"][2:5]):
             with self.subTest(cmd=cmd):
