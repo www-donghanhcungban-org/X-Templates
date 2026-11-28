@@ -1,4 +1,4 @@
-# ADR-0111 — Tách bộ đọc trọng số và chia shard khỏi xt.py
+# ADR-0111: Tách bộ đọc trọng số và chia shard khỏi xt.py
 
 - **Trạng thái:** Đã chấp nhận theo PLAN nâng cấp và D-626.
 - **Triển khai:** T-5069.
