@@ -57,6 +57,28 @@ class WriteBytesAtomicTest(TestCase):
         self.tmp = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         self.path = self.tmp / "hook.sh"
 
+    def test_migration_replaces_incomplete_prefix_and_retains_unrelated_manifest(self) -> None:
+        source = b'{"sample.txt":"example"}\n'
+        manifest = self.tmp / install.MANIFEST
+        manifest.parent.mkdir()
+        legacy = self.tmp / install.LEGACY_DIR
+        for current, expected in (
+            (source[:8], source),
+            (source[:-1], source[:-1]),
+            (b'{"own.txt":"keep"}', b'{"own.txt":"keep"}'),
+            (b"other bytes", b"other bytes"),
+        ):
+            with self.subTest(current=current):
+                legacy.mkdir()
+                (legacy / "harness.sha256.json").write_bytes(source)
+                manifest.write_bytes(current)
+                manifest.chmod(0o600)
+                install.migrate_legacy(self.tmp)
+                self.assertEqual(manifest.read_bytes(), expected)
+                self.assertEqual(stat.S_IMODE(manifest.stat().st_mode), 0o600)
+        self.assertFalse(install.legacy_manifest_complete(b'{"not-complete"'))
+        self.assertFalse(install.legacy_manifest_complete(b"[1]"))
+
     def test_legacy_manifest_survives_partial_write_and_retry(self) -> None:
         legacy = self.tmp / install.LEGACY_DIR
         legacy.mkdir()
@@ -356,23 +378,28 @@ class InstallInterruptedWriteTest(TestCase):
             for data, should_warn in ((complete[:25], True), (b"#!/bin/sh\nprintf custom\n", False)):
                 with self.subTest(should_warn=should_warn):
                     installed.write_bytes(data)
-                    log = io.StringIO()
+                    proposal = installed.with_name(installed.name + ".xtemplates-new")
                     with (
                         mock.patch.object(install, "SRC", root),
                         mock.patch.object(install, "harness_sources", return_value=[source]),
-                        redirect_stderr(log),
-                        redirect_stdout(log),
                     ):
-                        result = install.copy_harness_files(self.target, False, {rel: expected}, Counter())
-                    self.assertEqual(result, {rel: expected})
-                    self.assertEqual(installed.read_bytes(), data)
-                    self.assertEqual("có thể bị ghi cụt" in log.getvalue(), should_warn)
-                    proposal = installed.with_name(installed.name + ".xtemplates-new")
-                    if should_warn:
-                        self.assertEqual(proposal.read_bytes(), complete)
-                        proposal.unlink()
-                    else:
-                        self.assertFalse(proposal.exists())
+                        job = (source, rel, False, None, None)
+                        action = "updated-new" if should_warn else "kept-own"
+                        self.assertEqual(install.plan_entry(self.target, job, expected)["action"], action)
+                        stats = Counter()
+                        result = install.copy_harness_files(self.target, False, {rel: expected}, stats)
+                        self.assertEqual(stats, Counter({action: 1}))
+                        self.assertEqual(result, {rel: expected})
+                        self.assertEqual(installed.read_bytes(), data)
+                        if should_warn:
+                            self.assertEqual(proposal.read_bytes(), complete)
+                            proposal.write_bytes(b"# reviewed proposal\n")
+                            self.assertEqual(install.plan_entry(self.target, job, expected)["action"], "kept-own")
+                            install.copy_harness_files(self.target, False, {rel: expected}, Counter())
+                            self.assertEqual(proposal.read_bytes(), b"# reviewed proposal\n")
+                            proposal.unlink()
+                        else:
+                            self.assertFalse(proposal.exists())
 
     def run_install(self, *extra: str) -> tuple[int, str]:
         err = io.StringIO()
