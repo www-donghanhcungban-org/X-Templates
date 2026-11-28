@@ -1331,6 +1331,13 @@
 - Lý do (tiêu chí chất lượng cuối): Hai lượt đối chiếu registry và SHA-512 cho cùng metadata. Bốn gói nằm trong devDependencies của verify-render. Quyết định giới hạn phạm vi đó và đáp ứng BASE-DEP-005.
 - Đường lùi: Nếu thay phiên bản hoặc cách phân phối, rà lại metadata và ghi quyết định mới. Có thể gỡ gói và cập nhật Gate trước khi đổi phạm vi.
 
+### D-643 · 2026-11-28T13:32:39+00:00 · Duyệt PLAN-harden 2026-11-28 sau xác minh D-638
+
+- Phương án: (1) Dùng tiếp PLAN audit đã xác minh và bổ sung việc trực tiếp · (2) Mở PLAN kế riêng cho nợ audit còn mở và cổng ký
+- Chọn: Mở PLAN kế riêng cho nợ audit còn mở và cổng ký
+- Lý do (tiêu chí chất lượng cuối): Giữ nguyên bằng chứng đợt D-638, giữ ID đã có, nghiệm thu từng lát và chỉ ký sau audit strict cùng review delta
+- Đường lùi: Bỏ PLAN kế và quay lại PLAN D-638 nếu phạm vi audit đổi trước khi mở PR
+
 ### D-645 · 2026-11-28T14:45:13+00:00 · Sau audit chi phí ngày 28/11, sửa gì trước để giảm ngữ cảnh và thời gian mà vẫn phát hiện lỗi?
 
 - Phương án: (1) Giới hạn bằng chứng ci-triage sau che dữ liệu, giữ chữ ký đầy đủ và log gốc. Sửa audit delta ở lát riêng để dùng lại diff theo SHA và báo thiếu dữ liệu hoặc đổi harness. · (2) Giảm bộ kiểm hoặc rút PROGRESS và gộp hai lần quét phụ thuộc ngay.

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import unittest
 import unittest.mock
+from argparse import Namespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,6 +60,56 @@ def awaiting(history, sha=SHA, evidence="docs/m.png", digest=PNG):
 
 
 class DesignLedgerProblemTest(unittest.TestCase):
+    def test_resubmission_preserves_first_evidence_path(self):
+        state = d.submit(xt, d.empty(), SHA, "docs/sample.png", PNG)
+        state = d.reopen(xt, state, "new draft")
+        with self.assertRaisesRegex(d.DesignError, "docs/sample.png"):
+            d.submit(xt, state, SHA2, "docs/other.png", PNG)
+        self.assertEqual(state["status"], "none")
+        self.assertEqual(d.submit(xt, state, SHA2, "docs/sample.png", PNG)["submitted"]["sha"], SHA2)
+
+    def test_submit_checks_head_again_after_hashing(self):
+        args = Namespace(stage_cmd="design-submit", evidence="docs/sample.png")
+        with (
+            unittest.mock.patch.object(xt, "_stage_clean_head", side_effect=[SHA, SHA2]),
+            unittest.mock.patch.object(d, "evidence_path", return_value="docs/sample.png"),
+            unittest.mock.patch.object(d, "file_sha256", return_value=PNG),
+        ):
+            with self.assertRaises(d.DesignError):
+                d._transition(xt, args, Path("."))
+
+    def test_declaration_treats_unreadable_entry_as_review_required(self):
+        with unittest.mock.patch.object(Path, "lstat", side_effect=PermissionError("fixture")):
+            client, note = d._declared_line(Path("."))
+        self.assertTrue(client)
+        self.assertIn("PROJECT.md", note)
+        with (
+            unittest.mock.patch.object(d, "_declared_line", return_value=(False, "")),
+            unittest.mock.patch.object(Path, "lstat", side_effect=PermissionError("fixture")),
+        ):
+            client, note = d.declared(xt, Path("."))
+        self.assertTrue(client)
+        self.assertIn(d.LEDGER, note)
+
+    def test_design_hold_keeps_transitive_dependencies_and_unrelated_work(self):
+        tasks = [
+            {"id": "T-003", "state": " ", "after": ["T-001", "T-002"], "rest": ""},
+            {"id": "T-001", "state": " ", "after": [], "rest": "(ui: yes)"},
+            {"id": "T-002", "state": " ", "after": ["T-001"], "rest": ""},
+            {"id": "T-004", "state": " ", "after": [], "rest": ""},
+            {"id": "T-005", "state": " ", "after": ["T-003"], "rest": ""},
+        ]
+        manual = {"reason": "fixture", "at": AT}
+        state = {"plan": "PLAN.md", "deferred": {"T-002": manual}}
+        with (
+            unittest.mock.patch.object(xt, "_plan_tasks", return_value=tasks),
+            unittest.mock.patch.object(d, "lock_reason", return_value="review pending"),
+        ):
+            held = d.defer_held(xt, Path("."), state)
+        self.assertEqual(set(held["deferred"]), {"T-001", "T-002", "T-003", "T-005"})
+        self.assertEqual(held["deferred"]["T-002"], manual)
+        self.assertEqual(state["deferred"], {"T-002": manual})
+
     def test_valid_histories(self):
         ok = [
             d.empty(),
@@ -394,6 +445,7 @@ class DesignUiTagTest(unittest.TestCase):
             "- [ ] `T-001` Trang chủ (ui: có) — Gate: `true`",
             "- [ ] `T-001` Trang chủ (ui:) — Gate: `true`",
             "- [ ] `T-001` Trang chủ (ui: none) — Gate: `true`",
+            "- [ ] `T-001` Trang chủ (ui: no review yet) — Gate: `true`",
         ]
         no = [
             "- [ ] `T-001` Trang chủ — Gate: `true`",

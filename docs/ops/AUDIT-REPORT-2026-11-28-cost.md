@@ -25,8 +25,11 @@ Mốc kiểm là `main` ở `719eb8b0`. Ba lỗi tái hiện được ảnh hư�
 | Cùng fixture, cùng ID | Trước | Sau |
 |---|---:|---:|
 | JSON gửi agent | 164.905 B | 6.595 B |
+| Token trong cùng JSON, bộ mã hóa `o200k_base` | 82.271 | 3.091 |
 | Văn bản khi gọi lại | 164.593 B | 6.283 B |
 | State sau một run | 165.083 B | 6.773 B |
 | State sau hai run | 329.893 B | 13.283 B |
 
-Mỗi dòng dài giữ đầu, cuối và dấu cắt trong 600 ký tự. Hai chữ ký của biến thể alpha và beta vẫn khớp kết quả gốc. Log coverage thật vẫn trả nguyên dòng 57 ký tự. Hai ca hồi quy đỏ trước sửa. Sau sửa, 50 test triage CI/cục bộ, ghi state và trần kích thước đạt, exit 0. Lợi ích đo được là giảm 96,0% byte JSON ở fixture dòng dài.
+Mỗi dòng dài giữ đầu, cuối và dấu cắt trong 600 ký tự. Hai chữ ký của biến thể alpha và beta vẫn khớp kết quả gốc. Hai ca hồi quy đỏ trước sửa. Sau sửa, 50 test triage CI/cục bộ, ghi state và trần kích thước đạt, exit 0. Đếm toàn bộ JSON bằng `len(tiktoken.get_encoding("o200k_base").encode(text))`, tiktoken 0.12.0 chạy riêng ngoài dự án ngày 28/11/2026. Fixture giảm 96,2% token với bộ mã hóa này. [tiktoken](https://github.com/openai/tiktoken)
+
+Đối chứng trên năm lượt CI đỏ gần nhất tại thời điểm đo, dùng `gh run view ID --log-failed`. Log từ 9.770 B đến 1.488.610 B, dòng bằng chứng dài nhất từng lượt lần lượt là 57, 57, 57, 190 và 55 ký tự. Cả năm giữ nguyên toàn bộ bằng chứng và tiết kiệm 0 token từ phần này. Mẫu hiện tại cho thấy giới hạn có tác dụng ở ca log bất thường. [Lượt 1](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46154912933) · [Lượt 2](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46145557879) · [Lượt 3](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46113766233) · [Lượt 4](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/46112995241) · [Lượt 5](https://github.com/www-donghanhcungban-org/X-Templates/actions/runs/45990523804).
