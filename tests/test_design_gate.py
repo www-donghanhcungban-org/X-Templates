@@ -93,10 +93,11 @@ class DesignLedgerProblemTest(unittest.TestCase):
 
     def test_design_hold_keeps_transitive_dependencies_and_unrelated_work(self):
         tasks = [
-            {"id": "T-003", "state": " ", "after": ["T-002"], "rest": ""},
+            {"id": "T-003", "state": " ", "after": ["T-001", "T-002"], "rest": ""},
             {"id": "T-001", "state": " ", "after": [], "rest": "(ui: yes)"},
             {"id": "T-002", "state": " ", "after": ["T-001"], "rest": ""},
             {"id": "T-004", "state": " ", "after": [], "rest": ""},
+            {"id": "T-005", "state": " ", "after": ["T-003"], "rest": ""},
         ]
         manual = {"reason": "fixture", "at": AT}
         state = {"plan": "PLAN.md", "deferred": {"T-002": manual}}
@@ -105,7 +106,7 @@ class DesignLedgerProblemTest(unittest.TestCase):
             unittest.mock.patch.object(d, "lock_reason", return_value="review pending"),
         ):
             held = d.defer_held(xt, Path("."), state)
-        self.assertEqual(set(held["deferred"]), {"T-001", "T-002", "T-003"})
+        self.assertEqual(set(held["deferred"]), {"T-001", "T-002", "T-003", "T-005"})
         self.assertEqual(held["deferred"]["T-002"], manual)
         self.assertEqual(state["deferred"], {"T-002": manual})
 
