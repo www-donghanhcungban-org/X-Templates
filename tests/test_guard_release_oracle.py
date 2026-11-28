@@ -319,5 +319,17 @@ class ReleaseOracleTest(unittest.TestCase):
         self.assertEqual(bad, [], f"{len(bad)}/{len(cmds)} lệnh chữ lệch oracle")
 
 
+class NamespaceClassificationTest(unittest.TestCase):
+    def test_literal_non_tag_namespaces_are_not_tags(self) -> None:
+        for namespace in ("heads", "notes", "archive"):
+            with self.subTest(namespace=namespace):
+                self.assertIs(guard._could_be_tag_namespace(namespace), False)
+
+    def test_tag_and_indeterminate_namespaces_could_be_tags(self) -> None:
+        for namespace in ("tags", "", "?", "ta?s"):
+            with self.subTest(namespace=namespace):
+                self.assertIs(guard._could_be_tag_namespace(namespace), True)
+
+
 if __name__ == "__main__":
     unittest.main()
