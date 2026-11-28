@@ -1330,3 +1330,10 @@
 - Chọn: Chấp thuận đúng hai gói MPL-2.0 4.13.0 cho CI và máy dev, lập bảng bốn gói ghim và kiểm bảng theo lockfile
 - Lý do (tiêu chí chất lượng cuối): Hai lượt đối chiếu registry và SHA-512 cho cùng metadata. Bốn gói nằm trong devDependencies của verify-render. Quyết định giới hạn phạm vi đó và đáp ứng BASE-DEP-005.
 - Đường lùi: Nếu thay phiên bản hoặc cách phân phối, rà lại metadata và ghi quyết định mới. Có thể gỡ gói và cập nhật Gate trước khi đổi phạm vi.
+
+### D-643 · 2026-11-28T13:32:39+00:00 · Duyệt PLAN-harden 2026-11-28 sau xác minh D-638
+
+- Phương án: (1) Dùng tiếp PLAN audit đã xác minh và bổ sung việc trực tiếp · (2) Mở PLAN kế riêng cho nợ audit còn mở và cổng ký
+- Chọn: Mở PLAN kế riêng cho nợ audit còn mở và cổng ký
+- Lý do (tiêu chí chất lượng cuối): Giữ nguyên bằng chứng đợt D-638, giữ ID đã có, nghiệm thu từng lát và chỉ ký sau audit strict cùng review delta
+- Đường lùi: Bỏ PLAN kế và quay lại PLAN D-638 nếu phạm vi audit đổi trước khi mở PR
